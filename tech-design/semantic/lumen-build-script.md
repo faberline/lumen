@@ -1,6 +1,22 @@
+---
+id: semantic-lumen-build-script
+summary: Lossless source-unit coverage for the lumen project build script.
+capability_refs:
+  - id: "ops-operability"
+    role: primary
+    claim: "stateless-serving-rebuild-from-log-no-pvc"
+    coverage: partial
+    rationale: "The project build script is part of the operability/release workflow for installing and verifying the lumen binary."
+fill_sections: [text-source-unit, changes]
+---
+
+# Semantic TD: lumen/build.sh
+
+## Source
+<!-- type: text-source-unit lang: bash -->
+
+```bash
 #!/usr/bin/env bash
-# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-build-script.md#text-source-unit
-# CODEGEN-BEGIN
 set -euo pipefail
 
 usage() {
@@ -103,4 +119,17 @@ echo ""
 echo "Build complete. lumen ${TAG} installed and tagged."
 echo "Push the tag to trigger cross-platform release binaries:"
 echo "  git push origin ${TAG}"
-# CODEGEN-END
+```
+
+## Changes
+<!-- type: changes lang: yaml -->
+
+```yaml
+coverage_kind: semantic
+changes:
+  - path: "projects/lumen/build.sh"
+    action: modify
+    section: text-source-unit
+    description: "Regenerate the lumen project build script from a TD-owned text source unit."
+    impl_mode: codegen
+```
