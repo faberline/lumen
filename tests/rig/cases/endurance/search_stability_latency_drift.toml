@@ -1,8 +1,8 @@
 [record]
 suite = "lumen"
-dimension = "resilience"
-case = "packet_loss_p99"
-subject = "search p99 stays within 2x baseline under bounded fault pressure"
+dimension = "endurance"
+case = "search_stability_latency_drift"
+subject = "search latency drift remains bounded over the local endurance smoke"
 kind = "e2e"
 expected = "pass"
 required = true

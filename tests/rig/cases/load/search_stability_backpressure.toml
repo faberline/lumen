@@ -1,8 +1,8 @@
 [record]
 suite = "lumen"
-dimension = "endurance"
-case = "fd_leak"
-subject = "bounded search runs without file descriptor or thread leak symptoms"
+dimension = "load"
+case = "search_stability_backpressure"
+subject = "overload backpressure keeps sharded search bounded and available"
 kind = "e2e"
 expected = "pass"
 required = true
