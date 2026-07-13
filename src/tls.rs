@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#rust-source-unit
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#rust-source-unit
 // CODEGEN-BEGIN
 //! mTLS configuration for the peer (`:8082`) transport.
 //!
@@ -33,7 +33,7 @@ use anyhow::Result;
 const ENV_PREFIX: &str = "LUMEN_PEER";
 
 #[derive(Debug, Clone)]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#source
 pub struct PeerTlsConfig {
     pub cert: PathBuf,
     pub key: PathBuf,
@@ -41,7 +41,7 @@ pub struct PeerTlsConfig {
     pub required: bool,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#source
 impl From<service_tls::PeerTlsConfig> for PeerTlsConfig {
     fn from(cfg: service_tls::PeerTlsConfig) -> Self {
         Self {
@@ -53,7 +53,7 @@ impl From<service_tls::PeerTlsConfig> for PeerTlsConfig {
     }
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#source
 impl From<PeerTlsConfig> for service_tls::PeerTlsConfig {
     fn from(cfg: PeerTlsConfig) -> Self {
         Self {
@@ -65,7 +65,7 @@ impl From<PeerTlsConfig> for service_tls::PeerTlsConfig {
     }
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-tls-rs.md#source
 impl PeerTlsConfig {
     /// Load from env. Returns `Ok(None)` when no TLS material is
     /// configured (plain-HTTP peer transport).

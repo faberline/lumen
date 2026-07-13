@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-k8s-operator-reconcile
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-k8s-operator-reconcile
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-k8s-operator-reconcile

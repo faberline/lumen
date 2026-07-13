@@ -13,7 +13,7 @@ default_runner = "rig-resilience"
 # Clone the whole repo (APFS clonefile, O(1)): the lumen service binary and
 # the rig binary live in target/ at the repo root.
 base = "../.."
-workdir = "projects/lumen"
+workdir = "apps/lumen"
 # `always`: rig must read the runner's captured stdout (the inner report)
 # AFTER the run, then removes the vat itself — `failed` would delete a
 # successful vat before the report can be lifted.

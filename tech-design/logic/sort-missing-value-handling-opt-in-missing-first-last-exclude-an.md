@@ -137,17 +137,17 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/types.rs
+  - path: apps/lumen/src/types.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Expose the sort missing-value policy in SortSpec."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Materialize missing-inclusive sort ordering and exact totals for first/last policies."
-  - path: projects/lumen/tests/api_e2e.rs
+  - path: apps/lumen/tests/api_e2e.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -175,17 +175,17 @@ changes:
 
 ```yaml
 changes:
-  - path: projects/lumen/src/types.rs
+  - path: apps/lumen/src/types.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Expose sort missing-value policy in the request model."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Dispatch missing:first/last to materialized sort while keeping exclude on the keyset path."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

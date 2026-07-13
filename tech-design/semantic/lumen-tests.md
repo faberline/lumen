@@ -1,13 +1,13 @@
 ---
 id: semantic-lumen-tests
-summary: Semantic coverage for "projects/lumen/tests"
+summary: Semantic coverage for "apps/lumen/tests"
 capability_refs:
   - id: "competitor-feature-parity"
     role: primary
     gap: "query-planner-boolean-eval-roaring-postings"
     claim: "query-planner-boolean-eval-roaring-postings"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/tests`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/tests`."
   - id: "security-hardening"
     role: primary
     gap: "adversarial-query-safety"
@@ -199,11 +199,11 @@ fill_sections: [schema, unit-test, changes]
 ```yaml
 semantic_domain:
   key: "lumen/tests"
-  source_group: "projects/lumen/tests"
+  source_group: "apps/lumen/tests"
   coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/tests/perf_gate_vs_db.rs"
+      - path: "apps/lumen/tests/perf_gate_vs_db.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "enum_model", "service_method", "test_case"]
@@ -333,8 +333,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/spec_cli.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/spec_cli.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -410,8 +410,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/generated_clients_crud_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/generated_clients_crud_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -448,8 +448,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/protocol_transport_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/protocol_transport_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -465,8 +465,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/cli_convention.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/cli_convention.rs"
         language: "rust"
         ownership_state: "handwrite"
         generator_primitives: ["service_method", "test_case"]
@@ -497,8 +497,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/drop_field_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/drop_field_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -520,8 +520,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/reindex_stream_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/reindex_stream_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -546,8 +546,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/coverage_gaps_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/coverage_gaps_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -596,8 +596,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/api_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/api_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -733,8 +733,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/disk_format_bench.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/disk_format_bench.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method", "test_case"]
@@ -765,8 +765,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/hash_hamming.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/hash_hamming.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -803,8 +803,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/properties.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/properties.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -835,8 +835,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/vector_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/vector_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method", "test_case"]
@@ -879,8 +879,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/backup_restore_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/backup_restore_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -899,8 +899,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/nats_cluster_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/nats_cluster_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -931,8 +931,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/auth_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/auth_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -969,8 +969,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/write_qps.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/write_qps.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "enum_model", "service_method", "test_case"]
@@ -1100,8 +1100,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/hnsw_ef_recall.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/hnsw_ef_recall.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method", "test_case"]
@@ -1147,8 +1147,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/planner_diff.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/planner_diff.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method", "test_case"]
@@ -1176,8 +1176,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/coverage_pass_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/coverage_pass_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -1259,8 +1259,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/disk_scale_proof.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/disk_scale_proof.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method", "test_case"]
@@ -1342,8 +1342,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/collapse_nested.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/collapse_nested.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -1380,8 +1380,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/drop_drain_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/drop_drain_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -1409,8 +1409,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/wal_nats_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/wal_nats_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -1447,8 +1447,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/hybrid_rrf.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/hybrid_rrf.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -1467,8 +1467,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/operator_render.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/operator_render.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -1529,8 +1529,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/stats_metadata_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/stats_metadata_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -1555,8 +1555,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/authz_matrix_e2e.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/authz_matrix_e2e.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "service_method", "test_case"]
@@ -1593,8 +1593,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
-      - path: "projects/lumen/tests/perf_gate.rs"
+          domain: "apps/lumen/tests"
+      - path: "apps/lumen/tests/perf_gate.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method", "test_case"]
@@ -1619,7 +1619,7 @@ semantic_domain:
           ecosystem: "rust"
           role: "test"
           section_type: "unit-test"
-          domain: "projects/lumen/tests"
+          domain: "apps/lumen/tests"
 ```
 
 ## Unit Test
@@ -1632,33 +1632,33 @@ coverage_kind: semantic
 strategy: preserve observed source behavior while semantic coverage is promoted toward generator primitives
 evidence:
   source_tests:
-    - path: "projects/lumen/tests/perf_gate_vs_db.rs"
-    - path: "projects/lumen/tests/spec_cli.rs"
-    - path: "projects/lumen/tests/cli_convention.rs"
-    - path: "projects/lumen/tests/drop_field_e2e.rs"
-    - path: "projects/lumen/tests/reindex_stream_e2e.rs"
-    - path: "projects/lumen/tests/coverage_gaps_e2e.rs"
-    - path: "projects/lumen/tests/api_e2e.rs"
-    - path: "projects/lumen/tests/disk_format_bench.rs"
-    - path: "projects/lumen/tests/hash_hamming.rs"
-    - path: "projects/lumen/tests/properties.rs"
-    - path: "projects/lumen/tests/vector_e2e.rs"
-    - path: "projects/lumen/tests/backup_restore_e2e.rs"
-    - path: "projects/lumen/tests/nats_cluster_e2e.rs"
-    - path: "projects/lumen/tests/auth_e2e.rs"
-    - path: "projects/lumen/tests/write_qps.rs"
-    - path: "projects/lumen/tests/hnsw_ef_recall.rs"
-    - path: "projects/lumen/tests/planner_diff.rs"
-    - path: "projects/lumen/tests/coverage_pass_e2e.rs"
-    - path: "projects/lumen/tests/disk_scale_proof.rs"
-    - path: "projects/lumen/tests/collapse_nested.rs"
-    - path: "projects/lumen/tests/drop_drain_e2e.rs"
-    - path: "projects/lumen/tests/wal_nats_e2e.rs"
-    - path: "projects/lumen/tests/hybrid_rrf.rs"
-    - path: "projects/lumen/tests/operator_render.rs"
-    - path: "projects/lumen/tests/stats_metadata_e2e.rs"
-    - path: "projects/lumen/tests/authz_matrix_e2e.rs"
-    - path: "projects/lumen/tests/perf_gate.rs"
+    - path: "apps/lumen/tests/perf_gate_vs_db.rs"
+    - path: "apps/lumen/tests/spec_cli.rs"
+    - path: "apps/lumen/tests/cli_convention.rs"
+    - path: "apps/lumen/tests/drop_field_e2e.rs"
+    - path: "apps/lumen/tests/reindex_stream_e2e.rs"
+    - path: "apps/lumen/tests/coverage_gaps_e2e.rs"
+    - path: "apps/lumen/tests/api_e2e.rs"
+    - path: "apps/lumen/tests/disk_format_bench.rs"
+    - path: "apps/lumen/tests/hash_hamming.rs"
+    - path: "apps/lumen/tests/properties.rs"
+    - path: "apps/lumen/tests/vector_e2e.rs"
+    - path: "apps/lumen/tests/backup_restore_e2e.rs"
+    - path: "apps/lumen/tests/nats_cluster_e2e.rs"
+    - path: "apps/lumen/tests/auth_e2e.rs"
+    - path: "apps/lumen/tests/write_qps.rs"
+    - path: "apps/lumen/tests/hnsw_ef_recall.rs"
+    - path: "apps/lumen/tests/planner_diff.rs"
+    - path: "apps/lumen/tests/coverage_pass_e2e.rs"
+    - path: "apps/lumen/tests/disk_scale_proof.rs"
+    - path: "apps/lumen/tests/collapse_nested.rs"
+    - path: "apps/lumen/tests/drop_drain_e2e.rs"
+    - path: "apps/lumen/tests/wal_nats_e2e.rs"
+    - path: "apps/lumen/tests/hybrid_rrf.rs"
+    - path: "apps/lumen/tests/operator_render.rs"
+    - path: "apps/lumen/tests/stats_metadata_e2e.rs"
+    - path: "apps/lumen/tests/authz_matrix_e2e.rs"
+    - path: "apps/lumen/tests/perf_gate.rs"
 ---
 requirementDiagram
 
@@ -1673,31 +1673,31 @@ element UT_SOURCE_TESTS {
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/tests/perf_gate_vs_db.rs"
+  - path: "apps/lumen/tests/perf_gate_vs_db.rs"
     action: modify
     section: unit-test
     description: |
       Full-file unit-test artifact is replayed from its SPEC-MANAGED CODEGEN block.
     impl_mode: codegen
-  - path: "projects/lumen/tests/spec_cli.rs"
+  - path: "apps/lumen/tests/spec_cli.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/generated_clients_crud_e2e.rs"
+  - path: "apps/lumen/tests/generated_clients_crud_e2e.rs"
     action: modify
     section: unit-test
     description: |
       Full-file unit-test artifact is replayed from its SPEC-MANAGED CODEGEN block.
     impl_mode: codegen
-  - path: "projects/lumen/tests/protocol_transport_e2e.rs"
+  - path: "apps/lumen/tests/protocol_transport_e2e.rs"
     action: modify
     section: unit-test
     description: |
       Full-file unit-test artifact is replayed from its SPEC-MANAGED CODEGEN block.
     impl_mode: codegen
-  - path: "projects/lumen/tests/cli_convention.rs"
+  - path: "apps/lumen/tests/cli_convention.rs"
     action: modify
     section: unit-test
     description: |
@@ -1711,145 +1711,145 @@ changes:
       spec gen --out), and the backup-feature test verifies backup/export/import
       JSON next markers through the built binary.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/drop_field_e2e.rs"
+  - path: "apps/lumen/tests/drop_field_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/reindex_stream_e2e.rs"
+  - path: "apps/lumen/tests/reindex_stream_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/coverage_gaps_e2e.rs"
+  - path: "apps/lumen/tests/coverage_gaps_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/api_e2e.rs"
+  - path: "apps/lumen/tests/api_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/disk_format_bench.rs"
+  - path: "apps/lumen/tests/disk_format_bench.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/hash_hamming.rs"
+  - path: "apps/lumen/tests/hash_hamming.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/properties.rs"
+  - path: "apps/lumen/tests/properties.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/vector_e2e.rs"
+  - path: "apps/lumen/tests/vector_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/backup_restore_e2e.rs"
+  - path: "apps/lumen/tests/backup_restore_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/nats_cluster_e2e.rs"
+  - path: "apps/lumen/tests/nats_cluster_e2e.rs"
     action: modify
     section: unit-test
     description: |
       Full-file unit-test artifact is replayed from its SPEC-MANAGED CODEGEN block.
     impl_mode: codegen
-  - path: "projects/lumen/tests/auth_e2e.rs"
+  - path: "apps/lumen/tests/auth_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/write_qps.rs"
+  - path: "apps/lumen/tests/write_qps.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/hnsw_ef_recall.rs"
+  - path: "apps/lumen/tests/hnsw_ef_recall.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/planner_diff.rs"
+  - path: "apps/lumen/tests/planner_diff.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/coverage_pass_e2e.rs"
+  - path: "apps/lumen/tests/coverage_pass_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/disk_scale_proof.rs"
+  - path: "apps/lumen/tests/disk_scale_proof.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/collapse_nested.rs"
+  - path: "apps/lumen/tests/collapse_nested.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/drop_drain_e2e.rs"
+  - path: "apps/lumen/tests/drop_drain_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/wal_nats_e2e.rs"
+  - path: "apps/lumen/tests/wal_nats_e2e.rs"
     action: modify
     section: unit-test
     description: |
       Full-file unit-test artifact is replayed from its SPEC-MANAGED CODEGEN block.
     impl_mode: codegen
-  - path: "projects/lumen/tests/hybrid_rrf.rs"
+  - path: "apps/lumen/tests/hybrid_rrf.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/operator_render.rs"
+  - path: "apps/lumen/tests/operator_render.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/stats_metadata_e2e.rs"
+  - path: "apps/lumen/tests/stats_metadata_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/authz_matrix_e2e.rs"
+  - path: "apps/lumen/tests/authz_matrix_e2e.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/tests/perf_gate.rs"
+  - path: "apps/lumen/tests/perf_gate.rs"
     action: modify
     section: schema
     description: |

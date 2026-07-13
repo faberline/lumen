@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-vector-hash-hamming
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-vector-hash-hamming
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-vector-hash-hamming

@@ -19,7 +19,7 @@
 #   - cargo (rustup toolchain)
 #   - node + npx          (for @openapitools/openapi-generator-cli)
 
-# Allow running from anywhere — this Makefile lives in projects/lumen/clients/
+# Allow running from anywhere — this Makefile lives in apps/lumen/clients/
 # and shells out into the workspace root + the lumen crate.
 CLIENTS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 LUMEN_DIR := $(abspath $(CLIENTS_DIR)/..)

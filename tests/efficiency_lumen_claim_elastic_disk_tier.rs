@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-elastic-disk-tier
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-elastic-disk-tier
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-elastic-disk-tier

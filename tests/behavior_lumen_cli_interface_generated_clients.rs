@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/cli-interface/behavior/cli-interface.md#lumen-cli-interface-generated-clients
+// SPEC-MANAGED: apps/lumen/external-contracts/cli-interface/behavior/cli-interface.md#lumen-cli-interface-generated-clients
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-cli-interface-generated-clients

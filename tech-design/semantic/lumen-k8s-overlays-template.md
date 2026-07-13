@@ -1,12 +1,12 @@
 ---
 id: semantic-lumen-k8s-overlays-template
-summary: Semantic coverage for "projects/lumen/k8s/overlays/template"
+summary: Semantic coverage for "apps/lumen/k8s/overlays/template"
 capability_refs:
   - id: "long-running-stability"
     role: primary
     claim: "kustomize-base-overlays-hpa"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/k8s/overlays/template`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/k8s/overlays/template`."
 fill_sections: [deployment, changes]
 ---
 
@@ -23,11 +23,11 @@ deployment:
     role: "overlay"
   semantic_domain:
     key: "lumen/k8s/overlays/template"
-    source_group: "projects/lumen/k8s/overlays/template"
+    source_group: "apps/lumen/k8s/overlays/template"
     coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/k8s/overlays/template/kustomization.yaml"
+      - path: "apps/lumen/k8s/overlays/template/kustomization.yaml"
         language: "kustomize"
         ownership_state: "codegen"
         generator_primitives: ["kustomize_manifest"]
@@ -36,12 +36,12 @@ deployment:
           ecosystem: "kustomize"
           role: "kustomization"
           section_type: "deployment"
-          domain: "projects/lumen/k8s/overlays/template"
+          domain: "apps/lumen/k8s/overlays/template"
   artifacts:
-    - path: "projects/lumen/k8s/overlays/template/kustomization.yaml"
+    - path: "apps/lumen/k8s/overlays/template/kustomization.yaml"
       kind: "kustomization"
       content: |
-        # SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-k8s-overlays-template.md#deployment
+        # SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-k8s-overlays-template.md#deployment
         # CODEGEN-BEGIN
         apiVersion: kustomize.config.k8s.io/v1beta1
         kind: Kustomization
@@ -143,7 +143,7 @@ deployment:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/k8s/overlays/template/kustomization.yaml"
+  - path: "apps/lumen/k8s/overlays/template/kustomization.yaml"
     action: modify
     section: deployment
     description: |

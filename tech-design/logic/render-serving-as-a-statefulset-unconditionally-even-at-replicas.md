@@ -99,10 +99,10 @@ requirements:
 elements:
   operator_render_unit_tests:
     kind: test
-    path: projects/lumen/tests/operator_render.rs
+    path: apps/lumen/tests/operator_render.rs
   spec_cli_unit_tests:
     kind: test
-    path: projects/lumen/tests/spec_cli.rs
+    path: apps/lumen/tests/spec_cli.rs
 relations:
   - { from: operator_render_unit_tests, verifies: always_statefulset_with_pvc }
   - { from: operator_render_unit_tests, verifies: solo_no_raft_env_keeps_hpa }
@@ -172,62 +172,62 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/operator/render.rs
+  - path: apps/lumen/src/operator/render.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "render() unconditionally pushes serving_statefulset + serving_headless_service + serving_service + serving_pdb; serving_hpa is pushed only when replicas_per_shard <= 1 and its scaleTargetRef.kind becomes StatefulSet; serving_statefulset gates the raft downward-API env extension and the shard_count*replicas_per_shard replica override on replicas_per_shard > 1, leaving PVC/volumeMount/headless-service-dependent fields unconditional; serving_deployment's Deployment-only build path is removed."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-render-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-render-rs.md
     action: modify
     section: source
     impl_mode: hand-written
     description: "Sync the SPEC-MANAGED Source block byte-for-byte with the edited render.rs."
-  - path: projects/lumen/src/operator/reconcile.rs
+  - path: apps/lumen/src/operator/reconcile.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "ManagedService::readiness_targets returns kind \"StatefulSet\" unconditionally for the serving fleet (drop the replicas_per_shard branch); status_patch's desired-replica formula is unchanged."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-reconcile-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-reconcile-rs.md
     action: modify
     section: source
     impl_mode: hand-written
     description: "Sync the SPEC-MANAGED Source block byte-for-byte with the edited reconcile.rs."
-  - path: projects/lumen/src/operator/crd.rs
+  - path: apps/lumen/src/operator/crd.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Update module doc, replicas_per_shard doc, and raft_storage doc comments so the PVC is no longer described as raft-only / replicasPerShard>1-only; no schema field changes."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md
     action: modify
     section: source
     impl_mode: hand-written
     description: "Sync the SPEC-MANAGED Source block byte-for-byte with the edited crd.rs doc comments."
-  - path: projects/lumen/tests/operator_render.rs
+  - path: apps/lumen/tests/operator_render.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
     description: "Update fixtures/assertions so replicasPerShard:1 (dev_spec/prod_spec) expect a StatefulSet with a raft PVC, no raft env, and an HPA targeting kind StatefulSet; replicasPerShard>1 assertions are unchanged."
-  - path: projects/lumen/tech-design/semantic/lumen-tests.md
+  - path: apps/lumen/tech-design/semantic/lumen-tests.md
     action: modify
     section: source
     impl_mode: hand-written
     description: "Sync the SPEC-MANAGED Source block byte-for-byte with the edited operator_render.rs."
-  - path: projects/lumen/src/spec.rs
+  - path: apps/lumen/src/spec.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Add an llm_storage_md() (and JSON equivalent) documenting that replicasPerShard:1 still renders a StatefulSet with a durable raft PVC, following the llm_auth_md() pattern."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-spec-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-spec-rs.md
     action: modify
     section: source
     impl_mode: hand-written
     description: "Sync the SPEC-MANAGED Source block byte-for-byte with the edited spec.rs."
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Add a Storage variant to LlmTopic and wire it to lumen::spec::llm_storage_md()/json, following the existing Auth variant wiring."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-bin-lumen-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-bin-lumen-rs.md
     action: modify
     section: source
     impl_mode: hand-written

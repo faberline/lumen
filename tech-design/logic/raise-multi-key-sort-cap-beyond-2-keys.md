@@ -95,17 +95,17 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/types.rs
+  - path: apps/lumen/src/types.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Allow sort specs to carry up to four ordered keys."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Evaluate and compare multi-key sort tuples through the planner."
-  - path: projects/lumen/tests/planner_diff.rs
+  - path: apps/lumen/tests/planner_diff.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -133,12 +133,12 @@ changes:
 
 ```yaml
 changes:
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Raise the multi-key materialized sort validation cap to four keys."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

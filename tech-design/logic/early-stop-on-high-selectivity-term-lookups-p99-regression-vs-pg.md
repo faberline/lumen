@@ -78,13 +78,13 @@ requirements:
 elements:
   storage_try_plan:
     kind: source
-    path: projects/lumen/src/storage.rs
+    path: apps/lumen/src/storage.rs
   perf_gate_term_query_latency_floor:
     kind: test
-    path: projects/lumen/tests/perf_gate.rs
+    path: apps/lumen/tests/perf_gate.rs
   vat_ec_efficiency_meter:
     kind: runner
-    path: projects/lumen/vat.toml
+    path: apps/lumen/vat.toml
 relations:
   - { from: storage_try_plan, verifies: posting_window_contract }
   - { from: perf_gate_term_query_latency_floor, verifies: term_latency_floor_contract }
@@ -130,15 +130,15 @@ e2e_tests:
   - id: local-term-latency-floor
     name: "local term latency floor"
     runner: cargo
-    path: projects/lumen/tests/perf_gate.rs
+    path: apps/lumen/tests/perf_gate.rs
     command: "cargo test -p lumen --test perf_gate term_query_latency_floor -- --exact --nocapture"
     verifies:
       - "Exact term lookup stays below the local p99 regression budget."
   - id: release-competitive-peer-gate
     name: "release competitive peer gate"
     runner: vat
-    path: projects/lumen/vat.toml
-    command: "cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter"
+    path: apps/lumen/vat.toml
+    command: "cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter"
     verifies:
       - "Postgres and OpenSearch peers are real services provisioned by vat."
       - "The release competitive gate exits clean under meter."
@@ -150,27 +150,27 @@ e2e_tests:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: claim
     section: logic
     impl_mode: hand-written
     reason: "Standalone Term planner already early-stops the returned page by reading only the requested posting window."
-  - path: projects/lumen/tests/perf_gate.rs
+  - path: apps/lumen/tests/perf_gate.rs
     action: verify
     section: unit-test
     impl_mode: hand-written
     reason: "Term latency floor is the local regression guard."
-  - path: projects/lumen/tests/perf_gate_vs_db.rs
+  - path: apps/lumen/tests/perf_gate_vs_db.rs
     action: verify
     section: e2e-test
     impl_mode: hand-written
     reason: "Release competitive gate covers keyword term performance claims."
-  - path: projects/lumen/vat.toml
+  - path: apps/lumen/vat.toml
     action: verify
     section: e2e-test
     impl_mode: hand-written
     reason: "ec-efficiency-meter is the real-service peer runner used as closing evidence."
-  - path: projects/lumen/README.md
+  - path: apps/lumen/README.md
     action: claim
     section: changes
     impl_mode: hand-written

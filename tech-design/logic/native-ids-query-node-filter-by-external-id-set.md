@@ -116,17 +116,17 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/types.rs
+  - path: apps/lumen/src/types.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Add the external-id set query shape to the public query model."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Resolve external ids through the interner and filter the row-id bitmap natively."
-  - path: projects/lumen/tests/planner_diff.rs
+  - path: apps/lumen/tests/planner_diff.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -154,17 +154,17 @@ changes:
 
 ```yaml
 changes:
-  - path: projects/lumen/src/types.rs
+  - path: apps/lumen/src/types.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Add the native ids query node to the request/query model."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Evaluate ids queries through the external-id interner and compose them with predicates and sort."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

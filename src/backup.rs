@@ -17,7 +17,7 @@ use service_backup::{
 
 /// Fetch `{base_url}/admin/backup` (Bearer `token` when set) and return the
 /// exact snapshot response bytes.
-/// @spec projects/lumen/tech-design/interfaces/cli/lumen-cli-add-dump-load-export-import-snapshot-verbs.md#logic
+/// @spec apps/lumen/tech-design/interfaces/cli/lumen-cli-add-dump-load-export-import-snapshot-verbs.md#logic
 pub async fn fetch_snapshot_bytes(base_url: &str, token: Option<&str>) -> Result<Vec<u8>> {
     let url = format!("{}/admin/backup", base_url.trim_end_matches('/'));
     let client = reqwest::Client::new();
@@ -40,7 +40,7 @@ pub async fn fetch_snapshot_bytes(base_url: &str, token: Option<&str>) -> Result
 
 /// POST exact SnapshotV1 JSON bytes to `{base_url}/admin/restore` (Bearer
 /// `token` when set).
-/// @spec projects/lumen/tech-design/interfaces/cli/lumen-cli-add-dump-load-export-import-snapshot-verbs.md#logic
+/// @spec apps/lumen/tech-design/interfaces/cli/lumen-cli-add-dump-load-export-import-snapshot-verbs.md#logic
 pub async fn restore_snapshot_bytes(
     base_url: &str,
     token: Option<&str>,

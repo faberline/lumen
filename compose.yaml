@@ -1,6 +1,6 @@
 # Local verification stack: Lumen + OTLP observability.
 #
-#   docker compose -f projects/lumen/compose.yaml up --build
+#   docker compose -f apps/lumen/compose.yaml up --build
 #
 # Proves the local service and OTLP path on one machine. For multi-node local
 # raft replication, use scripts/dev-cluster.sh.
@@ -21,7 +21,7 @@ services:
   lumen:
     build:
       context: ../..
-      dockerfile: projects/lumen/Dockerfile
+      dockerfile: apps/lumen/Dockerfile
     image: lumen:dev
     hostname: lumen
     depends_on: [otel-collector]

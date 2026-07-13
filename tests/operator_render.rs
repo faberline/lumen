@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-tests.md#unit-test
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-tests.md#unit-test
 // CODEGEN-BEGIN
 //! Operator render tests: a `Lumen` spec → the exact child objects, with no
 //! cluster. This encodes the operational knowledge that lives in `k8s/base` +

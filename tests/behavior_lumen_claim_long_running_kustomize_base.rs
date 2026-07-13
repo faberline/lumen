@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-long-running-kustomize-base
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-long-running-kustomize-base
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-long-running-kustomize-base
@@ -7,7 +7,7 @@
 // @contract long-running-kustomize-base-overlays
 // @category behavior
 // @required_for_production true
-// @command kustomize build projects/lumen/k8s/base && kustomize build projects/lumen/k8s/overlays/dev && kustomize build projects/lumen/k8s/overlays/staging && kustomize build projects/lumen/k8s/overlays/prod && kustomize build projects/lumen/k8s/operator
+// @command kustomize build apps/lumen/k8s/base && kustomize build apps/lumen/k8s/overlays/dev && kustomize build apps/lumen/k8s/overlays/staging && kustomize build apps/lumen/k8s/overlays/prod && kustomize build apps/lumen/k8s/operator
 // AW-EC-END
 
 // Contract: The base, dev, staging, prod, and operator kustomize surfaces render valid Kubernetes manifests.
@@ -15,7 +15,7 @@
 #[ignore = "AW EC gate: run via `aw health --verify-ec` or `cargo test -- --ignored`"]
 fn lumen_claim_long_running_kustomize_base() {
     let command =
-        "kustomize build projects/lumen/k8s/base && kustomize build projects/lumen/k8s/overlays/dev && kustomize build projects/lumen/k8s/overlays/staging && kustomize build projects/lumen/k8s/overlays/prod && kustomize build projects/lumen/k8s/operator";
+        "kustomize build apps/lumen/k8s/base && kustomize build apps/lumen/k8s/overlays/dev && kustomize build apps/lumen/k8s/overlays/staging && kustomize build apps/lumen/k8s/overlays/prod && kustomize build apps/lumen/k8s/operator";
     let id = "lumen-claim-long-running-kustomize-base";
     let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     while !root.join(".aw").is_dir() {

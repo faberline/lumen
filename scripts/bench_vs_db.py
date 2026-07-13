@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-scripts.md#schema
+# SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-scripts.md#schema
 # CODEGEN-BEGIN
 """Cross-engine search latency benchmark: lumen vs PostgreSQL vs MongoDB vs OpenSearch.
 

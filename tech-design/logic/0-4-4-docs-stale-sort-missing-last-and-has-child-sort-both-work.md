@@ -76,7 +76,7 @@ requirements:
 elements:
   spec_cli_doc_contracts:
     kind: test
-    path: projects/lumen/tests/spec_cli.rs
+    path: apps/lumen/tests/spec_cli.rs
 relations:
   - { from: spec_cli_doc_contracts, verifies: openapi_sort_doc_current }
   - { from: spec_cli_doc_contracts, verifies: query_shape_has_child_sort_current }
@@ -116,7 +116,7 @@ e2e_tests:
   - id: spec-cli-agent-doc-contract
     name: "spec cli agent doc contract"
     runner: cargo
-    path: projects/lumen/tests/spec_cli.rs
+    path: apps/lumen/tests/spec_cli.rs
     command: "cargo test -p lumen --test spec_cli -- --nocapture"
     verifies:
       - "OpenAPI JSON/YAML remain valid after doc string changes."
@@ -124,7 +124,7 @@ e2e_tests:
   - id: storage-has-child-sort-contract
     name: "storage has_child sort contract"
     runner: cargo
-    path: projects/lumen/src/storage.rs
+    path: apps/lumen/src/storage.rs
     command: "cargo test -p lumen storage::tests::has_child_sort_tests -- --nocapture"
     verifies:
       - "Runtime support for has_child + parent sorting remains covered."
@@ -134,17 +134,17 @@ e2e_tests:
 
 ```yaml
 changes:
-  - path: projects/lumen/src/types.rs
+  - path: apps/lumen/src/types.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Update SearchRequest.sort docs to say up to four keys, missing=first/last keep and count rows, and sorted has_child queries are supported through materialization."
-  - path: projects/lumen/src/spec.rs
+  - path: apps/lumen/src/spec.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Update query shape and LLM workflow text for has_child + parent-field sort."
-  - path: projects/lumen/tests/spec_cli.rs
+  - path: apps/lumen/tests/spec_cli.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

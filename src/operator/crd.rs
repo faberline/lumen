@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#rust-source-unit
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#rust-source-unit
 // CODEGEN-BEGIN
 //! The `Lumen` custom resource (`lumen.dev/v1alpha1`).
 //!
@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
     printcolumn = r#"{"name":"Age","type":"date","jsonPath":".metadata.creationTimestamp"}"#
 )]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct LumenSpec {
     /// Serving container image, e.g. `lumen:latest`. Required.
     pub image: String,
@@ -131,7 +131,7 @@ pub struct LumenSpec {
 /// Versioned virtual-bucket map control-plane metadata.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct ShardMapSpec {
     #[serde(default)]
     pub version: u64,
@@ -145,7 +145,7 @@ pub struct ShardMapSpec {
     pub assignments: Vec<u32>,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 impl Default for ShardMapSpec {
     fn default() -> Self {
         Self {
@@ -159,7 +159,7 @@ impl Default for ShardMapSpec {
 /// Storage-pressure policy for rare, operator-owned shard split workflows.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct ReshardPolicy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_shard_bytes: Option<u64>,
@@ -177,7 +177,7 @@ pub struct ReshardPolicy {
     pub workflow: ReshardWorkflowSpec,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 impl Default for ReshardPolicy {
     fn default() -> Self {
         Self {
@@ -194,7 +194,7 @@ impl Default for ReshardPolicy {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct ReshardWorkflowSpec {
     #[serde(default)]
     pub phase: ReshardPhase,
@@ -222,11 +222,47 @@ pub struct ReshardWorkflowSpec {
     /// actually changed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_cutover_shard_map_version: Option<u64>,
+    /// Epoch-seconds wall-clock timestamp `reshard_driver::advance_convergence`
+    /// first observed the *current* `shardMap.version`'s post-cutover
+    /// convergence wait as pending (#1485 R2) — stamped once, on the first
+    /// `AwaitingTopologyConvergence` tick, in the same `Patch::Merge` style
+    /// `lastCutoverShardMapVersion` already uses (spec-is-checkpoint, not
+    /// driver memory). Cleared (patched to `null`) the moment convergence is
+    /// confirmed, so it is always either `None` or the start of the wait
+    /// still in progress. `reshard_driver::convergence_stall_condition`
+    /// computes the `topologyConvergenceStalled` budget directly from this
+    /// field, so both the budget and the raised condition survive an
+    /// operator restart — replacing the prior process-local-cache-only
+    /// computation, which reset to zero on every restart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub convergence_wait_started_at: Option<u64>,
+    /// Count of bounded remediation rolling-restart re-triggers
+    /// `reshard_driver::advance_convergence` has fired for the current
+    /// convergence-stall episode — the same wait `convergenceWaitStartedAt`
+    /// tracks (#1485 R1). Bounded to at most `1`: once the stall budget is
+    /// exceeded with the ConfigMap-race signature (StatefulSet rollout
+    /// complete but some pod still reporting the old shard-map version), the
+    /// driver first persists this as `1`, then calls
+    /// `ClusterControl::trigger_rolling_restart` exactly once per episode.
+    /// The write-ahead checkpoint prevents a patch failure after a successful
+    /// restart from causing a duplicate restart on the next tick. A later
+    /// stall in the same episode never re-triggers. Reset to `0` alongside
+    /// `convergenceWaitStartedAt` once the episode resolves.
+    #[serde(default)]
+    pub convergence_remediation_restart_count: u32,
+    /// Epoch-seconds timestamp of the durable remediation rolling-restart
+    /// claim for this episode, if any (#1485 R1) — surfaced alongside
+    /// `convergenceRemediationRestartCount` in `status.reshard` so operators
+    /// can see when the bounded self-heal was attempted without reading
+    /// driver logs. `None` until `convergenceRemediationRestartCount` first
+    /// becomes non-zero; cleared together with it once the episode resolves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub convergence_remediation_restarted_at: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub enum ReshardPhase {
     #[default]
     Complete,
@@ -235,7 +271,7 @@ pub enum ReshardPhase {
     CatchingUp,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 impl ReshardPhase {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -259,7 +295,7 @@ impl ReshardPhase {
 /// Log output format.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub enum LogFormat {
     /// Structured one-line-per-event JSON (prod/staging).
     Json,
@@ -268,7 +304,7 @@ pub enum LogFormat {
     Pretty,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 impl LogFormat {
     /// The `LUMEN_LOG_FORMAT` value the serving binary expects.
     pub fn as_env(self) -> &'static str {
@@ -282,7 +318,7 @@ impl LogFormat {
 /// Whether the client API requires a bearer token.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub enum AuthMode {
     /// Open API (dev / trusted network). Serialized as `disabled` — NOT `off`,
     /// which YAML 1.1 (kubectl / go-yaml) would parse as the boolean `false`
@@ -295,7 +331,7 @@ pub enum AuthMode {
     Required,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 impl AuthMode {
     /// The `LUMEN_AUTH` value the serving binary expects.
     pub fn as_env(self) -> &'static str {
@@ -309,7 +345,7 @@ impl AuthMode {
 /// Stateless serving-fleet shape: autoscaling bounds + per-pod resources.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct ServingSpec {
     /// HPA bounds + CPU target.
     #[serde(default)]
@@ -359,7 +395,7 @@ pub struct ServingSpec {
     pub bootstrap: Option<ServingBootstrapSpec>,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 impl Default for ServingSpec {
     fn default() -> Self {
         Self {
@@ -377,7 +413,7 @@ impl Default for ServingSpec {
 
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct ServingBootstrapSpec {
     /// SnapshotV1 JSON seed URI. Use an exact `file://` path or
     /// `s3://bucket/key` object, not a backup prefix.
@@ -400,7 +436,7 @@ pub struct ServingBootstrapSpec {
 /// shared across variants), mirroring keep's `KeepBackupSpec` (#776).
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct ServingBackupSpec {
     /// Cron schedule (`CronJob.spec.schedule`) for the backup runner.
     pub schedule: String,
@@ -423,7 +459,7 @@ pub struct ServingBackupSpec {
 /// HPA bounds for the serving fleet.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct Autoscaling {
     /// Floor (also the StatefulSet's apply-time replica count in HPA mode).
     pub min_replicas: i32,
@@ -433,7 +469,7 @@ pub struct Autoscaling {
     pub target_cpu_utilization: i32,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 impl Default for Autoscaling {
     fn default() -> Self {
         Self {
@@ -447,7 +483,7 @@ impl Default for Autoscaling {
 /// Status subresource, written back by the reconcile loop.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct LumenStatus {
     /// `Pending | Reconciling | Ready | Degraded`.
     #[serde(default)]
@@ -475,7 +511,7 @@ pub struct LumenStatus {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 pub struct LumenReshardStatus {
     #[serde(default)]
     pub phase: String,
@@ -518,9 +554,21 @@ pub struct LumenReshardStatus {
     pub blocking_conditions: Vec<String>,
     #[serde(default)]
     pub message: String,
+    /// Mirrors `spec.reshardPolicy.workflow.convergenceRemediationRestartCount`
+    /// (#1485 R1) — count of bounded remediation rolling-restart re-triggers
+    /// the reshard driver has fired for the current convergence-stall
+    /// episode, so operators can see the self-heal fired without reading
+    /// `spec`. `status_patch` copies this straight from the spec field.
+    #[serde(default)]
+    pub convergence_remediation_restart_count: u32,
+    /// Mirrors `spec.reshardPolicy.workflow.convergenceRemediationRestartedAt`
+    /// (#1485 R1) — epoch-seconds timestamp of the last remediation restart
+    /// re-trigger, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub convergence_remediation_restarted_at: Option<u64>,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
 impl LumenSpec {
     pub fn storage_pod_count(&self) -> i32 {
         if self.replicas_per_shard > 1 {
@@ -583,6 +631,12 @@ impl LumenSpec {
             usage_measured_at_map_version: None,
             blocking_conditions,
             message,
+            convergence_remediation_restart_count: policy
+                .workflow
+                .convergence_remediation_restart_count,
+            convergence_remediation_restarted_at: policy
+                .workflow
+                .convergence_remediation_restarted_at,
         }
     }
 
@@ -619,7 +673,7 @@ impl LumenSpec {
     /// should_start_split`] / `drive_tick`) that reads the
     /// `blockingConditions` this function writes and acts on them
     /// independently.
-    /// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
+    /// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md#source
     pub fn reshard_status_with_usage(
         &self,
         shard_usage_bytes: &BTreeMap<u32, u64>,

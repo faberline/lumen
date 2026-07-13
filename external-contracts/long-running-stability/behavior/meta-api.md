@@ -20,7 +20,7 @@ e2e_tests:
     claim_id: meta-api-health-ready-metrics-version
     contract_id: ops-meta-api-surface
     category: behavior
-    test_path: projects/lumen/tests/behavior_lumen_long_running_stability_meta_api.rs
+    test_path: apps/lumen/tests/behavior_lumen_long_running_stability_meta_api.rs
     command: "cargo test -p lumen --test api_e2e -- --nocapture"
     assertions:
       - "GET /healthz (liveness) returns 200 always; GET /readyz returns 200 normally and 503 while draining; both bypass auth."

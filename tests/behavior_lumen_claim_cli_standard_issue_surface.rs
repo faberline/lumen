@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-cli-standard-issue-surface
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-cli-standard-issue-surface
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-cli-standard-issue-surface

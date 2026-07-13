@@ -118,12 +118,12 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Wire `lumen spec gen` language selection and offline typed-client generation dispatch."
-  - path: projects/lumen/tests/spec_gen_e2e.rs
+  - path: apps/lumen/tests/spec_gen_e2e.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

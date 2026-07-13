@@ -95,12 +95,12 @@ flowchart TD
 
 ```yaml
 changes:
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Extend IssueCommand with Comment, add IssueCommentArgs, and dispatch to cli_std::issue::comment using Lumen TOOL metadata."
-  - path: projects/lumen/tests/cli_convention.rs
+  - path: apps/lumen/tests/cli_convention.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

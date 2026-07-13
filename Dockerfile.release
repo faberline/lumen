@@ -1,4 +1,4 @@
-# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-runtime-image.md#runtime-image
+# SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-runtime-image.md#runtime-image
 # CODEGEN-BEGIN
 # syntax=docker/dockerfile:1
 # Production image for lumen — downloads a PUBLISHED release binary (no source
@@ -6,7 +6,7 @@
 # surface (no shell/apt/curl in the final image). The sibling `Dockerfile` is
 # the from-source build for dev / CI.
 #
-#   docker build -f projects/lumen/Dockerfile.release -t lumen:0.4.5 \
+#   docker build -f apps/lumen/Dockerfile.release -t lumen:0.4.5 \
 #     --build-arg LUMEN_VERSION=lumen@0.4.5 .
 #
 # The image arch (BuildKit TARGETARCH) selects the matching linux tarball:

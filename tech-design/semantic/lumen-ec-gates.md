@@ -37,11 +37,11 @@ fill_sections: [schema, changes]
 ```yaml
 semantic_domain:
   key: "lumen/ec-gates"
-  source_group: "projects/lumen/ec-gates"
+  source_group: "apps/lumen/ec-gates"
   coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/aw.toml"
+      - path: "apps/lumen/aw.toml"
         language: "toml"
         ownership_state: "codegen"
         generator_primitives: ["ec_inventory"]
@@ -50,8 +50,8 @@ semantic_domain:
           ecosystem: "aw"
           role: "ec-inventory"
           section_type: "schema"
-          domain: "projects/lumen/ec-gates"
-      - path: "projects/lumen/vat.toml"
+          domain: "apps/lumen/ec-gates"
+      - path: "apps/lumen/vat.toml"
         language: "toml"
         ownership_state: "handwrite"
         generator_primitives: ["external_runner_manifest"]
@@ -60,8 +60,8 @@ semantic_domain:
           ecosystem: "vat"
           role: "ec-runner-dispatch"
           section_type: "schema"
-          domain: "projects/lumen/ec-gates"
-      - path: "projects/lumen/external-contracts/claim-closure/production-claims.md"
+          domain: "apps/lumen/ec-gates"
+      - path: "apps/lumen/external-contracts/claim-closure/production-claims.md"
         language: "markdown"
         ownership_state: "codegen"
         generator_primitives: ["ec_claim_closure"]
@@ -70,8 +70,8 @@ semantic_domain:
           ecosystem: "aw"
           role: "production-claim-closure"
           section_type: "schema"
-          domain: "projects/lumen/ec-gates"
-      - path: "projects/lumen/external-contracts/ec.lock"
+          domain: "apps/lumen/ec-gates"
+      - path: "apps/lumen/external-contracts/ec.lock"
         language: "toml"
         ownership_state: "codegen"
         generator_primitives: ["ec_lock"]
@@ -80,7 +80,7 @@ semantic_domain:
           ecosystem: "aw"
           role: "ec-ir-lock"
           section_type: "schema"
-          domain: "projects/lumen/ec-gates"
+          domain: "apps/lumen/ec-gates"
 ```
 
 ## Changes
@@ -89,25 +89,25 @@ semantic_domain:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/aw.toml"
+  - path: "apps/lumen/aw.toml"
     action: modify
     section: schema
     description: |
       Generated EC inventory and dispatch commands are covered by this semantic TD.
     impl_mode: codegen
-  - path: "projects/lumen/vat.toml"
+  - path: "apps/lumen/vat.toml"
     action: modify
     section: schema
     description: |
       Vat-managed meter and rig runner dispatch is covered by this semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/external-contracts/claim-closure/production-claims.md"
+  - path: "apps/lumen/external-contracts/claim-closure/production-claims.md"
     action: modify
     section: schema
     description: |
       Production claim closure mappings are covered by this semantic TD.
     impl_mode: codegen
-  - path: "projects/lumen/external-contracts/ec.lock"
+  - path: "apps/lumen/external-contracts/ec.lock"
     action: modify
     section: schema
     description: |

@@ -1,12 +1,12 @@
 ---
 id: semantic-lumen-benches
-summary: Semantic coverage for "projects/lumen/benches"
+summary: Semantic coverage for "apps/lumen/benches"
 capability_refs:
   - id: "competitor-performance"
     role: primary
     claim: "depth-invariant-filter-sort-pagination"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/benches`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/benches`."
 fill_sections: [schema, unit-test, changes]
 ---
 
@@ -18,11 +18,11 @@ fill_sections: [schema, unit-test, changes]
 ```yaml
 semantic_domain:
   key: "lumen/benches"
-  source_group: "projects/lumen/benches"
+  source_group: "apps/lumen/benches"
   coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/benches/bench_duplicates.rs"
+      - path: "apps/lumen/benches/bench_duplicates.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method"]
@@ -53,8 +53,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/benches"
-      - path: "projects/lumen/benches/bench_search.rs"
+          domain: "apps/lumen/benches"
+      - path: "apps/lumen/benches/bench_search.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method"]
@@ -91,8 +91,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/benches"
-      - path: "projects/lumen/benches/bench_index.rs"
+          domain: "apps/lumen/benches"
+      - path: "apps/lumen/benches/bench_index.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method"]
@@ -135,7 +135,7 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/benches"
+          domain: "apps/lumen/benches"
 ```
 
 ## Unit Test
@@ -162,19 +162,19 @@ element UT_SOURCE_TESTS {
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/benches/bench_duplicates.rs"
+  - path: "apps/lumen/benches/bench_duplicates.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: codegen
-  - path: "projects/lumen/benches/bench_search.rs"
+  - path: "apps/lumen/benches/bench_search.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: codegen
-  - path: "projects/lumen/benches/bench_index.rs"
+  - path: "apps/lumen/benches/bench_index.rs"
     action: modify
     section: schema
     description: |

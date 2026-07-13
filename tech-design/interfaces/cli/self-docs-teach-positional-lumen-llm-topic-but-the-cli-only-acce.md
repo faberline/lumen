@@ -65,7 +65,7 @@ id: lumen-llm-topic-invocation-verification
 requirements:
   outline_uses_topic_flag:
     id: R1
-    text: "`projects/lumen/tests/spec_cli.rs::llm_outline_maps_agent_topics` asserts all detail-topic examples use `lumen llm --topic <topic>`."
+    text: "`apps/lumen/tests/spec_cli.rs::llm_outline_maps_agent_topics` asserts all detail-topic examples use `lumen llm --topic <topic>`."
     kind: functional
     risk: high
     verify: test
@@ -77,7 +77,7 @@ requirements:
     verify: test
   advertised_commands_parse:
     id: R3
-    text: "`projects/lumen/tests/cli_convention.rs` invokes the built lumen binary with each outline-advertised `--topic` command."
+    text: "`apps/lumen/tests/cli_convention.rs` invokes the built lumen binary with each outline-advertised `--topic` command."
     kind: functional
     risk: high
     verify: test
@@ -92,32 +92,32 @@ flowchart TD
 
 ```yaml
 changes:
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Change the module-level agent entry hint from `lumen llm outline` to `lumen llm --topic outline` and annotate it to this TD."
-  - path: projects/lumen/src/spec.rs
+  - path: apps/lumen/src/spec.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Update `llm_outline_md()` topic bullets and nearby cross-topic references from positional `lumen llm <topic>` to canonical `lumen llm --topic <topic>` text."
-  - path: projects/lumen/src/operator/crd.rs
+  - path: apps/lumen/src/operator/crd.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Update CRD/operator-facing storage topic references from `lumen llm storage` to `lumen llm --topic storage`."
-  - path: projects/lumen/README.md
+  - path: apps/lumen/README.md
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Update README brief and Agent Offline Integration surfaces to show `lumen llm --topic ...` examples."
-  - path: projects/lumen/tests/spec_cli.rs
+  - path: apps/lumen/tests/spec_cli.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
     description: "Add #824 `@spec` regression assertions for canonical outline topic examples and absence of rejected positional examples."
-  - path: projects/lumen/tests/cli_convention.rs
+  - path: apps/lumen/tests/cli_convention.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

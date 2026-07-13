@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-k8s-stateless-kind
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-k8s-stateless-kind
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-k8s-stateless-kind
@@ -7,14 +7,14 @@
 // @contract k8s-stateless-kind-dogfood
 // @category stability
 // @required_for_production true
-// @command projects/lumen/scripts/kind-e2e.sh
+// @command apps/lumen/scripts/kind-e2e.sh
 // AW-EC-END
 
 // Contract: The live kind dogfood path runs Lumen only, without building or deploying Relay, and proves the serving API recovers after a pod restart; operator mode also proves shardCount=2 with replicasPerShard=1 and replicasPerShard=3 storage topology.
 #[test]
 #[ignore = "AW EC gate: run via `aw health --verify-ec` or `cargo test -- --ignored`"]
 fn lumen_claim_k8s_stateless_kind() {
-    let command = "projects/lumen/scripts/kind-e2e.sh";
+    let command = "apps/lumen/scripts/kind-e2e.sh";
     let id = "lumen-claim-k8s-stateless-kind";
     let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     while !root.join(".aw").is_dir() {

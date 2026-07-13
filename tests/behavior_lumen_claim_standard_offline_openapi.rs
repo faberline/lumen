@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-standard-offline-openapi
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-standard-offline-openapi
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-standard-offline-openapi

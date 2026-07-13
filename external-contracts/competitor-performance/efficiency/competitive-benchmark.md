@@ -25,8 +25,8 @@ e2e_tests:
     claim_id: competitive-regression-gate-beat-pg-os-per-cell-ratcheting
     contract_id: search-efficiency-filtering-ranking-pagination
     category: efficiency
-    test_path: projects/lumen/tests/benchmark_lumen_competitor_performance_competitive.rs
-    command: "cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter"
+    test_path: apps/lumen/tests/benchmark_lumen_competitor_performance_competitive.rs
+    command: "cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter"
     assertions:
       - "Lumen-only default gate holds per-cell e2e/engine latency floors from perf-baseline.json without provisioning pg/OpenSearch."
       - "Retained pg/OpenSearch ratios remain the calibrated competitive evidence; explicit compare runners refresh them only when cells or peer configs change."
@@ -43,10 +43,10 @@ tool_contracts:
     tool: meter
     manifest: meter-search-efficiency.toml
     category: efficiency
-    command: "cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter"
+    command: "cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter"
     native:
       version: 1
       project: lumen
       source_contract: lumen-competitor-performance-competitive
-      delegate_command: "cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter"
+      delegate_command: "cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter"
 ```

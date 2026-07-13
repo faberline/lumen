@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-competitor-performance-external-comparison
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-competitor-performance-external-comparison
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-competitor-performance-external-comparison
@@ -7,14 +7,14 @@
 // @contract competitor-performance-external-comparison
 // @category efficiency
 // @required_for_production true
-// @command cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter
+// @command cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter
 // AW-EC-END
 
 // Contract: The vat efficiency runner executes the Lumen-only regression path against retained Postgres/OpenSearch-calibrated floors; explicit calibration runners refresh peers only on demand.
 #[test]
 #[ignore = "AW EC gate: run via `aw health --verify-ec` or `cargo test -- --ignored`"]
 fn lumen_claim_competitor_performance_external_comparison() {
-    let command = "cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter";
+    let command = "cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter";
     let id = "lumen-claim-competitor-performance-external-comparison";
     let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     while !root.join(".aw").is_dir() {

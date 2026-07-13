@@ -1,11 +1,11 @@
 #!/usr/bin/env sh
-# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-install-script.md#text-source-unit
+# SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-install-script.md#text-source-unit
 # CODEGEN-BEGIN
 # lumen installer — downloads the right prebuilt binary from GitHub
 # Releases and drops it on your PATH.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/chrischeng-c4/axiom/main/projects/lumen/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/chrischeng-c4/axiom/main/apps/lumen/install.sh | sh
 #
 # Env overrides:
 #   LUMEN_VERSION   tag to install (default: latest lumen@* release, e.g. lumen@1.0)

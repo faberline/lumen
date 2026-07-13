@@ -1,9 +1,9 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/source/projects-lumen-src-bin-lumen-rs.md#rust-source-unit
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/source/projects-lumen-src-bin-lumen-rs.md#rust-source-unit
 // CODEGEN-BEGIN
 //! `lumen` — the single agent-first CLI: `serve` (serving node), `spec` /
 //! `llm` (offline integration contract + agent topics), and `k8s` (operator
 //! + CRD generation). Agents start here: `lumen llm --topic outline`.
-//! @spec projects/lumen/tech-design/interfaces/cli/self-docs-teach-positional-lumen-llm-topic-but-the-cli-only-acce.md#logic
+//! @spec apps/lumen/tech-design/interfaces/cli/self-docs-teach-positional-lumen-llm-topic-but-the-cli-only-acce.md#logic
 //!
 //! A serving node is symmetric: it answers reads from its local
 //! materialized index and accepts writes by publishing them to the
@@ -86,12 +86,12 @@ enum Command {
     /// running target + version, downloads the matching `lumen-<target>.tar.gz`,
     /// verifies its sha256, and atomically replaces the running executable.
     /// `--check` reports the available version without changing anything.
-    // @spec projects/lumen/tech-design/interfaces/cli/lumen-upgrade-self-update-cli-from-github-releases.md
+    // @spec apps/lumen/tech-design/interfaces/cli/lumen-upgrade-self-update-cli-from-github-releases.md
     Upgrade(UpgradeArgs),
     /// Search, view, and file Lumen issues on the axiom tracker.
     /// `search` and `view` read existing `app:lumen` issues; `create`
     /// files a diagnostics-rich issue tagged `app:lumen`.
-    // @spec projects/lumen/tech-design/interfaces/cli/lumen-issue-search-view-create-shared-cli-standard.md
+    // @spec apps/lumen/tech-design/interfaces/cli/lumen-issue-search-view-create-shared-cli-standard.md
     Issue(IssueArgs),
     /// Fetch a snapshot from a running serving fleet's own `/admin/backup`
     /// and ship it to a destination (`file://`, `s3://`, or schema-only
@@ -107,13 +107,13 @@ enum Command {
     /// example). Resolves a bearer token from the deployment's
     /// token-registry Secret when `--secret`/`--cr` is given (see `lumen llm
     /// --topic auth`).
-    // @spec projects/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
+    // @spec apps/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
     Connect(ConnectArgs),
     /// One-shot query wrappers against a reachable lumen node: `index`,
     /// `search`, `duplicates`, `collections list`. Assembles the exact wire
     /// body `lumen spec --shapes` publishes — no interactive REPL. Requires
     /// the `backup` feature (pulled in transitively by `operator`).
-    // @spec projects/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
+    // @spec apps/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
     Query(QueryArgs),
 }
 
@@ -275,7 +275,7 @@ struct K8sFileOutputArgs {
 }
 
 /// `lumen upgrade` flags.
-/// @spec projects/lumen/tech-design/interfaces/cli/lumen-upgrade-self-update-cli-from-github-releases.md
+/// @spec apps/lumen/tech-design/interfaces/cli/lumen-upgrade-self-update-cli-from-github-releases.md
 #[derive(clap::Args)]
 struct UpgradeArgs {
     /// Report the current and latest version without modifying the binary.
@@ -293,8 +293,8 @@ struct UpgradeArgs {
 }
 
 /// `lumen issue <search|view|create|comment>` flags.
-/// @spec projects/lumen/tech-design/interfaces/cli/lumen-issue-search-view-create-shared-cli-standard.md
-/// @spec projects/lumen/tech-design/interfaces/cli/lumen-cli-add-issue-comment-auto-reopen-follow-up.md
+/// @spec apps/lumen/tech-design/interfaces/cli/lumen-issue-search-view-create-shared-cli-standard.md
+/// @spec apps/lumen/tech-design/interfaces/cli/lumen-cli-add-issue-comment-auto-reopen-follow-up.md
 #[derive(clap::Args)]
 struct IssueArgs {
     #[command(subcommand)]
@@ -403,7 +403,7 @@ struct BackupArgs {
 
 /// `lumen connect` flags (#1321): manage a `kubectl port-forward` around a
 /// wrapped command so an agent never tracks the port-forward process itself.
-/// @spec projects/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
+/// @spec apps/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
 #[derive(clap::Args)]
 struct ConnectArgs {
     /// kubectl context to port-forward through. Omit to use the current context.
@@ -458,7 +458,7 @@ enum TokenRole {
     Admin,
 }
 
-/// @spec projects/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
+/// @spec apps/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
 impl From<TokenRole> for cli_std::connect::Role {
     fn from(role: TokenRole) -> Self {
         match role {
@@ -474,7 +474,7 @@ impl From<TokenRole> for cli_std::connect::Role {
 /// `--namespace`/`--secret` are set, resolve one bearer token from the
 /// deployment's token-registry Secret (see `lumen llm --topic auth`) whose
 /// role covers `--role` for the query's collection (or the wildcard `*`).
-/// @spec projects/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
+/// @spec apps/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
 #[derive(clap::Args, Clone)]
 struct QueryTarget {
     /// Base URL of a reachable lumen serving node, e.g. `http://localhost:7373`
@@ -501,7 +501,7 @@ struct QueryTarget {
 
 /// `lumen query <index|search|duplicates|collections>` flags (#1321): thin
 /// one-shot wrappers assembling the exact `lumen spec --shapes` wire body.
-/// @spec projects/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
+/// @spec apps/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
 #[derive(clap::Args)]
 struct QueryArgs {
     #[command(subcommand)]
@@ -734,7 +734,7 @@ enum SpecFormat {
 #[derive(Parser)]
 struct SpecArgs {
     /// Generate a typed client from this spec instead of printing it.
-    /// @spec projects/lumen/tech-design/interfaces/cli/lumen-spec-gen-generate-a-typed-client-ts-py-rust-from-lumen-s-o.md
+    /// @spec apps/lumen/tech-design/interfaces/cli/lumen-spec-gen-generate-a-typed-client-ts-py-rust-from-lumen-s-o.md
     #[command(subcommand)]
     gen: Option<SpecSub>,
     /// Schema format to emit when neither `--shapes` nor `--fields` is set.
@@ -967,8 +967,8 @@ async fn main() -> Result<()> {
 
 /// This binary's identity + build provenance for the standard CLI ops
 /// (`upgrade` / `issue`), per the CONTRIBUTING.md CLI convention.
-/// @spec projects/lumen/tech-design/interfaces/cli/lumen-upgrade-self-update-cli-from-github-releases.md
-/// @spec projects/lumen/tech-design/interfaces/cli/lumen-issue-search-view-create-shared-cli-standard.md
+/// @spec apps/lumen/tech-design/interfaces/cli/lumen-upgrade-self-update-cli-from-github-releases.md
+/// @spec apps/lumen/tech-design/interfaces/cli/lumen-issue-search-view-create-shared-cli-standard.md
 const TOOL: cli_std::ToolInfo = cli_std::ToolInfo {
     project: "lumen",
     repo: "chrischeng-c4/axiom",
@@ -1046,7 +1046,7 @@ async fn issue(args: IssueArgs) -> Result<()> {
 
 /// `lumen spec gen` — generate a typed client from lumen's own OpenAPI document
 /// (offline; no engine or server) and write it into `--out`.
-/// @spec projects/lumen/tech-design/interfaces/cli/lumen-spec-gen-generate-a-typed-client-ts-py-rust-from-lumen-s-o.md
+/// @spec apps/lumen/tech-design/interfaces/cli/lumen-spec-gen-generate-a-typed-client-ts-py-rust-from-lumen-s-o.md
 fn spec_gen(args: GenArgs) -> Result<()> {
     use cclab_openapi_codegen::{generate, GenOptions, HttpClient, Lang};
     let lang = match args.lang {
@@ -1392,7 +1392,7 @@ fn restore_file_next_command(url: &str, path: &Path, has_token: bool) -> String 
 /// whose role covers `target.role` for `collection` (or `*`). Returns `None`
 /// when no token can be resolved (e.g. `spec.auth: off` deployments). Thin
 /// wrapper over `cli_std::connect::resolve_token` (#1376).
-/// @spec projects/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
+/// @spec apps/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
 fn resolve_token(target: &QueryTarget, collection: Option<&str>) -> Result<Option<String>> {
     cli_std::connect::resolve_token(
         target.token.as_deref(),
@@ -1422,7 +1422,7 @@ fn resolve_base_url(target: &QueryTarget) -> Result<String> {
 /// `LUMEN_TOKEN`, when resolved) set, then tear the port-forward down
 /// (`ChildGuard::drop`) once the wrapped command exits — regardless of its
 /// exit status — so no port-forward process is left for the caller to track.
-/// @spec projects/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
+/// @spec apps/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
 async fn connect(args: ConnectArgs) -> Result<()> {
     let service = args
         .service
@@ -1652,7 +1652,7 @@ async fn http_get_json(
 /// `lumen query` dispatch (#1321, R3): resolves `--url`/token via
 /// `QueryTarget` (R2, shared with `lumen connect`), assembles the exact wire
 /// body, and POSTs/GETs it. No REPL, no new HTTP endpoint.
-/// @spec projects/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
+/// @spec apps/lumen/tech-design/interfaces/cli/cli-connect-query-k8s-agent-workflow.md
 #[cfg(feature = "backup")]
 async fn dispatch_query(args: QueryArgs) -> Result<()> {
     match args.command {
@@ -1711,9 +1711,9 @@ fn render_release_dockerfile(version: Option<&str>) -> String {
     let template = strip_ownership_markers(include_str!("../../Dockerfile.release"));
     let mut out = String::new();
     for line in template.lines() {
-        if line.starts_with("#   docker build -f projects/lumen/Dockerfile.release -t lumen:") {
+        if line.starts_with("#   docker build -f apps/lumen/Dockerfile.release -t lumen:") {
             out.push_str(&format!(
-                "#   docker build -f projects/lumen/Dockerfile.release -t lumen:{version} \\"
+                "#   docker build -f apps/lumen/Dockerfile.release -t lumen:{version} \\"
             ));
         } else if line.starts_with("#     --build-arg LUMEN_VERSION=") {
             out.push_str(&format!("#     --build-arg LUMEN_VERSION={tag} ."));
@@ -1898,7 +1898,7 @@ struct SegmentCheckpointSink {
     aof: Option<lumen::coordinator::SharedAof>,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-bin-lumen-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-bin-lumen-rs.md#source
 #[async_trait::async_trait]
 impl lumen::api::CheckpointSink for SegmentCheckpointSink {
     async fn checkpoint_now(&self) -> Result<bool> {

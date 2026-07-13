@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/source/projects-lumen-src-metrics-rs.md#rust-source-unit
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/source/projects-lumen-src-metrics-rs.md#rust-source-unit
 // CODEGEN-BEGIN
 //! Lightweight in-process Prometheus exposition.
 //!
@@ -24,7 +24,7 @@ use service_metrics::{Counter, Gauge, Sample};
 /// `shard="0", partition="0"` as constants; future LSM/Raft tiers will
 /// vary `partition` and `shard` respectively.
 #[derive(Debug, Default)]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-metrics-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-metrics-rs.md#source
 pub struct Metrics {
     pub index_writes_total: Counter,
     pub index_bytes_total: Counter,
@@ -62,7 +62,7 @@ pub struct Metrics {
     pub scatter_map_version_mismatches_total: Counter,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-metrics-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-metrics-rs.md#source
 impl Metrics {
     pub fn new() -> Self {
         Self::default()

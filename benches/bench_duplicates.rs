@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-benches.md#schema
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-benches.md#schema
 // CODEGEN-BEGIN
 //! Duplicate-detection bench.
 //!
@@ -23,7 +23,7 @@ const HOT_KEYS: usize = 5_000;
 
 struct Lcg(u64);
 
-/// @spec projects/lumen/tech-design/semantic/lumen-benches.md#schema
+/// @spec apps/lumen/tech-design/semantic/lumen-benches.md#schema
 impl Lcg {
     fn new(seed: u64) -> Self {
         Self(seed)

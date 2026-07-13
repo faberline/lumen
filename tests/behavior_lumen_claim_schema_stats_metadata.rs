@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-schema-stats-metadata
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-schema-stats-metadata
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-schema-stats-metadata

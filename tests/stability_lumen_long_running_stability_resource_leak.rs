@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/long-running-stability/stability/query-resilience.md#lumen-long-running-stability-resource-leak
+// SPEC-MANAGED: apps/lumen/external-contracts/long-running-stability/stability/query-resilience.md#lumen-long-running-stability-resource-leak
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-long-running-stability-resource-leak
@@ -7,14 +7,14 @@
 // @contract search-stability-resource-leak
 // @category stability
 // @required_for_production true
-// @command cd projects/lumen && ../../target/debug/vat run rig-endurance
+// @command cd apps/lumen && ../../target/debug/vat run rig-endurance
 // AW-EC-END
 
 // Contract: (e) Open FD count after sustained index+search load <= 1.20x before + 16 (rig endurance/fd_leak.toml). Env-dependent (vat-provisioned lumen).
 #[test]
 #[ignore = "AW EC gate: run via `aw health --verify-ec` or `cargo test -- --ignored`"]
 fn lumen_long_running_stability_resource_leak() {
-    let command = "cd projects/lumen && ../../target/debug/vat run rig-endurance";
+    let command = "cd apps/lumen && ../../target/debug/vat run rig-endurance";
     let id = "lumen-long-running-stability-resource-leak";
     let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     while !root.join(".aw").is_dir() {

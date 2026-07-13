@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/competitor-performance/efficiency/competitive-benchmark.md#lumen-competitor-performance-competitive
+// SPEC-MANAGED: apps/lumen/external-contracts/competitor-performance/efficiency/competitive-benchmark.md#lumen-competitor-performance-competitive
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-competitor-performance-competitive
@@ -7,7 +7,7 @@
 // @contract search-efficiency-filtering-ranking-pagination
 // @category efficiency
 // @required_for_production true
-// @command cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter
+// @command cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter
 // AW-EC-END
 
 // Contract: Lumen-only default gate holds per-cell e2e/engine latency floors from perf-baseline.json without provisioning pg/OpenSearch.
@@ -17,7 +17,7 @@
 #[test]
 #[ignore = "AW EC gate: run via `aw health --verify-ec` or `cargo test -- --ignored`"]
 fn lumen_competitor_performance_competitive() {
-    let command = "cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter";
+    let command = "cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter";
     let id = "lumen-competitor-performance-competitive";
     let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     while !root.join(".aw").is_dir() {

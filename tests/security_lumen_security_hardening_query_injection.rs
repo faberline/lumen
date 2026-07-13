@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/security-hardening/security/access-control.md#lumen-security-hardening-query-injection
+// SPEC-MANAGED: apps/lumen/external-contracts/security-hardening/security/access-control.md#lumen-security-hardening-query-injection
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-security-hardening-query-injection

@@ -66,15 +66,15 @@ docker run --rm -p 7373:7373 \
 ### 3c. Local multi-node raft
 
 ```bash
-projects/lumen/scripts/dev-cluster.sh
+apps/lumen/scripts/dev-cluster.sh
 ```
 
 ### 3d. Kubernetes (kustomize overlays)
 
 ```bash
-kubectl apply -k projects/lumen/k8s/overlays/dev      # 1 serving, pretty logs, auth off
-kubectl apply -k projects/lumen/k8s/overlays/staging  # 3 serving, json logs, ServiceMonitor
-kubectl apply -k projects/lumen/k8s/overlays/prod     # 6 serving (HPA 6–12), auth required
+kubectl apply -k apps/lumen/k8s/overlays/dev      # 1 serving, pretty logs, auth off
+kubectl apply -k apps/lumen/k8s/overlays/staging  # 3 serving, json logs, ServiceMonitor
+kubectl apply -k apps/lumen/k8s/overlays/prod     # 6 serving (HPA 6–12), auth required
 ```
 
 Structure: `k8s/base` (Deployment, Service, HPA, PDB, ConfigMap),
@@ -188,7 +188,7 @@ aw health --project lumen ec --verify-ec        # EC command matrix green
 aw health --project lumen full
 
 # performance (only when perf is part of the release claim) — competitive x100 profile
-cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter
+cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter
 ```
 
 > The aggregate gate is `aw health --project lumen full` →

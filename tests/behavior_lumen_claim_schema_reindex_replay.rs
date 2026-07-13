@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-schema-reindex-replay
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-schema-reindex-replay
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-schema-reindex-replay

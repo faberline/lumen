@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-examples.md#schema
+# SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-examples.md#schema
 # CODEGEN-BEGIN
 """Illustrative DIY ingestion recipe: Postgres logical replication -> lumen.
 

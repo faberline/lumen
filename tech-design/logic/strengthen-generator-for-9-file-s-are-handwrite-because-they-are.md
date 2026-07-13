@@ -50,22 +50,22 @@ flowchart TD
 
 ```yaml
 changes:
-  - path: projects/lumen/tech-design/logic/strengthen-generator-for-9-file-s-are-handwrite-because-they-are.md
+  - path: apps/lumen/tech-design/logic/strengthen-generator-for-9-file-s-are-handwrite-because-they-are.md
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Define the rust-source-unit promotion workflow and verification loop for the remaining Lumen generator gaps."
-  - path: projects/lumen/build.rs
+  - path: apps/lumen/build.rs
     action: modify
     section: rust-source-unit
     impl_mode: codegen
     description: "Promote the build script from HANDWRITE ownership to a per-file rust-source-unit TD."
-  - path: projects/lumen/src/raft_sm.rs
+  - path: apps/lumen/src/raft_sm.rs
     action: modify
     section: rust-source-unit
     impl_mode: codegen
     description: "Promote the raft state-machine implementation to a per-file rust-source-unit TD."
-  - path: projects/lumen/tests/spec_gen_e2e.rs
+  - path: apps/lumen/tests/spec_gen_e2e.rs
     action: modify
     section: rust-source-unit
     impl_mode: hand-written

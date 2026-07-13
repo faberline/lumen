@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/source/projects-lumen-src-lib-rs.md#rust-source-unit
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/source/projects-lumen-src-lib-rs.md#rust-source-unit
 // CODEGEN-BEGIN
 //! lumen — standalone search and duplicate-detection index.
 //!
@@ -11,7 +11,7 @@
 //!   primary/replica replication. Rebuildable from the caller.
 //! - HTTP/2 transport, client-side collection-shard routing.
 //!
-//! Full surface and v1 scope: `projects/lumen/README.md`.
+//! Full surface and v1 scope: `apps/lumen/README.md`.
 
 /// Local append-only log (Stage 2 Phase 2f-3): the binary's "AOF" — a framed,
 /// crash-safe record of every APPLIED `(seq, WalRecord)`. Recovery is RDB (the

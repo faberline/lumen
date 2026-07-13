@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#rust-source-unit
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#rust-source-unit
 // CODEGEN-BEGIN
 //! Bearer-token auth + per-collection RBAC.
 //!
@@ -49,13 +49,13 @@ const TOKEN_REGISTRY_FILE_ENV: &str = "LUMEN_TOKEN_REGISTRY_FILE";
 const LEGACY_TOKENS_ENV: &str = "LUMEN_TOKENS";
 
 #[derive(Debug, Clone)]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
 pub struct AuthConfig {
     pub required: bool,
     pub tokens: HashMap<String, TokenClaims>,
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
 impl AuthConfig {
     pub fn open() -> Self {
         Self {
@@ -90,10 +90,10 @@ impl AuthConfig {
 /// Lumen's concrete verifier for the shared `service-auth` middleware: a
 /// thin newtype over `service_auth::StaticRoleMapVerifier`.
 #[derive(Debug, Clone)]
-/// @spec projects/lumen/tech-design/logic/lumen-service-auth-convergence-delegate-middleware-to-shared-ver.md#logic
+/// @spec apps/lumen/tech-design/logic/lumen-service-auth-convergence-delegate-middleware-to-shared-ver.md#logic
 pub struct LumenVerifier(service_auth::StaticRoleMapVerifier);
 
-/// @spec projects/lumen/tech-design/logic/lumen-service-auth-convergence-delegate-middleware-to-shared-ver.md#logic
+/// @spec apps/lumen/tech-design/logic/lumen-service-auth-convergence-delegate-middleware-to-shared-ver.md#logic
 impl LumenVerifier {
     pub fn new(cfg: Arc<AuthConfig>) -> Self {
         Self(service_auth::StaticRoleMapVerifier::new(
@@ -103,7 +103,7 @@ impl LumenVerifier {
     }
 }
 
-/// @spec projects/lumen/tech-design/logic/lumen-service-auth-convergence-delegate-middleware-to-shared-ver.md#logic
+/// @spec apps/lumen/tech-design/logic/lumen-service-auth-convergence-delegate-middleware-to-shared-ver.md#logic
 impl Verifier for LumenVerifier {
     type Principal = AuthContext;
 
@@ -120,10 +120,10 @@ impl Verifier for LumenVerifier {
 /// thin newtype over the shared [`RoleMapPrincipal`] so [`ensure`](Self::ensure)
 /// can map its rejection into lumen's own [`AuthErr`] / `ApiError` shape.
 #[derive(Debug, Clone)]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
 pub struct AuthContext(RoleMapPrincipal);
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
 impl AuthContext {
     pub fn ensure(&self, collection_id: &str, needed: Role) -> Result<(), AuthErr> {
         self.0.ensure(collection_id, needed).map_err(AuthErr::from)
@@ -134,7 +134,7 @@ impl AuthContext {
     }
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
 pub async fn auth_middleware(
     State(verifier): State<Arc<LumenVerifier>>,
     req: Request,
@@ -144,7 +144,7 @@ pub async fn auth_middleware(
 }
 
 #[derive(Debug)]
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
 pub enum AuthErr {
     Forbidden {
         subject: String,
@@ -153,7 +153,7 @@ pub enum AuthErr {
     },
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
 impl From<RoleMapDenied> for AuthErr {
     fn from(denied: RoleMapDenied) -> Self {
         AuthErr::Forbidden {
@@ -164,7 +164,7 @@ impl From<RoleMapDenied> for AuthErr {
     }
 }
 
-/// @spec projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
+/// @spec apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md#source
 impl IntoResponse for AuthErr {
     fn into_response(self) -> Response {
         match self {

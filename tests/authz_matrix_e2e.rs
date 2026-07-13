@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-tests.md#unit-test
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-tests.md#unit-test
 // CODEGEN-BEGIN
 //! Authorization matrix (TEST-STRATEGY security gate): every data-plane
 //! endpoint × {no token, wrong-scope token, right-scope token} returns the

@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-dynamic-multi-shard-replica-kind
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-dynamic-multi-shard-replica-kind
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-dynamic-multi-shard-replica-kind
@@ -7,14 +7,14 @@
 // @contract dynamic-multi-shard-replica-kind
 // @category stability
 // @required_for_production true
-// @command projects/lumen/scripts/kind-e2e.sh
+// @command apps/lumen/scripts/kind-e2e.sh
 // AW-EC-END
 
 // Contract: The live kind dogfood path covers multi-shard and replicated-shard operator profiles.
 #[test]
 #[ignore = "AW EC gate: run via `aw health --verify-ec` or `cargo test -- --ignored`"]
 fn lumen_claim_dynamic_multi_shard_replica_kind() {
-    let command = "projects/lumen/scripts/kind-e2e.sh";
+    let command = "apps/lumen/scripts/kind-e2e.sh";
     let id = "lumen-claim-dynamic-multi-shard-replica-kind";
     let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     while !root.join(".aw").is_dir() {

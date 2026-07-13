@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/topology/behavior/shard-topology.md#lumen-topology-existing-raft-replica-sync
+// SPEC-MANAGED: apps/lumen/external-contracts/topology/behavior/shard-topology.md#lumen-topology-existing-raft-replica-sync
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-topology-existing-raft-replica-sync
