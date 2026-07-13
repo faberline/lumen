@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-ec-vat-managed-runners
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-ec-vat-managed-runners
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-ec-vat-managed-runners
@@ -7,14 +7,14 @@
 // @contract ec-vat-managed-runners
 // @category behavior
 // @required_for_production true
-// @command cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter
+// @command cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter
 // AW-EC-END
 
 // Contract: The vat-managed meter runner remains executable for Lumen efficiency EC dispatch.
 #[test]
 #[ignore = "AW EC gate: run via `aw health --verify-ec` or `cargo test -- --ignored`"]
 fn lumen_claim_ec_vat_managed_runners() {
-    let command = "cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter";
+    let command = "cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter";
     let id = "lumen-claim-ec-vat-managed-runners";
     let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     while !root.join(".aw").is_dir() {

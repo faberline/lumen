@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/long-running-stability/behavior/devops-render.md#lumen-long-running-stability-operator-render
+// SPEC-MANAGED: apps/lumen/external-contracts/long-running-stability/behavior/devops-render.md#lumen-long-running-stability-operator-render
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-long-running-stability-operator-render

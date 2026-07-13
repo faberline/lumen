@@ -87,12 +87,12 @@ flowchart TD
 
 ```yaml
 changes:
-  - path: projects/lumen/tech-design/interfaces/rest/relay-wal.md
+  - path: apps/lumen/tech-design/interfaces/rest/relay-wal.md
     action: annotate
     section: logic
     impl_mode: hand-written
     reason: "Historical RelayWal design retained without active source replay targets; raft-host is the active durable primary/replica log path."
-  - path: projects/lumen/tech-design/interfaces/rest/relay-wal.md
+  - path: apps/lumen/tech-design/interfaces/rest/relay-wal.md
     action: annotate
     section: unit-test
     impl_mode: hand-written

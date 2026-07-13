@@ -1,4 +1,4 @@
-<!-- SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-projects-lumen.md#schema -->
+<!-- SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-projects-lumen.md#schema -->
 <!-- CODEGEN-BEGIN -->
 # lumen Agent Context
 
@@ -7,7 +7,7 @@
 ## Tech Design
 
 - [Tech Design](tech-design): implementation source of truth.
-- Validate: `aw td check projects/lumen/tech-design`.
+- Validate: `aw td check apps/lumen/tech-design`.
 
 ## Capability Map
 

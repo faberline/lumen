@@ -1,13 +1,13 @@
 ---
 id: semantic-lumen-k8s-base
-summary: Semantic coverage for "projects/lumen/k8s/base"
+summary: Semantic coverage for "apps/lumen/k8s/base"
 capability_refs:
   - id: "long-running-stability"
     role: primary
     gap: "kustomize-base-overlays-hpa"
     claim: "kustomize-base-overlays-hpa"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/k8s/base`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/k8s/base`."
   - id: "kubernetes-native-deployment"
     role: primary
     gap: "kustomize-base-overlays-hpa"
@@ -30,11 +30,11 @@ deployment:
     role: "base"
   semantic_domain:
     key: "lumen/k8s/base"
-    source_group: "projects/lumen/k8s/base"
+    source_group: "apps/lumen/k8s/base"
     coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/k8s/base/kustomization.yaml"
+      - path: "apps/lumen/k8s/base/kustomization.yaml"
         language: "kustomize"
         ownership_state: "codegen"
         generator_primitives: ["kustomize_manifest"]
@@ -43,12 +43,12 @@ deployment:
           ecosystem: "kustomize"
           role: "kustomization"
           section_type: "deployment"
-          domain: "projects/lumen/k8s/base"
+          domain: "apps/lumen/k8s/base"
   artifacts:
-    - path: "projects/lumen/k8s/base/kustomization.yaml"
+    - path: "apps/lumen/k8s/base/kustomization.yaml"
       kind: "kustomization"
       content: |
-        # SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-k8s-base.md#deployment
+        # SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-k8s-base.md#deployment
         # CODEGEN-BEGIN
         apiVersion: kustomize.config.k8s.io/v1beta1
         kind: Kustomization
@@ -88,7 +88,7 @@ deployment:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/k8s/base/kustomization.yaml"
+  - path: "apps/lumen/k8s/base/kustomization.yaml"
     action: modify
     section: deployment
     description: |

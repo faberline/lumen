@@ -127,17 +127,17 @@ flowchart TD
 
 ```yaml
 changes:
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Add the connect/query Command variants, k8s coordinate + query-target arg structs, the ChildGuard port-forward lifecycle, the shared token-registry resolution helper, and the index/search/duplicates/collections-list body builders + HTTP dispatch."
-  - path: projects/lumen/src/spec.rs
+  - path: apps/lumen/src/spec.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Publish the flat `index` write-path shape in query_shapes() (closing the exact gap the issue reporter hit) and document connect/query in the llm outline + quickstart topics."
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -154,7 +154,7 @@ changes:
       secret_data_bytes/select_token/resolve_token) — moved verbatim into the
       new shared `libs/cli-std/src/connect.rs` module (feature `k8s`) so any
       k8s-native service CLI's own `connect` verb can reuse them, not just
-      lumen's. `projects/lumen/src/bin/lumen.rs` keeps this doc's R3/R4 scope
+      lumen's. `apps/lumen/src/bin/lumen.rs` keeps this doc's R3/R4 scope
       (query body builders/dispatch, flag surface, discoverability) plus a
       thin adapter over `cli_std::connect` for R1/R2: the `Lumen` CRD-name
       lookup convention (`resource_kind = "lumen"`) and the

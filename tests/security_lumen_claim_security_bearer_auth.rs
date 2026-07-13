@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-security-bearer-auth
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-security-bearer-auth
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-security-bearer-auth

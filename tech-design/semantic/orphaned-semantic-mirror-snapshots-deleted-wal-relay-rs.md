@@ -88,22 +88,22 @@ flowchart TD
 
 ```yaml
 changes:
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-wal_relay-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-wal_relay-rs.md
     action: delete
     section: logic
     impl_mode: hand-written
-    description: "Delete semantic source snapshot for removed projects/lumen/src/wal_relay.rs."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-tests-wal_relay-rs.md
+    description: "Delete semantic source snapshot for removed apps/lumen/src/wal_relay.rs."
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-tests-wal_relay-rs.md
     action: delete
     section: logic
     impl_mode: hand-written
-    description: "Delete semantic test snapshot for removed projects/lumen/tests/wal_relay.rs."
-  - path: projects/lumen/tech-design/td.lock
+    description: "Delete semantic test snapshot for removed apps/lumen/tests/wal_relay.rs."
+  - path: apps/lumen/tech-design/td.lock
     action: modify
     section: changes
     impl_mode: hand-written
     description: "Regenerate Lumen TD lock after deleting orphaned semantic TDs."
-  - path: projects/lumen/tech-design/semantic/orphaned-semantic-mirror-snapshots-deleted-wal-relay-rs.md
+  - path: apps/lumen/tech-design/semantic/orphaned-semantic-mirror-snapshots-deleted-wal-relay-rs.md
     action: annotate
     section: unit-test
     impl_mode: hand-written

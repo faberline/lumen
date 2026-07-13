@@ -101,7 +101,7 @@ requirements:
 elements:
   lumen_auth_unit_tests:
     kind: test
-    path: projects/lumen/src/auth.rs
+    path: apps/lumen/src/auth.rs
   service_auth_unit_tests:
     kind: test
     path: libs/service-auth/src/lib.rs
@@ -155,7 +155,7 @@ e2e_tests:
   - id: lumen-auth-e2e-contract
     name: "lumen auth e2e contract"
     runner: cargo
-    path: projects/lumen/tests/auth_e2e.rs
+    path: apps/lumen/tests/auth_e2e.rs
     command: "cargo test -p lumen --test auth_e2e -- --nocapture"
     verifies:
       - "Required mode rejects missing and invalid Bearer tokens with the shared 401 JSON body."
@@ -164,14 +164,14 @@ e2e_tests:
   - id: lumen-authz-matrix-contract
     name: "lumen authz matrix contract"
     runner: cargo
-    path: projects/lumen/tests/authz_matrix_e2e.rs
+    path: apps/lumen/tests/authz_matrix_e2e.rs
     command: "cargo test -p lumen --test authz_matrix_e2e -- --nocapture"
     verifies:
       - "Every protected route still enforces its route-specific role minimum after middleware delegation."
   - id: lumen-package-regression
     name: "lumen package regression"
     runner: cargo
-    path: projects/lumen
+    path: apps/lumen
     command: "cargo test -p lumen"
     verifies:
       - "The package compiles and the full Lumen regression suite remains green."
@@ -181,17 +181,17 @@ e2e_tests:
 
 ```yaml
 changes:
-  - path: projects/lumen/Cargo.toml
+  - path: apps/lumen/Cargo.toml
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Add the workspace service-auth dependency to the Lumen crate."
-  - path: projects/lumen/src/auth.rs
+  - path: apps/lumen/src/auth.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Introduce LumenVerifier, implement service_auth::Verifier<Principal = AuthContext>, use service_auth::bearer_token/shared AuthError for authentication failures, retain AuthContext::ensure for per-collection RBAC and audit logging, and expose an auth_middleware wrapper backed by service_auth::auth_middleware."
-  - path: projects/lumen/src/auth.rs
+  - path: apps/lumen/src/auth.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -201,17 +201,17 @@ changes:
     section: unit-test
     impl_mode: hand-written
     description: "Keep the shared verifier middleware contract covered by generic service-auth unit tests."
-  - path: projects/lumen/src/api.rs
+  - path: apps/lumen/src/api.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Build Arc<LumenVerifier> from AppState auth and layer the shared auth middleware only over data-plane routes."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-auth-rs.md
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Synchronize the spec-managed source capture for auth.rs so ownership annotations and source block match the implementation."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-api-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-api-rs.md
     action: modify
     section: logic
     impl_mode: hand-written

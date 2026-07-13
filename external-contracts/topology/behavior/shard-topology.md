@@ -54,4 +54,4 @@ e2e_tests:
 | 1182 | Versioned virtual-bucket shard map | `cargo test -p lumen reshard`; `cargo test -p lumen` covers multi-shard routing for one large collection and versioned map coexistence. |
 | 1180 | Operator-owned reshard policy | `cargo test -p lumen --features operator --test operator_render -- --nocapture` covers CRD/render/status topology. |
 | 1181 | Empty-PVC replica bootstrap seed | `cargo test -p lumen --bin lumen bootstrap_seed_file_restores_snapshot_before_catchup -- --nocapture` and `cargo test -p lumen` cover seed-before-catch-up. |
-| 1179 | Multi-shard and replicated-shard dogfood | `projects/lumen/scripts/kind-e2e.sh` passes with `shardCount=2, replicasPerShard=1` and `shardCount=2, replicasPerShard=3`. |
+| 1179 | Multi-shard and replicated-shard dogfood | `apps/lumen/scripts/kind-e2e.sh` passes with `shardCount=2, replicasPerShard=1` and `shardCount=2, replicasPerShard=3`. |

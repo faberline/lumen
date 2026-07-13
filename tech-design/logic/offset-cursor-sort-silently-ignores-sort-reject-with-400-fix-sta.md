@@ -131,17 +131,17 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Reject unsupported offset-cursor plus sort combinations before they can silently ignore the sort."
-  - path: projects/lumen/src/api.rs
+  - path: apps/lumen/src/api.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Map unsupported sort planner errors to HTTP 400 responses."
-  - path: projects/lumen/tests/api_e2e.rs
+  - path: apps/lumen/tests/api_e2e.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -161,17 +161,17 @@ changes:
 
 ```yaml
 changes:
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Reject offset cursor plus sort before silently falling through to score-ranked paging."
-  - path: projects/lumen/src/types.rs
+  - path: apps/lumen/src/types.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Keep the SearchRequest.sort documentation aligned with supported sortable field kinds."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

@@ -22,7 +22,7 @@ e2e_tests:
     claim_id: role-based-authz-matrix-per-route
     contract_id: search-security-rbac-and-limit
     category: security
-    test_path: projects/lumen/tests/security_lumen_security_hardening_access_control.rs
+    test_path: apps/lumen/tests/security_lumen_security_hardening_access_control.rs
     command: "cargo test -p lumen --test authz_matrix_e2e --test api_e2e -- --nocapture"
     assertions:
       - "FILTERING: search over a collection the token cannot read returns 403; results never leak rows outside the caller's RBAC scope."
@@ -32,7 +32,7 @@ e2e_tests:
     claim_id: adversarial-query-safety
     contract_id: search-security-injection
     category: security
-    test_path: projects/lumen/tests/security_lumen_security_hardening_query_injection.rs
+    test_path: apps/lumen/tests/security_lumen_security_hardening_query_injection.rs
     command: "cargo test -p lumen --test coverage_gaps_e2e search_security_query_injection_rejects_bad_queries -- --nocapture"
     assertions:
       - "C2: malformed JSON, deeply-nested JSON query DSL, special-char search text, inverted ranges, and range numeric overflow are rejected or evaluated safely (no panic, no 5xx, bounded work)."
@@ -41,7 +41,7 @@ e2e_tests:
     claim_id: score-confidentiality
     contract_id: search-security-result-leak
     category: security
-    test_path: projects/lumen/tests/security_lumen_security_hardening_result_leak.rs
+    test_path: apps/lumen/tests/security_lumen_security_hardening_result_leak.rs
     command: "cargo test -p lumen --test coverage_gaps_e2e search_security_result_leak_respects_collection_boundaries -- --nocapture"
     assertions:
       - "C3: relevance scores and hit existence do not leak documents across collection boundaries; RBAC denial coverage remains pinned by the authz matrix case."
@@ -56,12 +56,12 @@ tool_contracts:
     tool: guard
     manifest: guard-search.toml
     category: security
-    command: "target/debug/guard scan projects/lumen --compact --no-persist"
+    command: "target/debug/guard scan apps/lumen --compact --no-persist"
     native:
       version: 1
       project: lumen
       source_contract: lumen-security-hardening-access-control
-      target: projects/lumen
+      target: apps/lumen
   - id: lumen-meter-search-security
     tool: meter
     manifest: meter-search-security.toml

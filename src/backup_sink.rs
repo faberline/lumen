@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/source/projects-lumen-src-backup_sink-rs.md#rust-source-unit
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/source/projects-lumen-src-backup_sink-rs.md#rust-source-unit
 // CODEGEN-BEGIN
 //! Lumen backup compatibility exports.
 //!

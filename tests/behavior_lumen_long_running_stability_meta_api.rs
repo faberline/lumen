@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/long-running-stability/behavior/meta-api.md#lumen-long-running-stability-meta-api
+// SPEC-MANAGED: apps/lumen/external-contracts/long-running-stability/behavior/meta-api.md#lumen-long-running-stability-meta-api
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-long-running-stability-meta-api

@@ -1,13 +1,13 @@
 ---
 id: semantic-lumen-scripts
-summary: Semantic coverage for "projects/lumen/scripts"
+summary: Semantic coverage for "apps/lumen/scripts"
 capability_refs:
   - id: "competitor-feature-parity"
     role: primary
     gap: "query-planner-boolean-eval-roaring-postings"
     claim: "query-planner-boolean-eval-roaring-postings"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/scripts`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/scripts`."
   - id: "long-running-stability"
     role: primary
     gap: "kind-api-recovery-no-relay"
@@ -25,11 +25,11 @@ fill_sections: [schema, unit-test, changes]
 ```yaml
 semantic_domain:
   key: "lumen/scripts"
-  source_group: "projects/lumen/scripts"
+  source_group: "apps/lumen/scripts"
   coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/scripts/load-fixture.py"
+      - path: "apps/lumen/scripts/load-fixture.py"
         language: "python"
         ownership_state: "codegen"
         generator_primitives: ["service_method"]
@@ -48,8 +48,8 @@ semantic_domain:
           ecosystem: "python"
           role: "service"
           section_type: "logic"
-          domain: "projects/lumen/scripts"
-      - path: "projects/lumen/scripts/bench_vs_db.py"
+          domain: "apps/lumen/scripts"
+      - path: "apps/lumen/scripts/bench_vs_db.py"
         language: "python"
         ownership_state: "codegen"
         generator_primitives: ["python_data_model", "service_method"]
@@ -152,14 +152,14 @@ semantic_domain:
           ecosystem: "python"
           role: "schema"
           section_type: "schema"
-          domain: "projects/lumen/scripts"
+          domain: "apps/lumen/scripts"
 python_modules:
-  - path: projects/lumen/scripts/load-fixture.py
+  - path: apps/lumen/scripts/load-fixture.py
     body:
     - kind: raw
       lines:
       - '#!/usr/bin/env python3'
-      - '# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-scripts.md#schema'
+      - '# SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-scripts.md#schema'
       - '# CODEGEN-BEGIN'
       - '"""Generate a synthetic lumen index fixture.'
       - ''
@@ -305,12 +305,12 @@ python_modules:
       - 'if __name__ == "__main__":'
       - '    raise SystemExit(main())'
       - '# CODEGEN-END'
-  - path: projects/lumen/scripts/bench_vs_db.py
+  - path: apps/lumen/scripts/bench_vs_db.py
     body:
     - kind: raw
       lines:
       - '#!/usr/bin/env python3'
-      - '# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-scripts.md#schema'
+      - '# SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-scripts.md#schema'
       - '# CODEGEN-BEGIN'
       - '"""Cross-engine search latency benchmark: lumen vs PostgreSQL vs MongoDB vs OpenSearch.'
       - ''
@@ -962,13 +962,13 @@ element UT_SOURCE_TESTS {
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/scripts/load-fixture.py"
+  - path: "apps/lumen/scripts/load-fixture.py"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: codegen
-  - path: "projects/lumen/scripts/bench_vs_db.py"
+  - path: "apps/lumen/scripts/bench_vs_db.py"
     action: modify
     section: schema
     description: |

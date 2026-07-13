@@ -31,10 +31,10 @@ tool_contracts:
     tool: guard
     manifest: guard.toml
     category: security
-    command: "target/debug/guard scan projects/lumen --compact --no-persist"
+    command: "target/debug/guard scan apps/lumen --compact --no-persist"
     native:
       version: 1
       project: lumen
       source_contract: lumen-security-hardening-auth-bearer-rbac
-      target: projects/lumen
+      target: apps/lumen
 ```

@@ -95,7 +95,7 @@ e2e_tests:
     claim_id: vat-managed-meter-and-rig-runners
     contract_id: ec-vat-managed-runners
     category: behavior
-    command: "cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter"
+    command: "cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter"
     assertions:
       - "The vat-managed meter runner remains executable for Lumen efficiency EC dispatch."
   - id: lumen-claim-ec-claim-closure-evidence
@@ -137,7 +137,7 @@ e2e_tests:
     claim_id: external-pg-and-opensearch-arena-comparison
     contract_id: competitor-performance-external-comparison
     category: efficiency
-    command: "cd projects/lumen && ../../target/debug/vat run ec-efficiency-meter"
+    command: "cd apps/lumen && ../../target/debug/vat run ec-efficiency-meter"
     assertions:
       - "The vat efficiency runner executes the Lumen-only regression path against retained Postgres/OpenSearch-calibrated floors; explicit calibration runners refresh peers only on demand."
   - id: lumen-claim-competitor-performance-depth-invariant
@@ -162,7 +162,7 @@ e2e_tests:
     claim_id: kustomize-base-overlays-hpa
     contract_id: long-running-kustomize-base-overlays
     category: behavior
-    command: "kustomize build projects/lumen/k8s/base && kustomize build projects/lumen/k8s/overlays/dev && kustomize build projects/lumen/k8s/overlays/staging && kustomize build projects/lumen/k8s/overlays/prod && kustomize build projects/lumen/k8s/operator"
+    command: "kustomize build apps/lumen/k8s/base && kustomize build apps/lumen/k8s/overlays/dev && kustomize build apps/lumen/k8s/overlays/staging && kustomize build apps/lumen/k8s/overlays/prod && kustomize build apps/lumen/k8s/operator"
     assertions:
       - "The base, dev, staging, prod, and operator kustomize surfaces render valid Kubernetes manifests."
   - id: lumen-claim-long-running-stateless-kind
@@ -170,7 +170,7 @@ e2e_tests:
     claim_id: kind-api-recovery-no-relay
     contract_id: long-running-stateless-kind-dogfood
     category: stability
-    command: "projects/lumen/scripts/kind-e2e.sh"
+    command: "apps/lumen/scripts/kind-e2e.sh"
     assertions:
       - "The live kind dogfood path runs Lumen only, without building or deploying Relay, and proves the serving API recovers after a pod restart; operator mode also proves shardCount=2 with replicasPerShard=1 and replicasPerShard=3 storage topology."
 
@@ -423,7 +423,7 @@ e2e_tests:
     claim_id: servicemonitor-prometheusrule-bundle
     contract_id: observability-servicemonitor-rule
     category: behavior
-    command: "kustomize build projects/lumen/k8s/overlays/prod"
+    command: "kustomize build apps/lumen/k8s/overlays/prod"
     assertions:
       - "The production overlay renders the ServiceMonitor and PrometheusRule bundle."
   - id: lumen-claim-observability-otlp
@@ -440,7 +440,7 @@ e2e_tests:
     claim_id: kustomize-base-overlays-hpa
     contract_id: k8s-kustomize-base-overlays
     category: behavior
-    command: "kustomize build projects/lumen/k8s/base && kustomize build projects/lumen/k8s/overlays/dev && kustomize build projects/lumen/k8s/overlays/staging && kustomize build projects/lumen/k8s/overlays/prod && kustomize build projects/lumen/k8s/operator"
+    command: "kustomize build apps/lumen/k8s/base && kustomize build apps/lumen/k8s/overlays/dev && kustomize build apps/lumen/k8s/overlays/staging && kustomize build apps/lumen/k8s/overlays/prod && kustomize build apps/lumen/k8s/operator"
     assertions:
       - "The Kubernetes base, overlays, HPA/PDB, and operator manifests render successfully."
   - id: lumen-claim-k8s-operator-reconcile
@@ -464,7 +464,7 @@ e2e_tests:
     claim_id: kind-api-recovery-no-relay
     contract_id: k8s-stateless-kind-dogfood
     category: stability
-    command: "projects/lumen/scripts/kind-e2e.sh"
+    command: "apps/lumen/scripts/kind-e2e.sh"
     assertions:
       - "The live kind dogfood path runs Lumen only, without building or deploying Relay, and proves the serving API recovers after a pod restart; operator mode also proves shardCount=2 with replicasPerShard=1 and replicasPerShard=3 storage topology."
 
@@ -489,7 +489,7 @@ e2e_tests:
     claim_id: multi-shard-replica-kind-e2e
     contract_id: dynamic-multi-shard-replica-kind
     category: stability
-    command: "projects/lumen/scripts/kind-e2e.sh"
+    command: "apps/lumen/scripts/kind-e2e.sh"
     assertions:
       - "The live kind dogfood path covers multi-shard and replicated-shard operator profiles."
   - id: lumen-claim-dynamic-reshard-durability

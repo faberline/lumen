@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-lexical-bm25
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-lexical-bm25
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-lexical-bm25

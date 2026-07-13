@@ -114,17 +114,17 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/types.rs
+  - path: apps/lumen/src/types.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Expose optional per-item version fields for last-write-wins stale write suppression."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Apply external-version checks during index writes and ignore stale per-cell updates."
-  - path: projects/lumen/tests/api_e2e.rs
+  - path: apps/lumen/tests/api_e2e.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -144,17 +144,17 @@ changes:
 
 ```yaml
 changes:
-  - path: projects/lumen/src/types.rs
+  - path: apps/lumen/src/types.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Expose optional external version fields on index payloads."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Apply last-write-wins external version checks during index writes."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

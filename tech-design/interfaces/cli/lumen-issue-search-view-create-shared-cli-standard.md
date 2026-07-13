@@ -148,12 +148,12 @@ flowchart TD
 
 ```yaml
 changes:
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Replace the deprecated lumen report-issue command with the standard issue search/view/create group wired to cli_std::issue."
-  - path: projects/lumen/tests/cli_convention.rs
+  - path: apps/lumen/tests/cli_convention.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

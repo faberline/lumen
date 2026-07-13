@@ -92,10 +92,10 @@ requirements:
 elements:
   crd_rs_doc_comment:
     kind: doc
-    path: projects/lumen/src/operator/crd.rs
+    path: apps/lumen/src/operator/crd.rs
   spec_cli_unit_tests:
     kind: test
-    path: projects/lumen/tests/spec_cli.rs
+    path: apps/lumen/tests/spec_cli.rs
 relations:
   - { from: crd_rs_doc_comment,    verifies: crd_doc_comment_warns_cluster_default_not_ssd }
   - { from: spec_cli_unit_tests,   verifies: llm_storage_documents_ssd_guidance }
@@ -135,32 +135,32 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/operator/crd.rs
+  - path: apps/lumen/src/operator/crd.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Strengthen the ServingSpec.raft_storage_class doc comment: state that unset means cluster default, that the cluster default is commonly not SSD-backed (e.g. GKE's standard-rwo), and that raft/WAL write latency benefits from picking an SSD-backed StorageClass explicitly via this field. No schema/type/default change - the field stays Option<String>."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-operator-crd-rs.md
     action: modify
     section: source
     impl_mode: hand-written
     description: "Sync the SPEC-MANAGED Source block byte-for-byte with the edited crd.rs doc comment."
-  - path: projects/lumen/src/spec.rs
+  - path: apps/lumen/src/spec.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Extend llm_storage_md() with a new subsection (same style/placement pattern the #808 backup and #809 resize subsections used) stating that the cluster-default StorageClass is usually not SSD-backed, that raft/WAL write latency benefits from setting spec.serving.raftStorageClass explicitly, and listing a few well-known example StorageClass names per common provider (GKE premium-rwo/pd-ssd, EKS gp3, AKS managed-csi-premium) as informational reference text a deployer should verify against their own cluster - not a mapping the operator consumes or validates."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-spec-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-spec-rs.md
     action: modify
     section: source
     impl_mode: hand-written
     description: "Sync the SPEC-MANAGED Source block byte-for-byte with the edited spec.rs."
-  - path: projects/lumen/tests/spec_cli.rs
+  - path: apps/lumen/tests/spec_cli.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
     description: "Add a new llm_storage_documents_* test (matching the existing naming/assertion pattern) asserting the new SSD guidance text and per-provider example StorageClass names are present in llm_storage_md()."
-  - path: projects/lumen/tech-design/semantic/lumen-tests.md
+  - path: apps/lumen/tech-design/semantic/lumen-tests.md
     action: modify
     section: source
     impl_mode: hand-written

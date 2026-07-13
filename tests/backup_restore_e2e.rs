@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-tests.md#unit-test
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-tests.md#unit-test
 // CODEGEN-BEGIN
 //! Backup → restore round-trip.
 
@@ -128,7 +128,7 @@ async fn restore_rejects_wrong_version() {
 
 /// #1095: the CLI helper path can export SnapshotV1 bytes over HTTP and import
 /// them into a fresh server.
-/// @spec projects/lumen/tech-design/interfaces/cli/lumen-cli-add-dump-load-export-import-snapshot-verbs.md#unit-test
+/// @spec apps/lumen/tech-design/interfaces/cli/lumen-cli-add-dump-load-export-import-snapshot-verbs.md#unit-test
 #[cfg(feature = "backup")]
 #[tokio::test]
 async fn http_snapshot_helpers_export_then_import() {

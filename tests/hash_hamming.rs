@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-tests.md#unit-test
+// SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-tests.md#unit-test
 // CODEGEN-BEGIN
 //! Hash field + Hamming near-duplicate search: index 64-bit hex hashes, then
 //! retrieve every doc within a Hamming-distance threshold, ranked by

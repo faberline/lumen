@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-build-script.md#text-source-unit
+# SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-build-script.md#text-source-unit
 # CODEGEN-BEGIN
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: projects/lumen/build.sh <debug|release>
+Usage: apps/lumen/build.sh <debug|release>
 
 debug    Build lumen and install target/debug/lumen to ~/.cargo/bin/lumen.
 release  Build/install lumen, create a release commit, and print the tag to push after git:land.
@@ -20,7 +20,7 @@ fail_hint() {
   local mode="$1"
   echo ""
   echo "Build failed."
-  echo "Retry with: projects/lumen/build.sh ${mode}"
+  echo "Retry with: apps/lumen/build.sh ${mode}"
   echo "Verify with: ~/.cargo/bin/lumen --version"
 }
 
@@ -61,8 +61,8 @@ install_lumen() {
 }
 
 if [[ "$MODE" == "debug" ]]; then
-  VERSION_FILES=(projects/lumen/Cargo.toml)
-  CURRENT_VERSION="$(project_build_read_version projects/lumen/Cargo.toml)"
+  VERSION_FILES=(apps/lumen/Cargo.toml)
+  CURRENT_VERSION="$(project_build_read_version apps/lumen/Cargo.toml)"
   project_build_prepare_debug_version lumen "$CURRENT_VERSION" "${VERSION_FILES[@]}"
   cargo build -p lumen --bin lumen --features raft-wal
   install_lumen debug
@@ -72,8 +72,8 @@ if [[ "$MODE" == "debug" ]]; then
   exit 0
 fi
 
-VERSION_FILES=(projects/lumen/Cargo.toml)
-CURRENT_VERSION="$(project_build_read_version projects/lumen/Cargo.toml)"
+VERSION_FILES=(apps/lumen/Cargo.toml)
+CURRENT_VERSION="$(project_build_read_version apps/lumen/Cargo.toml)"
 export PROJECT_BUILD_REQUIRE_REMOTE_TAG_CHECK=1
 project_build_prepare_release_version lumen "$CURRENT_VERSION" "${VERSION_FILES[@]}"
 
@@ -82,7 +82,7 @@ cargo build --release -p lumen --bin lumen --features "otel operator raft-wal se
 install_lumen release
 
 TAG="${PROJECT_BUILD_RELEASE_TAG}"
-git add Cargo.lock projects/lumen
+git add Cargo.lock apps/lumen
 git commit --allow-empty -m "release(lumen): ${TAG}"
 
 project_build_print_release_next_steps lumen "$TAG"

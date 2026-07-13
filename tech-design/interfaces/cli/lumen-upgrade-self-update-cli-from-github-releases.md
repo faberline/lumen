@@ -153,12 +153,12 @@ flowchart TD
 
 ```yaml
 changes:
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Wire the upgrade command to release discovery, asset selection, checksum verification, and atomic binary replacement."
-  - path: projects/lumen/tests/spec_cli.rs
+  - path: apps/lumen/tests/spec_cli.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -178,7 +178,7 @@ changes:
 
 ```yaml
 changes:
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written

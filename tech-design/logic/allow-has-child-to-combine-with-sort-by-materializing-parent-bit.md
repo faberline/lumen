@@ -119,12 +119,12 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Materialize parent bitmaps so has_child filters can participate in sorted parent queries."
-  - path: projects/lumen/tests/collapse_nested.rs
+  - path: apps/lumen/tests/collapse_nested.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -152,12 +152,12 @@ changes:
 
 ```yaml
 changes:
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Route sorted has_child queries through the materialized parent sort path while preserving incompatible sort rejections."
-  - path: projects/lumen/src/storage.rs
+  - path: apps/lumen/src/storage.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

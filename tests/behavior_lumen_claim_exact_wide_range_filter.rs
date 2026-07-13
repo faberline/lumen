@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-exact-wide-range-filter
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-exact-wide-range-filter
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-exact-wide-range-filter

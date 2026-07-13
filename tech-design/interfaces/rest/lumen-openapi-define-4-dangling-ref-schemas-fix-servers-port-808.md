@@ -98,12 +98,12 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/spec.rs
+  - path: apps/lumen/src/spec.rs
     action: modify
     section: logic
     impl_mode: hand-written
     reason: "Register the OpenAPI component schemas and emit server URLs with Lumen's actual service port."
-  - path: projects/lumen/tests/spec_cli.rs
+  - path: apps/lumen/tests/spec_cli.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
@@ -131,12 +131,12 @@ changes:
 
 ```yaml
 changes:
-  - path: projects/lumen/src/spec.rs
+  - path: apps/lumen/src/spec.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Render lumen's OpenAPI document with complete schemas and server metadata."
-  - path: projects/lumen/tests/spec_cli.rs
+  - path: apps/lumen/tests/spec_cli.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

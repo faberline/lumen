@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-observability-servicemonitor-rule
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-observability-servicemonitor-rule
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-observability-servicemonitor-rule
@@ -7,14 +7,14 @@
 // @contract observability-servicemonitor-rule
 // @category behavior
 // @required_for_production true
-// @command kustomize build projects/lumen/k8s/overlays/prod
+// @command kustomize build apps/lumen/k8s/overlays/prod
 // AW-EC-END
 
 // Contract: The production overlay renders the ServiceMonitor and PrometheusRule bundle.
 #[test]
 #[ignore = "AW EC gate: run via `aw health --verify-ec` or `cargo test -- --ignored`"]
 fn lumen_claim_observability_servicemonitor_rule() {
-    let command = "kustomize build projects/lumen/k8s/overlays/prod";
+    let command = "kustomize build apps/lumen/k8s/overlays/prod";
     let id = "lumen-claim-observability-servicemonitor-rule";
     let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     while !root.join(".aw").is_dir() {

@@ -1,12 +1,12 @@
 ---
 id: semantic-lumen-examples
-summary: Semantic coverage for "projects/lumen/examples"
+summary: Semantic coverage for "apps/lumen/examples"
 capability_refs:
   - id: "competitor-feature-parity"
     role: primary
     claim: "query-planner-boolean-eval-roaring-postings"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/examples`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/examples`."
 fill_sections: [schema, unit-test, changes]
 ---
 
@@ -18,11 +18,11 @@ fill_sections: [schema, unit-test, changes]
 ```yaml
 semantic_domain:
   key: "lumen/examples"
-  source_group: "projects/lumen/examples"
+  source_group: "apps/lumen/examples"
   coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/examples/consumer_pg_logical.py"
+      - path: "apps/lumen/examples/consumer_pg_logical.py"
         language: "python"
         ownership_state: "codegen"
         generator_primitives: ["service_method"]
@@ -50,14 +50,14 @@ semantic_domain:
           ecosystem: "python"
           role: "service"
           section_type: "logic"
-          domain: "projects/lumen/examples"
+          domain: "apps/lumen/examples"
 python_modules:
-  - path: projects/lumen/examples/consumer_pg_logical.py
+  - path: apps/lumen/examples/consumer_pg_logical.py
     body:
     - kind: raw
       lines:
       - '#!/usr/bin/env python3'
-      - '# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-examples.md#schema'
+      - '# SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-examples.md#schema'
       - '# CODEGEN-BEGIN'
       - '"""Illustrative DIY ingestion recipe: Postgres logical replication -> lumen.'
       - ''
@@ -203,7 +203,7 @@ element UT_SOURCE_TESTS {
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/examples/consumer_pg_logical.py"
+  - path: "apps/lumen/examples/consumer_pg_logical.py"
     action: modify
     section: schema
     description: |

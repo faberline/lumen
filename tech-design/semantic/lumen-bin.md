@@ -1,12 +1,12 @@
 ---
 id: semantic-lumen-bin
-summary: Semantic coverage for "projects/lumen/src/bin"
+summary: Semantic coverage for "apps/lumen/src/bin"
 capability_refs:
   - id: "cli-interface"
     role: primary
     claim: "service-process-interface"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/src/bin`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/src/bin`."
 fill_sections: [schema, changes]
 ---
 
@@ -18,11 +18,11 @@ fill_sections: [schema, changes]
 ```yaml
 semantic_domain:
   key: "lumen/bin"
-  source_group: "projects/lumen/src/bin"
+  source_group: "apps/lumen/src/bin"
   coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/src/bin/lumen.rs"
+      - path: "apps/lumen/src/bin/lumen.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "enum_model", "service_method"]
@@ -152,8 +152,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src/bin"
-      - path: "projects/lumen/src/bin/lumen-bench.rs"
+          domain: "apps/lumen/src/bin"
+      - path: "apps/lumen/src/bin/lumen-bench.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "enum_model", "service_method"]
@@ -217,7 +217,7 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src/bin"
+          domain: "apps/lumen/src/bin"
 ```
 
 ## Changes
@@ -226,13 +226,13 @@ semantic_domain:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/src/bin/lumen.rs"
+  - path: "apps/lumen/src/bin/lumen.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/bin/lumen-bench.rs"
+  - path: "apps/lumen/src/bin/lumen-bench.rs"
     action: modify
     section: schema
     description: |

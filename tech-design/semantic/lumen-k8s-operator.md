@@ -1,12 +1,12 @@
 ---
 id: semantic-lumen-k8s-operator
-summary: Semantic coverage for "projects/lumen/k8s/operator"
+summary: Semantic coverage for "apps/lumen/k8s/operator"
 capability_refs:
   - id: "long-running-stability"
     role: primary
     claim: "kustomize-base-overlays-hpa"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/k8s/operator`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/k8s/operator`."
 fill_sections: [deployment, changes]
 ---
 
@@ -23,11 +23,11 @@ deployment:
     role: "unknown"
   semantic_domain:
     key: "lumen/k8s/operator"
-    source_group: "projects/lumen/k8s/operator"
+    source_group: "apps/lumen/k8s/operator"
     coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/k8s/operator/kustomization.yaml"
+      - path: "apps/lumen/k8s/operator/kustomization.yaml"
         language: "kustomize"
         ownership_state: "codegen"
         generator_primitives: ["kustomize_manifest"]
@@ -36,9 +36,9 @@ deployment:
           ecosystem: "kustomize"
           role: "kustomization"
           section_type: "deployment"
-          domain: "projects/lumen/k8s/operator"
+          domain: "apps/lumen/k8s/operator"
   artifacts:
-    - path: "projects/lumen/k8s/operator/kustomization.yaml"
+    - path: "apps/lumen/k8s/operator/kustomization.yaml"
       kind: "kustomization"
       content: |
         apiVersion: kustomize.config.k8s.io/v1beta1
@@ -59,7 +59,7 @@ deployment:
           - crd.yaml
           - rbac.yaml
           - deployment.yaml
-    - path: "projects/lumen/k8s/operator/deployment.yaml"
+    - path: "apps/lumen/k8s/operator/deployment.yaml"
       kind: "kubernetes-deployment"
       content: |
         # The operator: a controller that watches Lumen objects cluster-wide. Ships in
@@ -135,13 +135,13 @@ deployment:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/k8s/operator/kustomization.yaml"
+  - path: "apps/lumen/k8s/operator/kustomization.yaml"
     action: modify
     section: deployment
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: codegen
-  - path: "projects/lumen/k8s/operator/deployment.yaml"
+  - path: "apps/lumen/k8s/operator/deployment.yaml"
     action: modify
     section: deployment
     description: |

@@ -131,7 +131,7 @@ wait_lumen_ready() {
 # Build the Lumen image and load it into the kind node.
 #
 # Built from the WORKSPACE ROOT as context (the same pattern as
-# projects/lumen/compose.yaml and conductor's CI): cargo resolves the whole
+# apps/lumen/compose.yaml and conductor's CI): cargo resolves the whole
 # workspace and `cargo build -p lumen` in the Dockerfile compiles only lumen's
 # real dependency closure. The repo-root .dockerignore keeps the context to
 # source-only (~MBs, not the 35G of target/). The deployment pins

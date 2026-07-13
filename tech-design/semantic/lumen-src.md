@@ -1,12 +1,12 @@
 ---
 id: semantic-lumen-src
-summary: Semantic coverage for "projects/lumen/src"
+summary: Semantic coverage for "apps/lumen/src"
 capability_refs:
   - id: "cli-interface"
     role: primary
     claim: "service-process-interface"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/src`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/src`."
 fill_sections: [schema, changes]
 ---
 
@@ -18,11 +18,11 @@ fill_sections: [schema, changes]
 ```yaml
 semantic_domain:
   key: "lumen/src"
-  source_group: "projects/lumen/src"
+  source_group: "apps/lumen/src"
   coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/src/spec.rs"
+      - path: "apps/lumen/src/spec.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method"]
@@ -74,8 +74,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/segment_rdb.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/segment_rdb.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method"]
@@ -124,8 +124,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/raft_sm.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/raft_sm.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method"]
@@ -174,8 +174,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/reshard.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/reshard.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method"]
@@ -221,8 +221,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/wal.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/wal.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method", "ts_type_surface"]
@@ -352,8 +352,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/log_entry.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/log_entry.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "enum_model"]
@@ -369,8 +369,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/types.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/types.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "enum_model", "service_method"]
@@ -500,8 +500,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/config.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/config.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method"]
@@ -535,8 +535,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/aof.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/aof.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "enum_model", "service_method"]
@@ -606,8 +606,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/lib.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/lib.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["source_unit"]
@@ -698,8 +698,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/auth.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/auth.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "enum_model", "service_method"]
@@ -772,8 +772,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/wal_nats.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/wal_nats.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method"]
@@ -834,8 +834,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/vector_index.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/vector_index.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "enum_model", "service_method"]
@@ -965,8 +965,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/backup.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/backup.rs"
         language: "rust"
         ownership_state: "handwrite"
         generator_primitives: ["service_method"]
@@ -982,8 +982,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/coordinator.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/coordinator.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method", "ts_type_surface"]
@@ -1044,8 +1044,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/metrics.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/metrics.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method"]
@@ -1082,8 +1082,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/tokenize.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/tokenize.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "service_method"]
@@ -1120,8 +1120,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/segment.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/segment.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "service_method", "ts_type_surface"]
@@ -1251,8 +1251,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/native_wire.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/native_wire.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "enum_model", "service_method"]
@@ -1373,8 +1373,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/raft.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/raft.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "enum_model", "service_method"]
@@ -1420,8 +1420,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/storage.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/storage.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "data_model", "enum_model", "service_method", "ts_type_surface"]
@@ -1551,8 +1551,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/routing.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/routing.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method"]
@@ -1676,8 +1676,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/rdb.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/rdb.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method"]
@@ -1726,8 +1726,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/api.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/api.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method"]
@@ -1857,8 +1857,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/tls.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/tls.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method"]
@@ -1898,8 +1898,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/backup_sink.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/backup_sink.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["source_unit"]
@@ -1908,8 +1908,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
-      - path: "projects/lumen/src/consumer.rs"
+          domain: "apps/lumen/src"
+      - path: "apps/lumen/src/consumer.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "service_method"]
@@ -1928,7 +1928,7 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src"
+          domain: "apps/lumen/src"
 ```
 
 ## Changes
@@ -1937,163 +1937,163 @@ semantic_domain:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/src/spec.rs"
+  - path: "apps/lumen/src/spec.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/segment_rdb.rs"
+  - path: "apps/lumen/src/segment_rdb.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/raft_sm.rs"
+  - path: "apps/lumen/src/raft_sm.rs"
     action: modify
     section: rust-source-unit
     description: |
       Full-file rust-source-unit artifact is replayed from its SPEC-MANAGED CODEGEN block.
     impl_mode: codegen
-  - path: "projects/lumen/src/reshard.rs"
+  - path: "apps/lumen/src/reshard.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/wal.rs"
+  - path: "apps/lumen/src/wal.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/log_entry.rs"
+  - path: "apps/lumen/src/log_entry.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/types.rs"
+  - path: "apps/lumen/src/types.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/config.rs"
+  - path: "apps/lumen/src/config.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/aof.rs"
+  - path: "apps/lumen/src/aof.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/lib.rs"
+  - path: "apps/lumen/src/lib.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/auth.rs"
+  - path: "apps/lumen/src/auth.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/wal_nats.rs"
+  - path: "apps/lumen/src/wal_nats.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/vector_index.rs"
+  - path: "apps/lumen/src/vector_index.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/backup.rs"
+  - path: "apps/lumen/src/backup.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/coordinator.rs"
+  - path: "apps/lumen/src/coordinator.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/metrics.rs"
+  - path: "apps/lumen/src/metrics.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/tokenize.rs"
+  - path: "apps/lumen/src/tokenize.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/segment.rs"
+  - path: "apps/lumen/src/segment.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/native_wire.rs"
+  - path: "apps/lumen/src/native_wire.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/raft.rs"
+  - path: "apps/lumen/src/raft.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/storage.rs"
+  - path: "apps/lumen/src/storage.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/routing.rs"
+  - path: "apps/lumen/src/routing.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/rdb.rs"
+  - path: "apps/lumen/src/rdb.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/api.rs"
+  - path: "apps/lumen/src/api.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/tls.rs"
+  - path: "apps/lumen/src/tls.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/backup_sink.rs"
+  - path: "apps/lumen/src/backup_sink.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/consumer.rs"
+  - path: "apps/lumen/src/consumer.rs"
     action: modify
     section: schema
     description: |

@@ -1,4 +1,4 @@
-// SPEC-MANAGED: projects/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-backup-rdb-store
+// SPEC-MANAGED: apps/lumen/external-contracts/claim-closure/production-claims.md#lumen-claim-backup-rdb-store
 // CODEGEN-BEGIN
 // AW-EC-BEGIN
 // @ec lumen-claim-backup-rdb-store

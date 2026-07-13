@@ -84,10 +84,10 @@ elements:
     path: libs/service-http/src/probes.rs
   lumen_api_e2e:
     kind: test
-    path: projects/lumen/tests/api_e2e.rs
+    path: apps/lumen/tests/api_e2e.rs
   lumen_auth_e2e:
     kind: test
-    path: projects/lumen/tests/auth_e2e.rs
+    path: apps/lumen/tests/auth_e2e.rs
 relations:
   - { from: service_http_unit_tests, verifies: shared_ready_ok }
   - { from: service_http_unit_tests, verifies: shared_ready_draining }
@@ -143,7 +143,7 @@ e2e_tests:
   - id: lumen-service-http-api-contract
     name: "lumen shared service-http probe contract"
     runner: cargo
-    path: projects/lumen/tests/api_e2e.rs
+    path: apps/lumen/tests/api_e2e.rs
     command: "cargo test -p lumen --test api_e2e -- --nocapture"
     verifies:
       - "GET /healthz and GET /readyz stay 200 without authentication."
@@ -152,14 +152,14 @@ e2e_tests:
   - id: lumen-service-http-auth-exempt-contract
     name: "lumen shared probes remain auth-exempt"
     runner: cargo
-    path: projects/lumen/tests/auth_e2e.rs
+    path: apps/lumen/tests/auth_e2e.rs
     command: "cargo test -p lumen --test auth_e2e -- --nocapture"
     verifies:
       - "Health, readiness, and metrics remain outside the data-plane auth layer."
   - id: lumen-package-regression
     name: "lumen package regression"
     runner: cargo
-    path: projects/lumen
+    path: apps/lumen
     command: "cargo test -p lumen"
     verifies:
       - "The package compiles and the full Lumen regression suite remains green."
@@ -179,32 +179,32 @@ changes:
     section: unit-test
     impl_mode: hand-written
     description: "Cover shared health, readiness, draining readiness, metrics, docs, and OpenAPI probe behavior."
-  - path: projects/lumen/tests/api_e2e.rs
+  - path: apps/lumen/tests/api_e2e.rs
     action: modify
     section: unit-test
     impl_mode: hand-written
     description: "Exercise Lumen's shared probe adapters for readyz, metrics, and OpenAPI route inventory."
-  - path: projects/lumen/Cargo.toml
+  - path: apps/lumen/Cargo.toml
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Add the service-http dependency to Lumen."
-  - path: projects/lumen/src/api.rs
+  - path: apps/lumen/src/api.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Implement service_http readiness/metrics adapters for Engine, build shared probe routes, keep local OpenAPI path annotations, and use service_http::trace_layer."
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Replace the local shutdown signal/drain future with service_http::shutdown_with_drain while keeping OTLP tracing intact."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-api-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-api-rs.md
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Synchronize the spec-managed source capture for api.rs service-http adoption."
-  - path: projects/lumen/tech-design/semantic/source/projects-lumen-src-bin-lumen-rs.md
+  - path: apps/lumen/tech-design/semantic/source/projects-lumen-src-bin-lumen-rs.md
     action: modify
     section: logic
     impl_mode: hand-written

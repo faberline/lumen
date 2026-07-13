@@ -1,12 +1,12 @@
 ---
 id: semantic-lumen-runtime-image
-summary: Semantic coverage for "projects/lumen/runtime-image"
+summary: Semantic coverage for "apps/lumen/runtime-image"
 capability_refs:
   - id: "competitor-feature-parity"
     role: primary
     claim: "query-planner-boolean-eval-roaring-postings"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/runtime-image`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/runtime-image`."
 fill_sections: [runtime-image, changes]
 ---
 
@@ -20,11 +20,11 @@ runtime_image:
   format: dockerfile
   semantic_domain:
     key: "lumen/runtime-image"
-    source_group: "projects/lumen/runtime-image"
+    source_group: "apps/lumen/runtime-image"
     coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/Dockerfile"
+      - path: "apps/lumen/Dockerfile"
         language: "dockerfile"
         ownership_state: "codegen"
         generator_primitives: ["runtime_image"]
@@ -33,8 +33,8 @@ runtime_image:
           ecosystem: "dockerfile"
           role: "dockerfile"
           section_type: "runtime-image"
-          domain: "projects/lumen/runtime-image"
-      - path: "projects/lumen/Dockerfile.release"
+          domain: "apps/lumen/runtime-image"
+      - path: "apps/lumen/Dockerfile.release"
         language: "dockerfile"
         ownership_state: "codegen"
         generator_primitives: ["runtime_image"]
@@ -43,12 +43,12 @@ runtime_image:
           ecosystem: "dockerfile"
           role: "release-dockerfile"
           section_type: "runtime-image"
-          domain: "projects/lumen/runtime-image"
+          domain: "apps/lumen/runtime-image"
   artifacts:
-    - path: "projects/lumen/Dockerfile"
+    - path: "apps/lumen/Dockerfile"
       kind: "dockerfile"
       content: |
-        # SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-runtime-image.md#runtime-image
+        # SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-runtime-image.md#runtime-image
         # CODEGEN-BEGIN
         # syntax=docker/dockerfile:1
         # From-source build for dev / CI. For production prefer `Dockerfile.release`,
@@ -88,10 +88,10 @@ runtime_image:
         ENTRYPOINT ["/usr/local/bin/lumen"]
         CMD ["serve"]
         # CODEGEN-END
-    - path: "projects/lumen/Dockerfile.release"
+    - path: "apps/lumen/Dockerfile.release"
       kind: "dockerfile"
       content: |
-        # SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-runtime-image.md#runtime-image
+        # SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-runtime-image.md#runtime-image
         # CODEGEN-BEGIN
         # syntax=docker/dockerfile:1
         # Production image for lumen — downloads a PUBLISHED release binary (no source
@@ -99,7 +99,7 @@ runtime_image:
         # surface (no shell/apt/curl in the final image). The sibling `Dockerfile` is
         # the from-source build for dev / CI.
         #
-        #   docker build -f projects/lumen/Dockerfile.release -t lumen:0.4.5 \
+        #   docker build -f apps/lumen/Dockerfile.release -t lumen:0.4.5 \
         #     --build-arg LUMEN_VERSION=lumen@0.4.5 .
         #
         # The image arch (BuildKit TARGETARCH) selects the matching linux tarball:
@@ -149,13 +149,13 @@ runtime_image:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/Dockerfile"
+  - path: "apps/lumen/Dockerfile"
     action: modify
     section: runtime-image
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: codegen
-  - path: "projects/lumen/Dockerfile.release"
+  - path: "apps/lumen/Dockerfile.release"
     action: modify
     section: runtime-image
     description: |

@@ -1,13 +1,13 @@
 ---
 id: semantic-lumen-k8s-components-observability
-summary: Semantic coverage for "projects/lumen/k8s/components/observability"
+summary: Semantic coverage for "apps/lumen/k8s/components/observability"
 capability_refs:
   - id: "long-running-stability"
     role: primary
     gap: "kustomize-base-overlays-hpa"
     claim: "kustomize-base-overlays-hpa"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/k8s/components/observability`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/k8s/components/observability`."
   - id: "observability"
     role: primary
     gap: "servicemonitor-prometheusrule-bundle"
@@ -30,11 +30,11 @@ deployment:
     role: "component"
   semantic_domain:
     key: "lumen/k8s/components/observability"
-    source_group: "projects/lumen/k8s/components/observability"
+    source_group: "apps/lumen/k8s/components/observability"
     coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/k8s/components/observability/kustomization.yaml"
+      - path: "apps/lumen/k8s/components/observability/kustomization.yaml"
         language: "kustomize"
         ownership_state: "codegen"
         generator_primitives: ["kustomize_manifest"]
@@ -43,9 +43,9 @@ deployment:
           ecosystem: "kustomize"
           role: "kustomization"
           section_type: "deployment"
-          domain: "projects/lumen/k8s/components/observability"
+          domain: "apps/lumen/k8s/components/observability"
   artifacts:
-    - path: "projects/lumen/k8s/components/observability/kustomization.yaml"
+    - path: "apps/lumen/k8s/components/observability/kustomization.yaml"
       kind: "kustomization"
       content: |
         apiVersion: kustomize.config.k8s.io/v1alpha1
@@ -70,7 +70,7 @@ deployment:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/k8s/components/observability/kustomization.yaml"
+  - path: "apps/lumen/k8s/components/observability/kustomization.yaml"
     action: modify
     section: deployment
     description: |

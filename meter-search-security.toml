@@ -1,4 +1,4 @@
-# SPEC-MANAGED: projects/lumen/external-contracts/security-hardening/security/access-control.md#lumen-meter-search-security
+# SPEC-MANAGED: apps/lumen/external-contracts/security-hardening/security/access-control.md#lumen-meter-search-security
 # CODEGEN-BEGIN
 # AW-EC-TOOL-BEGIN
 delegate_command = "target/debug/meter test -- -p lumen --test api_e2e -- --ignored"

@@ -1,12 +1,12 @@
 ---
 id: semantic-lumen-operator
-summary: Semantic coverage for "projects/lumen/src/operator"
+summary: Semantic coverage for "apps/lumen/src/operator"
 capability_refs:
   - id: "cli-interface"
     role: primary
     claim: "service-process-interface"
     coverage: partial
-    rationale: "Semantic takeover coverage for existing source group `projects/lumen/src/operator`."
+    rationale: "Semantic takeover coverage for existing source group `apps/lumen/src/operator`."
 fill_sections: [schema, changes]
 ---
 
@@ -18,11 +18,11 @@ fill_sections: [schema, changes]
 ```yaml
 semantic_domain:
   key: "lumen/operator"
-  source_group: "projects/lumen/src/operator"
+  source_group: "apps/lumen/src/operator"
   coverage_kind: semantic
   evidence:
     source_units:
-      - path: "projects/lumen/src/operator/render.rs"
+      - path: "apps/lumen/src/operator/render.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["config_surface", "service_method"]
@@ -125,8 +125,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src/operator"
-      - path: "projects/lumen/src/operator/crd.rs"
+          domain: "apps/lumen/src/operator"
+      - path: "apps/lumen/src/operator/crd.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["data_model", "enum_model", "service_method"]
@@ -187,8 +187,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src/operator"
-      - path: "projects/lumen/src/operator/mod.rs"
+          domain: "apps/lumen/src/operator"
+      - path: "apps/lumen/src/operator/mod.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method"]
@@ -219,8 +219,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src/operator"
-      - path: "projects/lumen/src/operator/reconcile.rs"
+          domain: "apps/lumen/src/operator"
+      - path: "apps/lumen/src/operator/reconcile.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["service_method"]
@@ -242,8 +242,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src/operator"
-      - path: "projects/lumen/src/operator/lease.rs"
+          domain: "apps/lumen/src/operator"
+      - path: "apps/lumen/src/operator/lease.rs"
         language: "rust"
         ownership_state: "codegen"
         generator_primitives: ["source_unit"]
@@ -252,8 +252,8 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src/operator"
-      - path: "projects/lumen/src/operator/resize.rs"
+          domain: "apps/lumen/src/operator"
+      - path: "apps/lumen/src/operator/resize.rs"
         language: "rust"
         ownership_state: "handwrite"
         generator_primitives: ["data_model", "enum_model", "service_method"]
@@ -281,7 +281,7 @@ semantic_domain:
           ecosystem: "rust"
           role: "source"
           section_type: "schema"
-          domain: "projects/lumen/src/operator"
+          domain: "apps/lumen/src/operator"
 ```
 
 ## Changes
@@ -290,37 +290,37 @@ semantic_domain:
 ```yaml
 coverage_kind: semantic
 changes:
-  - path: "projects/lumen/src/operator/render.rs"
+  - path: "apps/lumen/src/operator/render.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/operator/crd.rs"
+  - path: "apps/lumen/src/operator/crd.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/operator/mod.rs"
+  - path: "apps/lumen/src/operator/mod.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/operator/reconcile.rs"
+  - path: "apps/lumen/src/operator/reconcile.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/operator/lease.rs"
+  - path: "apps/lumen/src/operator/lease.rs"
     action: modify
     section: schema
     description: |
       Existing source behavior is covered by this feature/domain semantic TD.
     impl_mode: hand-written
-  - path: "projects/lumen/src/operator/resize.rs"
+  - path: "apps/lumen/src/operator/resize.rs"
     action: modify
     section: schema
     description: |

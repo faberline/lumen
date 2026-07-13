@@ -369,22 +369,22 @@ requirementDiagram
 
 ```yaml
 changes:
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: logic
     impl_mode: hand-written
     description: "Single-binary dispatch flow for serve/spec/llm/k8s subcommands."
-  - path: projects/lumen/src/bin/lumen.rs
+  - path: apps/lumen/src/bin/lumen.rs
     action: modify
     section: cli
     impl_mode: hand-written
     description: "Agent-facing lumen CLI command tree and argument surface."
-  - path: projects/lumen/Cargo.toml
+  - path: apps/lumen/Cargo.toml
     action: modify
     section: manifest
     impl_mode: hand-written
     description: "Operator dependencies remain feature-gated behind the operator feature."
-  - path: projects/lumen/tests/spec_cli.rs
+  - path: apps/lumen/tests/spec_cli.rs
     action: modify
     section: unit-test
     impl_mode: hand-written

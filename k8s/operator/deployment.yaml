@@ -1,4 +1,4 @@
-# SPEC-MANAGED: projects/lumen/tech-design/semantic/lumen-k8s-operator.md#deployment
+# SPEC-MANAGED: apps/lumen/tech-design/semantic/lumen-k8s-operator.md#deployment
 # CODEGEN-BEGIN
 # The operator: a controller that watches Lumen objects cluster-wide. Ships in
 # the same `lumen` image (run as `lumen k8s operator run`, built with
