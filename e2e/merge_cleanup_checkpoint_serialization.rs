@@ -36,16 +36,16 @@
 //!   makes the scratch-presence assertion the direct cleanup oracle, then
 //!   requires checkpoint completion, cleanup, live exact search, and cold
 //!   CURRENT recovery. It
-//!   covers `apps/lumen/src/segment_background_merge.rs:391-429,611-624` and
-//!   `apps/lumen/src/segment_rdb.rs:540-565,775-859`.
+//!   covers `src/segment_background_merge.rs:391-429,611-624` and
+//!   `src/segment_rdb.rs:540-565,775-859`.
 //! - Security: this change only serializes deletion of the process-created
-//!   scratch path at `apps/lumen/src/segment_background_merge.rs:615-623`; it
+//!   scratch path at `src/segment_background_merge.rs:615-623`; it
 //!   does not accept a new caller path or relax root validation. Existing
-//!   `apps/lumen/e2e/segment_startup_fail_closed_e2e.rs:798-811,816-842,1119-1148`
+//!   `e2e/segment_startup_fail_closed_e2e.rs:798-811,816-842,1119-1148`
 //!   keeps symlink, unknown-root, and unpointed-generation inputs fail closed
 //!   under the declared default gate. `:306-330` also refuses to treat a
 //!   symlink or non-directory as this test's merge scratch.
-//! - Performance: `apps/lumen/docs/indexing.md:271-276` says, verbatim,
+//! - Performance: `docs/indexing.md:271-276` says, verbatim,
 //!   "One merge runs per process. Four delta segments request a merge, and a
 //!   field retains at most 16." `:360-385` creates exactly four deltas and
 //!   requires the real merge-completed counter before the pause.
@@ -56,7 +56,7 @@
 //!
 //! After the repair, move the repaired merge scratch `remove_dir_all` and
 //! unpin work back outside the root save gate at
-//! `apps/lumen/src/segment_background_merge.rs:615-623`. The behavior
+//! `src/segment_background_merge.rs:615-623`. The behavior
 //! scratch-presence assertion at `:465` must fail because cleanup completes while the held
 //! checkpoint still owns the save interval. Restore the corrected production
 //! SHA before another gate. Do not weaken the observer order or replace the

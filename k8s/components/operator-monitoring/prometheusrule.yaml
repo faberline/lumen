@@ -52,7 +52,7 @@ spec:
             summary: "No lumen operator is being scraped in {{ $labels.namespace }} -- nothing is reconciling Lumen custom resources"
             description: "Every lumen-operator replica is either down or unscrapeable for 5m. Existing Lumen instances keep serving from their last-reconciled state, so there is no user-visible symptom: spec edits, drift repair, failed-pod replacement, and shard splits are all silently not happening. Both replicas are covered by one target group, so this fires only when the whole control plane is gone, not on a single-replica restart."
             runbook: "kubectl -n lumen-system get deploy lumen-operator; if READY is 0/N check `kubectl -n lumen-system logs deploy/lumen-operator --previous` for a crash, if it is 0/0 the Deployment was scaled down (`kubectl -n lumen-system scale deploy/lumen-operator --replicas=2`), and if the pods are Running check `kubectl -n lumen-system get endpoints lumen-operator-metrics` -- an empty Endpoints list means the Service selector no longer matches the pod labels."
-            runbook_url: "apps/lumen/docs/runbooks/operator-control-plane.md#lumenoperatorabsent"
+            runbook_url: "docs/runbooks/operator-control-plane.md#lumenoperatorabsent"
 
         # A ratio, not an absolute rate: an operator watching three CRs runs
         # very few reconciles, so `rate(errors) > 0` would page on a single
@@ -95,4 +95,4 @@ spec:
             summary: "lumen operator is failing more than 10% of its reconciles in {{ $labels.namespace }} ({{ $value | humanizePercentage }})"
             description: "Over the last 15m more than one in ten reconcile attempts returned an error. The operator keeps retrying every 15s, so some Lumen instances may still converge -- but a persistent failure means child objects (StatefulSet, Service, PVC, CronJob) are drifting from their CR without anything reporting it on the instance side. Each failure also emits a Warning/ReconcileFailed Event on the offending CR, which names the object and the error."
             runbook: "kubectl get events -A --field-selector reason=ReconcileFailed --sort-by=.lastTimestamp; the newest Event names the failing CR and the apiserver's own error. `is forbidden` means a missing RBAC grant in k8s/operator/rbac.yaml, `no matches for kind ServiceMonitor` means spec.observability=true on a cluster without the prometheus-operator CRDs, and `the object has been modified` is a conflict that clears itself unless a second controller is fighting over the same object. Cross-check with `kubectl -n lumen-system logs deploy/lumen-operator | grep 'reconcile failed'`."
-            runbook_url: "apps/lumen/docs/runbooks/operator-control-plane.md#lumenoperatorreconcileerrorrate"
+            runbook_url: "docs/runbooks/operator-control-plane.md#lumenoperatorreconcileerrorrate"

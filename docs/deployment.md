@@ -46,14 +46,14 @@ After 0.4.29 writes or adopts `CURRENT`, in-place downgrade to 0.4.28 is unsuppo
 ### Container
 
 Every Lumen release publishes multi-arch container images to GitHub Packages (GHCR)
-at `ghcr.io/chrischeng-c4/lumen`. Semver and `latest` tags are discovery-only
+at `ghcr.io/faberline/lumen`. Semver and `latest` tags are discovery-only
 references. Production and verifiable environments should resolve and pin the
 immutable root image index digest:
 
 ```bash
-RAW_DIGEST="$(docker buildx imagetools inspect ghcr.io/chrischeng-c4/lumen:<version> --format '{{json .Manifest}}' | jq -er '.digest')"
+RAW_DIGEST="$(docker buildx imagetools inspect ghcr.io/faberline/lumen:<version> --format '{{json .Manifest}}' | jq -er '.digest')"
 [[ "$RAW_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "invalid digest" >&2; exit 1; }
-IMAGE="ghcr.io/chrischeng-c4/lumen@${RAW_DIGEST}"
+IMAGE="ghcr.io/faberline/lumen@${RAW_DIGEST}"
 printf '%s\n' "$IMAGE" > lumen-image.ref
 ```
 
@@ -61,8 +61,8 @@ Create one protected annotated `lumen@<version>` tag at the exact candidate
 commit before promotion. Then verify the public release before deployment:
 
 ```bash
-apps/lumen/scripts/verify-release-artifacts.sh \
-  --repo chrischeng-c4/axiom \
+scripts/verify-release-artifacts.sh \
+  --repo faberline/lumen \
   --tag lumen@<version> \
   --commit <commit> \
   --candidate-run-id <id> \
@@ -136,7 +136,7 @@ lumen standalone compose patch --file <compose.yaml> [--name <name>]
 
 It refuses an existing same-name service unless it has the label
 `com.axiom.lumen.managed: 'true'`. It does not update the checked-in
-`apps/lumen/compose.yaml` application.
+`compose.yaml` application.
 
 Compose and GKE backup/restore runs must use the administrative restore path
 with `--replace`. Restore without `--replace` is refused. Keep backup storage
@@ -145,8 +145,8 @@ separate from the runtime PVC or named volume.
 Use the public commands for local backups and restores:
 
 ```bash
-lumen standalone backup --compose apps/lumen/compose.yaml --out /tmp/lumen.snapshot
-lumen standalone restore --compose apps/lumen/compose.yaml --file /tmp/lumen.snapshot --replace
+lumen standalone backup --compose compose.yaml --out /tmp/lumen.snapshot
+lumen standalone restore --compose compose.yaml --file /tmp/lumen.snapshot --replace
 lumen standalone backup --gke lumen.yaml --out /tmp/lumen-gke.snapshot
 lumen standalone restore --gke lumen.yaml --file /tmp/lumen-gke.snapshot --replace
 ```
@@ -259,7 +259,7 @@ metadata:
 spec:
   prunePolicy: Retain
   defaults:
-    image: ghcr.io/chrischeng-c4/lumen@sha256:<64-lowercase-root-digest>
+    image: ghcr.io/faberline/lumen@sha256:<64-lowercase-root-digest>
     auth: required
     servingTlsSecret: search-serving-tls
     serving:
@@ -330,7 +330,7 @@ The checked-in overlays are a Standalone runtime template. They run one
 Standalone Deployment inside Kubernetes.
 
 ```bash
-kubectl apply -k apps/lumen/k8s/overlays/dev
+kubectl apply -k k8s/overlays/dev
 ```
 
 This path is single-process and in-memory. The staging and prod overlay names

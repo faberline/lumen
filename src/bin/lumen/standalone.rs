@@ -15,7 +15,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const IMAGE: &str = "ghcr.io/chrischeng-c4/lumen:0.6.1";
+const IMAGE: &str = "ghcr.io/faberline/lumen:0.6.1";
 const MANAGED_LABEL: &str = "com.axiom.lumen.managed";
 const MANAGED_LABEL_VALUE: &str = "com.axiom.lumen.managed=true";
 

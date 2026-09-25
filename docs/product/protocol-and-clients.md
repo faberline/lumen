@@ -15,7 +15,7 @@
 - Problem: Declared shapes omit some cross-request behavior.
 - Who: HTTP callers.
 - Promise: OpenAPI and maintained guides describe the complete supported protocol.
-- Outcome: `protocol-contract-completeness`. Tracking: [Milestone #12](https://github.com/chrischeng-c4/axiom/milestone/12).
+- Outcome: `protocol-contract-completeness`. Tracking: [Milestone #12](https://github.com/faberline/lumen/milestone/12).
 - Non-goals: Undocumented compatibility guesses.
 - Open: Complete shared errors, streaming, and consistency declarations.
 - Neighbours: Protocol compatibility policy.
@@ -25,7 +25,7 @@
 - Problem: Generated source needs typed streaming and errors.
 - Who: TypeScript, Python, and Rust consumers.
 - Promise: Generated clients represent the supported protocol consistently.
-- Outcome: `generated-client-protocol-parity`. Tracking: [Milestone #13](https://github.com/chrischeng-c4/axiom/milestone/13).
+- Outcome: `generated-client-protocol-parity`. Tracking: [Milestone #13](https://github.com/faberline/lumen/milestone/13).
 - Non-goals: Published packages.
 - Open: Define typed streaming and errors for each language.
 - Neighbours: Strict generated-client gates.
@@ -35,7 +35,7 @@
 - Problem: Missing local toolchains can hide a skipped client journey.
 - Who: Release engineers and client consumers.
 - Promise: Required language gates fail when a required client does not run.
-- Outcome: `strict-generated-client-gates`. Tracking: [Milestone #13](https://github.com/chrischeng-c4/axiom/milestone/13).
+- Outcome: `strict-generated-client-gates`. Tracking: [Milestone #13](https://github.com/faberline/lumen/milestone/13).
 - Non-goals: Optional silent skips.
 - Open: Define the required toolchain matrix.
 - Neighbours: Generated-client protocol parity.
@@ -45,7 +45,7 @@
 - Problem: Search v2 callers need typed request and response parity in every generated client.
 - Who: TypeScript, Python, and Rust client users.
 - Promise: Generated clients expose the complete Search v2 contract as typed APIs.
-- Outcome: `generated-client-search-v2-parity`. Tracking: [Milestone #22](https://github.com/chrischeng-c4/axiom/milestone/22).
+- Outcome: `generated-client-search-v2-parity`. Tracking: [Milestone #22](https://github.com/faberline/lumen/milestone/22).
 - Non-goals: Untyped JSON fallback for new unions.
 - Open: Define all language-specific Search v2 parity gates.
 - Neighbours: Unified search contract and strict generated-client gates.
@@ -55,7 +55,7 @@
 - Problem: Callers need safe retry, deadline, and cancellation behavior.
 - Who: Generated-client consumers.
 - Promise: Clients apply an operation-aware request-resilience contract.
-- Outcome: `generated-client-request-resilience`. Tracking: [Milestone #14](https://github.com/chrischeng-c4/axiom/milestone/14).
+- Outcome: `generated-client-request-resilience`. Tracking: [Milestone #14](https://github.com/faberline/lumen/milestone/14).
 - Non-goals: Retrying ambiguous writes without a contract.
 - Open: Define retry and timeout policy.
 - Neighbours: Idempotent write replay.
@@ -65,7 +65,7 @@
 - Problem: Every caller repeats ID hydration and result ordering.
 - Who: Application integrations.
 - Promise: Generated clients can help bulk-fetch source records and restore hit order.
-- Outcome: `generated-client-source-integration-helpers`. Tracking: [Milestone #14](https://github.com/chrischeng-c4/axiom/milestone/14).
+- Outcome: `generated-client-source-integration-helpers`. Tracking: [Milestone #14](https://github.com/faberline/lumen/milestone/14).
 - Non-goals: Storing source records in Lumen.
 - Open: Define the callback contract.
 - Neighbours: Current indexing and querying boundaries.
@@ -75,7 +75,7 @@
 - Problem: Managed client workloads need a clear template boundary.
 - Who: Kubernetes application teams.
 - Promise: Lumen provides a versioned client-workload template.
-- Outcome: `versioned-client-workload-template`. Tracking: [Milestone #30](https://github.com/chrischeng-c4/axiom/milestone/30).
+- Outcome: `versioned-client-workload-template`. Tracking: [Milestone #30](https://github.com/faberline/lumen/milestone/30).
 - Non-goals: Fleet creating client deployments.
 - Open: Define projection and upgrade inputs.
 - Neighbours: Managed KSA access.
@@ -85,7 +85,7 @@
 - Problem: HTTP changes need a published compatibility rule.
 - Who: API and client maintainers.
 - Promise: Lumen defines additive, deprecated, and breaking protocol changes.
-- Outcome: `protocol-compatibility-policy`. Tracking: [Milestone #23](https://github.com/chrischeng-c4/axiom/milestone/23).
+- Outcome: `protocol-compatibility-policy`. Tracking: [Milestone #23](https://github.com/faberline/lumen/milestone/23).
 - Non-goals: Published packages.
 - Open: Define release-note and overlap requirements.
 - Neighbours: Search v2 migration.
@@ -95,7 +95,7 @@
 - Problem: Callers need an explicit path from the current search contract to Search v2.
 - Who: Existing Lumen callers.
 - Promise: Callers can use documented compatibility steps and offline tools before activation.
-- Outcome: `search-v2-migration`. Tracking: [Milestone #41](https://github.com/chrischeng-c4/axiom/milestone/41).
+- Outcome: `search-v2-migration`. Tracking: [Milestone #41](https://github.com/faberline/lumen/milestone/41).
 - Non-goals: Activating Search v2 before all members support it.
 - Open: Define the full migration-tool and compatibility contract.
 - Neighbours: Search capability activation at `lumen@0.37.0`.

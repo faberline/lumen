@@ -1,10 +1,10 @@
 //! DX contract `command_template` fact-freshness gate (#2494).
 //!
-//! `apps/lumen/src/dx.rs` renders the `lumen llm` task-navigation protocol
-//! from the hand-authored `apps/lumen/src/dx-contract.yaml`, which it
+//! `src/dx.rs` renders the `lumen llm` task-navigation protocol
+//! from the hand-authored `src/dx-contract.yaml`, which it
 //! `include_str!`s. Fully-bound
 //! `command` steps are already executed against the live binary by
-//! `apps/lumen/e2e/cli_convention.rs`'s
+//! `e2e/cli_convention.rs`'s
 //! `llm_outline_advertised_topic_commands_parse` /
 //! `llm_v2_executes_only_fully_bound_advertised_commands` — but templated
 //! `command_template` steps (the ones with `{placeholder}` inputs, e.g.

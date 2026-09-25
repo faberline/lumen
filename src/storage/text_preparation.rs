@@ -961,7 +961,7 @@ mod borrowed_tests {
     }
 
     // Append inside `#[cfg(test)] mod borrowed_tests` in
-    // apps/lumen/src/storage/text_preparation.rs.
+    // src/storage/text_preparation.rs.
     // This adds an analyzer-selecting helper; existing test helpers stay unchanged.
 
     fn engine_with_analyzer(analyzer: Analyzer) -> Engine {
@@ -1077,7 +1077,7 @@ mod borrowed_tests {
     }
 
     // Append inside `#[cfg(test)] mod borrowed_tests` in
-    // apps/lumen/src/storage/text_preparation.rs.
+    // src/storage/text_preparation.rs.
     //
     // The expected charge uses only the reservation baseline and the stage receipt.
     // It deliberately does not duplicate any large-row helper workspace formula.

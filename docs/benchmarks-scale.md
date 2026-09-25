@@ -2,7 +2,7 @@
 
 This page tracks lumen's scale posture across row count, read/search latency,
 paced qps, write qps, and disk footprint. The authoritative regression contract
-lives in `apps/lumen/e2e/perf-baseline.json`; this document is the human
+lives in `e2e/perf-baseline.json`; this document is the human
 handoff for what the current numbers mean.
 
 > **Status (2026-06-08 calibration):** the retained competitive calibration was
@@ -63,9 +63,9 @@ cargo test --release -p lumen --test write_qps --no-run
 lumen-only disk scale bench:
 
 ```sh
-LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10 apps/lumen/scripts/lumen_scale.sh 1000
+LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10 scripts/lumen_scale.sh 1000
 
-LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10,100,1000 apps/lumen/scripts/lumen_scale.sh 1000,10000,100000
+LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10,100,1000 scripts/lumen_scale.sh 1000,10000,100000
 
 LUMEN_SCALE_ALLOW_ABOVE_STANDARD=1 LUMEN_GATE_WINDOW_S=0.2 LUMEN_SCALE_CHUNK_ROWS=100000 ./scripts/lumen_scale.sh 1000000
 ```

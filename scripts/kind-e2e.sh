@@ -36,7 +36,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LUMEN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO_ROOT="$(cd "$LUMEN_DIR/../.." && pwd)"
+REPO_ROOT="$LUMEN_DIR"
 
 CLUSTER_NAME="${LUMEN_KIND_CLUSTER:-lumen-e2e}"
 NAMESPACE="lumen"
@@ -80,7 +80,7 @@ if [[ "$IMAGE_MODE" == "prebuilt" ]]; then
   [[ "$E2E_MODE" == "operator" ]] || die "prebuilt image mode requires LUMEN_E2E_MODE=operator"
   [[ -n "${LUMEN_E2E_IMAGE:-}" ]] || die "missing LUMEN_E2E_IMAGE"
   [[ ! "$IMAGE_TAG" =~ [[:space:][:cntrl:]] ]] || die "LUMEN_E2E_IMAGE contains whitespace or control characters"
-  [[ "$IMAGE_TAG" =~ ^ghcr\.io/chrischeng-c4/lumen@sha256:[0-9a-f]{64}$ ]] || die "invalid LUMEN_E2E_IMAGE: expected ghcr.io/chrischeng-c4/lumen@sha256:<64 hex>"
+  [[ "$IMAGE_TAG" =~ ^ghcr\.io/faberline/lumen@sha256:[0-9a-f]{64}$ ]] || die "invalid LUMEN_E2E_IMAGE: expected ghcr.io/faberline/lumen@sha256:<64 hex>"
   [[ "${IMAGE_TAG#*@}" != *"@"* ]] || die "multiple @ in LUMEN_E2E_IMAGE"
   cargo_ver="$(grep '^version = ' "$LUMEN_DIR/Cargo.toml" | head -n1 | cut -d'"' -f2)"
   EXPECTED_VER="${LUMEN_E2E_EXPECTED_VERSION:-}"
@@ -170,7 +170,7 @@ wait_lumen_ready() {
 # Build the Lumen image and load it into the kind node.
 #
 # Built from the WORKSPACE ROOT as context (the same pattern as
-# apps/lumen/compose.yaml and conductor's CI): cargo resolves the whole
+# compose.yaml and conductor's CI): cargo resolves the whole
 # workspace and `cargo build -p lumen` in the Dockerfile compiles only lumen's
 # real dependency closure. The repo-root .dockerignore keeps the context to
 # source-only (~MBs, not the 35G of target/). The deployment pins
@@ -195,7 +195,7 @@ deploy_lumen() {
   else
     kubectl apply -k "${LUMEN_DIR}/k8s/overlays/dev"
     # The overlay inherits base/deployment.yaml verbatim, and that manifest
-    # pins the released `ghcr.io/chrischeng-c4/lumen:<version>`. `kind load`
+    # pins the released `ghcr.io/faberline/lumen:<version>`. `kind load`
     # injected the build under test under a different name, so IfNotPresent
     # matched nothing and the node pulled the PREVIOUS RELEASE from GHCR --
     # a run that looked green while serving code this branch never built.
@@ -227,7 +227,7 @@ deploy_via_operator() {
     local tmp_op tmp_pinned mutable_image
     tmp_op="$(mktemp -t lumen-op.XXXXXX.yaml)"
     tmp_pinned="${tmp_op}.pinned"
-    mutable_image="ghcr.io/chrischeng-c4/lumen:${cargo_ver}"
+    mutable_image="ghcr.io/faberline/lumen:${cargo_ver}"
     kubectl kustomize "${LUMEN_DIR}/k8s/operator" > "$tmp_op"
     awk -v old="$mutable_image" -v new="$IMAGE_TAG" '
       function finish_document() {
@@ -660,9 +660,9 @@ durable_restart_oracle() {
 
 normalize_runtime_image_id() {
   local raw="$1"
-  if [[ "$raw" =~ ^ghcr\.io/chrischeng-c4/lumen@(sha256:[0-9a-f]{64})$ ]]; then
+  if [[ "$raw" =~ ^ghcr\.io/faberline/lumen@(sha256:[0-9a-f]{64})$ ]]; then
     echo "${BASH_REMATCH[1]}"
-  elif [[ "$raw" =~ ^docker-pullable://ghcr\.io/chrischeng-c4/lumen@(sha256:[0-9a-f]{64})$ ]]; then
+  elif [[ "$raw" =~ ^docker-pullable://ghcr\.io/faberline/lumen@(sha256:[0-9a-f]{64})$ ]]; then
     echo "${BASH_REMATCH[1]}"
   elif [[ "$raw" =~ ^(containerd|cri-o|docker)://(sha256:[0-9a-f]{64})$ ]]; then
     echo "${BASH_REMATCH[2]}"
@@ -805,8 +805,8 @@ fi
 # multi-shard mode the router rejects it outright with `501
 # duplicates_not_routed` -- duplicate detection filters by `min_group_size`
 # on one shard, before any cross-shard merge could happen, so answering it
-# across shards would be answering it wrong (apps/lumen/src/spec.rs:788,
-# apps/lumen/src/api.rs:1990). Asserting "at least one duplicate group"
+# across shards would be answering it wrong (src/spec.rs:788,
+# src/api.rs:1990). Asserting "at least one duplicate group"
 # against a 2-shard cluster therefore demands the product break its own
 # documented contract, and `curl -fsS` turned that into a bare `curl: (22)`
 # with no step name attached. Assert the refusal itself instead; the single

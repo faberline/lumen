@@ -152,7 +152,7 @@ validate_inputs() {
   [[ "$GKE_ZONE" =~ ^[a-z]+-[a-z0-9]+[0-9]-[a-z]$ && "$GKE_ZONE" == "$REGION"-* ]] || die 'invalid GKE zone'
   [[ "$RUN_ID" =~ ^[a-z0-9][a-z0-9-]{0,39}[a-z0-9]$ ]] || die 'invalid run id'
   case "$RUN_ID" in run|test|placeholder) die 'run id is a placeholder' ;; esac
-  [[ "$IMAGE" =~ ^ghcr\.io/chrischeng-c4/lumen@sha256:[0-9a-f]{64}$ ]] || die 'image is not an immutable Lumen digest'
+  [[ "$IMAGE" =~ ^ghcr\.io/faberline/lumen@sha256:[0-9a-f]{64}$ ]] || die 'image is not an immutable Lumen digest'
   [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || die 'invalid expected commit'
   [[ "$EXPECTED_RUN_ID" =~ ^[0-9]+$ ]] || die 'invalid candidate run id'
   [[ "$EXPECTED_RUN_ATTEMPT" =~ ^[0-9]+$ ]] || die 'invalid candidate run attempt'
@@ -172,7 +172,7 @@ validate_inputs() {
 
 validate_repo_inputs() {
   local path
-  for path in "$MODULE_DIR/scripts/check.sh" "$REPO_ROOT/kustomize/lumen-standalone-acceptance/tests/contract.sh" "$REPO_ROOT/apps/lumen/scripts/standalone-gke-acceptance.sh" "$REPO_ROOT/apps/lumen/scripts/verify-release-artifacts.sh"; do
+  for path in "$MODULE_DIR/scripts/check.sh" "$REPO_ROOT/kustomize/lumen-standalone-acceptance/tests/contract.sh" "$REPO_ROOT/scripts/standalone-gke-acceptance.sh" "$REPO_ROOT/scripts/verify-release-artifacts.sh"; do
     [[ -f "$path" && ! -L "$path" ]] || die 'required repository gate is missing or unsafe'
   done
 }
@@ -188,7 +188,7 @@ validate_candidate_identity() {
     die 'candidate manifest version is invalid'
   fi
   CANDIDATE_TAG="lumen@$CANDIDATE_VERSION"
-  root_digest="${IMAGE#ghcr.io/chrischeng-c4/lumen@}"
+  root_digest="${IMAGE#ghcr.io/faberline/lumen@}"
   jq -e --arg version "$CANDIDATE_VERSION" --arg tag "$CANDIDATE_TAG" --arg commit "$EXPECTED_COMMIT" --arg run "$EXPECTED_RUN_ID" --arg attempt "$EXPECTED_RUN_ATTEMPT" --arg root "$root_digest" '
     .version == $version and .tag == $tag and .commit == $commit and
     .run_id == $run and .run_attempt == $attempt and .image.root_digest == $root
@@ -457,7 +457,7 @@ wait_for_konnectivity_agent() {
 }
 
 run_inner_gate() {
-  env -i PATH="$PATH" KUBECONFIG="$KUBECONFIG" LUMEN_STANDALONE_GKE_CONTEXT="$CONTEXT" LUMEN_STANDALONE_GKE_PROJECT_ID="$PROJECT_ID" LUMEN_STANDALONE_GKE_LOCATION="$GKE_ZONE" LUMEN_STANDALONE_GKE_CLUSTER="$CLUSTER" LUMEN_STANDALONE_GKE_CLI="$LUMEN_CLI" LUMEN_STANDALONE_GKE_IMAGE="$IMAGE" LUMEN_STANDALONE_GKE_CLIENT_IMAGE="$CLIENT_IMAGE" LUMEN_STANDALONE_GKE_CLI_TARGET="$CLI_TARGET" LUMEN_STANDALONE_GKE_STORAGE_CLASS='premium-rwo' LUMEN_STANDALONE_GKE_NODE_POOL="$NODE_POOL" LUMEN_STANDALONE_GKE_RUN_ID="$RUN_ID" LUMEN_STANDALONE_GKE_EXPECTED_COMMIT="$EXPECTED_COMMIT" LUMEN_STANDALONE_GKE_EXPECTED_RUN_ID="$EXPECTED_RUN_ID" LUMEN_STANDALONE_GKE_EXPECTED_RUN_ATTEMPT="$EXPECTED_RUN_ATTEMPT" LUMEN_STANDALONE_GKE_EXPECTED_MANIFEST_SHA256="$EXPECTED_MANIFEST_SHA256" LUMEN_STANDALONE_GKE_EVIDENCE_DIR="$RUN_ROOT/private-receipt" LUMEN_STANDALONE_GKE_MUTATION=1 LUMEN_STANDALONE_GKE_CANDIDATE_RECEIPT_DIR="$CANDIDATE_RECEIPT_DIR" bash "$REPO_ROOT/apps/lumen/scripts/standalone-gke-acceptance.sh" --mode gke >"$RUN_ROOT/control/inner.log" 2>"$RUN_ROOT/control/inner.err" || die 'inner standalone GKE gate failed'
+  env -i PATH="$PATH" KUBECONFIG="$KUBECONFIG" LUMEN_STANDALONE_GKE_CONTEXT="$CONTEXT" LUMEN_STANDALONE_GKE_PROJECT_ID="$PROJECT_ID" LUMEN_STANDALONE_GKE_LOCATION="$GKE_ZONE" LUMEN_STANDALONE_GKE_CLUSTER="$CLUSTER" LUMEN_STANDALONE_GKE_CLI="$LUMEN_CLI" LUMEN_STANDALONE_GKE_IMAGE="$IMAGE" LUMEN_STANDALONE_GKE_CLIENT_IMAGE="$CLIENT_IMAGE" LUMEN_STANDALONE_GKE_CLI_TARGET="$CLI_TARGET" LUMEN_STANDALONE_GKE_STORAGE_CLASS='premium-rwo' LUMEN_STANDALONE_GKE_NODE_POOL="$NODE_POOL" LUMEN_STANDALONE_GKE_RUN_ID="$RUN_ID" LUMEN_STANDALONE_GKE_EXPECTED_COMMIT="$EXPECTED_COMMIT" LUMEN_STANDALONE_GKE_EXPECTED_RUN_ID="$EXPECTED_RUN_ID" LUMEN_STANDALONE_GKE_EXPECTED_RUN_ATTEMPT="$EXPECTED_RUN_ATTEMPT" LUMEN_STANDALONE_GKE_EXPECTED_MANIFEST_SHA256="$EXPECTED_MANIFEST_SHA256" LUMEN_STANDALONE_GKE_EVIDENCE_DIR="$RUN_ROOT/private-receipt" LUMEN_STANDALONE_GKE_MUTATION=1 LUMEN_STANDALONE_GKE_CANDIDATE_RECEIPT_DIR="$CANDIDATE_RECEIPT_DIR" bash "$REPO_ROOT/scripts/standalone-gke-acceptance.sh" --mode gke >"$RUN_ROOT/control/inner.log" 2>"$RUN_ROOT/control/inner.err" || die 'inner standalone GKE gate failed'
 }
 
 validate_private_receipt() {
@@ -466,7 +466,7 @@ validate_private_receipt() {
   candidate_dir=$CANDIDATE_RECEIPT_DIR
   inventory=$(find "$RUN_ROOT/private-receipt" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort) || die 'cannot inspect private receipt'
   [[ "$inventory" == $'lumen-standalone-gke-receipt.json\nlumen-standalone-gke-receipt.json.sha256' ]] || die 'inner gate produced an unexpected receipt inventory'
-  ( REPO='chrischeng-c4/axiom'; TAG="$CANDIDATE_TAG"; COMMIT="$EXPECTED_COMMIT"; CANDIDATE_RUN_ID="$EXPECTED_RUN_ID"; CANDIDATE_RECEIPT_DIR="$candidate_dir"; STANDALONE_GKE_RECEIPT="$receipt"; STANDALONE_GKE_RECEIPT_SIDECAR="$sidecar"; source "$REPO_ROOT/apps/lumen/scripts/verify-release-artifacts.sh"; validate_receipt "$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json" "$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json.sha256" "$CANDIDATE_RECEIPT_DIR"; CANDIDATE_ATTEMPT="$EXPECTED_RUN_ATTEMPT"; validate_standalone_gke_receipt ) >"$RUN_ROOT/control/receipt-verify.log" 2>"$RUN_ROOT/control/receipt-verify.err" || die 'private standalone GKE receipt failed verification'
+  ( REPO='faberline/lumen'; TAG="$CANDIDATE_TAG"; COMMIT="$EXPECTED_COMMIT"; CANDIDATE_RUN_ID="$EXPECTED_RUN_ID"; CANDIDATE_RECEIPT_DIR="$candidate_dir"; STANDALONE_GKE_RECEIPT="$receipt"; STANDALONE_GKE_RECEIPT_SIDECAR="$sidecar"; source "$REPO_ROOT/scripts/verify-release-artifacts.sh"; validate_receipt "$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json" "$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json.sha256" "$CANDIDATE_RECEIPT_DIR"; CANDIDATE_ATTEMPT="$EXPECTED_RUN_ATTEMPT"; validate_standalone_gke_receipt ) >"$RUN_ROOT/control/receipt-verify.log" 2>"$RUN_ROOT/control/receipt-verify.err" || die 'private standalone GKE receipt failed verification'
 }
 
 destroy_cluster() { terraform_plan_destroy "$RUN_ROOT/destroy.tfplan" "$RUN_ROOT/control/destroy-plan.json" destroy || die 'Terraform destroy plan changed the fixed resource set'; apply_saved_destroy "$RUN_ROOT/destroy.tfplan" destroy || die 'Terraform destroy or absence proof failed'; }

@@ -13,7 +13,7 @@ set -euo pipefail
 CDPATH=
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 KUSTOMIZE_SOURCE_ROOT="$REPO_ROOT/kustomize/lumen-standalone-acceptance"
 KUSTOMIZE_RENDERER_SOURCE="$KUSTOMIZE_SOURCE_ROOT/scripts/render.sh"
 KUSTOMIZE_VALIDATOR_SOURCE="$KUSTOMIZE_SOURCE_ROOT/scripts/validate.rb"
@@ -178,7 +178,7 @@ fi
   die "LUMEN_STANDALONE_GKE_NODE_POOL is not a safe GKE node-pool name"
 [[ "$LUMEN_STANDALONE_GKE_RUN_ID" =~ ^[a-z0-9]([a-z0-9-]{0,50}[a-z0-9])?$ ]] ||
   die "LUMEN_STANDALONE_GKE_RUN_ID must be a DNS-safe lowercase name"
-[[ "$LUMEN_STANDALONE_GKE_IMAGE" =~ ^ghcr\.io/chrischeng-c4/lumen@sha256:[0-9a-f]{64}$ ]] ||
+[[ "$LUMEN_STANDALONE_GKE_IMAGE" =~ ^ghcr\.io/faberline/lumen@sha256:[0-9a-f]{64}$ ]] ||
   die "LUMEN_STANDALONE_GKE_IMAGE must be the exact immutable Lumen digest form"
 APPROVED_CLIENT_IMAGE="docker.io/curlimages/curl@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13"
 [[ "$LUMEN_STANDALONE_GKE_CLIENT_IMAGE" == "$APPROVED_CLIENT_IMAGE" ]] ||
@@ -388,18 +388,18 @@ validate_candidate_manifest_v2() {
     die "candidate manifest version is not canonical"
   fi
   CANDIDATE_TAG="lumen@$CANDIDATE_VERSION"
-  CANDIDATE_DEFAULT_IMAGE="ghcr.io/chrischeng-c4/lumen:$CANDIDATE_VERSION"
+  CANDIDATE_DEFAULT_IMAGE="ghcr.io/faberline/lumen:$CANDIDATE_VERSION"
   jq -e --arg version "$CANDIDATE_VERSION" --arg tag "$CANDIDATE_TAG" '
     (keys|sort) == ["artifacts","candidate_tag","commit","image","jobs","pr","repository","run_attempt","run_id","run_url","sboms","schema","source_ref","tag","version","workflow_id","workflow_path","workflow_ref"] and
-    .schema == "cclab.lumen.candidate-manifest.v3" and .repository == "chrischeng-c4/axiom" and
+    .schema == "cclab.lumen.candidate-manifest.v3" and .repository == "faberline/lumen" and
     .version == $version and .tag == $tag and .source_ref == "refs/heads/main" and
     .workflow_path == ".github/workflows/lumen-release-candidate.yml" and
-    .workflow_ref == "chrischeng-c4/axiom/.github/workflows/lumen-release-candidate.yml@refs/heads/main" and
+    .workflow_ref == "faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main" and
     (.commit|type == "string" and test("^[0-9a-f]{40}$")) and
     (.run_id|type == "string" and test("^[0-9]+$")) and
     (.run_attempt|type == "string" and test("^[0-9]+$")) and
     .candidate_tag == ("release-candidate-" + .run_id + "-" + .run_attempt) and
-    .image.repository == "ghcr.io/chrischeng-c4/lumen" and
+    .image.repository == "ghcr.io/faberline/lumen" and
     ([.image.root_digest,.image.amd64_digest,.image.arm64_digest] | all(.[]; type == "string" and test("^sha256:[0-9a-f]{64}$"))) and
     (.jobs|keys|sort) == ["build","ghcr-image-and-attest","identity","kind-amd64","kind-arm64","manifest","result","verify-candidate","verify-libraries"] and
     (.jobs|all(.[]; . == "success")) and
@@ -422,7 +422,7 @@ validate_candidate_manifest_v2() {
     die "candidate manifest run id differs from the controller-bound expected run"
   [[ "$CANDIDATE_ATTEMPT" == "$LUMEN_STANDALONE_GKE_EXPECTED_RUN_ATTEMPT" ]] ||
     die "candidate manifest run attempt differs from the controller-bound expected attempt"
-  [[ "$LUMEN_STANDALONE_GKE_IMAGE" == "ghcr.io/chrischeng-c4/lumen@$ROOT_DIGEST" ]] || die "candidate image is not the exact receipt root digest"
+  [[ "$LUMEN_STANDALONE_GKE_IMAGE" == "ghcr.io/faberline/lumen@$ROOT_DIGEST" ]] || die "candidate image is not the exact receipt root digest"
   for target in aarch64-apple-darwin x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
     archive="$(jq -er --arg t "$target" '.artifacts[]|select(.target == $t)|.archive' "$manifest")"
     archive_hash="$(jq -er --arg t "$target" '.artifacts[]|select(.target == $t)|.archive_sha256' "$manifest")"
@@ -455,7 +455,7 @@ validate_candidate_manifest_v2() {
 }
 
 validate_candidate_manifest_v2
-[[ "$LUMEN_STANDALONE_GKE_IMAGE" == "ghcr.io/chrischeng-c4/lumen@$ROOT_DIGEST" ]] ||
+[[ "$LUMEN_STANDALONE_GKE_IMAGE" == "ghcr.io/faberline/lumen@$ROOT_DIGEST" ]] ||
   die "candidate image is not the exact receipt root digest"
 if ! "$VERIFIED_CLI" standalone gke render \
   --file "$CONFIG" \
@@ -1071,7 +1071,7 @@ v2_wait_pod() {
         [[ -n "$V2_NODE_ARCH" && -n "$V2_CHILD_DIGEST" ]] || die "scheduled node identity is incomplete"
         if [[ "$image" == "$LUMEN_STANDALONE_GKE_IMAGE" ]]; then
           V2_OBSERVED_RUNTIME_IMAGE_DIGEST="$ROOT_DIGEST"
-        elif [[ "$image" == "ghcr.io/chrischeng-c4/lumen@$V2_CHILD_DIGEST" ]]; then
+        elif [[ "$image" == "ghcr.io/faberline/lumen@$V2_CHILD_DIGEST" ]]; then
           V2_OBSERVED_RUNTIME_IMAGE_DIGEST="$V2_CHILD_DIGEST"
         else
           die "observed container imageID is not the exact candidate root or scheduled child digest"
@@ -1251,7 +1251,7 @@ v2_write_receipt_body() {
   [[ -n "$RECEIPT_TMP" && -n "$RECEIPT_SIDECAR_TMP" ]] || return 1
   [[ -n "$V2_OBSERVED_RUNTIME_IMAGE_DIGEST" && -n "$V2_NODE_ARCH" && -n "$V2_CHILD_DIGEST" ]] || return 1
   rm -f -- "$receipt" "$receipt.sha256"
-  jq -n --arg repository "chrischeng-c4/axiom" --arg version "$CANDIDATE_VERSION" --arg commit "$CANDIDATE_COMMIT" --arg workflow_ref "$CANDIDATE_WORKFLOW" --arg run_id "$CANDIDATE_RUN_ID" --arg run_attempt "$CANDIDATE_ATTEMPT" --arg manifest_sha256 "$RECEIPT_SHA256" --arg root_digest "$ROOT_DIGEST" --arg amd64_digest "$AMD64_DIGEST" --arg arm64_digest "$ARM64_DIGEST" --arg target "$LUMEN_STANDALONE_GKE_CLI_TARGET" --arg cli_sha256 "$CONTROLLER_CLI_SHA256" --arg observed_root "$V2_OBSERVED_RUNTIME_IMAGE_DIGEST" --arg child "$V2_CHILD_DIGEST" --arg arch "$V2_NODE_ARCH" --argjson required_deltas "$V2_REQUIRED_DELTAS" '
+  jq -n --arg repository "faberline/lumen" --arg version "$CANDIDATE_VERSION" --arg commit "$CANDIDATE_COMMIT" --arg workflow_ref "$CANDIDATE_WORKFLOW" --arg run_id "$CANDIDATE_RUN_ID" --arg run_attempt "$CANDIDATE_ATTEMPT" --arg manifest_sha256 "$RECEIPT_SHA256" --arg root_digest "$ROOT_DIGEST" --arg amd64_digest "$AMD64_DIGEST" --arg arm64_digest "$ARM64_DIGEST" --arg target "$LUMEN_STANDALONE_GKE_CLI_TARGET" --arg cli_sha256 "$CONTROLLER_CLI_SHA256" --arg observed_root "$V2_OBSERVED_RUNTIME_IMAGE_DIGEST" --arg child "$V2_CHILD_DIGEST" --arg arch "$V2_NODE_ARCH" --argjson required_deltas "$V2_REQUIRED_DELTAS" '
     {schema:"lumen.standalone-gke-receipt/v2",stage:"slice-b-live",complete:true,
      candidate:{repository:$repository,version:$version,commit:$commit,workflow_ref:$workflow_ref,run_id:$run_id,run_attempt:$run_attempt,manifest_sha256:$manifest_sha256,root_digest:$root_digest,amd64_digest:$amd64_digest,arm64_digest:$arm64_digest,controller_cli:{target:$target,sha256:$cli_sha256}},
      matrix:{clusterip_only:"passed",network_policy:"passed",allowed_ksa:"passed",unlisted_ksa:"passed",missing_token:"passed",bad_token:"passed",tokenreview:"passed",subjectaccessreview:"passed",application_admin_403:"passed",admin_backup_restore:"passed",pod_replacement:"passed",pvc_recovery:"passed",vertical_resize:"passed",cleanup:"passed",required_continuity:({profile:"LUMEN_AUTH=required",audience:"lumen.axiom.dev",observed_runtime_image_digest:$observed_root,scheduled_node_arch:$arch,scheduled_runtime_child_digest:$child,projected_allowed_2xx:"passed",same_ksa_default_token_401:"passed",projected_unlisted_403:"passed"} + $required_deltas)},

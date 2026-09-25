@@ -278,7 +278,7 @@ contract. Each source below states its direct contribution.
   - `external:kubernetes` stores desired state and runs the workload, network,
     lease, RBAC, and Secret contracts.
 - Gate: `cargo test -p lumen --features operator --test operator_render --test operator_backup_kubernetes_wiring`
-- Gate: `apps/lumen/scripts/kind-e2e.sh`
+- Gate: `scripts/kind-e2e.sh`
 - Gate: `acceptance/gcp/scripts/run.sh`
 
 ### Managed Fleet materialization
@@ -351,7 +351,7 @@ contract. Each source below states its direct contribution.
 - Gate: `cargo test -p lumen --test reshard_admin_e2e --test reshard_driver_e2e --test routed_shard_e2e`
 - Gate: `cargo test -p lumen --test stability_lumen_claim_dynamic_multi_shard_replica_kind`
 - Gate: `cargo test -p lumen --features raft-wal --test raft_shutdown_failover --test raft_segment_snapshot_archive --test raft_segment_snapshot_archive_wiring --test raft_oversized_committed_apply`
-- Gate: `apps/lumen/scripts/kind-e2e.sh`
+- Gate: `scripts/kind-e2e.sh`
 
 ### Durability and recovery
 

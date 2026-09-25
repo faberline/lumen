@@ -1710,11 +1710,11 @@ mod tests {
 
     fn binding() -> Binding {
         Binding {
-            repository: "chrischeng-c4/axiom".to_owned(),
+            repository: "faberline/lumen".to_owned(),
             run_id: "1234".to_owned(),
             run_attempt: "2".to_owned(),
             commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            image_reference: "ghcr.io/chrischeng-c4/lumen@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+            image_reference: "ghcr.io/faberline/lumen@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
             actual_image_id: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
         }
     }

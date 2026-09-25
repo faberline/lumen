@@ -10,12 +10,12 @@
 //!   primary/replica replication. Rebuildable from the caller.
 //! - HTTP/2 transport, client-side collection-shard routing.
 //!
-//! Full surface and v1 scope: `apps/lumen/README.md`.
+//! Full surface and v1 scope: `README.md`.
 //!
 //! ## Contracts inherited from the retired EC shells
 //!
 //! These 3 sentences were the whole of the `// Contract:` comment in 3 AW-EC shells
-//! under `apps/lumen/e2e/`, each of which ran `cargo test -p lumen --lib` in a
+//! under `e2e/`, each of which ran `cargo test -p lumen --lib` in a
 //! subprocess and asserted the child's exit status. `cargo test -p lumen` already runs
 //! this crate's colocated unit tests directly, so the shells added a second, nested run
 //! and nothing else. They were deleted on 2026-08-20 with the EC machinery they

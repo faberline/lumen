@@ -22,16 +22,16 @@
 //!   sequence within the bounded cleanup watchdog. :250-287 and :436-504
 //!   require every item, real AOF replay, an on-demand checkpoint, a real
 //!   post-checkpoint AOF suffix, and cold reopen to retain the committed head.
-//!   It covers apps/lumen/src/coordinator.rs:382-479,
-//!   apps/lumen/src/aof.rs:266-387, and
-//!   apps/lumen/src/segment_checkpoint.rs:220-268.
-//! - Security: the new foreign delivery at apps/lumen/src/coordinator.rs:382-475
-//!   receives a typed WalDelivery from apps/lumen/src/wal.rs:677-699; this
+//!   It covers src/coordinator.rs:382-479,
+//!   src/aof.rs:266-387, and
+//!   src/segment_checkpoint.rs:220-268.
+//! - Security: the new foreign delivery at src/coordinator.rs:382-475
+//!   receives a typed WalDelivery from src/wal.rs:677-699; this
 //!   contract adds no byte parser, path, or authorization input. The persisted
 //!   AOF byte boundary remains covered by
-//!   apps/lumen/e2e/aof_oversized_committed_apply.rs:445-503, which feeds a
+//!   e2e/aof_oversized_committed_apply.rs:445-503, which feeds a
 //!   complete malformed frame and requires refusal with the old watermark.
-//! - Performance: apps/lumen/docs/indexing.md:264-272 says, verbatim,
+//! - Performance: docs/indexing.md:264-272 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   native_oversized_committed_apply.rs:309-323, called at :418, :437, and
 //!   :477,
@@ -42,9 +42,9 @@
 //! # Root negative controls
 //!
 //! - Keep the oversized foreign-delivery restart/refusal branch in
-//!   apps/lumen/src/coordinator.rs:456-479. The behavior assertion at :359
+//!   src/coordinator.rs:456-479. The behavior assertion at :359
 //!   must fail because the committed watermark stays at the schema sequence.
-//! - Remove the post-apply AOF append in apps/lumen/src/coordinator.rs:605-614.
+//! - Remove the post-apply AOF append in src/coordinator.rs:605-614.
 //!   The pre-checkpoint real-AOF replay assertion at :441-455 must fail.
 //! - Do not change the fixture threshold or an assertion to create either red.
 //!

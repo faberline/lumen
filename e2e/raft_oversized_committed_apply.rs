@@ -11,25 +11,25 @@
 //!
 //! # Facets
 //!
-//! - Behavior: `apps/lumen/e2e/raft_oversized_committed_apply.rs:409-416`
+//! - Behavior: `e2e/raft_oversized_committed_apply.rs:409-416`
 //!   owns the current cold-host refusal red. `:428-444` detects partial
 //!   visibility and a later stall. `:497-502`, `:516-520`, and helper
 //!   assertions `:196-209` require a 1,000-item,
 //!   270 KiB-per-Keyword fast Index record already retained by Raft to publish
 //!   every exact Keyword, advance its Raft index, checkpoint, and cold reopen.
-//!   This covers committed apply at `apps/lumen/src/raft_sm.rs:104-158` and
+//!   This covers committed apply at `src/raft_sm.rs:104-158` and
 //!   `:221-249`, with retained-store replay at
 //!   `libs/raft-runtime/src/host.rs:568-584`.
-//! - Security: `apps/lumen/e2e/raft_oversized_committed_apply.rs:459-480`
+//! - Security: `e2e/raft_oversized_committed_apply.rs:459-480`
 //!   feeds a truncated caller/peer-controlled `LWAL` fast Index into the
 //!   committed `EngineSm::apply` callback and requires refusal, no document,
 //!   and the old watermark. It covers the fast-record byte boundary at
-//!   `apps/lumen/src/wal.rs:320-419` as reached by
-//!   `apps/lumen/src/raft_sm.rs:221-249`. It runs after the behavior oracle,
+//!   `src/wal.rs:320-419` as reached by
+//!   `src/raft_sm.rs:221-249`. It runs after the behavior oracle,
 //!   so the current red remains the oversized committed-record behavior red.
-//! - Performance: `apps/lumen/docs/indexing.md:264-272` says, verbatim,
+//! - Performance: `docs/indexing.md:264-272` says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
-//!   `apps/lumen/e2e/raft_oversized_committed_apply.rs:238-245`, called at
+//!   `e2e/raft_oversized_committed_apply.rs:238-245`, called at
 //!   `:503` and `:511`, reads the
 //!   public `/metrics` pending high-water and total gauges and keeps both at or
 //!   below that budget. `REPLAY_WATCHDOG` is test cleanup that turns a stalled

@@ -14,7 +14,7 @@ approved `aw-grill-release apply` lands it.
 
 ## Goal
 
-Leave `apps/lumen/README.md`, `STATUS.md`, `ROADMAP.md`, and `docs/**` as
+Leave `README.md`, `STATUS.md`, `ROADMAP.md`, and `docs/**` as
 uncommitted working-tree bytes that state the product's promises, support
 matrix, and outcomes, with `aw metadoc check lumen` and
 `aw meta check --path apps/lumen` both clean, so the grill confirms each
@@ -29,7 +29,7 @@ section instead of writing it.
   `git -c core.fsmonitor=false status --short -- apps/lumen` must show no
   other writer's uncommitted work. If it does, stop and report; one worktree
   carries one writer.
-- Read before drafting: `apps/lumen/README.md`, `CONTRIBUTING.md`,
+- Read before drafting: `README.md`, `CONTRIBUTING.md`,
   `STATUS.md`, `ROADMAP.md`, `docs/**`, and `Cargo.toml`; the `e2e/` manifest
   and the `src/` module `//!` blocks for what the code actually does;
   neighbouring `apps/*/README.md` boundary paragraphs and the
@@ -86,7 +86,7 @@ section instead of writing it.
 - Every `Tracking:` line reads `Not assigned.` unless it already carried a
   link before your run.
 - `git -c core.fsmonitor=false status --short` shows changes only under
-  `apps/lumen/README.md`, `STATUS.md`, `ROADMAP.md`, and `docs/`.
+  `README.md`, `STATUS.md`, `ROADMAP.md`, and `docs/`.
 
 ## Never
 
@@ -99,7 +99,7 @@ section instead of writing it.
 - Never bind a promise to the tracker: no `(Milestone #<number>)` on a
   heading, no `Tracking:` link, no `#<iid>` reference. `aw metadoc check` P4
   refuses it, and binding is the approved `aw-grill-release apply`'s write.
-- Never write `apps/lumen/src/**`, `apps/lumen/e2e/**`, `Cargo.toml`,
+- Never write `src/**`, `e2e/**`, `Cargo.toml`,
   or another project's files.
 - Never claim a cross-project boundary — what moves to `libs/`, what a
   neighbour owns — beyond quoting a `cto` spike's `## Decision`; raise the

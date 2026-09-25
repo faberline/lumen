@@ -939,7 +939,7 @@ mod tests {
         drop(held);
     }
 
-    // Insert inside the existing `#[cfg(test)] mod tests` in apps/lumen/src/aof.rs,
+    // Insert inside the existing `#[cfg(test)] mod tests` in src/aof.rs,
     // after `replay_full_waits_for_real_checkpoint_then_replays_and_cold_recovers`.
     // It uses that module's existing imports and helpers: `ChangeBudget`, `Engine`,
     // `AofWriter`, `SegmentRdbStore`, `create_entry`, `index_entry`, `rec`, and

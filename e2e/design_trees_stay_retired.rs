@@ -41,23 +41,10 @@ use std::path::{Path, PathBuf};
 
 /// The projects USER DECISION D1 named, plus `apps/tape` (retired 2026-08-26).
 /// Each had both trees; each now has neither.
-const RETIRED: [&str; 16] = [
-    "apps/lumen",
-    "apps/tape",
-    "libs/build-stamp",
-    "libs/cli-std",
-    "libs/metrics-prometheus",
-    "libs/openapi-codegen",
-    "libs/peer-tls",
-    "libs/raft-core",
-    "libs/raft-runtime",
-    "libs/service-auth",
-    "libs/service-backup",
-    "libs/service-http",
-    "libs/service-k8s",
-    "libs/service-observability",
-    "libs/storage-durable",
-    "libs/transport-h2c",
+const RETIRED: [&str; 1] = [
+    // Lumen's own tree. `apps/tape` stayed in faberline/axiom and the fifteen
+    // libraries D1 also named moved to faberline/core; neither is visible here.
+    ".",
 ];
 
 /// Directory names the retirement removed.
@@ -70,8 +57,8 @@ const POINTER: &str = "@spec";
 /// Files whose job is to name the retired mechanism. Both are asserted to exist,
 /// so renaming one fails this suite instead of silently widening the exemption.
 const EXEMPT: [&str; 2] = [
-    "apps/lumen/docs/td-ec-retirement.md",
-    "apps/lumen/e2e/design_trees_stay_retired.rs",
+    "docs/td-ec-retirement.md",
+    "e2e/design_trees_stay_retired.rs",
 ];
 
 /// Tracked files under the fifteen at the commit that introduced this file: 593;
@@ -81,12 +68,8 @@ const EXEMPT: [&str; 2] = [
 const MIN_FILES_SWEPT: usize = 400;
 
 fn repo_root() -> PathBuf {
-    // `apps/lumen` -> `apps` -> repository root.
+    // Lumen's crate root is the repository root.
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("apps/lumen lives two levels below the repository root")
-        .to_path_buf()
 }
 
 /// Walk one project, collecting its files and any design directory found on the

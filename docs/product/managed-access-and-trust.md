@@ -15,7 +15,7 @@
 - Problem: A Managed runtime needs explicit whole-runtime access grants.
 - Who: Kubernetes ServiceAccount users.
 - Promise: Direct Managed and Fleet declarations converge exact runtime access.
-- Outcome: `managed-runtime-ksa-access`. Tracking: [Milestone #39](https://github.com/chrischeng-c4/axiom/milestone/39).
+- Outcome: `managed-runtime-ksa-access`. Tracking: [Milestone #39](https://github.com/faberline/lumen/milestone/39).
 - Non-goals: Per-collection authorization.
 - Open: Define complete grant replacement and cleanup rules.
 - Neighbours: Managed auth unification.
@@ -25,7 +25,7 @@
 - Problem: Clients need an explicit, rotation-safe managed credential input.
 - Who: In-cluster generated-client users.
 - Promise: A Managed KSA profile reads the projected token without exposing it.
-- Outcome: `projected-ksa-client-auth`. Tracking: [Milestone #30](https://github.com/chrischeng-c4/axiom/milestone/30).
+- Outcome: `projected-ksa-client-auth`. Tracking: [Milestone #30](https://github.com/faberline/lumen/milestone/30).
 - Non-goals: Anonymous fallback after authorization failure.
 - Open: Define the final projected-token and CA contract.
 - Neighbours: Generated-client request resilience.
@@ -35,7 +35,7 @@
 - Problem: Managed paths need one required identity model.
 - Who: Managed runtime operators.
 - Promise: Managed Lumen uses one required KSA identity and whole-runtime permission model.
-- Outcome: `managed-auth-unification`. Tracking: [Milestone #25](https://github.com/chrischeng-c4/axiom/milestone/25).
+- Outcome: `managed-auth-unification`. Tracking: [Milestone #25](https://github.com/faberline/lumen/milestone/25).
 - Non-goals: Disabled Managed authentication.
 - Open: Define migration from current grants.
 - Neighbours: Managed runtime KSA access.
@@ -45,7 +45,7 @@
 - Problem: Runtime TLS material needs safe operator lifecycle management.
 - Who: Managed runtime operators.
 - Promise: The operator manages declared runtime certificates and rotation.
-- Outcome: `managed-runtime-certificates`. Tracking: [Milestone #26](https://github.com/chrischeng-c4/axiom/milestone/26).
+- Outcome: `managed-runtime-certificates`. Tracking: [Milestone #26](https://github.com/faberline/lumen/milestone/26).
 - Non-goals: Logging or embedding private keys.
 - Open: Define issuance and rotation integration.
 - Neighbours: Managed client trust.
@@ -55,7 +55,7 @@
 - Problem: Clients need a managed, rotated trust path.
 - Who: Managed client workloads.
 - Promise: Client trust material follows the managed runtime certificate contract.
-- Outcome: `managed-client-trust`. Tracking: [Milestone #26](https://github.com/chrischeng-c4/axiom/milestone/26).
+- Outcome: `managed-client-trust`. Tracking: [Milestone #26](https://github.com/faberline/lumen/milestone/26).
 - Non-goals: Trust-on-first-use.
 - Open: Define CA projection and reload behavior.
 - Neighbours: Runtime certificates and workload templates.

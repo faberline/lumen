@@ -12,9 +12,9 @@ mod first_compaction_contract {
     //!   writes a real base and four real sparse checkpoints through SegmentRdbStore.
     //!   It requires layer reduction, then checks current live and cold searches
     //!   plus a retained first generation.
-    //! - Security: apps/lumen/src/segment_rdb.rs:543 reads the local generation
+    //! - Security: src/segment_rdb.rs:543 reads the local generation
     //!   bytes on cold open. Existing index_durable_oracle refusal cases beginning
-    //!   at apps/lumen/e2e/indexing_durable_oracle.rs:970 feed malformed catalog
+    //!   at e2e/indexing_durable_oracle.rs:970 feed malformed catalog
     //!   bytes and preserve CURRENT. This compaction case uses the same reader for
     //!   the compacted generation and the retained predecessor.
     //! - Performance: .aw/workitems/deliveries/lumen061-04-bounded-compaction-backpressure.md:3
@@ -22,7 +22,7 @@ mod first_compaction_contract {
     //!   sixteen. This bounded structural case asserts the four-delta reduction.
     //!   It does not measure the separate stage-6 latency or RSS budget.
     //!
-    //! Append this source to apps/lumen/e2e/indexing_durable_oracle.rs. It relies
+    //! Append this source to e2e/indexing_durable_oracle.rs. It relies
     //! only on helpers already in that target and uses no compactor-specific API.
 
     #[cfg(unix)]
@@ -450,9 +450,9 @@ mod full_compaction_contract {
     //!   threshold, one job folds one adjacent delta pair, the base stays
     //!   untouched, and the retained pre-compaction generation still holds the
     //!   replaced layers' bytes.
-    //! - Security: `apps/lumen/src/segment_rdb.rs:450-480` writes and validates
+    //! - Security: `src/segment_rdb.rs:450-480` writes and validates
     //!   the staged catalog before publication. The existing malformed-CURRENT
-    //!   refusals at `apps/lumen/e2e/indexing_durable_oracle.rs:970-1018` cover
+    //!   refusals at `e2e/indexing_durable_oracle.rs:970-1018` cover
     //!   the same persisted catalog trust boundary and assert that CURRENT is not
     //!   changed. This case cold-opens both the compacted and retained bytes; it
     //!   adds no new caller-controlled path or format.
@@ -1963,7 +1963,7 @@ mod full_compaction_contract {
         //!
         //! - Behavior: `indexing_durable_oracle.rs:7713` requires the other checkpoint
         //!   while encoding is paused; `:7728` and `:7771` retain the fifth Keyword layer.
-        //! - Security: `apps/lumen/src/segment_rdb.rs:66-73` is a test-only observer seam.
+        //! - Security: `src/segment_rdb.rs:66-73` is a test-only observer seam.
         //!   `indexing_durable_oracle.rs:7740` and `:7760` require CURRENT and cold reopen
         //!   to retain the later collection reference, without a new input boundary.
         //! - Performance: `indexing_durable_oracle.rs:7713` measures the approved bounded
@@ -2327,7 +2327,7 @@ mod full_compaction_contract {
         //!   requires prune and a second public store opener to preserve the worker's source
         //!   and staging until the selected merge publishes.
         //! - Security: these cases exercise the process-owned generation root through
-        //!   `apps/lumen/src/segment_background_merge.rs` and `apps/lumen/src/segment_rdb.rs`.
+        //!   `src/segment_background_merge.rs` and `src/segment_rdb.rs`.
         //!   They do not add caller-controlled bytes, paths, or identifiers. Existing malformed
         //!   CURRENT refusal cases in the parent target keep the file-input boundary covered.
         //!   The prune case asserts that a second opener cannot mistake an active worker staging
@@ -3029,12 +3029,12 @@ mod full_compaction_contract {
             //! - Behavior: `indexing_durable_oracle.rs:8667`, `:8671`, `:8710`, and
             //!   `:8723` require a durable restore to activate its candidate before the
             //!   paused old merge releases, then retain that candidate live and cold.
-            //!   Change points: `apps/lumen/src/segment_restore.rs:154-289` and
-            //!   `apps/lumen/src/segment_background_merge.rs:449-552`.
+            //!   Change points: `src/segment_restore.rs:154-289` and
+            //!   `src/segment_background_merge.rs:449-552`.
             //! - Security: `indexing_durable_oracle.rs:8694` and `:8723` require the
             //!   process-written `CURRENT` input to remain on the restore candidate after
-            //!   stale-worker release. Boundary: `apps/lumen/src/segment_rdb.rs:635-676`.
-            //! - Performance: `apps/lumen/ROADMAP.md:73-78` promises one background
+            //!   stale-worker release. Boundary: `src/segment_rdb.rs:635-676`.
+            //! - Performance: `ROADMAP.md:73-78` promises one background
             //!   merge that rechecks segment input and collection epoch before publication.
             //!   `indexing_durable_oracle.rs:8694` asserts that structural promise; the
             //!   two-second observation is only an interleaving control, not a latency claim.
@@ -3276,12 +3276,12 @@ mod full_compaction_contract {
             //!
             //! - Behavior: `indexing_durable_oracle.rs:8860`, `:8883`, `:8891`, and
             //!   `:8900` require the failed fifth cut to retry before the sixth live
-            //!   mutation is captured. Change points: `apps/lumen/src/segment_rdb.rs:459-513`
-            //!   and `apps/lumen/src/segment_background_merge.rs:447-501`.
+            //!   mutation is captured. Change points: `src/segment_rdb.rs:459-513`
+            //!   and `src/segment_background_merge.rs:447-501`.
             //! - Security: `indexing_durable_oracle.rs:8864`, `:8875`, and `:8891` keep
             //!   process-written `CURRENT` and its predecessor from making frozen input
-            //!   stale. Boundary: `apps/lumen/src/segment_rdb.rs:637-676`.
-            //! - Performance: `apps/lumen/ROADMAP.md:52-55` promises that a
+            //!   stale. Boundary: `src/segment_rdb.rs:637-676`.
+            //! - Performance: `ROADMAP.md:52-55` promises that a
             //!   pre-publication failure retains frozen changes; `:73-78` requires merge
             //!   input revalidation. `indexing_durable_oracle.rs:8875` asserts both
             //!   structural rules. Its waits are cleanup and interleaving controls only.
@@ -4755,7 +4755,7 @@ mod full_compaction_contract {
         //!   corrupts the persisted mapped-base local-row descriptor and checksum.
         //!   It requires `load_current_generation` to refuse each input and leave
         //!   CURRENT unchanged. This covers the changed file-read boundary in
-        //!   `apps/lumen/src/segment_rdb.rs:1625-1795`.
+        //!   `src/segment_rdb.rs:1625-1795`.
         //! - Performance: the user-approved #4246 plan requires a compaction
         //!   request at four deltas and base replacement only when measured delta
         //!   bytes meet or exceed the complete base. These cases assert both

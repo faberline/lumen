@@ -1,7 +1,7 @@
 # Runbook — lumen operator control plane
 
 On-call procedures for the two alerts shipped by the `operator-monitoring`
-component (`apps/lumen/k8s/components/operator-monitoring/prometheusrule.yaml`).
+component (`k8s/components/operator-monitoring/prometheusrule.yaml`).
 Both watch the **control plane** — the `lumen-operator` Deployment in
 `lumen-system` — not a `Lumen` instance. A serving StatefulSet keeps answering
 reads from its last-reconciled state while nothing reconciles, so neither alert
@@ -112,7 +112,7 @@ rather than historical.
 
 | Event `note` contains | Cause | Action |
 |---|---|---|
-| `is forbidden` / `cannot create` | Missing RBAC for a kind the operator renders | Reconcile `k8s/operator/rbac.yaml` against the kinds in `apps/lumen/src/operator/render.rs`; a newly rendered kind needs a new grant |
+| `is forbidden` / `cannot create` | Missing RBAC for a kind the operator renders | Reconcile `k8s/operator/rbac.yaml` against the kinds in `src/operator/render.rs`; a newly rendered kind needs a new grant |
 | `no matches for kind "ServiceMonitor"` / `"PrometheusRule"` | `spec.observability: true` on a cluster with no prometheus-operator CRDs | Install the CRDs, or set `spec.observability: false` on the CR |
 | `the object has been modified` | Optimistic-concurrency conflict | Self-clearing; if it persists, something else is writing the same object — look for a second operator or a GitOps controller fighting over it |
 | `connection refused` / `context deadline exceeded` | Apiserver unreachable or throttling | Check apiserver health and the operator's client-side rate limits |
@@ -301,7 +301,7 @@ curl -fsS http://127.0.0.1:7373/metrics | grep lumen_storage_degraded
 
 - `libs/service-k8s/src/controller.rs` — the reconcile loop, leader gate, and Event publication.
 - `libs/service-k8s/src/metrics.rs` — the metric definitions and the `/metrics` listener.
-- `apps/lumen/k8s/components/observability/` — the **instance** (data-plane) alerts, a separate concern from this runbook.
-- `apps/lumen/docs/deployment.md` — Standalone and Managed install flow.
-- `apps/lumen/docs/gke.md` — current GKE evidence and the regional production target.
-- `apps/lumen/docs/client-integration.md` — current and planned client workload responsibilities.
+- `k8s/components/observability/` — the **instance** (data-plane) alerts, a separate concern from this runbook.
+- `docs/deployment.md` — Standalone and Managed install flow.
+- `docs/gke.md` — current GKE evidence and the regional production target.
+- `docs/client-integration.md` — current and planned client workload responsibilities.

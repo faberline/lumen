@@ -1,7 +1,7 @@
 # CODEGEN-BEGIN
 # AW-EC-TOOL-BEGIN
 project = "lumen"
-scenarios_dir = "apps/lumen/e2e/rig/cases/resilience"
+scenarios_dir = "e2e/rig/cases/resilience"
 source_contract = "lumen-long-running-stability-query-resilience"
 version = 1
 # AW-EC-TOOL-END

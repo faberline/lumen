@@ -6,7 +6,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! These 12 sentences were the whole of the `// Contract:` comment in 12 AW-EC shells
-//! under `apps/lumen/e2e/`, each of which ran `cargo test -p lumen --test spec_cli` in
+//! under `e2e/`, each of which ran `cargo test -p lumen --test spec_cli` in
 //! a subprocess and asserted the child's exit status. `cargo test -p lumen` already
 //! runs this target directly, so the shells added a second, nested run and nothing
 //! else. They were deleted on 2026-08-20 with the EC machinery they belonged to, and
@@ -1439,7 +1439,7 @@ fn dx_llm_composes_library_owned_provider_content() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|source| source == "apps/lumen/clients/codegen.toml"));
+        .any(|source| source == "clients/codegen.toml"));
     assert_eq!(value["providers"].as_array().unwrap().len(), 1);
     assert_eq!(value["providers"][0]["id"], "openapi-codegen");
     let provider = openapi_codegen::llm::topic();
@@ -1461,18 +1461,18 @@ fn dx_llm_composes_library_owned_provider_content() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|source| source == "apps/lumen/e2e/release_artifacts.rs"));
+        .any(|source| source == "e2e/release_artifacts.rs"));
     for source in [
         ".github/workflows/lumen-release-candidate.yml",
-        "apps/lumen/scripts/verify-release-candidate.sh",
-        "apps/lumen/e2e/release_candidate.rs",
+        "scripts/verify-release-candidate.sh",
+        "e2e/release_candidate.rs",
         ".github/workflows/lumen-release.yml",
         ".github/workflows/lumen-release-recovery.yml",
         ".github/workflows/lumen-release-0.4.29-recovery.yml",
         ".github/workflows/lumen-release-0.4.30-recovery.yml",
         ".github/workflows/lumen-release-0.4.29-public-verify.yml",
-        "apps/lumen/scripts/verify-release-artifacts.sh",
-        "apps/lumen/e2e/release_promotion.rs",
+        "scripts/verify-release-artifacts.sh",
+        "e2e/release_promotion.rs",
         ".agents/skills/build-release/SKILL.md",
     ] {
         assert!(
@@ -1488,7 +1488,7 @@ fn dx_llm_composes_library_owned_provider_content() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|source| source == "apps/lumen/install.sh"));
+        .any(|source| source == "install.sh"));
     assert_eq!(release_value["providers"].as_array().unwrap().len(), 1);
     assert_eq!(release_value["providers"][0]["id"], "raft-runtime");
     let raft_provider = raft_runtime::llm::topic();
@@ -1622,8 +1622,8 @@ fn dx_querying_topic_separates_current_and_target_contracts() {
         json!([
             "lumen spec --fields",
             "lumen spec --shapes",
-            "apps/lumen/docs/querying.md",
-            "apps/lumen/STATUS.md"
+            "docs/querying.md",
+            "STATUS.md"
         ])
     );
     assert_eq!(value["markdown"], markdown);

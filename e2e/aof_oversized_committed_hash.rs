@@ -21,15 +21,15 @@
 //!   include 12 bytes while a live Hash row is materialized and zero after each
 //!   cold mmap reopen. :1049-1084 makes a stuck or failed baseline red without
 //!   leaving a child alive. These assertions cover
-//!   apps/lumen/src/aof.rs:274-315 and the borrowed Hash planning and
-//!   attachment path in apps/lumen/src/storage/committed_index_apply.rs:251-322,753-771.
+//!   src/aof.rs:274-315 and the borrowed Hash planning and
+//!   attachment path in src/storage/committed_index_apply.rs:251-322,753-771.
 //! - Security: aof_oversized_committed_hash.rs:752-789 writes a complete,
 //!   CRC-valid but format-corrupt Hash AOF frame and requires refusal before
 //!   its watermark or row becomes visible. It covers the persisted-byte
-//!   boundary at apps/lumen/src/aof.rs:285-315. The Hash grammar itself is not
-//!   widened: existing apps/lumen/e2e/hash_hamming.rs:163-179 rejects invalid
+//!   boundary at src/aof.rs:285-315. The Hash grammar itself is not
+//!   widened: existing e2e/hash_hamming.rs:163-179 rejects invalid
 //!   hex at the public Hash input boundary.
-//! - Performance: apps/lumen/docs/indexing.md:264-276 says, verbatim,
+//! - Performance: docs/indexing.md:264-276 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   aof_oversized_committed_hash.rs:651-660 reads real public pending total and
 //!   high-water metrics after each replay and checkpoint. Fixture and mapped AOF

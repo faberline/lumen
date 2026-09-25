@@ -2,7 +2,7 @@
 // @contract spec-gen-generated-clients-public-api-journey
 //! Generated-client delivery gate for Lumen itself.
 //!
-//! This is intentionally under `apps/lumen/e2e`, not only `examples/`:
+//! This is intentionally under `e2e`, not only `examples/`:
 //! Lumen's own test surface is the release guarantee that generated Python,
 //! TypeScript, and Rust clients can drive the public API happy path against a
 //! real Lumen server.
@@ -10,7 +10,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! This sentence was the whole of the `// Contract:` comment in an AW-EC shell under
-//! `apps/lumen/e2e/`, which ran `cargo test -p lumen --test generated_clients_crud_e2e`
+//! `e2e/`, which ran `cargo test -p lumen --test generated_clients_crud_e2e`
 //! in a subprocess and asserted the child's exit status. `cargo test -p lumen` already
 //! runs this target directly, so the shell added a second, nested run and nothing else.
 //! It was deleted on 2026-08-20 with the EC machinery it belonged to, and the sentence

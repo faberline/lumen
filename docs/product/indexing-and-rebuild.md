@@ -15,7 +15,7 @@
 - Problem: Persistent backends need one public acknowledgement meaning.
 - Who: Writers that retry after faults.
 - Promise: Persistent writes acknowledge only after durable commit and index apply.
-- Outcome: `durable-write-contract`. Tracking: [Milestone #9](https://github.com/chrischeng-c4/axiom/milestone/9).
+- Outcome: `durable-write-contract`. Tracking: [Milestone #9](https://github.com/faberline/lumen/milestone/9).
 - Non-goals: Making Lumen the source of truth.
 - Open: Define one contract across every selected persistent backend.
 - Neighbours: Idempotency and recovery consume this acknowledgement.
@@ -25,7 +25,7 @@
 - Problem: A retry can otherwise apply a write twice.
 - Who: HTTP and generated-client writers.
 - Promise: A durable payload-bound key replays the first result safely.
-- Outcome: `idempotent-write-replay`. Tracking: [Milestone #10](https://github.com/chrischeng-c4/axiom/milestone/10).
+- Outcome: `idempotent-write-replay`. Tracking: [Milestone #10](https://github.com/faberline/lumen/milestone/10).
 - Non-goals: Unbounded key retention.
 - Open: Define retention and conflict reporting.
 - Neighbours: Durable writes and generated-client resilience.
@@ -36,7 +36,7 @@
 - Who: Teams that keep a persistent Lumen index while serving reads and writes.
 - Promise: A completed v2 checkpoint retains hard-linked unchanged segments, captures sparse changes through `CaptureBarrier`, and publishes a complete validated manifest with its data version before it trims AOF data.
 - Status row: `incremental-segment-checkpoint` is Limited until the outcome completes.
-- Outcome: `incremental-segment-checkpoint`. Tracking: [Milestone #132](https://github.com/chrischeng-c4/axiom/milestone/132).
+- Outcome: `incremental-segment-checkpoint`. Tracking: [Milestone #132](https://github.com/faberline/lumen/milestone/132).
 - Non-goals: New request shapes, changed batch limits, source-record storage, a coordinator `MutationGate` checkpoint lock, a full-copy fallback, and a performance claim before the required workload passes.
 - Open: Validate all-field layer correctness; v2 data-version and 0.6.0 compatibility; `CaptureBarrier` plus serialized restore/publication epoch validation; 128/256 MiB admission and reservation release; four/16 segment merge rules; failure recovery; batch limits; and each independent 30-minute workload case in the roadmap.
 - Neighbours: Durable acknowledgement defines the publish and AOF boundary; recovery owns reopen, backup, and restore.
@@ -46,7 +46,7 @@
 - Problem: One failed field must not leave part of an item visible.
 - Who: Batch-write callers.
 - Promise: Each accepted item becomes visible in full or not at all.
-- Outcome: `item-atomic-batch-writes`. Tracking: [Milestone #11](https://github.com/chrischeng-c4/axiom/milestone/11).
+- Outcome: `item-atomic-batch-writes`. Tracking: [Milestone #11](https://github.com/faberline/lumen/milestone/11).
 - Non-goals: A transaction across unrelated batch items.
 - Open: Define stable per-item results and retries.
 - Neighbours: Idempotent replay and versioned tombstones.
@@ -56,7 +56,7 @@
 - Problem: A schema conversion must not replace the active index early.
 - Who: Teams evolving indexed schemas.
 - Promise: A validated shadow generation can become active atomically.
-- Outcome: `shadow-rebuild-generations`. Tracking: [Milestone #16](https://github.com/chrischeng-c4/axiom/milestone/16).
+- Outcome: `shadow-rebuild-generations`. Tracking: [Milestone #16](https://github.com/faberline/lumen/milestone/16).
 - Non-goals: In-place destructive schema changes.
 - Open: Define retained-generation limits and rollback detail.
 - Neighbours: Strict schema types and Search v2 migration.
@@ -66,7 +66,7 @@
 - Problem: Legacy number and set types cannot express the target schema safely.
 - Who: Schema authors.
 - Promise: Collections use explicit scalar types with independent multi-value and facet options.
-- Outcome: `strict-search-schema-types`. Tracking: [Milestone #15](https://github.com/chrischeng-c4/axiom/milestone/15).
+- Outcome: `strict-search-schema-types`. Tracking: [Milestone #15](https://github.com/faberline/lumen/milestone/15).
 - Non-goals: Silent rounding or schema coercion.
 - Open: Define each target type and migration refusal.
 - Neighbours: Shadow rebuild generations and Search v2 migration.

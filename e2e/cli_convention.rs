@@ -12,7 +12,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! These 5 sentences were the whole of the `// Contract:` comment in 5 AW-EC shells
-//! under `apps/lumen/e2e/`, each of which ran `cargo test -p lumen --test
+//! under `e2e/`, each of which ran `cargo test -p lumen --test
 //! cli_convention` in a subprocess and asserted the child's exit status. `cargo test -p
 //! lumen` already runs this target directly, so the shells added a second, nested run
 //! and nothing else. They were deleted on 2026-08-20 with the EC machinery they
@@ -149,7 +149,7 @@ fn help_ships_standard_issue_group_not_report_issue() {
 /// - Security: the assertions at `:101`, `:169`, `:183`, and `:197` feed
 ///   untrusted command-line values into `serve` and require refusal before it
 ///   can create a listener or contact a broker. They cover the retired input fields at
-///   `apps/lumen/src/bin/lumen.rs:1117-1127`.
+///   `src/bin/lumen.rs:1117-1127`.
 /// - Performance: those parse-only refusals reach no request, scan, startup,
 ///   or build path. They make no timing claim. The existing durable performance
 ///   gate remains the measurement for write execution.
@@ -334,7 +334,7 @@ fn issue_comment_help_and_dry_run_preview() {
 
     let preview = run_lumen(&["issue", "comment", "123", "--dry-run", "still", "broken"]);
     for expected in [
-        "repo:  chrischeng-c4/axiom",
+        "repo:  faberline/lumen",
         "issue: #123",
         "state: open",
         "still broken",
@@ -354,7 +354,7 @@ fn issue_comment_help_and_dry_run_preview() {
 fn issue_create_comment_and_upgrade_check_outputs_are_chainable() {
     let created = run_lumen_chainable(&["issue", "create", "--dry-run", "test", "message"]);
     for expected in [
-        "repo:  chrischeng-c4/axiom",
+        "repo:  faberline/lumen",
         "title: lumen: test message",
         "labels: app:lumen, type:report",
         "next: done",

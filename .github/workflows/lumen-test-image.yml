@@ -163,7 +163,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: apps/lumen/Dockerfile.test
+          file: Dockerfile.test
           platforms: linux/amd64,linux/arm64
           push: true
           # NEVER add `latest` or a semver tag here — this is the dev/test

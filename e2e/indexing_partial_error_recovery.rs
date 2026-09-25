@@ -3,11 +3,11 @@
 //! - Behavior: an error-returning committed `Index` record keeps its applied
 //!   Keyword prefix in the AOF and in a cold incremental checkpoint. A rejected
 //!   Number replacement keeps its existing live deletion after cold recovery.
-//! - Security: `apps/lumen/src/coordinator.rs:377` controls the AOF bytes
-//!   recovery reads. `apps/lumen/src/storage.rs:4981` drops the caller value
+//! - Security: `src/coordinator.rs:377` controls the AOF bytes
+//!   recovery reads. `src/storage.rs:4981` drops the caller value
 //!   before fallible validation. These tests reject data loss and resurrection.
 //! - Performance: these tests prove recovery correctness. The stage6 durable
-//!   workload in `apps/lumen/e2e/perf_gate.rs:2865` measures checkpoint and
+//!   workload in `e2e/perf_gate.rs:2865` measures checkpoint and
 //!   merge work.
 
 use std::sync::Arc;

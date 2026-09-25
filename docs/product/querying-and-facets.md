@@ -15,7 +15,7 @@
 - Problem: Scoring, filtering, cursors, and totals need one deterministic contract.
 - Who: Search callers and generated clients.
 - Promise: Search separates scoring and filtering with stable result controls.
-- Outcome: `unified-search-contract`. Tracking: [Milestone #17](https://github.com/chrischeng-c4/axiom/milestone/17).
+- Outcome: `unified-search-contract`. Tracking: [Milestone #17](https://github.com/faberline/lumen/milestone/17).
 - Non-goals: Cross-collection joins.
 - Open: Finalize compatibility and failure semantics.
 - Neighbours: Search v2 migration and generated-client parity.
@@ -25,7 +25,7 @@
 - Problem: Callers need exact reported facet and metric values.
 - Who: Search dashboards and APIs.
 - Promise: Search can return declared exact facets and metrics.
-- Outcome: `exact-search-facets-metrics`. Tracking: [Milestone #19](https://github.com/chrischeng-c4/axiom/milestone/19).
+- Outcome: `exact-search-facets-metrics`. Tracking: [Milestone #19](https://github.com/faberline/lumen/milestone/19).
 - Non-goals: General OLAP.
 - Open: Define exact limits and failures.
 - Neighbours: Facet governance and distributed convergence.
@@ -35,7 +35,7 @@
 - Problem: A facet request can consume unbounded resources.
 - Who: Operators and search callers.
 - Promise: Facet work has explicit admission and resource limits.
-- Outcome: `facet-resource-governance`. Tracking: [Milestone #20](https://github.com/chrischeng-c4/axiom/milestone/20).
+- Outcome: `facet-resource-governance`. Tracking: [Milestone #20](https://github.com/faberline/lumen/milestone/20).
 - Non-goals: Silent approximate results.
 - Open: Define budgets and refusal classes.
 - Neighbours: Exact facets and runtime configuration.
@@ -45,7 +45,7 @@
 - Problem: Shards must merge exact facet state safely.
 - Who: Distributed-search callers.
 - Promise: Routed search merges declared exact facet state across shards.
-- Outcome: `distributed-facet-convergence`. Tracking: [Milestone #21](https://github.com/chrischeng-c4/axiom/milestone/21).
+- Outcome: `distributed-facet-convergence`. Tracking: [Milestone #21](https://github.com/faberline/lumen/milestone/21).
 - Non-goals: Best-effort partial answers.
 - Open: Define shard-failure and cleanup behavior.
 - Neighbours: Distributed routing and merge.
@@ -55,7 +55,7 @@
 - Problem: Vector and hybrid candidates need a clear facet scope.
 - Who: Vector-search callers.
 - Promise: Governed facets define their exact or labelled approximate candidate scope.
-- Outcome: `vector-hybrid-facets`. Tracking: [Milestone #128](https://github.com/chrischeng-c4/axiom/milestone/128).
+- Outcome: `vector-hybrid-facets`. Tracking: [Milestone #128](https://github.com/faberline/lumen/milestone/128).
 - Non-goals: Claiming approximate counts are exact.
 - Open: Choose the candidate and match scope.
 - Neighbours: Exact facets and distributed convergence.

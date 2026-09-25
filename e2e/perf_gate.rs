@@ -10,7 +10,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! This sentence was the whole of the `// Contract:` comment in an AW-EC shell under
-//! `apps/lumen/e2e/`, which ran `cargo test -p lumen --test perf_gate` in a subprocess
+//! `e2e/`, which ran `cargo test -p lumen --test perf_gate` in a subprocess
 //! and asserted the child's exit status. The coarse timing contract now runs only
 //! through the explicit release-profile candidate command. The shell added a second,
 //! nested run and nothing else. It was deleted on 2026-08-20 with the EC machinery it
@@ -917,7 +917,7 @@ mod durable_workload {
     //!
     //! # Facets
     //!
-    //! - Behavior: `apps/lumen/e2e/perf_gate.rs:2868` drives all mutation and
+    //! - Behavior: `e2e/perf_gate.rs:2868` drives all mutation and
     //!   query paths before it writes one receipt. `perf_cell_receipt.rs:1529`
     //!   accepts only a complete exact sixteen-cell aggregate. This target runs
     //!   under `cargo test -p lumen --test perf_gate -- --ignored` for release.
@@ -10749,41 +10749,41 @@ mod durable_workload {
         //!   through the production `post_json` and `record_request_error`
         //!   path and asserts the journaled `RequestErrorRecord` carries a
         //!   multi-level `source_chain` and `is_connect=true`
-        //!   (`apps/lumen/e2e/perf_gate.rs:5535`, `:5539`) — the exact
+        //!   (`e2e/perf_gate.rs:5535`, `:5539`) — the exact
         //!   evidence the Goal's two undiagnosed 30-minute cells lacked.
         //!   Behavior is also carried by
         //!   `request_error_journal_lands_in_the_failure_evidence_bundle`,
         //!   which proves the same journal reaches `request-errors.txt`
         //!   through `finish_failed_docker_run`
-        //!   (`apps/lumen/e2e/perf_gate.rs:1863`) and asserts the on-disk
+        //!   (`e2e/perf_gate.rs:1863`) and asserts the on-disk
         //!   bytes equal the rendered journal and contain the endpoint,
         //!   identifier, and error text
-        //!   (`apps/lumen/e2e/perf_gate.rs:5608-5611`).
+        //!   (`e2e/perf_gate.rs:5608-5611`).
         //! - Security: the change opens two new boundaries on data a peer
         //!   (the Lumen container under test) supplies and this harness now
         //!   persists to disk instead of discarding — a non-2xx response
         //!   body (`post_json`'s new branch,
-        //!   `apps/lumen/e2e/perf_gate.rs:2552`) and the count of
+        //!   `e2e/perf_gate.rs:2552`) and the count of
         //!   failed-request records (`RequestErrorJournal::push`'s cap
-        //!   check, `apps/lumen/e2e/perf_gate.rs:1742`). Both are closed by
+        //!   check, `e2e/perf_gate.rs:1742`). Both are closed by
         //!   a bound:
         //!   `non_success_status_record_carries_status_and_a_truncated_body`
         //!   feeds a `REQUEST_ERROR_BODY_MAX_BYTES + 200`-byte untrusted
         //!   body and asserts the retained record never contains the full
-        //!   body (`apps/lumen/e2e/perf_gate.rs:5672`), only the
+        //!   body (`e2e/perf_gate.rs:5672`), only the
         //!   `truncate_evidence_body`-bounded form
-        //!   (`apps/lumen/e2e/perf_gate.rs:1764`);
+        //!   (`e2e/perf_gate.rs:1764`);
         //!   `request_error_journal_caps_entries_and_counts_the_overflow`
         //!   feeds `REQUEST_ERROR_JOURNAL_CAP + 5` failures and asserts the
         //!   journal stops growing at the cap and only counts the rest in
-        //!   `overflow` (`apps/lumen/e2e/perf_gate.rs:5631-5632`).
+        //!   `overflow` (`e2e/perf_gate.rs:5631-5632`).
         //! - Performance: every request this change touches (`post_json`,
         //!   `send_index`/`send_replace`/`send_unindex`/`send_query`)
         //!   already runs under the unchanged `REQUEST_TIMEOUT` budget
-        //!   (`apps/lumen/e2e/perf_gate.rs:821`, `Duration::from_secs(5)`),
+        //!   (`e2e/perf_gate.rs:821`, `Duration::from_secs(5)`),
         //!   which the declared gate `cargo test --release --locked -p
         //!   lumen --test perf_gate -- --ignored --test-threads=1
-        //!   --nocapture` (`apps/lumen/README.md:253`) already measures end
+        //!   --nocapture` (`README.md:253`) already measures end
         //!   to end through
         //!   `durable_workload::approved_30_minute_durable_workload`. This
         //!   change adds only O(1) bookkeeping on a request whose outcome
@@ -10791,7 +10791,7 @@ mod durable_workload {
         //!   `post_json` returns) and preserves the exact single outer
         //!   `tokio::time::timeout(REQUEST_TIMEOUT, ..)` that already wraps
         //!   the whole round trip
-        //!   (`apps/lumen/e2e/perf_gate.rs:2544`), so no new user-waited
+        //!   (`e2e/perf_gate.rs:2544`), so no new user-waited
         //!   path opens; the existing gate is the account and no new case
         //!   is added.
         let runtime = tokio::runtime::Builder::new_current_thread()

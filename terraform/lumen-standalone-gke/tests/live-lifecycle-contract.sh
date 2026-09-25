@@ -109,7 +109,7 @@ expect_predicate_reject private-symlink-leaf safe_private_file "$TMP/path-link-l
 
 mkdir -p "$FIXTURE/terraform/lumen-standalone-gke/scripts" \
   "$FIXTURE/kustomize/lumen-standalone-acceptance/tests" \
-  "$FIXTURE/apps/lumen/scripts" "$FIXTURE/bin" "$STATE" "$CANDIDATE"
+  "$FIXTURE/scripts" "$FIXTURE/bin" "$STATE" "$CANDIDATE"
 cp "$LIVE" "$FIXTURE/terraform/lumen-standalone-gke/scripts/live-acceptance.sh"
 cp "$REPAIR" "$FIXTURE/terraform/lumen-standalone-gke/scripts/repair-destroy.sh"
 chmod 755 "$FIXTURE/terraform/lumen-standalone-gke/scripts/live-acceptance.sh" "$FIXTURE/terraform/lumen-standalone-gke/scripts/repair-destroy.sh"
@@ -154,10 +154,10 @@ printf '%s\n' kustomize >>"$repo/test-state/events"
 [[ "$(<"$repo/test-state/mode")" != kustomize-fail ]]
 EOF
 
-cat >"$FIXTURE/apps/lumen/scripts/standalone-gke-acceptance.sh" <<'EOF'
+cat >"$FIXTURE/scripts/standalone-gke-acceptance.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 state="$repo/test-state"
 mode=$(<"$state/mode"); private_tmp_root=$(cd -P /tmp && pwd -P)
 printf '%s\n' inner >>"$state/events"
@@ -175,7 +175,7 @@ for name in KUBECONFIG LUMEN_STANDALONE_GKE_CONTEXT LUMEN_STANDALONE_GKE_PROJECT
 [[ "$LUMEN_STANDALONE_GKE_CONTEXT" == contract-context ]]
 [[ "$LUMEN_STANDALONE_GKE_PROJECT_ID" == abcde1 && "$LUMEN_STANDALONE_GKE_LOCATION" == us-central1-a ]]
 [[ "$LUMEN_STANDALONE_GKE_CLI" == "$(<"$state/expected-cli")" ]]
-[[ "$LUMEN_STANDALONE_GKE_IMAGE" == "ghcr.io/chrischeng-c4/lumen@sha256:$(printf '%064d' 0)" ]]
+[[ "$LUMEN_STANDALONE_GKE_IMAGE" == "ghcr.io/faberline/lumen@sha256:$(printf '%064d' 0)" ]]
 [[ "$LUMEN_STANDALONE_GKE_CLI_TARGET" == aarch64-apple-darwin ]]
 [[ "$LUMEN_STANDALONE_GKE_RUN_ID" == contract-run ]]
 [[ "$LUMEN_STANDALONE_GKE_EXPECTED_RUN_ID" == 123 && "$LUMEN_STANDALONE_GKE_EXPECTED_RUN_ATTEMPT" == 2 ]]
@@ -192,10 +192,10 @@ if [[ "$mode" == inner-sidecar-bad ]]; then hash=$(printf '%064d' 0); fi
 printf '%s  lumen-standalone-gke-receipt.json\n' "$hash" >"$receipt.sha256"
 EOF
 
-cat >"$FIXTURE/apps/lumen/scripts/verify-release-artifacts.sh" <<'EOF'
+cat >"$FIXTURE/scripts/verify-release-artifacts.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-fake_repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)
+fake_repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 fake_state="$fake_repo/test-state"
 fake_sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'; else shasum -a 256 "$1" | awk '{print $1}'; fi; }
 validate_receipt() {
@@ -471,11 +471,11 @@ cat >"$FIXTURE/bin/sleep" <<'EOF'
 exit 0
 EOF
 
-chmod 755 "$FIXTURE/terraform/lumen-standalone-gke/scripts/check.sh" "$FIXTURE/kustomize/lumen-standalone-acceptance/tests/contract.sh" "$FIXTURE/apps/lumen/scripts/standalone-gke-acceptance.sh" "$FIXTURE/apps/lumen/scripts/verify-release-artifacts.sh" "$FIXTURE/bin/terraform" "$FIXTURE/bin/gcloud" "$FIXTURE/bin/kubectl" "$FIXTURE/bin/cp" "$FIXTURE/bin/sleep"
+chmod 755 "$FIXTURE/terraform/lumen-standalone-gke/scripts/check.sh" "$FIXTURE/kustomize/lumen-standalone-acceptance/tests/contract.sh" "$FIXTURE/scripts/standalone-gke-acceptance.sh" "$FIXTURE/scripts/verify-release-artifacts.sh" "$FIXTURE/bin/terraform" "$FIXTURE/bin/gcloud" "$FIXTURE/bin/kubectl" "$FIXTURE/bin/cp" "$FIXTURE/bin/sleep"
 
 LIVE_FIXTURE="$FIXTURE/terraform/lumen-standalone-gke/scripts/live-acceptance.sh"
 REPAIR_FIXTURE="$FIXTURE/terraform/lumen-standalone-gke/scripts/repair-destroy.sh"
-COMMON_ARGS=(--project-id abcde1 --region us-central1 --gke-zone us-central1-a --run-id contract-run --candidate-receipt-dir "$CANDIDATE" --lumen-cli "$CLI" --cli-target aarch64-apple-darwin --image "ghcr.io/chrischeng-c4/lumen@$CANDIDATE_ROOT_DIGEST" --expected-commit "$CANDIDATE_COMMIT" --expected-run-id 123 --expected-run-attempt 2)
+COMMON_ARGS=(--project-id abcde1 --region us-central1 --gke-zone us-central1-a --run-id contract-run --candidate-receipt-dir "$CANDIDATE" --lumen-cli "$CLI" --cli-target aarch64-apple-darwin --image "ghcr.io/faberline/lumen@$CANDIDATE_ROOT_DIGEST" --expected-commit "$CANDIDATE_COMMIT" --expected-run-id 123 --expected-run-attempt 2)
 
 reset_case() {
   local name=$1 mode=$2

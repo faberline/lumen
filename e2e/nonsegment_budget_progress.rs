@@ -4,16 +4,16 @@
 //!   :129, and :139 require legal large index requests to make progress
 //!   through CBOR and no-data-dir serving without a permanent capacity
 //!   refusal, retain the existing admin checkpoint response, and preserve a
-//!   real CBOR cold start. Change points: apps/lumen/src/bin/lumen.rs:3518-3533
-//!   chooses CBOR/no-data-dir persistence and apps/lumen/src/coordinator.rs
+//!   real CBOR cold start. Change points: src/bin/lumen.rs:3518-3533
+//!   chooses CBOR/no-data-dir persistence and src/coordinator.rs
 //!   owns capacity before a submitted record applies.
 //! - Security: the changed request-capacity path accepts caller input after
 //!   the existing body-limit boundary. Every large request in
 //!   support/serve_budget_support.rs:336-342 is asserted below 8 MiB; the
 //!   closed oversized-body outcome is already pinned by
-//!   apps/lumen/e2e/http_body_limit_e2e.rs:67-119. No new parser, path, or
+//!   e2e/http_body_limit_e2e.rs:67-119. No new parser, path, or
 //!   credential input is opened by the spill/progress change points.
-//! - Performance: apps/lumen/ROADMAP.md:60-70 promises, verbatim, "Pending
+//! - Performance: ROADMAP.md:60-70 promises, verbatim, "Pending
 //!   active, frozen, and reserved changes have a 256 MiB total budget" and
 //!   "At 128 MiB, the runtime requests an early checkpoint."
 //!   nonsegment_budget_progress.rs:64 and

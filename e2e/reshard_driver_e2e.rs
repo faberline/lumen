@@ -14,7 +14,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! These 3 sentences were the whole of the `// Contract:` comment in 3 AW-EC shells
-//! under `apps/lumen/e2e/`, each of which ran `cargo test -p lumen --features operator
+//! under `e2e/`, each of which ran `cargo test -p lumen --features operator
 //! --test reshard_driver_e2e` in a subprocess and asserted the child's exit status. The
 //! third shell's command also chained `--test reshard_admin_e2e` and `--lib
 //! segment_rdb`; both are likewise executed directly by the same gate row, so its
@@ -24,7 +24,7 @@
 //! was `cargo test -p lumen`, and with `default = []` that command compiled every
 //! `#![cfg(feature = "operator")]` target into an empty binary that printed `0 passed`
 //! and exited 0 — so the shells were the sole surviving record that these checks should
-//! run at all. `apps/lumen/CONTRIBUTING.md` declared `cargo test -p lumen --features
+//! run at all. `CONTRIBUTING.md` declared `cargo test -p lumen --features
 //! "operator delegated-auth"` as a required second gate row that day, and that run
 //! executes this target directly. That made each shell a second, nested run of a target
 //! the gate already covers, so they were deleted the same day. The sentence is the only

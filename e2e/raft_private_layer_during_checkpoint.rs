@@ -15,19 +15,19 @@
 //!   live. Assertions at `:602-608` require the first cold `CURRENT` to remain
 //!   the captured cut, and `:625-634` requires the next cold `CURRENT` to
 //!   retain the later state and final Raft watermark. The changed seam is
-//!   `apps/lumen/src/storage.rs:13944-14004` after a staged checkpoint from
-//!   `apps/lumen/src/segment_rdb.rs:643-824`.
+//!   `src/storage.rs:13944-14004` after a staged checkpoint from
+//!   `src/segment_rdb.rs:643-824`.
 //! - Security: this change accepts no new caller, peer, or disk format. The
 //!   committed-LWAL byte boundary already has a closed malformed-input case in
-//!   `apps/lumen/e2e/raft_oversized_committed_apply.rs:459-480`, which feeds a
+//!   `e2e/raft_oversized_committed_apply.rs:459-480`, which feeds a
 //!   truncated record to `EngineSm::apply` and requires no mutation or watermark
 //!   advance. The process-written checkpoint reader boundary remains validated
-//!   before cold open at `apps/lumen/src/segment_rdb.rs:1910-2070`.
-//! - Performance: `apps/lumen/docs/indexing.md:264-272` says, verbatim,
+//!   before cold open at `src/segment_rdb.rs:1910-2070`.
+//! - Performance: `docs/indexing.md:264-272` says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   This case asserts its one reused command really exceeds that boundary at
 //!   `:229-237`. Existing
-//!   `apps/lumen/e2e/raft_oversized_committed_apply.rs:238-245` measures the
+//!   `e2e/raft_oversized_committed_apply.rs:238-245` measures the
 //!   public pending gauges against that same limit. The pause timeouts only
 //!   bound test cleanup; they are not a latency promise.
 //!

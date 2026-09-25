@@ -60,7 +60,7 @@ validate_contract_shape() {
     (.region | test("^[a-z]+-[a-z0-9]+[0-9]$")) and
     (.gke_zone | test("^[a-z]+-[a-z0-9]+[0-9]-[a-z]$")) and
     (.run_id | test("^[a-z0-9][a-z0-9-]{0,39}[a-z0-9]$")) and
-    (.image | test("^ghcr\\.io/chrischeng-c4/lumen@sha256:[0-9a-f]{64}$")) and
+    (.image | test("^ghcr\\.io/faberline/lumen@sha256:[0-9a-f]{64}$")) and
     (.expected_commit | test("^[0-9a-f]{40}$")) and
     (.expected_run_id | test("^[0-9]+$")) and
     (.expected_run_attempt | test("^[0-9]+$")) and

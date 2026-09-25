@@ -8,7 +8,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! This sentence was the whole of the `// Contract:` comment in an AW-EC shell under
-//! `apps/lumen/e2e/`, which ran `cargo test -p lumen --test stats_metadata_e2e` in a
+//! `e2e/`, which ran `cargo test -p lumen --test stats_metadata_e2e` in a
 //! subprocess and asserted the child's exit status. `cargo test -p lumen` already runs
 //! this target directly, so the shell added a second, nested run and nothing else. It
 //! was deleted on 2026-08-20 with the EC machinery it belonged to, and the sentence is

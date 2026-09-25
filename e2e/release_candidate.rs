@@ -2,14 +2,14 @@
 //!
 //! # Facets
 //!
-//! - Behavior: `apps/lumen/e2e/release_candidate.rs:2595` rejects each broken
-//!   sixteen-cell workflow shape, and `apps/lumen/e2e/release_candidate.rs:4104`
+//! - Behavior: `e2e/release_candidate.rs:2595` rejects each broken
+//!   sixteen-cell workflow shape, and `e2e/release_candidate.rs:4104`
 //!   refuses a final 0.6.1 receipt without its evidence.
-//! - Security: `apps/lumen/e2e/release_candidate.rs:2595` carries mutable-image,
-//!   run-binding, and shared-path refusals; `apps/lumen/e2e/release_candidate.rs:4153`
+//! - Security: `e2e/release_candidate.rs:2595` carries mutable-image,
+//!   run-binding, and shared-path refusals; `e2e/release_candidate.rs:4153`
 //!   carries missing, corrupt, and foreign receipt refusal at the workflow/script boundary.
 //! - Performance: the approved release gate is verbatim at
-//!   `apps/lumen/e2e/release_candidate.rs:54`; `apps/lumen/e2e/release_candidate.rs:1842`
+//!   `e2e/release_candidate.rs:54`; `e2e/release_candidate.rs:1842`
 //!   requires that command and its receipt checks. This asserts wiring only,
 //!   not that a 30-minute workload has passed.
 //!
@@ -48,12 +48,12 @@ const ACTIONS: &[&str] = &[
     "anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610",
 ];
 const WORKFLOW_BYTES_SHA256: &str =
-    "44075cc9f740d9fa0db18a74481bffafaae410b24ee2463d2670d1294880b54f";
+    "3e6f2f5a40cae6c3bce865c344ffde1266c70a9aa91399e317679370d95c0172";
 const KIND_E2E_BYTES_SHA256: &str =
-    "1e6bb83156af06463fed2ba8408cc0b6ab433ce08a68d92a5b17c934972fdedc";
+    "600d98c971e6abba921b426f239ebfa066f4b01b2e179db7aa841b1f878aa38c";
 const RELEASE_PERF_GATE: &str = "cargo test --release --locked -p lumen --test perf_gate -- --ignored --test-threads=1 --nocapture";
 const VERIFIER_BYTES_SHA256: &str =
-    "988f572370ebecc3839c233237c749ca41e03109326e72a958009747161461f5";
+    "e90b7a6b80138bcaec768a79f125fc845d08c036842e1304ede145a0d1342eec";
 
 fn sha256_bytes(bytes: &[u8]) -> String {
     let mut child = Command::new("shasum")
@@ -75,11 +75,6 @@ fn sha256_bytes(bytes: &[u8]) -> String {
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .into()
 }
 fn key(name: &str) -> Yaml {
     Yaml::String(name.into())
@@ -296,8 +291,8 @@ fn validate_libraries_job(workflow: &Yaml) -> Result<(), Finding> {
     let library_job = job(workflow, "verify-libraries").ok_or(Finding("LIBRARIES"))?;
     let library_map = library_job.as_mapping().ok_or(Finding("LIBRARIES"))?;
     require(
-        library_map.len() == 6
-            && ["name", "needs", "runs-on", "permissions", "env", "steps"]
+        library_map.len() == 5
+            && ["name", "needs", "runs-on", "permissions", "steps"]
                 .iter()
                 .all(|name| library_map.contains_key(&key(name))),
         "LIBRARIES",
@@ -311,18 +306,10 @@ fn validate_libraries_job(workflow: &Yaml) -> Result<(), Finding> {
         field(library_job, "runs-on").and_then(Yaml::as_str) == Some("ubuntu-latest"),
         "LIBRARIES",
     )?;
-    let env = field(library_job, "env")
-        .and_then(Yaml::as_mapping)
-        .ok_or(Finding("LIBRARIES"))?;
-    require(
-        env.len() == 1
-            && env.get(&key("GH_TOKEN")).and_then(Yaml::as_str) == Some("${{ github.token }}"),
-        "LIBRARIES",
-    )?;
     let steps = field(library_job, "steps")
         .and_then(Yaml::as_sequence)
         .ok_or(Finding("LIBRARIES"))?;
-    require(steps.len() == 3, "LIBRARIES")?;
+    require(steps.len() == 2, "LIBRARIES")?;
     require(
         field(&steps[0], "uses").and_then(Yaml::as_str)
             == Some("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"),
@@ -356,23 +343,7 @@ fn validate_libraries_job(workflow: &Yaml) -> Result<(), Finding> {
             == Some(0),
         "LIBRARIES",
     )?;
-    let uv_step = steps[1].as_mapping().ok_or(Finding("LIBRARIES"))?;
-    require(
-        uv_step.len() == 2
-            && field(&steps[1], "uses").and_then(Yaml::as_str)
-                == Some("astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9"),
-        "LIBRARIES",
-    )?;
-    let uv_with = field(&steps[1], "with")
-        .and_then(Yaml::as_mapping)
-        .ok_or(Finding("LIBRARIES"))?;
-    require(
-        uv_with.len() == 2
-            && uv_with.get(&key("version")).and_then(Yaml::as_str) == Some("0.12.1")
-            && uv_with.get(&key("enable-cache")).and_then(Yaml::as_bool) == Some(false),
-        "LIBRARIES",
-    )?;
-    let run_step = steps[2].as_mapping().ok_or(Finding("LIBRARIES"))?;
+    let run_step = steps[1].as_mapping().ok_or(Finding("LIBRARIES"))?;
     require(
         run_step.len() == 3
             && ["name", "shell", "run"]
@@ -381,37 +352,41 @@ fn validate_libraries_job(workflow: &Yaml) -> Result<(), Finding> {
         "LIBRARIES",
     )?;
     require(
-        field(&steps[2], "shell").and_then(Yaml::as_str) == Some("bash"),
+        field(&steps[1], "shell").and_then(Yaml::as_str) == Some("bash"),
         "LIBRARIES",
     )?;
     require(
-        field(&steps[2], "name").and_then(Yaml::as_str)
+        field(&steps[1], "name").and_then(Yaml::as_str)
             == Some("Run required service and Raft library gates without GKE"),
         "LIBRARIES",
     )?;
-    let run = field(&steps[2], "run")
+    let run = field(&steps[1], "run")
         .and_then(Yaml::as_str)
         .ok_or(Finding("LIBRARIES"))?;
+    // The shared library gates run against faberline/core at the exact commit
+    // Cargo.lock pins; the implementor build keeps Lumen's own slice.
     require(
         exact_shell_lines(
             run,
             &[
                 "set -euo pipefail",
-                "cargo test --locked -p service-k8s --test stateful_instance_render",
-                "cargo test --locked -p service-k8s --test stateful_adapter_equivalence",
-                "cargo test --locked -p service-k8s",
-                "cargo test --locked -p storage-durable",
-                "cargo test --locked -p service-backup --features http-client",
-                "cargo test --locked -p raft-runtime --test adversarial_recovery",
-                "cargo test --locked -p raft-core",
-                "cargo test --locked -p raft-runtime",
-                "bash scripts/raft-implementor-build.sh",
-                "python3 scripts/meta/test_readme_contract.py",
-                "python3 scripts/meta/test_project_docs_contract.py",
-                "uv run --python 3.13 --project apps/aw --locked pytest -q apps/aw/e2e/test_wis.py",
-                "uv run --python 3.13 --project apps/aw --locked aw meta check --path apps/lumen --format json",
-                "uv run --python 3.13 --no-project scripts/meta/project_docs_contract.py check apps/lumen --format json",
-                "uv run --python 3.13 --project apps/aw --locked aw wis gap apps/lumen",
+                "core_rev=\"$(sed -n 's|^source = \"git+https://github.com/faberline/core?tag=[^#]*#\\([0-9a-f]\\{40\\}\\)\"$|\\1|p' Cargo.lock | sort -u)\"",
+                "[[ \"$core_rev\" =~ ^[0-9a-f]{40}$ ]] || { echo \"Cargo.lock must pin exactly one faberline/core commit\" >&2; exit 1; }",
+                "core=\"$RUNNER_TEMP/core\"",
+                "git init -q \"$core\"",
+                "git -C \"$core\" fetch -q --depth 1 https://github.com/faberline/core \"$core_rev\"",
+                "git -C \"$core\" checkout -q --detach FETCH_HEAD",
+                "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p service-k8s --test stateful_instance_render",
+                "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p service-k8s --test stateful_adapter_equivalence",
+                "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p service-k8s",
+                "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p storage-durable",
+                "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p service-backup --features http-client",
+                "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime --test adversarial_recovery",
+                "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-core",
+                "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime",
+                "cargo build --locked -p lumen --features raft-wal",
+                "cargo test --locked -p lumen --features raft-wal --lib --no-run",
+                "cargo test --locked -p lumen --features raft-wal --test raft_oversized_committed_apply --no-run",
                 "git -c core.fsmonitor=false diff --check",
             ],
         ),
@@ -993,7 +968,7 @@ fn validate_candidate_and_kind_commands(workflow: &Yaml) -> Result<(), Finding> 
         &["name", "env", "shell", "run"],
         &[
             "set -euo pipefail",
-            "apps/lumen/scripts/verify-release-candidate.sh --repo chrischeng-c4/axiom --version \"${{ needs.identity.outputs.version }}\" --commit \"${{ needs.identity.outputs.commit }}\" --run-id \"${{ github.run_id }}\" --run-attempt \"${{ github.run_attempt }}\" --manifest candidate/candidate-manifest.json --manifest-sidecar candidate/candidate-manifest.json.sha256 --artifacts-dir candidate --image \"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" --candidate-tag \"${{ needs.ghcr-image-and-attest.outputs.candidate_tag }}\" --amd64-digest \"${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\" --arm64-digest \"${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\" --mode full",
+            "scripts/verify-release-candidate.sh --repo faberline/lumen --version \"${{ needs.identity.outputs.version }}\" --commit \"${{ needs.identity.outputs.commit }}\" --run-id \"${{ github.run_id }}\" --run-attempt \"${{ github.run_attempt }}\" --manifest candidate/candidate-manifest.json --manifest-sidecar candidate/candidate-manifest.json.sha256 --artifacts-dir candidate --image \"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" --candidate-tag \"${{ needs.ghcr-image-and-attest.outputs.candidate_tag }}\" --amd64-digest \"${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\" --arm64-digest \"${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\" --mode full",
         ],
     )?;
     let supply_chain = named_step(
@@ -1022,7 +997,7 @@ fn validate_candidate_and_kind_commands(workflow: &Yaml) -> Result<(), Finding> 
         ),
     ] {
         let command = format!(
-            "LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_IMAGE=\"${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}\" LUMEN_E2E_EXPECTED_VERSION=\"${{{{ needs.identity.outputs.version }}}}\" LUMEN_E2E_EXPECTED_GIT_SHA=\"${{short_sha:0:8}}\" LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"{digest}\" apps/lumen/scripts/kind-e2e.sh"
+            "LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_IMAGE=\"${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}\" LUMEN_E2E_EXPECTED_VERSION=\"${{{{ needs.identity.outputs.version }}}}\" LUMEN_E2E_EXPECTED_GIT_SHA=\"${{short_sha:0:8}}\" LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"{digest}\" scripts/kind-e2e.sh"
         );
         validate_exact_run_step(
             workflow,
@@ -1232,25 +1207,18 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
                 "cargo test --locked -p lumen --features release --test release_feature_set",
                 "cargo clean",
                 "df -h /",
-                "bash apps/lumen/scripts/standalone-container-smoke.sh bind",
-                "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash apps/lumen/scripts/standalone-container-smoke.sh durable",
+                "bash scripts/standalone-container-smoke.sh bind",
+                "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
             ],
         ),
         "GATES",
     )?;
     for gate in [
-        "cargo test --locked -p service-k8s",
-        "cargo test --locked -p storage-durable",
-        "cargo test --locked -p service-backup --features http-client",
-        "cargo test --locked -p raft-core",
-        "cargo test --locked -p raft-runtime",
-        "bash scripts/raft-implementor-build.sh",
-        "python3 scripts/meta/test_readme_contract.py",
-        "python3 scripts/meta/test_project_docs_contract.py",
-        "uv run --python 3.13 --project apps/aw --locked pytest -q apps/aw/e2e/test_wis.py",
-        "uv run --python 3.13 --project apps/aw --locked aw meta check --path apps/lumen --format json",
-        "uv run --python 3.13 --no-project scripts/meta/project_docs_contract.py check apps/lumen --format json",
-        "uv run --python 3.13 --project apps/aw --locked aw wis gap apps/lumen",
+        "https://github.com/faberline/core",
+        "--manifest-path",
+        "cargo build --locked -p lumen --features raft-wal",
+        "cargo test --locked -p lumen --features raft-wal --lib --no-run",
+        "cargo test --locked -p lumen --features raft-wal --test raft_oversized_committed_apply --no-run",
         "git -c core.fsmonitor=false diff --check",
     ] {
         require(!run.contains(gate), "LIBRARIES")?;
@@ -2055,8 +2023,8 @@ fn validate_scale_matrix_sources(
         "SCALE_MATRIX",
     )?;
     require(
-        benchmark_doc.contains("LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10 apps/lumen/scripts/lumen_scale.sh 1000")
-            && benchmark_doc.contains("LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10,100,1000 apps/lumen/scripts/lumen_scale.sh 1000,10000,100000")
+        benchmark_doc.contains("LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10 scripts/lumen_scale.sh 1000")
+            && benchmark_doc.contains("LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10,100,1000 scripts/lumen_scale.sh 1000,10000,100000")
             && benchmark_doc.contains("standard 100K cap")
             && benchmark_doc.contains("QPS applies only to reads")
             && benchmark_doc.contains("actual shared-queue high-water mark")
@@ -2344,7 +2312,7 @@ fn validate_durable_perf_final_binding(workflow: &Yaml) -> Result<(), Finding> {
         .filter(|step| {
             field(step, "run")
                 .and_then(Yaml::as_str)
-                .is_some_and(|run| run.contains("apps/lumen/scripts/verify-durable-perf.py"))
+                .is_some_and(|run| run.contains("scripts/verify-durable-perf.py"))
         })
         .collect::<Vec<_>>();
     require(verifications.len() == 1, PERF_WORKFLOW)?;
@@ -2360,7 +2328,7 @@ fn validate_durable_perf_final_binding(workflow: &Yaml) -> Result<(), Finding> {
     let verify_lines = shell_logical_lines(verify_run);
     let verify_command = verify_lines
         .iter()
-        .filter(|line| line.contains("apps/lumen/scripts/verify-durable-perf.py"))
+        .filter(|line| line.contains("scripts/verify-durable-perf.py"))
         .collect::<Vec<_>>();
     require(
         verify_command.len() == 1
@@ -2649,7 +2617,7 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
             "verify-candidate",
             "attestations: read\ncontents: read\npackages: read",
         ),
-        ("verify-libraries", "contents: read\nissues: read"),
+        ("verify-libraries", "contents: read"),
         ("kind-amd64", "contents: read\npackages: read"),
         ("kind-arm64", "contents: read\npackages: read"),
         ("result", "contents: read"),
@@ -2706,19 +2674,20 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         "cargo test --locked -p lumen --features \"operator delegated-auth\"",
         "cargo test --locked -p lumen --features release --test release_feature_set",
         "cargo clean",
-        "bash apps/lumen/scripts/standalone-container-smoke.sh bind",
-        "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash apps/lumen/scripts/standalone-container-smoke.sh durable",
+        "bash scripts/standalone-container-smoke.sh bind",
+        "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
         RELEASE_PERF_GATE,
-        "cargo test --locked -p service-k8s --test stateful_instance_render",
-        "cargo test --locked -p service-k8s --test stateful_adapter_equivalence",
-        "cargo test --locked -p service-k8s",
-        "cargo test --locked -p raft-runtime --test adversarial_recovery",
-        "cargo test --locked -p raft-core",
-        "cargo test --locked -p raft-runtime",
-        "bash scripts/raft-implementor-build.sh",
+        "git -C \"$core\" fetch -q --depth 1 https://github.com/faberline/core \"$core_rev\"",
+        "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p service-k8s --test stateful_instance_render",
+        "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p service-k8s --test stateful_adapter_equivalence",
+        "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p service-k8s",
+        "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime --test adversarial_recovery",
+        "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-core",
+        "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime",
+        "cargo build --locked -p lumen --features raft-wal",
+        "cargo test --locked -p lumen --features raft-wal --lib --no-run",
+        "cargo test --locked -p lumen --features raft-wal --test raft_oversized_committed_apply --no-run",
         "git -c core.fsmonitor=false diff --check",
-        "python3 scripts/meta/test_readme_contract.py",
-        "project_docs_contract.py check apps/lumen --format json",
         "--image \"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\"",
         "LUMEN_E2E_EXPECTED_RUNTIME_DIGEST",
         "final-candidate-manifest.json",
@@ -2909,32 +2878,32 @@ fn workflow() -> String {
     fs::read_to_string(root().join(".github/workflows/lumen-release-candidate.yml")).unwrap()
 }
 fn kind_e2e_source() -> String {
-    fs::read_to_string(root().join("apps/lumen/scripts/kind-e2e.sh")).unwrap()
+    fs::read_to_string(root().join("scripts/kind-e2e.sh")).unwrap()
 }
 fn perf_gate_source() -> String {
-    fs::read_to_string(root().join("apps/lumen/e2e/perf_gate.rs")).unwrap()
+    fs::read_to_string(root().join("e2e/perf_gate.rs")).unwrap()
 }
 fn perf_workload_ledger_source() -> String {
-    fs::read_to_string(root().join("apps/lumen/e2e/support/perf_workload_ledger.rs")).unwrap()
+    fs::read_to_string(root().join("e2e/support/perf_workload_ledger.rs")).unwrap()
 }
 fn perf_gate_vs_db_source() -> String {
-    fs::read_to_string(root().join("apps/lumen/e2e/perf_gate_vs_db.rs")).unwrap()
+    fs::read_to_string(root().join("e2e/perf_gate_vs_db.rs")).unwrap()
 }
 fn lumen_scale_script() -> String {
-    fs::read_to_string(root().join("apps/lumen/scripts/lumen_scale.sh")).unwrap()
+    fs::read_to_string(root().join("scripts/lumen_scale.sh")).unwrap()
 }
 fn benchmark_scale_doc() -> String {
-    fs::read_to_string(root().join("apps/lumen/docs/benchmarks-scale.md")).unwrap()
+    fs::read_to_string(root().join("docs/benchmarks-scale.md")).unwrap()
 }
 fn verifier() -> (String, u32) {
-    let path = root().join("apps/lumen/scripts/verify-release-candidate.sh");
+    let path = root().join("scripts/verify-release-candidate.sh");
     (
         fs::read_to_string(&path).unwrap(),
         fs::metadata(path).unwrap().permissions().mode(),
     )
 }
 fn dockerfile() -> String {
-    fs::read_to_string(root().join("apps/lumen/Dockerfile.release")).unwrap()
+    fs::read_to_string(root().join("Dockerfile.release")).unwrap()
 }
 
 fn durable_perf_workflow_fixture() -> String {
@@ -3016,7 +2985,7 @@ fn durable_perf_workflow_fixture() -> String {
         shell: bash
         run: |
           set -euo pipefail
-          python3 apps/lumen/scripts/verify-durable-perf.py --receipts-dir candidate/perf --repo "${{{{ github.repository }}}}" --run-id "${{{{ github.run_id }}}}" --run-attempt "${{{{ github.run_attempt }}}}" --commit "${{{{ needs.identity.outputs.commit }}}}" --image "${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}" --output candidate/durable-perf-summary.json
+          python3 scripts/verify-durable-perf.py --receipts-dir candidate/perf --repo "${{{{ github.repository }}}}" --run-id "${{{{ github.run_id }}}}" --run-attempt "${{{{ github.run_attempt }}}}" --commit "${{{{ needs.identity.outputs.commit }}}}" --image "${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}" --output candidate/durable-perf-summary.json
       - name: Bind all successful job conclusions into final receipt
         shell: bash
         run: |
@@ -3170,7 +3139,7 @@ fn durable_performance_release_workflow_is_fail_closed() {
         "missing aggregate",
         replace_once(
             &source,
-            "      - name: Verify qualifying durable performance receipts\n        shell: bash\n        run: |\n          set -euo pipefail\n          python3 apps/lumen/scripts/verify-durable-perf.py --receipts-dir candidate/perf --repo \"${{ github.repository }}\" --run-id \"${{ github.run_id }}\" --run-attempt \"${{ github.run_attempt }}\" --commit \"${{ needs.identity.outputs.commit }}\" --image \"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" --output candidate/durable-perf-summary.json\n",
+            "      - name: Verify qualifying durable performance receipts\n        shell: bash\n        run: |\n          set -euo pipefail\n          python3 scripts/verify-durable-perf.py --receipts-dir candidate/perf --repo \"${{ github.repository }}\" --run-id \"${{ github.run_id }}\" --run-attempt \"${{ github.run_attempt }}\" --commit \"${{ needs.identity.outputs.commit }}\" --image \"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" --output candidate/durable-perf-summary.json\n",
             "",
         ),
     );
@@ -3401,34 +3370,34 @@ fn cloud_free_gate_mutations_fail_without_hash_oracle() {
 #[test]
 fn live_candidate_contract_is_fail_closed() {
     let source = workflow();
-    const DURABLE_GATE: &str = "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash apps/lumen/scripts/standalone-container-smoke.sh durable";
+    const DURABLE_GATE: &str = "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable";
     for (replacement, finding) in [
         (
-            "# LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash apps/lumen/scripts/standalone-container-smoke.sh durable",
+            "# LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
             "GATES",
         ),
         (
-            "echo 'LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash apps/lumen/scripts/standalone-container-smoke.sh durable'",
+            "echo 'LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable'",
             "GATES",
         ),
         (
-            "if false; then LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash apps/lumen/scripts/standalone-container-smoke.sh durable; fi",
+            "if false; then LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable; fi",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\" bash apps/lumen/scripts/standalone-container-smoke.sh durable",
+            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\" bash scripts/standalone-container-smoke.sh durable",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\" bash apps/lumen/scripts/standalone-container-smoke.sh durable",
+            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\" bash scripts/standalone-container-smoke.sh durable",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}:latest\" bash apps/lumen/scripts/standalone-container-smoke.sh durable",
+            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}:latest\" bash scripts/standalone-container-smoke.sh durable",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash apps/lumen/scripts/standalone-container-smoke.sh bind",
+            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh bind",
             "GATES",
         ),
     ] {
@@ -3599,7 +3568,7 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     let same_name_step = replace_once(
         &source,
         "      - name: Log in to GHCR with read-only job access\n        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ github.token }}\n",
-        "      - name: Log in to GHCR with read-only job access\n        shell: bash\n        run: |\n          # docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9\n          printf '#!/usr/bin/env bash\\nexit 0\\n' > apps/lumen/scripts/verify-release-candidate.sh\n",
+        "      - name: Log in to GHCR with read-only job access\n        shell: bash\n        run: |\n          # docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9\n          printf '#!/usr/bin/env bash\\nexit 0\\n' > scripts/verify-release-candidate.sh\n",
     );
     assert_ne!(same_name_step, source);
     assert_eq!(
@@ -3651,7 +3620,7 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     ] {
         expect_workflow(&source, from, to, code);
     }
-    for (occurrence, finding) in [(0, "UV_SETUP"), (1, "LIBRARIES")] {
+    for (occurrence, finding) in [(0, "UV_SETUP")] {
         let changed = replace_occurrence(&source, "version: 0.12.1", "version: 0.12.2", occurrence);
         assert_eq!(
             validate_workflow(&changed, &dockerfile()).unwrap_err(),
@@ -4214,8 +4183,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     );
     let wrong_dev_matrix = replace_once(
         &benchmark_doc,
-        "LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10 apps/lumen/scripts/lumen_scale.sh 1000",
-        "LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=100 apps/lumen/scripts/lumen_scale.sh 1000",
+        "LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=10 scripts/lumen_scale.sh 1000",
+        "LUMEN_SCALE_DISK=1 LUMEN_SCALE_QPS=1 LUMEN_SCALE_CELLS=range,filter_sort,keyword_sort,sorted_page_deep LUMEN_SCALE_QPS_TARGETS=100 scripts/lumen_scale.sh 1000",
     );
     assert_eq!(
         validate_scale_matrix_sources(&scale_source, &scale_script, &wrong_dev_matrix).unwrap_err(),
@@ -4295,20 +4264,39 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     );
     expect_workflow(
         &source,
-        "cargo test --locked -p raft-core",
+        "cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-core",
         "true",
         "LIBRARIES",
     );
     expect_workflow(
         &source,
-        "          cargo test --locked -p raft-runtime --test adversarial_recovery\n          cargo test --locked -p raft-core\n          cargo test --locked -p raft-runtime\n          bash scripts/raft-implementor-build.sh",
-        "          bash scripts/raft-implementor-build.sh\n          cargo test --locked -p raft-runtime --test adversarial_recovery\n          cargo test --locked -p raft-core\n          cargo test --locked -p raft-runtime",
+        "git -C \"$core\" fetch -q --depth 1 https://github.com/faberline/core \"$core_rev\"",
+        "git -C \"$core\" fetch -q --depth 1 https://github.com/faberline/core main",
         "LIBRARIES",
     );
     expect_workflow(
         &source,
-        "          cargo test --locked -p raft-runtime --test adversarial_recovery\n          cargo test --locked -p raft-core\n          cargo test --locked -p raft-runtime\n          bash scripts/raft-implementor-build.sh",
-        "          cargo test --locked -p raft-runtime --test adversarial_recovery\n          cargo test --locked -p raft-core\n          cargo test --locked -p raft-runtime\n          cargo test --locked -p raft-core\n          bash scripts/raft-implementor-build.sh",
+        "          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime --test adversarial_recovery
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-core
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime
+          cargo build --locked -p lumen --features raft-wal",
+        "          cargo build --locked -p lumen --features raft-wal
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime --test adversarial_recovery
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-core
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime",
+        "LIBRARIES",
+    );
+    expect_workflow(
+        &source,
+        "          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime --test adversarial_recovery
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-core
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime
+          cargo build --locked -p lumen --features raft-wal",
+        "          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime --test adversarial_recovery
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-core
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-runtime
+          cargo test --locked --manifest-path \"$core/Cargo.toml\" -p raft-core
+          cargo build --locked -p lumen --features raft-wal",
         "LIBRARIES",
     );
     for (from, to) in [
@@ -4356,17 +4344,17 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         (
             "verify-candidate",
             "Verify full run-scoped candidate supply chain",
-            "apps/lumen/scripts/verify-release-candidate.sh \\",
+            "scripts/verify-release-candidate.sh \\",
         ),
         (
             "kind-amd64",
             "Run prebuilt candidate kind e2e",
-            "apps/lumen/scripts/kind-e2e.sh",
+            "scripts/kind-e2e.sh",
         ),
         (
             "kind-arm64",
             "Run prebuilt candidate kind e2e",
-            "apps/lumen/scripts/kind-e2e.sh",
+            "scripts/kind-e2e.sh",
         ),
     ] {
         let insertion = format!(
@@ -4394,15 +4382,15 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     }
     expect_workflow(
         &source,
-        "  verify-libraries:\n    name: verify service and Raft library gates\n    needs: [identity]\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      issues: read\n    env:\n      GH_TOKEN: ${{ github.token }}\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${{ needs.identity.outputs.commit }}",
-        "  verify-libraries:\n    name: verify service and Raft library gates\n    needs: [identity]\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      issues: read\n    env:\n      GH_TOKEN: ${{ github.token }}\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${{ github.sha }}",
+        "  verify-libraries:\n    name: verify service and Raft library gates\n    needs: [identity]\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${{ needs.identity.outputs.commit }}",
+        "  verify-libraries:\n    name: verify service and Raft library gates\n    needs: [identity]\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${{ github.sha }}",
         "LIBRARIES",
     );
     for occurrence in 0..2 {
         let changed = replace_occurrence(
             &source,
-            "          apps/lumen/scripts/kind-e2e.sh",
-            "          if false; then apps/lumen/scripts/kind-e2e.sh; fi",
+            "          scripts/kind-e2e.sh",
+            "          if false; then scripts/kind-e2e.sh; fi",
             occurrence,
         );
         assert_eq!(
@@ -4413,8 +4401,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     }
     let supply_chain_dead = replace_occurrence(
         &source,
-        "          apps/lumen/scripts/verify-release-candidate.sh \\",
-        "          if false; then\n          apps/lumen/scripts/verify-release-candidate.sh \\",
+        "          scripts/verify-release-candidate.sh \\",
+        "          if false; then\n          scripts/verify-release-candidate.sh \\",
         0,
     );
     let supply_chain_dead = replace_once(
@@ -4550,7 +4538,7 @@ fn local_fixture() -> tempfile::TempDir {
         "aarch64-unknown-linux-musl",
     ];
     let artifacts_json: Vec<_> = targets.iter().map(|target| json!({"target":target,"archive":format!("lumen-{target}.tar.gz"),"archive_sha256":sha(&artifacts.join(format!("lumen-{target}.tar.gz"))),"sidecar":format!("lumen-{target}.tar.gz.sha256"),"sidecar_sha256":sha(&artifacts.join(format!("lumen-{target}.tar.gz.sha256")))})).collect();
-    let manifest = json!({"schema":"cclab.lumen.candidate-manifest.v3","repository":"chrischeng-c4/axiom","workflow_path":".github/workflows/lumen-release-candidate.yml","workflow_id":42,"run_id":"7","run_attempt":"2","run_url":"https://github.com/chrischeng-c4/axiom/actions/runs/7/attempts/2","source_ref":"refs/heads/main","workflow_ref":"chrischeng-c4/axiom/.github/workflows/lumen-release-candidate.yml@refs/heads/main","commit":"0123456789012345678901234567890123456789","version":"0.4.27","tag":"lumen@0.4.27","candidate_tag":"release-candidate-7-2","pr":{"number":42,"url":"https://github.com/chrischeng-c4/axiom/pull/42"},"image":{"repository":"ghcr.io/chrischeng-c4/lumen","root_digest":format!("sha256:{}", "1".repeat(64)),"amd64_digest":format!("sha256:{}", "2".repeat(64)),"arm64_digest":format!("sha256:{}", "3".repeat(64))},"artifacts":artifacts_json,"sboms":{"amd64":{"file":"spdx-amd64.json","sha256":sha(&artifacts.join("spdx-amd64.json"))},"arm64":{"file":"spdx-arm64.json","sha256":sha(&artifacts.join("spdx-arm64.json"))}},"jobs":{"identity":"success","build":"success","manifest":"success","ghcr-image-and-attest":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success","result":"success"}});
+    let manifest = json!({"schema":"cclab.lumen.candidate-manifest.v3","repository":"faberline/lumen","workflow_path":".github/workflows/lumen-release-candidate.yml","workflow_id":42,"run_id":"7","run_attempt":"2","run_url":"https://github.com/faberline/lumen/actions/runs/7/attempts/2","source_ref":"refs/heads/main","workflow_ref":"faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main","commit":"0123456789012345678901234567890123456789","version":"0.4.27","tag":"lumen@0.4.27","candidate_tag":"release-candidate-7-2","pr":{"number":42,"url":"https://github.com/faberline/lumen/pull/42"},"image":{"repository":"ghcr.io/faberline/lumen","root_digest":format!("sha256:{}", "1".repeat(64)),"amd64_digest":format!("sha256:{}", "2".repeat(64)),"arm64_digest":format!("sha256:{}", "3".repeat(64))},"artifacts":artifacts_json,"sboms":{"amd64":{"file":"spdx-amd64.json","sha256":sha(&artifacts.join("spdx-amd64.json"))},"arm64":{"file":"spdx-arm64.json","sha256":sha(&artifacts.join("spdx-arm64.json"))}},"jobs":{"identity":"success","build":"success","manifest":"success","ghcr-image-and-attest":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success","result":"success"}});
     write_manifest(&artifacts.join("final-candidate-manifest.json"), &manifest);
     dir
 }
@@ -4605,10 +4593,10 @@ fn replace_host_archive(dir: &Path, stage_name: &str, readme: bool, mode: u32, v
 
 fn run_local_version(dir: &Path, version: &str) -> Output {
     Command::new("bash")
-        .arg(root().join("apps/lumen/scripts/verify-release-candidate.sh"))
+        .arg(root().join("scripts/verify-release-candidate.sh"))
         .args([
             "--repo",
-            "chrischeng-c4/axiom",
+            "faberline/lumen",
             "--version",
             version,
             "--commit",
@@ -4644,11 +4632,11 @@ fn set_fixture_version(dir: &Path, version: &str) {
 
 fn durable_perf_fixture_binding() -> perf_cell_receipt::Binding {
     perf_cell_receipt::Binding {
-        repository: "chrischeng-c4/axiom".to_owned(),
+        repository: "faberline/lumen".to_owned(),
         run_id: "7".to_owned(),
         run_attempt: "2".to_owned(),
         commit: "0123456789012345678901234567890123456789".to_owned(),
-        image_reference: format!("ghcr.io/chrischeng-c4/lumen@sha256:{}", "1".repeat(64)),
+        image_reference: format!("ghcr.io/faberline/lumen@sha256:{}", "1".repeat(64)),
         actual_image_id: format!("sha256:{}", "4".repeat(64)),
     }
 }
@@ -4719,12 +4707,12 @@ fn durable_perf_fixture_measurement() -> perf_cell_receipt::Measurement {
 
 fn run_durable_perf_verifier(dir: &Path) -> Output {
     Command::new("python3")
-        .arg(root().join("apps/lumen/scripts/verify-durable-perf.py"))
+        .arg(root().join("scripts/verify-durable-perf.py"))
         .args([
             "--receipts-dir",
             dir.join("perf").to_str().unwrap(),
             "--repo",
-            "chrischeng-c4/axiom",
+            "faberline/lumen",
             "--run-id",
             "7",
             "--run-attempt",

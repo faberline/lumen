@@ -417,7 +417,7 @@ mod tests {
     }
 
     // Append inside `#[cfg(test)] mod tests` in
-    // `apps/lumen/src/composed_segment/checkpoint_publication.rs`.
+    // `src/composed_segment/checkpoint_publication.rs`.
     // It uses that module's existing `keyword` helper and imports.
 
     #[test]

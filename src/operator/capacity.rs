@@ -6,7 +6,7 @@
 //!
 //! The platform capacity catalog is published as a Kubernetes ConfigMap
 //! (`lumen-capacity-catalog` in `lumen-system` namespace) by Terraform
-//! (`apps/lumen/terraform/modules/lumen-capacity/catalog.tf`), mapping direct GCE
+//! (`terraform/modules/lumen-capacity/catalog.tf`), mapping direct GCE
 //! machine types to `lumen.axiom.dev/capacity-profile` labels and tolerations.
 
 use serde::{Deserialize, Serialize};

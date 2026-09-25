@@ -24,20 +24,20 @@
 //!   bytes for rows 0, 16, and 31, all Number and Hash values, and deletion of
 //!   the omitted base field. :722-733 requires the real checkpoint and cold
 //!   reopen to retain that same head and state. These cover
-//!   apps/lumen/src/coordinator.rs:390-647,
-//!   apps/lumen/src/wal.rs:943-961, and
-//!   apps/lumen/src/segment_checkpoint.rs:220-268.
+//!   src/coordinator.rs:390-647,
+//!   src/wal.rs:943-961, and
+//!   src/segment_checkpoint.rs:220-268.
 //! - Security: this direct native delivery receives a typed `WalRecord`, not
 //!   caller-controlled HTTP bytes, a path, or an identity, at
-//!   apps/lumen/src/wal.rs:808-832 and
-//!   apps/lumen/src/coordinator.rs:419-517. Its new private staged receipt is
+//!   src/wal.rs:808-832 and
+//!   src/coordinator.rs:419-517. Its new private staged receipt is
 //!   process-owned under a 0700 directory at
-//!   apps/lumen/src/wal_source_stage.rs:31-63 and :155-190; this route adds no
+//!   src/wal_source_stage.rs:31-63 and :155-190; this route adds no
 //!   caller-selected file path. The persisted-AOF byte boundary it reaches is
 //!   already fail-closed in
-//!   apps/lumen/e2e/aof_oversized_committed_replace.rs:794-868, which mutates
+//!   e2e/aof_oversized_committed_replace.rs:794-868, which mutates
 //!   a complete frame and requires refusal before document or watermark change.
-//! - Performance: apps/lumen/docs/indexing.md:264-276 says, verbatim,
+//! - Performance: docs/indexing.md:264-276 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   native_oversized_committed_replace.rs:304-346 proves the actual generic
 //!   CBOR source is above that limit while remaining at the public 32-document
@@ -48,7 +48,7 @@
 //! # Root negative control
 //!
 //! After the native generic borrowed route exists, bypass its `ReplaceDocs`
-//! dispatch in `apps/lumen/src/coordinator.rs` before it obtains a bounded
+//! dispatch in `src/coordinator.rs` before it obtains a bounded
 //! staged representation. The behavior assertion at :609-614 must fail because
 //! the foreign committed sequence remains unapplied or requires restart. Restore
 //! every changed source file by SHA-256. Never lower the public 32-document

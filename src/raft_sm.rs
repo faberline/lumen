@@ -539,7 +539,7 @@ mod tests {
 
     mod admission_contract {
         use super::*;
-        // Draft bytes for apps/lumen/src/raft_sm.rs's existing `#[cfg(test)] mod tests`.
+        // Draft bytes for src/raft_sm.rs's existing `#[cfg(test)] mod tests`.
         // The host status is observed through its public router after apply cleanup.
 
         use crate::change_admission::PendingChangeCapacity;

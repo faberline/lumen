@@ -8,7 +8,7 @@
 #    its 127.0.0.1:7373 listener while the host-published port remains unreachable.
 #
 # Usage:
-#   bash apps/lumen/scripts/standalone-container-smoke.sh bind|durable
+#   bash scripts/standalone-container-smoke.sh bind|durable
 
 set -euo pipefail
 
@@ -20,11 +20,11 @@ fi
 
 if [[ "$MODE" == "durable" ]]; then
   # DURABLE-CONTRACT-BEGIN
-  [[ "${LUMEN_STANDALONE_DURABLE_IMAGE:-}" =~ ^ghcr\.io/chrischeng-c4/lumen@sha256:[0-9a-f]{64}$ ]] || {
+  [[ "${LUMEN_STANDALONE_DURABLE_IMAGE:-}" =~ ^ghcr\.io/faberline/lumen@sha256:[0-9a-f]{64}$ ]] || {
     echo "ERROR: LUMEN_STANDALONE_DURABLE_IMAGE must be an exact GHCR root digest" >&2
     exit 1
   }
-  OLD_IMAGE="ghcr.io/chrischeng-c4/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d"
+  OLD_IMAGE="ghcr.io/faberline/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d"
   ID_SUFFIX="$(date +%s)_$$_${RANDOM}"
   VOLUME="lumen-smoke-durable-${ID_SUFFIX}"
   REJECT_VOLUME="lumen-smoke-durable-reject-${ID_SUFFIX}"
@@ -317,7 +317,7 @@ trap 'exit 143' TERM
 
 echo "==> Building task-local Lumen image: ${IMAGE_TAG}"
 CREATED_IMAGE="$IMAGE_TAG"
-docker build -f apps/lumen/Dockerfile -t "$IMAGE_TAG" .
+docker build -f Dockerfile -t "$IMAGE_TAG" .
 
 echo "==> Running positive container: ${POS_CONTAINER}"
 CREATED_POS_CONTAINER="$POS_CONTAINER"

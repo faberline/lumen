@@ -36,7 +36,7 @@ struct Inputs {
 }
 
 #[rustfmt::skip]
-fn root() -> PathBuf { PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap().into() }
+fn root() -> PathBuf { PathBuf::from(env!("CARGO_MANIFEST_DIR")) }
 #[rustfmt::skip]
 fn shell_fn<'a>(source: &'a str, name: &str) -> &'a str {
     let marker = format!("{name}() {{");
@@ -64,7 +64,7 @@ fn validate(input: &Inputs) -> Result<(), Finding> {
     require!(!installer_checksum.contains("true ||") && !installer_checksum.contains("|| true") && !installer_version.contains("true ||") && !installer_version.contains("|| true"), "INSTALLER_INTEGRITY", "installer integrity control flow contains a bypass");
 
     let prebuilt = between(&input.kind, "if [[ \"$IMAGE_MODE\" == \"prebuilt\" ]]; then", "elif [[ \"$IMAGE_MODE\" != \"local\" ]]");
-    for needle in ["requires LUMEN_E2E_MODE=operator", "^ghcr\\.io/chrischeng-c4/lumen@sha256:[0-9a-f]{64}$", "^sha256:[0-9a-f]{64}$", "^[0-9a-f]{8}$", "EXPECTED_RUNTIME_DIGEST\" != \"$ROOT_DIGEST", "cargo_ver=\"$(grep"] {
+    for needle in ["requires LUMEN_E2E_MODE=operator", "^ghcr\\.io/faberline/lumen@sha256:[0-9a-f]{64}$", "^sha256:[0-9a-f]{64}$", "^[0-9a-f]{8}$", "EXPECTED_RUNTIME_DIGEST\" != \"$ROOT_DIGEST", "cargo_ver=\"$(grep"] {
         require!(prebuilt.contains(needle), "KIND_INPUTS", format!("prebuilt input proof missing: {needle}"));
     }
     require!(!["docker build", "kind load docker-image", "docker login", "gh auth"].iter().any(|v| prebuilt.contains(v)), "KIND_PREBUILT_LOCAL", "prebuilt branch performs local or credential work");
@@ -96,9 +96,9 @@ fn validate(input: &Inputs) -> Result<(), Finding> {
     let normalize = shell_fn(&input.kind, "normalize_runtime_image_id");
     let expected_normalize = r###"
   local raw="$1"
-  if [[ "$raw" =~ ^ghcr\.io/chrischeng-c4/lumen@(sha256:[0-9a-f]{64})$ ]]; then
+  if [[ "$raw" =~ ^ghcr\.io/faberline/lumen@(sha256:[0-9a-f]{64})$ ]]; then
     echo "${BASH_REMATCH[1]}"
-  elif [[ "$raw" =~ ^docker-pullable://ghcr\.io/chrischeng-c4/lumen@(sha256:[0-9a-f]{64})$ ]]; then
+  elif [[ "$raw" =~ ^docker-pullable://ghcr\.io/faberline/lumen@(sha256:[0-9a-f]{64})$ ]]; then
     echo "${BASH_REMATCH[1]}"
   elif [[ "$raw" =~ ^(containerd|cri-o|docker)://(sha256:[0-9a-f]{64})$ ]]; then
     echo "${BASH_REMATCH[2]}"
@@ -151,7 +151,7 @@ fn validate(input: &Inputs) -> Result<(), Finding> {
     require!(checkpoint.zip(persisted).is_some_and(|(a, b)| a < b) && persisted.zip(deleted).is_some_and(|(a, b)| a < b) && deleted.zip(identity).is_some_and(|(a, b)| a < b) && identity.zip(old_read).is_some_and(|(a, b)| a < b) && old_read.zip(fresh).is_some_and(|(a, b)| a < b), "KIND_POST_RESTART", "checkpoint, restart, old-document read, and fresh write are missing or out of order");
     require!(!restart.contains("api_put_collection") && input.kind.matches("step \"5. checkpoint, replace serving pod, and prove durable recovery\" durable_restart_oracle").count() == 1, "KIND_POST_RESTART", "durable restart oracle must run once without recreating the collection");
 
-    for needle in ["{{json .Manifest}}' | jq -er '.digest'", "[[ \"$RAW_DIGEST\" =~ ^sha256:[0-9a-f]{64}$ ]]", "IMAGE=\"ghcr.io/chrischeng-c4/lumen@${RAW_DIGEST}\"", "--candidate-run-id <id>", "--mode public", "--output /tmp/lumen-public-release.json", "protected annotated `lumen@<version>` tag", "discovery-only", "native amd64 and arm64 kind runs before publication"] {
+    for needle in ["{{json .Manifest}}' | jq -er '.digest'", "[[ \"$RAW_DIGEST\" =~ ^sha256:[0-9a-f]{64}$ ]]", "IMAGE=\"ghcr.io/faberline/lumen@${RAW_DIGEST}\"", "--candidate-run-id <id>", "--mode public", "--output /tmp/lumen-public-release.json", "protected annotated `lumen@<version>` tag", "discovery-only", "native amd64 and arm64 kind runs before publication"] {
         require!(input.docs.contains(needle), "DEPLOYMENT_DIGEST", format!("deployment proof missing: {needle}"));
     }
     let verify_docs = between(&input.docs, "Create one protected annotated `lumen@<version>` tag at the exact candidate\ncommit before promotion. Then verify the public release before deployment:", "Each release image carries");
@@ -187,7 +187,7 @@ fn render_release() -> String {
 fn live() -> Inputs {
     let root = root();
     let read = |path: &str| fs::read_to_string(root.join(path)).unwrap_or_else(|e| panic!("read {path}: {e}"));
-    Inputs { kind: read("apps/lumen/scripts/kind-e2e.sh"), docs: read("apps/lumen/docs/deployment.md"), dockerfile: read("apps/lumen/Dockerfile.release"), installer: read("apps/lumen/install.sh"), cargo: read("apps/lumen/Cargo.toml"), rendered: render_release() }
+    Inputs { kind: read("scripts/kind-e2e.sh"), docs: read("docs/deployment.md"), dockerfile: read("Dockerfile.release"), installer: read("install.sh"), cargo: read("Cargo.toml"), rendered: render_release() }
 }
 #[rustfmt::skip]
 fn replace_once(source: &str, from: &str, to: &str) -> String {
@@ -534,11 +534,11 @@ cp "$LUMEN_TEST_ASSET_DIR/${url##*/}" "$out"
         std::env::var("PATH").unwrap_or_default()
     );
     let output = Command::new("sh")
-        .arg(root().join("apps/lumen/install.sh"))
+        .arg(root().join("install.sh"))
         .env("PATH", path)
         .env("LUMEN_VERSION", "lumen@9.9.9")
         .env("LUMEN_INSTALL", run.path().join("install"))
-        .env("LUMEN_REPO", "chrischeng-c4/axiom")
+        .env("LUMEN_REPO", "faberline/lumen")
         .env("LUMEN_TEST_ASSET_DIR", assets)
         .env_remove("GH_TOKEN")
         .env_remove("GITHUB_TOKEN")
@@ -634,10 +634,10 @@ fn runtime_image_id_allowlist_and_digest_binding_are_executable() {
     let child = format!("sha256:{}", "2".repeat(64));
     let third = format!("sha256:{}", "3".repeat(64));
     for raw in [
-        format!("ghcr.io/chrischeng-c4/lumen@{root}"),
-        format!("ghcr.io/chrischeng-c4/lumen@{child}"),
-        format!("docker-pullable://ghcr.io/chrischeng-c4/lumen@{root}"),
-        format!("docker-pullable://ghcr.io/chrischeng-c4/lumen@{child}"),
+        format!("ghcr.io/faberline/lumen@{root}"),
+        format!("ghcr.io/faberline/lumen@{child}"),
+        format!("docker-pullable://ghcr.io/faberline/lumen@{root}"),
+        format!("docker-pullable://ghcr.io/faberline/lumen@{child}"),
         format!("cri-o://{root}"),
         format!("cri-o://{child}"),
         format!("containerd://{root}"),
@@ -653,19 +653,19 @@ fn runtime_image_id_allowlist_and_digest_binding_are_executable() {
         );
     }
     for raw in [
-        format!("ghcr.io/chrischeng-c4/lumen@{third}"),
-        format!("docker-pullable://ghcr.io/chrischeng-c4/lumen@{third}"),
+        format!("ghcr.io/faberline/lumen@{third}"),
+        format!("docker-pullable://ghcr.io/faberline/lumen@{third}"),
         format!("cri-o://{third}"),
         format!("containerd://{third}"),
         format!("docker://{third}"),
         format!("ghcr.io/other/lumen@{root}"),
         format!("unknown://{root}"),
-        "ghcr.io/chrischeng-c4/lumen:0.4.27".into(),
-        "ghcr.io/chrischeng-c4/lumen@sha256:1234".into(),
-        format!("ghcr.io/chrischeng-c4/lumen@sha256:{}", "A".repeat(64)),
-        format!("junk-ghcr.io/chrischeng-c4/lumen@{root}"),
-        format!("ghcr.io/chrischeng-c4/lumen@{root}-junk"),
-        format!("ghcr.io/chrischeng-c4/lumen@@{root}"),
+        "ghcr.io/faberline/lumen:0.4.27".into(),
+        "ghcr.io/faberline/lumen@sha256:1234".into(),
+        format!("ghcr.io/faberline/lumen@sha256:{}", "A".repeat(64)),
+        format!("junk-ghcr.io/faberline/lumen@{root}"),
+        format!("ghcr.io/faberline/lumen@{root}-junk"),
+        format!("ghcr.io/faberline/lumen@@{root}"),
     ] {
         assert!(
             !run_runtime_image_id_fixture(&kind, &raw, &root, &child)
@@ -678,8 +678,8 @@ fn runtime_image_id_allowlist_and_digest_binding_are_executable() {
 
 #[test]
 fn fixture_batch_paths_cover_gnu_and_bsd_mktemp_shapes() {
-    let script = root().join("apps/lumen/scripts/load-fixture.py");
-    let kind = fs::read_to_string(root().join("apps/lumen/scripts/kind-e2e.sh"))
+    let script = root().join("scripts/load-fixture.py");
+    let kind = fs::read_to_string(root().join("scripts/kind-e2e.sh"))
         .expect("read kind e2e script");
     for name in [
         "lumen-fixture.ABCDEF.json",
@@ -744,10 +744,10 @@ fn scoped_negative_mutations_fail_with_stable_findings() {
     let mount_default = "map(if has(\"readOnly\") then . else . + {\"readOnly\": false} end)";
     let mut fixture = live(); fixture.kind = replace_nth(&fixture.kind, mount_default, "map(. + {\"readOnly\": false})", 0); expect(fixture, "KIND_STORAGE");
     let mut fixture = live(); fixture.kind = replace_nth(&fixture.kind, mount_default, "map(.)", 2); expect(fixture, "KIND_STORAGE");
-    let mut fixture = live(); fixture.kind = replace_once(&fixture.kind, "^ghcr\\.io/chrischeng-c4/lumen@sha256:[0-9a-f]{64}$", "^ghcr\\.io/chrischeng-c4/lumen:.+$"); expect(fixture, "KIND_INPUTS");
+    let mut fixture = live(); fixture.kind = replace_once(&fixture.kind, "^ghcr\\.io/faberline/lumen@sha256:[0-9a-f]{64}$", "^ghcr\\.io/faberline/lumen:.+$"); expect(fixture, "KIND_INPUTS");
     let mut fixture = live(); fixture.kind = replace_once(&fixture.kind, "[[ \"$EXPECTED_RUNTIME_DIGEST\" != \"$ROOT_DIGEST\" ]] || die \"runtime child digest must differ from root index digest\"", ": distinct root and child precondition omitted"); expect(fixture, "KIND_INPUTS");
-    let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "normalize_runtime_image_id", "^ghcr\\.io/chrischeng-c4/lumen@", "^ghcr\\.io/.+@"); expect(fixture, "KIND_RUNTIME_ID");
-    let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "normalize_runtime_image_id", "^ghcr\\.io/chrischeng-c4/lumen@(sha256:[0-9a-f]{64})$", "^ghcr\\.io/chrischeng-c4/lumen@(sha256:[0-9a-f]{64})"); expect(fixture, "KIND_RUNTIME_ID");
+    let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "normalize_runtime_image_id", "^ghcr\\.io/faberline/lumen@", "^ghcr\\.io/.+@"); expect(fixture, "KIND_RUNTIME_ID");
+    let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "normalize_runtime_image_id", "^ghcr\\.io/faberline/lumen@(sha256:[0-9a-f]{64})$", "^ghcr\\.io/faberline/lumen@(sha256:[0-9a-f]{64})"); expect(fixture, "KIND_RUNTIME_ID");
     let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "runtime_digest_is_expected", "[[ \"$digest\" == \"$ROOT_DIGEST\" || \"$digest\" == \"$EXPECTED_RUNTIME_DIGEST\" ]]", "[[ \"$digest\" == \"$ROOT_DIGEST\" ]]"); expect(fixture, "KIND_RUNTIME_ID");
     let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "runtime_digest_is_expected", "[[ \"$digest\" == \"$ROOT_DIGEST\" || \"$digest\" == \"$EXPECTED_RUNTIME_DIGEST\" ]]", "[[ \"$digest\" == \"$EXPECTED_RUNTIME_DIGEST\" ]]"); expect(fixture, "KIND_RUNTIME_ID");
     let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "runtime_digest_is_expected", "[[ \"$digest\" == \"$ROOT_DIGEST\" || \"$digest\" == \"$EXPECTED_RUNTIME_DIGEST\" ]]", "[[ \"$digest\" == \"$ROOT_DIGEST\" || \"$digest\" == \"$EXPECTED_RUNTIME_DIGEST\" ]] || true"); expect(fixture, "KIND_RUNTIME_ID");

@@ -27,21 +27,21 @@
 //!   a caller checkpoint. `:624-714` requires the retained source's exact AOF
 //!   wire, one applied watermark, an independent maintenance checkpoint, both
 //!   live rows, and final cold state. These assertions cover
-//!   `apps/lumen/src/coordinator.rs:449-488`,
-//!   `apps/lumen/src/coordinator.rs:554-710`, and
-//!   `apps/lumen/src/segment_capacity.rs:410-443`.
-//! - Security: the changed wait at `apps/lumen/src/coordinator.rs:461-488`
+//!   `src/coordinator.rs:449-488`,
+//!   `src/coordinator.rs:554-710`, and
+//!   `src/segment_capacity.rs:410-443`.
+//! - Security: the changed wait at `src/coordinator.rs:461-488`
 //!   receives a typed `WalDelivery::Deferred` from
-//!   `apps/lumen/src/wal.rs:1060-1092`; it does not accept a new raw byte,
+//!   `src/wal.rs:1060-1092`; it does not accept a new raw byte,
 //!   path, or authorization input. A future fallback uses the existing
 //!   temporary-spill filesystem boundary in
-//!   `apps/lumen/src/segment_checkpoint.rs:345-386`. That collision boundary
+//!   `src/segment_checkpoint.rs:345-386`. That collision boundary
 //!   remains covered by
-//!   `apps/lumen/e2e/aof_standalone_replay_capacity_progress.rs:573-580` and
+//!   `e2e/aof_standalone_replay_capacity_progress.rs:573-580` and
 //!   `:749-755`, which pre-creates a predictable path and requires its
 //!   sentinel to remain unchanged. Generic frame refusal remains covered by
-//!   `apps/lumen/e2e/aof_oversized_committed_replace.rs:794-868`.
-//! - Performance: `apps/lumen/docs/indexing.md:264-276` says, verbatim,
+//!   `e2e/aof_oversized_committed_replace.rs:794-868`.
+//! - Performance: `docs/indexing.md:264-276` says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   Assertions at `:337-351`, called at `:630`, `:695`, and `:714`, read the
 //!   real public pending total and high-water gauges and require both to stay
@@ -51,7 +51,7 @@
 //! # Root negative control
 //!
 //! Remove the native generic capacity-owner ensure before the Full wait in
-//! `apps/lumen/src/coordinator.rs:461-488`. The behavior assertion at
+//! `src/coordinator.rs:461-488`. The behavior assertion at
 //! `:574-577` must fail after its cleanup checkpoint proves that the valid
 //! committed source stayed retained until caller-driven capacity release.
 //! Restore changed production bytes by SHA-256 before another gate.

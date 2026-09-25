@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Local NON-QUALIFYING driver for the durable performance matrix.
 #
-# Wraps the existing contract of apps/lumen/e2e/perf_gate.rs
+# Wraps the existing contract of e2e/perf_gate.rs
 # (durable_workload::approved_30_minute_durable_workload in diagnostic mode)
 # so a whole local run is one command that leaves receipts behind. It never
 # produces acceptance evidence: qualifying receipts require a registry digest
@@ -9,17 +9,17 @@
 # lumen-release-candidate workflow, which verify-durable-perf.py then judges.
 #
 # Usage:
-#   apps/lumen/scripts/durable-perf-local.sh build
-#       docker build apps/lumen/Dockerfile into a fresh build dir; refuses the
+#   scripts/durable-perf-local.sh build
+#       docker build Dockerfile into a fresh build dir; refuses the
 #       image when any tracked or untracked source changed during the build.
-#   apps/lumen/scripts/durable-perf-local.sh cell <endpoint> <batch> <backend>
+#   scripts/durable-perf-local.sh cell <endpoint> <batch> <backend>
 #       run one diagnostic cell against the latest (or $LUMEN_PERF_BUILD_DIR)
 #       build; exit code is the test's exit code.
-#   apps/lumen/scripts/durable-perf-local.sh matrix
+#   scripts/durable-perf-local.sh matrix
 #       run every cell of the qualifying matrix in order, skipping cells whose
 #       receipt already records exit 0, continuing past failures; exit 1 when
 #       any cell is red.
-#   apps/lumen/scripts/durable-perf-local.sh status
+#   scripts/durable-perf-local.sh status
 #       print the cell receipts of the selected build as a table.
 #
 # Layout: $LUMEN_PERF_LOCAL_ROOT (default /tmp/lumen-durable-perf-local)
@@ -35,7 +35,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROOT="${LUMEN_PERF_LOCAL_ROOT:-/tmp/lumen-durable-perf-local}"
 GIT=(git -c core.fsmonitor=false)
 WORKLOAD_TEST="durable_workload::approved_30_minute_durable_workload"
@@ -113,7 +113,7 @@ cmd_build() {
   # carries build timestamps, so two builds of identical bytes would get
   # two ids. Without attestations the id is content-addressed and the
   # build-twice-same-id self-check means what it says.
-  docker build --progress plain --provenance=false --sbom=false --file "$REPO_ROOT/apps/lumen/Dockerfile" --tag "$tag" "$REPO_ROOT" >"$dir/build.log" 2>&1
+  docker build --progress plain --provenance=false --sbom=false --file "$REPO_ROOT/Dockerfile" --tag "$tag" "$REPO_ROOT" >"$dir/build.log" 2>&1
   code=$?
   set -e
   printf '%s\n' "$code" >"$dir/build.exit"

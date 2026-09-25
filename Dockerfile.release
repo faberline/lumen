@@ -5,7 +5,7 @@
 # surface (no shell/apt/curl in the final image). The sibling `Dockerfile` is
 # the from-source build for dev / CI.
 #
-#   docker build -f apps/lumen/Dockerfile.release -t lumen:0.4.5 \
+#   docker build -f Dockerfile.release -t lumen:0.4.5 \
 #     --build-arg LUMEN_VERSION=lumen@0.4.5 .
 #
 # The image arch selects the matching linux tarball. BuildKit supplies
@@ -24,7 +24,7 @@ RUN mkdir -p -m 0750 /out/lumen-data && touch /out/lumen-data/.lumen-volume-seed
 # ---- stage 1a: fetch + verify the release binary (needs shell + curl) --------
 FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS binary-source-fetch
 ARG LUMEN_VERSION=lumen@0.4.5
-ARG LUMEN_REPO=chrischeng-c4/axiom
+ARG LUMEN_REPO=faberline/lumen
 ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*

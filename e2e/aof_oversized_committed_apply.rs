@@ -19,14 +19,14 @@
 //!   and :591-626 require all rows, a strict AOF suffix after the checkpoint,
 //!   the later update and delete, a final checkpoint, and cold reopen. These
 //!   assertions
-//!   cover apps/lumen/src/aof.rs:248-377 and
-//!   apps/lumen/src/segment_rdb.rs:489-506,939-960.
+//!   cover src/aof.rs:248-377 and
+//!   src/segment_rdb.rs:489-506,939-960.
 //! - Security: aof_oversized_committed_apply.rs:445-448,469-503 feeds a CRC-valid,
 //!   complete AOF frame whose fast LWAL payload is truncated. It requires the
 //!   replay to refuse the frame, leave its indexed value absent, and save only
 //!   the prior watermark. It covers persisted bytes at
-//!   apps/lumen/src/aof.rs:266-325.
-//! - Performance: apps/lumen/docs/indexing.md:264-272 says, verbatim,
+//!   src/aof.rs:266-325.
+//! - Performance: docs/indexing.md:264-272 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   aof_oversized_committed_apply.rs:415-422, called at :529-534, :545-550,
 //!   :581-586, and :619-624, reads public /metrics total and high-water gauges

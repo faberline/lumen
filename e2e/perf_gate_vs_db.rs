@@ -46,7 +46,7 @@
 //! - Security: `perf_gate_vs_db.rs:1046-1064` refuses a 1,001-item request as
 //!   `batch_too_large`, then proves it has not mutated visible documents.
 //!   The mock response is an external acknowledgement boundary.
-//! - Performance: `apps/lumen/ROADMAP.md:90-94` defines 1,000 `/index` field
+//! - Performance: `ROADMAP.md:90-94` defines 1,000 `/index` field
 //!   items as the current batch-limit case and says completed document work is
 //!   counted only after all fields complete. The test retains that boundary.
 //!
@@ -62,7 +62,7 @@
 //!   `:3713-3827`; it adds no caller-controlled path or bytes boundary.
 //!   Existing `segment_startup_fail_closed_e2e.rs:816-843` refuses unknown
 //!   root content before a listener or `CURRENT` mutation.
-//! - Performance: `apps/lumen/ROADMAP.md:60-71` promises a 256 MiB total
+//! - Performance: `ROADMAP.md:60-71` promises a 256 MiB total
 //!   active/frozen/reserved pending-change budget. The actual 100k invocation
 //!   at `perf_gate_vs_db.rs:3889` must complete under that cap; this case
 //!   intentionally adds no QPS or latency loop.
@@ -70,7 +70,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! These 4 sentences were the whole of the `// Contract:` comment in 4 AW-EC shells
-//! under `apps/lumen/e2e/`, each of which ran `cargo test -p lumen --test
+//! under `e2e/`, each of which ran `cargo test -p lumen --test
 //! perf_gate_vs_db` in a subprocess and asserted the child's exit status. `cargo test
 //! -p lumen` already runs this target directly, so the shells added a second, nested
 //! run and nothing else. They were deleted on 2026-08-20 with the EC machinery they

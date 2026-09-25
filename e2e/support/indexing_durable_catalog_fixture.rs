@@ -812,7 +812,7 @@ pub(crate) fn stage1_reuse_assert_not_hardlinked_collection(
 
 
 // Append after the frozen stage1 oracle in
-// apps/lumen/e2e/indexing_durable_oracle.rs (base sha256:
+// e2e/indexing_durable_oracle.rs (base sha256:
 // 940ac59d8f5f18e28e7822e4d2d4f53e10fda37045e952aec385728ed357993e).
 //
 // These cases use only existing v2 base segments. Each corrupts a manifest

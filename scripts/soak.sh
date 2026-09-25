@@ -23,7 +23,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LUMEN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO_ROOT="$(cd "$LUMEN_DIR/../.." && pwd)"
+REPO_ROOT="$LUMEN_DIR"
 
 DURATION_SECS="${LUMEN_SOAK_DURATION_SECS:-60}"
 LUMEN_UPSTREAM="${LUMEN_UPSTREAM:-127.0.0.1:7373}"

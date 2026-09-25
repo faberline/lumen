@@ -1,6 +1,6 @@
 //! Release feature set consistency test and gate verification.
 
-use std::{io::Write, path::Path, process::Command};
+use std::{path::Path, process::Command};
 
 const EXPECTED_DIRECT_FEATURES: &[&str] = &[
     "delegated-auth",
@@ -10,89 +10,6 @@ const EXPECTED_DIRECT_FEATURES: &[&str] = &[
     "raft-wal",
     "self-update",
 ];
-const RELEASE_SKILL_SHA256: &str =
-    "eaf7e96c088ca15700bbff100ebed4829b92535fc19e2fa1952c36bf93374243";
-
-fn validate_release_skill_order(content: &str) -> Result<(), String> {
-    let markers = [
-        "2. Run `git-land`",
-        "3. Dispatch `<app>-release-candidate`",
-        "Wait for the final candidate manifest.",
-        "4. Independently run the candidate verifier in full mode.",
-        "7. The controller creates one annotated `<app>@<version>` tag",
-        "8. Dispatch `<app>-release`",
-        "9. Run the public verifier.",
-    ];
-    let mut previous = 0;
-    for marker in markers {
-        let position = content
-            .find(marker)
-            .ok_or_else(|| format!("release skill is missing {marker:?}"))?;
-        if position <= previous {
-            return Err(format!("release skill order is invalid at {marker:?}"));
-        }
-        previous = position;
-    }
-
-    for retired in [
-        ".claude/skills/lumen-build-release/scripts/release.sh",
-        "scripts/project-build-monitor-release.sh",
-    ] {
-        if content.contains(retired) {
-            return Err(format!("retired release route remains: {retired}"));
-        }
-    }
-    validate_no_raw_git_tag_push(content)?;
-    Ok(())
-}
-
-fn validate_release_skill_pair(agents: &str, claude: &str) -> Result<(), String> {
-    if agents != claude {
-        return Err("Claude and .agents release skills differ".to_string());
-    }
-    let digest = sha256_text(agents)?;
-    if digest != RELEASE_SKILL_SHA256 {
-        return Err(format!(
-            "release skill digest changed: expected {RELEASE_SKILL_SHA256}, got {digest}"
-        ));
-    }
-    validate_release_skill_order(agents)
-}
-
-fn sha256_text(content: &str) -> Result<String, String> {
-    let mut file = tempfile::NamedTempFile::new().map_err(|error| error.to_string())?;
-    file.write_all(content.as_bytes())
-        .map_err(|error| error.to_string())?;
-    let path = file.path();
-
-    let shasum = Command::new("shasum")
-        .args(["-a", "256"])
-        .arg(path)
-        .output();
-    if let Ok(output) = shasum {
-        if output.status.success() {
-            if let Some(digest) = String::from_utf8_lossy(&output.stdout)
-                .split_whitespace()
-                .next()
-            {
-                return Ok(digest.to_string());
-            }
-        }
-    }
-
-    let sha256sum = Command::new("sha256sum").arg(path).output();
-    if let Ok(output) = sha256sum {
-        if output.status.success() {
-            if let Some(digest) = String::from_utf8_lossy(&output.stdout)
-                .split_whitespace()
-                .next()
-            {
-                return Ok(digest.to_string());
-            }
-        }
-    }
-    Err("neither shasum nor sha256sum could hash the release skill".to_string())
-}
 
 fn parse_release_features(content: &str) -> Result<Vec<String>, String> {
     let val: toml::Value = toml::from_str(content).map_err(|e| e.to_string())?;
@@ -148,24 +65,6 @@ fn logical_lines(content: &str) -> Vec<String> {
         logical.push(current.trim().to_string());
     }
     logical
-}
-
-fn validate_no_raw_git_tag_push(content: &str) -> Result<(), String> {
-    for line in logical_lines(content) {
-        let tokens: Vec<&str> = line
-            .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
-            .filter(|token| !token.is_empty())
-            .collect();
-        if let Some(git) = tokens.iter().position(|token| *token == "git") {
-            if tokens[git + 1..]
-                .iter()
-                .any(|token| *token == "tag" || *token == "push")
-            {
-                return Err(format!("raw Git tag/push command remains: {line}"));
-            }
-        }
-    }
-    Ok(())
 }
 
 fn validate_surface_invocation(content: &str) -> Result<(), String> {
@@ -284,7 +183,7 @@ fn validate_local_release_invocation(content: &str) -> Result<(), String> {
 }
 
 fn validate_release_image_pin_contract(content: &str) -> Result<(), String> {
-    let version_selection = "CURRENT_VERSION=\"$(project_build_read_version apps/lumen/Cargo.toml)\"\nsync_lumen_release_image_pins \"$CURRENT_VERSION\"";
+    let version_selection = "CURRENT_VERSION=\"$(project_build_read_version Cargo.toml)\"\nsync_lumen_release_image_pins \"$CURRENT_VERSION\"";
     content
         .find(version_selection)
         .ok_or_else(|| "local release version preparation is missing".to_string())?;
@@ -309,8 +208,8 @@ fn validate_release_image_pin_contract(content: &str) -> Result<(), String> {
     }
 
     for path in [
-        "apps/lumen/k8s/base/deployment.yaml",
-        "apps/lumen/k8s/operator/deployment.yaml",
+        "k8s/base/deployment.yaml",
+        "k8s/operator/deployment.yaml",
     ] {
         if content.matches(path).count() != 1 {
             return Err(format!(
@@ -407,7 +306,7 @@ fn test_manifest_release_features() {
 #[test]
 fn test_build_surfaces_release_invocation() {
     let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let repo_root = base_dir.parent().unwrap().parent().unwrap();
+    let repo_root = base_dir;
     let surfaces = [
         base_dir.join("build.sh"),
         base_dir.join("Dockerfile"),
@@ -492,7 +391,7 @@ fn test_build_surfaces_release_invocation() {
 fn test_release_preparation_updates_all_checked_in_image_pins() {
     let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let build_script =
-        std::fs::read_to_string(base_dir.join("build.sh")).expect("read apps/lumen/build.sh");
+        std::fs::read_to_string(base_dir.join("build.sh")).expect("read build.sh");
     validate_release_image_pin_contract(&build_script)
         .expect("release preparation must update every checked-in image pin");
 
@@ -504,7 +403,7 @@ fn test_release_preparation_updates_all_checked_in_image_pins() {
             .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
         assert!(
             manifest.contains(&format!(
-                "image: ghcr.io/chrischeng-c4/lumen:{}",
+                "image: ghcr.io/faberline/lumen:{}",
                 env!("CARGO_PKG_VERSION")
             )),
             "{} must pin the workspace Lumen version {}",
@@ -513,7 +412,7 @@ fn test_release_preparation_updates_all_checked_in_image_pins() {
         );
     }
 
-    let missing_base = build_script.replace("  apps/lumen/k8s/base/deployment.yaml \\\n", "");
+    let missing_base = build_script.replace("  k8s/base/deployment.yaml \\\n", "");
     assert!(validate_release_image_pin_contract(&missing_base).is_err());
 
     let stale_version = build_script.replace(
@@ -523,7 +422,7 @@ fn test_release_preparation_updates_all_checked_in_image_pins() {
     assert!(validate_release_image_pin_contract(&stale_version).is_err());
 
     let before_selection = build_script.replace(
-        "CURRENT_VERSION=\"$(project_build_read_version apps/lumen/Cargo.toml)\"\nsync_lumen_release_image_pins",
+        "CURRENT_VERSION=\"$(project_build_read_version Cargo.toml)\"\nsync_lumen_release_image_pins",
         "sync_lumen_release_image_pins",
     );
     assert!(validate_release_image_pin_contract(&before_selection).is_err());
@@ -534,10 +433,10 @@ fn test_release_preparation_updates_all_checked_in_image_pins() {
     let operator = temp.path().join("operator.yaml");
     std::fs::write(
         &standalone,
-        "image: ghcr.io/chrischeng-c4/lumen:0.4.26\nimage: ghcr.io/example/sidecar:9\n",
+        "image: ghcr.io/faberline/lumen:0.4.26\nimage: ghcr.io/example/sidecar:9\n",
     )
     .expect("write standalone fixture");
-    std::fs::write(&operator, "  image: ghcr.io/chrischeng-c4/lumen:0.4.25\n")
+    std::fs::write(&operator, "  image: ghcr.io/faberline/lumen:0.4.25\n")
         .expect("write operator fixture");
 
     let updated = run_release_image_pin_function(function, "0.4.28", &standalone, &operator);
@@ -548,11 +447,11 @@ fn test_release_preparation_updates_all_checked_in_image_pins() {
     );
     assert_eq!(
         std::fs::read_to_string(&standalone).expect("read updated standalone fixture"),
-        "image: ghcr.io/chrischeng-c4/lumen:0.4.28\nimage: ghcr.io/example/sidecar:9\n"
+        "image: ghcr.io/faberline/lumen:0.4.28\nimage: ghcr.io/example/sidecar:9\n"
     );
     assert_eq!(
         std::fs::read_to_string(&operator).expect("read updated operator fixture"),
-        "  image: ghcr.io/chrischeng-c4/lumen:0.4.28\n"
+        "  image: ghcr.io/faberline/lumen:0.4.28\n"
     );
 
     let missing = temp.path().join("missing.yaml");
@@ -567,7 +466,7 @@ fn test_release_preparation_updates_all_checked_in_image_pins() {
     let duplicate = temp.path().join("duplicate.yaml");
     std::fs::write(
         &duplicate,
-        "image: ghcr.io/chrischeng-c4/lumen:0.4.25\nimage: ghcr.io/chrischeng-c4/lumen:0.4.26\n",
+        "image: ghcr.io/faberline/lumen:0.4.25\nimage: ghcr.io/faberline/lumen:0.4.26\n",
     )
     .expect("write duplicate-pin fixture");
     let duplicate_result =
@@ -644,139 +543,6 @@ fn test_release_preparation_rejects_retired_routes_and_stale_llms_guidance() {
             "retired LLM publication route must fail: {retired}"
         );
     }
-}
-
-#[test]
-fn test_release_skill_entrypoints_are_identical_and_candidate_first() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let repo_root = base_dir.parent().unwrap().parent().unwrap();
-    let agents = std::fs::read_to_string(repo_root.join(".agents/skills/build-release/SKILL.md"))
-        .expect("read .agents release skill");
-    let claude = std::fs::read_to_string(repo_root.join(".claude/skills/build-release/SKILL.md"))
-        .expect("read .claude release skill");
-
-    validate_release_skill_pair(&agents, &claude)
-        .expect("release skill entrypoints must be identical and candidate-first");
-
-    let escaped_agents = agents.replace(
-        "3. Dispatch `<app>-release-candidate`",
-        "g\\it tag -m release lumen@<version>; g\\it push --tags\n3. Dispatch `<app>-release-candidate`",
-    );
-    let escaped_claude = claude.replace(
-        "3. Dispatch `<app>-release-candidate`",
-        "g\\it tag -m release lumen@<version>; g\\it push --tags\n3. Dispatch `<app>-release-candidate`",
-    );
-    assert_ne!(
-        escaped_agents, agents,
-        "shell-escape fixture must change the skill bytes"
-    );
-    assert_eq!(
-        escaped_agents, escaped_claude,
-        "parity fixture must keep both entrypoints equal"
-    );
-    assert!(
-        validate_release_skill_pair(&escaped_agents, &escaped_claude).is_err(),
-        "same-byte shell-escape fixture must fail the fixed digest oracle"
-    );
-
-    let drift = agents.replace(
-        "Publish one verified release",
-        "Publish a different verified release",
-    );
-    assert_ne!(drift, agents, "skill drift fixture must change bytes");
-    assert!(
-        validate_release_skill_pair(&agents, &drift).is_err(),
-        "skill drift must fail the parity oracle"
-    );
-
-    let candidate_verifier_step =
-        "4. Independently run the candidate verifier in full mode. Stop on any mismatch.\n";
-    let tag_step = "7. The controller creates one annotated `<app>@<version>` tag at the exact\n";
-    let tag_first = agents
-        .replace(candidate_verifier_step, "")
-        .replace(tag_step, &format!("{tag_step}{candidate_verifier_step}"));
-    assert_ne!(
-        tag_first, agents,
-        "tag-first fixture must move the complete candidate-verifier step"
-    );
-    assert!(
-        validate_release_skill_order(&tag_first).is_err(),
-        "tag-first fixture must fail the release-order oracle"
-    );
-
-    let receipt = "Wait for the final candidate manifest.";
-    let receipt_after_tag = agents.replace(receipt, "").replace(
-        "7. The controller creates one annotated `<app>@<version>` tag",
-        &format!("7. The controller creates one annotated `<app>@<version>` tag\n{receipt}"),
-    );
-    assert_ne!(
-        receipt_after_tag, agents,
-        "receipt fixture must move the receipt after the annotated tag"
-    );
-    assert!(
-        validate_release_skill_order(&receipt_after_tag).is_err(),
-        "receipt-after-tag fixture must fail the release-order oracle"
-    );
-
-    let raw_git_before_candidate = agents.replace(
-        "3. Dispatch `<app>-release-candidate`",
-        "git tag -m release lumen@<version>; git push --tags\n3. Dispatch `<app>-release-candidate`",
-    );
-    assert_ne!(
-        raw_git_before_candidate, agents,
-        "raw Git tag/push fixture must change the skill bytes"
-    );
-    assert!(
-        validate_release_skill_order(&raw_git_before_candidate).is_err(),
-        "any raw Git tag/push command before the candidate must fail"
-    );
-
-    let raw_git_with_global_options = agents.replace(
-        "3. Dispatch `<app>-release-candidate`",
-        "git -C . tag -m release lumen@<version>; git -C . push --tags\n3. Dispatch `<app>-release-candidate`",
-    );
-    assert_ne!(
-        raw_git_with_global_options, agents,
-        "global-option raw Git fixture must change the skill bytes"
-    );
-    assert!(
-        validate_release_skill_order(&raw_git_with_global_options).is_err(),
-        "global-option raw Git tag/push must fail"
-    );
-
-    let raw_git_with_c_and_continuation = agents.replace(
-        "3. Dispatch `<app>-release-candidate`",
-        concat!(
-            "git \\\n",
-            "-C . \\\n",
-            "tag -m release lumen@<version>\n3. Dispatch `<app>-release-candidate`"
-        ),
-    );
-    assert_ne!(
-        raw_git_with_c_and_continuation, agents,
-        "git -C backslash fixture must change the skill bytes"
-    );
-    assert!(
-        validate_release_skill_order(&raw_git_with_c_and_continuation).is_err(),
-        "git -C backslash tag must fail"
-    );
-
-    let raw_git_with_git_dir_and_continuation = agents.replace(
-        "3. Dispatch `<app>-release-candidate`",
-        concat!(
-            "git \\\n",
-            "--git-dir=.git \\\n",
-            "push --tags\n3. Dispatch `<app>-release-candidate`"
-        ),
-    );
-    assert_ne!(
-        raw_git_with_git_dir_and_continuation, agents,
-        "git --git-dir backslash fixture must change the skill bytes"
-    );
-    assert!(
-        validate_release_skill_order(&raw_git_with_git_dir_and_continuation).is_err(),
-        "git --git-dir backslash push must fail"
-    );
 }
 
 #[test]

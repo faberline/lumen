@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 
 use serde_yaml::Value;
 
-const IMAGE: &str = "ghcr.io/chrischeng-c4/lumen:0.6.1";
+const IMAGE: &str = "ghcr.io/faberline/lumen:0.6.1";
 const MANAGED_LABEL: &str = "com.axiom.lumen.managed";
 
 fn run(current_dir: &Path, file: &OsStr, name: Option<&str>) -> Output {

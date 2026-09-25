@@ -23,16 +23,16 @@
 //!   callback to finish before a caller checkpoint and retain
 //!   its source bytes. Assertions at `:560-596` require one committed
 //!   watermark, maintenance, both rows, and a final cold open at that watermark.
-//!   They cover `apps/lumen/src/raft_sm.rs:107-160` and `:223-302`, plus
-//!   `apps/lumen/src/segment_capacity.rs:410-443`.
+//!   They cover `src/raft_sm.rs:107-160` and `:223-302`, plus
+//!   `src/segment_capacity.rs:410-443`.
 //! - Security: assertions at `:604-617` corrupt the external peer command
 //!   after the valid result and require the generic decoder to refuse it without
 //!   moving the Raft watermark or changing indexed rows. They cover the same
-//!   `apps/lumen/src/raft_sm.rs:107-160` byte boundary and
-//!   `apps/lumen/src/wal.rs:256-267` `WalRecord::decode` input validation. The capacity
+//!   `src/raft_sm.rs:107-160` byte boundary and
+//!   `src/wal.rs:256-267` `WalRecord::decode` input validation. The capacity
 //!   owner only adds maintenance before a wait; it does not widen the accepted
 //!   peer format.
-//! - Performance: `apps/lumen/docs/indexing.md:264-276` says, verbatim,
+//! - Performance: `docs/indexing.md:264-276` says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   Assertions at `:309-317`, `:322-326`, and `:570-596` use the public
 //!   pending total and high-water gauges and require both to remain within that
@@ -42,7 +42,7 @@
 //! # Root negative control
 //!
 //! Remove the generic capacity-owner ensure before a Full wait in
-//! `apps/lumen/src/raft_sm.rs:107-160`. The behavior assertion at `:433-436`
+//! `src/raft_sm.rs:107-160`. The behavior assertion at `:433-436`
 //! must fail after its bounded cleanup checkpoint proves that the valid retained
 //! peer command had been waiting for caller-driven progress. Restore every
 //! changed production file by SHA-256 before another gate.

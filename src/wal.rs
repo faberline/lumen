@@ -1170,7 +1170,7 @@ mod tests {
     use futures::StreamExt;
     use std::collections::BTreeMap;
 
-    // Append inside `apps/lumen/src/wal.rs`'s existing `#[cfg(test)] mod tests`.
+    // Append inside `src/wal.rs`'s existing `#[cfg(test)] mod tests`.
     // The injected-fault test needs this test-only helper in `wal_source_stage.rs`:
     //
     // #[cfg(test)] pub(crate) fn for_mem_wal_with_injector(

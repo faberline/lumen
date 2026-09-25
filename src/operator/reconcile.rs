@@ -67,7 +67,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! These 2 sentences were the whole of the `// Contract:` comment in 2 AW-EC shells
-//! under `apps/lumen/e2e/`, each of which ran `cargo test -p lumen --features operator
+//! under `e2e/`, each of which ran `cargo test -p lumen --features operator
 //! --lib prune_stale_hpa_deletes_operator_rendered_hpa_on_multi_shard` in a subprocess
 //! and asserted the child's exit status. That test is this file's own.
 //!
@@ -76,7 +76,7 @@
 //! module at all — `crate::operator` gates `pub mod reconcile;` on the `operator`
 //! feature — so each shell's `--lib` name filter matched no test, printed `0 passed`,
 //! and exited 0. That left the shells as the sole surviving record that these checks
-//! should run at all. `apps/lumen/CONTRIBUTING.md` declared `cargo test -p lumen
+//! should run at all. `CONTRIBUTING.md` declared `cargo test -p lumen
 //! --features "operator delegated-auth"` as a required second gate row that day, and
 //! that run executes this module's colocated tests directly. That made each shell a
 //! second, nested run of a check the gate already covers, so they were deleted the same

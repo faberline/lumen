@@ -257,7 +257,7 @@ After release, verify its public receipt and exact checksum sidecar:
 
 ```bash
 receipt_dir=$(mktemp -d)
-gh release download lumen@0.4.29 --repo chrischeng-c4/axiom \
+gh release download lumen@0.4.29 --repo faberline/lumen \
   --pattern 'lumen-standalone-gke-receipt.json*' --dir "$receipt_dir"
 (cd "$receipt_dir" && shasum -a 256 -c lumen-standalone-gke-receipt.json.sha256)
 ```

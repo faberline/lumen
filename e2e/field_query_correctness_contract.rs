@@ -158,7 +158,7 @@ async fn sealed_keyword_update_survives_checkpoint_and_cold_reopen() {
     );
 }
 
-// Append after apps/lumen/e2e/indexing_durable_oracle.rs at sha256
+// Append after e2e/indexing_durable_oracle.rs at sha256
 // 3a1f56ba158a191b2070806b8653e9c6bbfaee5c73bf1082ee5e8f6f686401ed.
 //
 // Facets when applied:
@@ -660,7 +660,7 @@ async fn v2_current_refuses_keyword_delta_duplicate_stable_local_rows() {
         "a sparse keyword delta with duplicate stable external IDs in local rows",
     );
 }
-// Append after apps/lumen/e2e/indexing_durable_oracle.rs at sha256
+// Append after e2e/indexing_durable_oracle.rs at sha256
 // 06752f2533c2c65519ae06c8af4a1915553e8df0388b3e52bf5b89e076a7f3bc.
 //
 // Facets when applied:
@@ -674,7 +674,7 @@ async fn v2_current_refuses_keyword_delta_duplicate_stable_local_rows() {
 //   equality show sparse work and hard-link reuse. The approved stage6 release
 //   workload, rather than this case, measures checkpoint and merge time.
 //
-// Source premise read only: apps/lumen/src/segment_rdb.rs:1296-1304 currently
+// Source premise read only: src/segment_rdb.rs:1296-1304 currently
 // emits base-only catalog refs, and :1373-1380 rejects layers. These cases must
 // be red until the scalar layered writer and reader land.
 
@@ -1512,7 +1512,7 @@ async fn v2_current_refuses_number_sparse_delta_duplicate_stable_local_rows() {
     );
 }
 
-// Scratch-only append for apps/lumen/e2e/indexing_durable_oracle.rs.
+// Scratch-only append for e2e/indexing_durable_oracle.rs.
 //
 // Facets when applied:
 // - Behavior: public one-token and two-token Match requests compare ordered
@@ -2215,7 +2215,7 @@ async fn v2_text_sparse_delta_preserves_bm25_docs_and_cold_mutations() {
     )
     .await;
 }
-// Scratch-only append for apps/lumen/e2e/indexing_durable_oracle.rs.
+// Scratch-only append for e2e/indexing_durable_oracle.rs.
 //
 // Facets when applied:
 // - Behavior: the two backend wrappers below call one parameterized contract.

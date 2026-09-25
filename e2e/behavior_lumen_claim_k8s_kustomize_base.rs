@@ -6,7 +6,7 @@
 // @contract k8s-kustomize-base-overlays
 // @category behavior
 // @required_for_production true
-// @command kustomize build apps/lumen/k8s/base && kustomize build apps/lumen/k8s/overlays/dev && kustomize build apps/lumen/k8s/overlays/staging && kustomize build apps/lumen/k8s/overlays/prod && kustomize build apps/lumen/k8s/operator
+// @command kustomize build k8s/base && kustomize build k8s/overlays/dev && kustomize build k8s/overlays/staging && kustomize build k8s/overlays/prod && kustomize build k8s/operator
 // AW-EC-END
 
 // Contract: The Kubernetes base, overlays, HPA/PDB, and operator manifests render successfully.
@@ -14,7 +14,7 @@
 #[ignore = "AW EC gate: run via `aw health --verify-ec` or `cargo test -- --ignored`"]
 fn lumen_claim_k8s_kustomize_base() {
     let command =
-        "kustomize build apps/lumen/k8s/base && kustomize build apps/lumen/k8s/overlays/dev && kustomize build apps/lumen/k8s/overlays/staging && kustomize build apps/lumen/k8s/overlays/prod && kustomize build apps/lumen/k8s/operator";
+        "kustomize build k8s/base && kustomize build k8s/overlays/dev && kustomize build k8s/overlays/staging && kustomize build k8s/overlays/prod && kustomize build k8s/operator";
     let id = "lumen-claim-k8s-kustomize-base";
     let mut root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     while !root.join(".aw").is_dir() {

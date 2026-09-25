@@ -27,27 +27,27 @@
 //!   requires a cold `CURRENT(C)` plus strict AOF replay to recover all three
 //!   distinct IDs at :721-774. This is the black-box oracle for moving only
 //!   the stable covered-prefix copy and its first temp `sync_all` out of
-//!   `apps/lumen/src/segment_checkpoint.rs:180-187`'s current `SharedAof`
+//!   `src/segment_checkpoint.rs:180-187`'s current `SharedAof`
 //!   critical section.
 //! - Security: the changed reader consumes the process-written AOF file.  The
 //!   exact suffix and cold replay assertions at :715-774 reject a publication
 //!   that drops or reorders an acknowledged later record.  The new observer
 //!   has no caller-controlled path, environment, or wire input.  Existing
 //!   malformed-AOF refusal remains covered by
-//!   `apps/lumen/e2e/segment_startup_fail_closed_e2e.rs:907-947`, registered
+//!   `e2e/segment_startup_fail_closed_e2e.rs:907-947`, registered
 //!   by the default `cargo test -p lumen` gate.
-//! - Performance: `apps/lumen/docs/indexing.md:264-276` promises, verbatim,
+//! - Performance: `docs/indexing.md:264-276` promises, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   `assert_pending_budget` at :498-512 reads public `/metrics` after the
 //!   complete interleaving and requires total and high-water bytes within that
 //!   bound at :775. This case asserts no timing budget; its channel waits are
 //!   fixture cleanup only.  The approved request-latency gate is the sixteen
-//!   cell workload in `apps/lumen/e2e/perf_gate.rs:4182-4226`.
+//!   cell workload in `e2e/perf_gate.rs:4182-4226`.
 //!
 //! # Root negative control
 //!
 //! Restore the current one-phase call in
-//! `apps/lumen/src/segment_checkpoint.rs:180-187`, so `SharedAof` remains
+//! `src/segment_checkpoint.rs:180-187`, so `SharedAof` remains
 //! locked while `FramedLogWriter` performs the initial compaction-temp sync.
 //! The exact pre-release assertion at :688-692 must fail because `U` reaches
 //! the WAL but cannot persist and acknowledge until the initial temp sync

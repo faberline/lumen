@@ -2,7 +2,7 @@
 //!
 //! # Facets
 //!
-//! - Behavior: `apps/lumen/e2e/oversized_text_staging.rs:355-359` accepts
+//! - Behavior: `e2e/oversized_text_staging.rs:355-359` accepts
 //!   legal oversized Text. Its BM25 assertion at `:314-319` runs live
 //!   (`:360`) and cold (`:393`); `:366-382` checks checkpoint publication.
 //!   The prepared-row case calls its BM25 helper `:443-481` at `:546-585`,
@@ -13,20 +13,20 @@
 //!   names storage, the API, coordinator, SegmentRdbStore, the process
 //!   scheduler, and metrics for this path.
 //! - Security: the HTTP body boundary is pinned by
-//!   `apps/lumen/e2e/http_body_limit_e2e.rs:67-119` and `:124-189`; this
+//!   `e2e/http_body_limit_e2e.rs:67-119` and `:124-189`; this
 //!   file proves its own bodies stay below it at `:343-347` and `:529-533`.
 //!   It sends a caller-controlled unknown field after valid prepared rows
 //!   and requires the closed `422 unknown_field` outcome at `:539-544`.
-//!   The staged-run file boundary is closed by `apps/lumen/src/text_row_stage.rs:954-965`,
+//!   The staged-run file boundary is closed by `src/text_row_stage.rs:954-965`,
 //!   which rejects a truncated prefix read from the workspace at `:165-172`
 //!   and `:287-332`.
-//! - Performance: `apps/lumen/ROADMAP.md:60-70` promises a 256 MiB total
+//! - Performance: `ROADMAP.md:60-70` promises a 256 MiB total
 //!   for active, frozen, and reserved changes. This file executes public
 //!   pending-budget assertions at `:227-236` after apply (`:361-362`) and
 //!   publication (`:383-384`). It requires engine-scoped Text staging
 //!   counters at `:400-414`, so this request cannot be credited to another
 //!   test's process-wide peak; `:73-80` serializes shared gauge reads. The gauge source is
-//!   `apps/lumen/src/metrics.rs:422-428` and `:715-742`.
+//!   `src/metrics.rs:422-428` and `:715-742`.
 //!
 //! The fixture is intentionally not a 30-minute benchmark. It checks the
 //! current per-record pending-memory limit and the actual staging path. The

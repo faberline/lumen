@@ -3,7 +3,7 @@
 ## Brief
 
 Use this guide to change `apps/lumen`. The [README](README.md) owns product
-promises. The root [CONTRIBUTING.md](../../CONTRIBUTING.md) owns repository-wide
+promises. The ecosystem [CONTRIBUTING.md](https://github.com/faberline/core/blob/main/CONTRIBUTING.md) owns repository-wide
 authoring rules.
 
 ## Authoritative Inputs
@@ -30,20 +30,20 @@ Read these sources in order for the part you change:
     placement, the Standard Regional profile, and its acceptance contract.
 11. [Client integration](docs/client-integration.md) for connection profiles,
     workload projection, request mechanics, and source hydration helpers.
-12. `apps/lumen/src/` and `apps/lumen/e2e/` for behavior and executable
+12. `src/` and `e2e/` for behavior and executable
    contracts.
-13. `apps/lumen/src/operator/crd.rs` and
-   `apps/lumen/src/operator/fleet.rs` for the generated Kubernetes API.
+13. `src/operator/crd.rs` and
+   `src/operator/fleet.rs` for the generated Kubernetes API.
 14. [Deployment](docs/deployment.md), [configuration](docs/configuration.md), and
    [authentication](docs/authentication.md) for maintained operating context.
 
-Generated `apps/lumen/k8s/operator/crd.yaml` follows the Rust CRD types. Do not
+Generated `k8s/operator/crd.yaml` follows the Rust CRD types. Do not
 edit generated schema as a substitute for changing its source.
 
 ## Local Workflow
 
 Use `product-deliver` for authorized behavior work. QA writes the failing
-black-box case before Dev changes `apps/lumen/src/`; Dev adds the red unit test
+black-box case before Dev changes `src/`; Dev adds the red unit test
 and implementation. A fresh `lumen-qa` runs the declared complete gate. The
 controller owns Git, tracker, and acceptance. Legacy AW use is explicit-only.
 
@@ -63,7 +63,7 @@ When a Rust CRD type changes, regenerate the checked-in schema:
 
 ```bash
 cargo run -p lumen --features operator --bin lumen -- \
-  k8s crd render --out apps/lumen/k8s/operator
+  k8s crd render --out k8s/operator
 ```
 
 When README, STATUS, ROADMAP, protocol, generated-client, indexing, querying,
@@ -97,9 +97,9 @@ docs-only change does not claim that product gates ran.
 | release feature set | `cargo test -p lumen --locked --features release --test release_feature_set` |
 | landed-main release candidate oracle | `cargo test -p lumen --test release_candidate` |
 | protected-tag promotion oracle | `cargo test -p lumen --test release_promotion` |
-| full candidate verifier | `apps/lumen/scripts/verify-release-candidate.sh --repo chrischeng-c4/axiom --version <version> --commit <commit> --run-id <id> --run-attempt <attempt> --manifest <path> --manifest-sidecar <path> --artifacts-dir <path> --image <image> --candidate-tag <tag> --amd64-digest <digest> --arm64-digest <digest> --mode full` |
-| public release verifier | `apps/lumen/scripts/verify-release-artifacts.sh --repo chrischeng-c4/axiom --tag lumen@<version> --commit <commit> --candidate-run-id <id> --mode public --output <path>` |
-| standalone container bind smoke | `bash apps/lumen/scripts/standalone-container-smoke.sh bind` |
+| full candidate verifier | `scripts/verify-release-candidate.sh --repo faberline/lumen --version <version> --commit <commit> --run-id <id> --run-attempt <attempt> --manifest <path> --manifest-sidecar <path> --artifacts-dir <path> --image <image> --candidate-tag <tag> --amd64-digest <digest> --arm64-digest <digest> --mode full` |
+| public release verifier | `scripts/verify-release-artifacts.sh --repo faberline/lumen --tag lumen@<version> --commit <commit> --candidate-run-id <id> --mode public --output <path>` |
+| standalone container bind smoke | `bash scripts/standalone-container-smoke.sh bind` |
 
 All eight rows are required for a full Lumen behavior claim. None is a superset
 of the others. Do not replace the second or third row with `--all-features`;
@@ -113,8 +113,8 @@ live-cluster script.
 
 The durable performance matrix (README gate `cargo test --release --locked -p
 lumen --test perf_gate -- --ignored --test-threads=1 --nocapture`) has a local
-driver, `apps/lumen/scripts/durable-perf-local.sh`: `build` makes a
-source-bound image from `apps/lumen/Dockerfile`, `cell <endpoint> <batch>
+driver, `scripts/durable-perf-local.sh`: `build` makes a
+source-bound image from `Dockerfile`, `cell <endpoint> <batch>
 <backend>` runs one diagnostic cell, `matrix` runs all sixteen and resumes past
 cells already green, and `status` prints the receipts. Every local run is
 diagnostic only; qualifying receipts come from the

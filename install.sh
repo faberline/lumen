@@ -4,12 +4,12 @@
 # Releases and drops it on your PATH.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/chrischeng-c4/axiom/main/apps/lumen/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/faberline/lumen/main/install.sh | sh
 #
 # Env overrides:
 #   LUMEN_VERSION   tag to install (default: latest lumen@* release, e.g. lumen@1.0)
 #   LUMEN_INSTALL   install dir (default: $HOME/.local/bin)
-#   LUMEN_REPO      gh repo (default: chrischeng-c4/axiom)
+#   LUMEN_REPO      gh repo (default: faberline/lumen)
 #   GH_TOKEN        GitHub token for private-repo fetch (also: GITHUB_TOKEN).
 #                   axiom is public so this is normally unnecessary; kept for
 #                   forks/mirrors that are private. If unset and `gh` is logged
@@ -22,7 +22,7 @@
 #   3  missing curl / tar
 set -eu
 
-REPO="${LUMEN_REPO:-chrischeng-c4/axiom}"
+REPO="${LUMEN_REPO:-faberline/lumen}"
 INSTALL_DIR="${LUMEN_INSTALL:-$HOME/.local/bin}"
 VERSION="${LUMEN_VERSION:-latest}"
 TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"

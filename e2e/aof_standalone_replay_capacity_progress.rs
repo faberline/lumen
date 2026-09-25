@@ -26,17 +26,17 @@
 //!   requires the exact source watermark, prior local value, AOF value,
 //!   maintenance checkpoint, final checkpoint, cold open, and covered-suffix
 //!   skip. These assertions
-//!   cover apps/lumen/src/aof.rs:333-357 and
-//!   apps/lumen/src/segment_capacity.rs:312-348.
+//!   cover src/aof.rs:333-357 and
+//!   src/segment_capacity.rs:312-348.
 //! - Security: :571-579 pre-creates the predictable first temporary spill
 //!   directory name and :747-753 requires its sentinel to remain unchanged
 //!   after fallback maintenance. This closes the filesystem collision boundary
-//!   introduced by apps/lumen/src/segment_checkpoint.rs:349-386. The unchanged
+//!   introduced by src/segment_checkpoint.rs:349-386. The unchanged
 //!   AOF format boundary remains covered by
-//!   apps/lumen/e2e/aof_oversized_committed_replace.rs:797-868, which refuses a
+//!   e2e/aof_oversized_committed_replace.rs:797-868, which refuses a
 //!   CRC-valid corrupt generic ReplaceDocs frame before rows or watermark
 //!   publication.
-//! - Performance: apps/lumen/docs/indexing.md:264-276 says, verbatim,
+//! - Performance: docs/indexing.md:264-276 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   :471-490 reads public pending total and high-water gauges after replay
 //!   and cold open, at :741-746 and :780-785, and requires both to stay
@@ -47,7 +47,7 @@
 //! # Root negative control
 //!
 //! Remove the generic replay capacity-owner ensure call before either Full wait
-//! in apps/lumen/src/aof.rs:333-357. The child assertion at :660-665 must fail
+//! in src/aof.rs:333-357. The child assertion at :660-665 must fail
 //! after its cleanup checkpoint proves that the valid committed record had been
 //! waiting. Restore every changed production file by SHA-256 before another
 //! gate.

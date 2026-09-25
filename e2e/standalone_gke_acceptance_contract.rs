@@ -14,14 +14,10 @@ use serde_json::{json, Value};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|path| path.parent())
-        .unwrap()
-        .to_path_buf()
 }
 
 fn full_script() -> String {
-    fs::read_to_string(root().join("apps/lumen/scripts/standalone-gke-acceptance.sh")).unwrap()
+    fs::read_to_string(root().join("scripts/standalone-gke-acceptance.sh")).unwrap()
 }
 
 fn live_slice() -> String {
@@ -304,7 +300,7 @@ V2_NODE_ARCH=''
 V2_OBSERVED_RUNTIME_IMAGE_DIGEST=''
 V2_LAST_POD_UID=''
 ROOT_DIGEST='sha256:root'
-LUMEN_STANDALONE_GKE_IMAGE='ghcr.io/chrischeng-c4/lumen@sha256:root'
+LUMEN_STANDALONE_GKE_IMAGE='ghcr.io/faberline/lumen@sha256:root'
 die() { exit 2; }
 k() {
   [[ "$1" == get && "$2" == pod ]] || return 99
@@ -790,7 +786,7 @@ fn findings(source: &str) -> Vec<&'static str> {
         ),
         (
             "CANDIDATE",
-            "CANDIDATE_DEFAULT_IMAGE=\"ghcr.io/chrischeng-c4/lumen:$CANDIDATE_VERSION\"",
+            "CANDIDATE_DEFAULT_IMAGE=\"ghcr.io/faberline/lumen:$CANDIDATE_VERSION\"",
         ),
         ("CANDIDATE", ".version == $version and .tag == $tag"),
         ("CANDIDATE", "--arg version \"$CANDIDATE_VERSION\""),
@@ -821,7 +817,7 @@ fn findings(source: &str) -> Vec<&'static str> {
         ),
         (
             "RUNTIME_IMAGE",
-            "elif [[ \"$image\" == \"ghcr.io/chrischeng-c4/lumen@$V2_CHILD_DIGEST\" ]]; then",
+            "elif [[ \"$image\" == \"ghcr.io/faberline/lumen@$V2_CHILD_DIGEST\" ]]; then",
         ),
         (
             "RUNTIME_IMAGE",
@@ -1441,7 +1437,7 @@ fn preflight_findings(source: &str) -> Vec<&'static str> {
         ),
         (
             "PREFLIGHT",
-            "REPO_ROOT=\"$(cd \"$SCRIPT_DIR/../../..\" && pwd -P)\"",
+            "REPO_ROOT=\"$(cd \"$SCRIPT_DIR/..\" && pwd -P)\"",
         ),
         (
             "PREFLIGHT",
@@ -1583,7 +1579,7 @@ fn preflight_findings(source: &str) -> Vec<&'static str> {
         "[[ \"${KUBECTL_CACHE_DIR%/*}\" == \"$TMP_ROOT\" && \"${KUBECTL_CACHE_DIR##*/}\" == kubectl-cache ]] || die 'kubectl cache path identity is unsafe'",
         "[[ \"$(private_mode \"$KUBECTL_CACHE_DIR\")\" == 700 ]] || die 'kubectl cache path mode is not 0700'",
         "SCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd -P)\"",
-        "REPO_ROOT=\"$(cd \"$SCRIPT_DIR/../../..\" && pwd -P)\"",
+        "REPO_ROOT=\"$(cd \"$SCRIPT_DIR/..\" && pwd -P)\"",
         "KUSTOMIZE_SOURCE_ROOT=\"$REPO_ROOT/kustomize/lumen-standalone-acceptance\"",
         "KUSTOMIZE_RENDERER_SOURCE=\"$KUSTOMIZE_SOURCE_ROOT/scripts/render.sh\"",
         "KUSTOMIZE_VALIDATOR_SOURCE=\"$KUSTOMIZE_SOURCE_ROOT/scripts/validate.rb\"",
@@ -1876,7 +1872,7 @@ fn run_gke_oracle(fixture: &GkeOracleFixture, kubeconfig: &Path, evidence: &Path
         .env("LUMEN_STANDALONE_GKE_CLI", &fixture.cli)
         .env(
             "LUMEN_STANDALONE_GKE_IMAGE",
-            format!("ghcr.io/chrischeng-c4/lumen@sha256:{}", "0".repeat(64)),
+            format!("ghcr.io/faberline/lumen@sha256:{}", "0".repeat(64)),
         )
         .env(
             "LUMEN_STANDALONE_GKE_CLIENT_IMAGE",
@@ -1903,7 +1899,7 @@ fn run_gke_oracle(fixture: &GkeOracleFixture, kubeconfig: &Path, evidence: &Path
         .env("FAKE_KUBECTL_CALLS", &fixture.kubectl_calls)
         .env("FAKE_GCLOUD_MARKER", &fixture.gcloud_marker)
         .env("FAKE_PHYSICAL_ROOT", &fixture.physical_root)
-        .arg(root().join("apps/lumen/scripts/standalone-gke-acceptance.sh"))
+        .arg(root().join("scripts/standalone-gke-acceptance.sh"))
         .args(["--mode", "gke"]);
     command.output().expect("run GKE acceptance oracle")
 }
@@ -2617,9 +2613,9 @@ fn metric_shape_and_restart_window_mutations_fail_the_static_contract() {
 #[test]
 fn runtime_image_identity_binds_root_or_scheduled_child_inside_pod_wait_predicate() {
     let source = live_slice();
-    let root = "ghcr.io/chrischeng-c4/lumen@sha256:root";
-    let amd64_child = "ghcr.io/chrischeng-c4/lumen@sha256:amd64-child";
-    let arm64_child = "ghcr.io/chrischeng-c4/lumen@sha256:arm64-child";
+    let root = "ghcr.io/faberline/lumen@sha256:root";
+    let amd64_child = "ghcr.io/faberline/lumen@sha256:amd64-child";
+    let arm64_child = "ghcr.io/faberline/lumen@sha256:arm64-child";
     let config = "ghcr.io/other/config@sha256:config";
 
     for (arch, child, other_child) in [
@@ -2724,25 +2720,25 @@ fn runtime_image_identity_binds_root_or_scheduled_child_inside_pod_wait_predicat
         ("wrong repo", config),
         (
             "wrong repo with root digest",
-            "ghcr.io/chrischeng-c4/other@sha256:root",
+            "ghcr.io/faberline/other@sha256:root",
         ),
         (
             "wrong repo with scheduled child digest",
-            "ghcr.io/chrischeng-c4/other@sha256:amd64-child",
+            "ghcr.io/faberline/other@sha256:amd64-child",
         ),
-        ("tag", "ghcr.io/chrischeng-c4/lumen:0.4.29"),
+        ("tag", "ghcr.io/faberline/lumen:0.4.29"),
         (
             "tag plus root digest",
-            "ghcr.io/chrischeng-c4/lumen:0.4.29@sha256:root",
+            "ghcr.io/faberline/lumen:0.4.29@sha256:root",
         ),
         (
             "tag plus scheduled child digest",
-            "ghcr.io/chrischeng-c4/lumen:0.4.29@sha256:amd64-child",
+            "ghcr.io/faberline/lumen:0.4.29@sha256:amd64-child",
         ),
         ("malformed", "sha256:amd64-child"),
-        ("substring", "ghcr.io/chrischeng-c4/lumen@sha256:root-extra"),
-        ("prefix", "prefixghcr.io/chrischeng-c4/lumen@sha256:root"),
-        ("suffix", "ghcr.io/chrischeng-c4/lumen@sha256:root-suffix"),
+        ("substring", "ghcr.io/faberline/lumen@sha256:root-extra"),
+        ("prefix", "prefixghcr.io/faberline/lumen@sha256:root"),
+        ("suffix", "ghcr.io/faberline/lumen@sha256:root-suffix"),
     ] {
         let result = run_service_link_wait(
             &source,
@@ -2760,7 +2756,7 @@ fn runtime_image_identity_binds_root_or_scheduled_child_inside_pod_wait_predicat
     for (name, pod_image) in [
         (
             "wrong repository",
-            "ghcr.io/chrischeng-c4/other@sha256:root",
+            "ghcr.io/faberline/other@sha256:root",
         ),
         ("child instead of root", amd64_child),
     ] {
@@ -2782,7 +2778,7 @@ fn runtime_image_identity_binds_root_or_scheduled_child_inside_pod_wait_predicat
 
     let exact_runtime_identity = r#"        if [[ "$image" == "$LUMEN_STANDALONE_GKE_IMAGE" ]]; then
           V2_OBSERVED_RUNTIME_IMAGE_DIGEST="$ROOT_DIGEST"
-        elif [[ "$image" == "ghcr.io/chrischeng-c4/lumen@$V2_CHILD_DIGEST" ]]; then
+        elif [[ "$image" == "ghcr.io/faberline/lumen@$V2_CHILD_DIGEST" ]]; then
           V2_OBSERVED_RUNTIME_IMAGE_DIGEST="$V2_CHILD_DIGEST"
         else
           die "observed container imageID is not the exact candidate root or scheduled child digest"
@@ -2798,7 +2794,7 @@ fn runtime_image_identity_binds_root_or_scheduled_child_inside_pod_wait_predicat
             &unchecked_identity,
             false,
             "True",
-            "prefixghcr.io/chrischeng-c4/lumen@sha256:root",
+            "prefixghcr.io/faberline/lumen@sha256:root",
             root,
             config,
             "amd64",
@@ -2811,8 +2807,8 @@ fn runtime_image_identity_binds_root_or_scheduled_child_inside_pod_wait_predicat
 
     let unbound_child = replace_once(
         &source,
-        "elif [[ \"$image\" == \"ghcr.io/chrischeng-c4/lumen@$V2_CHILD_DIGEST\" ]]; then",
-        "elif [[ \"$image\" == \"ghcr.io/chrischeng-c4/lumen@sha256:wrong-child\" ]]; then",
+        "elif [[ \"$image\" == \"ghcr.io/faberline/lumen@$V2_CHILD_DIGEST\" ]]; then",
+        "elif [[ \"$image\" == \"ghcr.io/faberline/lumen@sha256:wrong-child\" ]]; then",
     );
     assert!(findings(&unbound_child).contains(&"RUNTIME_IMAGE"));
     assert!(
@@ -2889,8 +2885,8 @@ fn negative_mutations_remove_real_gate_obligations() {
             "CANDIDATE",
         ),
         (
-            "CANDIDATE_DEFAULT_IMAGE=\"ghcr.io/chrischeng-c4/lumen:$CANDIDATE_VERSION\"",
-            "CANDIDATE_DEFAULT_IMAGE=\"ghcr.io/chrischeng-c4/lumen:0.4.29\"",
+            "CANDIDATE_DEFAULT_IMAGE=\"ghcr.io/faberline/lumen:$CANDIDATE_VERSION\"",
+            "CANDIDATE_DEFAULT_IMAGE=\"ghcr.io/faberline/lumen:0.4.29\"",
             "CANDIDATE",
         ),
         (
@@ -3513,7 +3509,7 @@ fn negative_mutations_remove_real_gate_obligations() {
         integrity_findings(&changed).contains(&"INTEGRITY"),
         "unverified render execution did not fail the integrity contract"
     );
-    let invocation = "validate_candidate_manifest_v2\n[[ \"$LUMEN_STANDALONE_GKE_IMAGE\" == \"ghcr.io/chrischeng-c4/lumen@$ROOT_DIGEST\" ]] ||\n  die \"candidate image is not the exact receipt root digest\"\n";
+    let invocation = "validate_candidate_manifest_v2\n[[ \"$LUMEN_STANDALONE_GKE_IMAGE\" == \"ghcr.io/faberline/lumen@$ROOT_DIGEST\" ]] ||\n  die \"candidate image is not the exact receipt root digest\"\n";
     let without_invocation = replace_once(&full, invocation, "");
     let render_at = without_invocation
         .find("[[ -f \"$RENDERED/.lumen-standalone-managed\" ]]")

@@ -24,15 +24,15 @@ mod capacity_http_contract {
     //! - Behavior: `indexing_durable_oracle.rs:10600`, `:10620`, `:10640`, and
     //!   `:10669` require a real `POST /collections/{id}/index` pre-submit refusal,
     //!   successful retry after publication, and live plus cold query recovery. Change points:
-    //!   `apps/lumen/src/coordinator.rs:566-621`,
-    //!   `apps/lumen/src/segment_checkpoint.rs:171-217`, and
-    //!   `apps/lumen/src/api.rs:1554-1586`.
+    //!   `src/coordinator.rs:566-621`,
+    //!   `src/segment_checkpoint.rs:171-217`, and
+    //!   `src/api.rs:1554-1586`.
     //! - Security: `indexing_durable_oracle.rs:10603`, `:10608`, and `:10612` feed
     //!   caller-controlled large `/index` bytes and require the closed `429`, exact
     //!   `Retry-After: 1`, and unchanged MemWal/applied sequences. Change point:
-    //!   `apps/lumen/src/api.rs:3269-3273` maps the pre-publication capacity error
+    //!   `src/api.rs:3269-3273` maps the pre-publication capacity error
     //!   to the HTTP boundary.
-    //! - Performance: `apps/lumen/ROADMAP.md:60-70` promises a 256 MiB pending
+    //! - Performance: `ROADMAP.md:60-70` promises a 256 MiB pending
     //!   active/frozen/reserved budget and checkpoint progress at that limit.
     //!   `indexing_durable_oracle.rs:10431-10435` pins the documented limit and
     //!   `:10593-10597` refuses a missing-429 result only after the actual raw payload
@@ -41,13 +41,13 @@ mod capacity_http_contract {
     //! - Behavior (externally committed record): `indexing_durable_oracle.rs:11584`,
     //!   `:11592`, `:11600`, and `:11650` pin direct WAL publication, stationary
     //!   applied state while capacity is held, later application, and cold recovery.
-    //!   Change points: `apps/lumen/src/coordinator.rs:297-358`
-    //!   and `apps/lumen/src/segment_checkpoint.rs:172-217`.
+    //!   Change points: `src/coordinator.rs:297-358`
+    //!   and `src/segment_checkpoint.rs:172-217`.
     //! - Security (capacity boundary): `indexing_durable_oracle.rs:11530`, `:11536`,
     //!   `:11564`, and `:11592` require rejected caller-controlled input to leave WAL
     //!   and the applied watermark unchanged, and a committed record to stay invisible
     //!   before admission owns it.
-    //! - Performance (same approved budget): `apps/lumen/ROADMAP.md:60-70`;
+    //! - Performance (same approved budget): `ROADMAP.md:60-70`;
     //!   `indexing_durable_oracle.rs:10773-10803` bounds real public accounting and
     //!   `:10813-10868` establishes a staged public capacity witness without
     //!   claiming latency or RSS.
@@ -1257,8 +1257,8 @@ mod capacity_http_contract {
         //!   query-invisible. `:11600-11634` and `:11636-11676` then require
         //!   exactly-once live application and cold recovery. These assertions
         //!   exercise externally delivered capacity handling in
-        //!   `apps/lumen/src/coordinator.rs:481-531` and configured checkpoint
-        //!   ownership in `apps/lumen/src/segment_checkpoint.rs:411-435`.
+        //!   `src/coordinator.rs:481-531` and configured checkpoint
+        //!   ownership in `src/segment_checkpoint.rs:411-435`.
         //! - Security: `indexing_durable_oracle.rs:11530-11541` proves the
         //!   caller-controlled local input rejected at the HTTP boundary did
         //!   not publish a WAL record or advance the applied watermark.
@@ -1266,7 +1266,7 @@ mod capacity_http_contract {
         //!   invisible until it owns budget. This change reads only the process's
         //!   public metrics; it opens no new caller path, parser, or file input
         //!   boundary.
-        //! - Performance: `apps/lumen/ROADMAP.md:60-70` promises, verbatim,
+        //! - Performance: `ROADMAP.md:60-70` promises, verbatim,
         //!   "Pending active, frozen, and reserved changes have a 256 MiB total
         //!   budget." `indexing_durable_oracle.rs:10773-10803` checks that
         //!   public total and high-water accounting stay within that limit.

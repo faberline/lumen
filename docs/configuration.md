@@ -42,7 +42,7 @@ One reachable local container can use:
 ```bash
 docker run --rm -p 127.0.0.1:7373:7373 \
   -e LUMEN_AUTH=off \
-  ghcr.io/chrischeng-c4/lumen:<version>
+  ghcr.io/faberline/lumen:<version>
 ```
 
 ## Managed precedence

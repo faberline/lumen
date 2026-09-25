@@ -7,22 +7,22 @@
 //! # Facets
 //!
 //! - Behavior: fixture assertions at
-//!   `apps/lumen/e2e/segment_startup_fail_closed_e2e.rs:492`, `:560`, `:569`,
+//!   `e2e/segment_startup_fail_closed_e2e.rs:492`, `:560`, `:569`,
 //!   `:577`, `:584`, and `:589` establish the complete CRC-valid frames, bad
 //!   middle payload, and valid successor. `:923` invokes refusal assertions at
 //!   `:360`, `:364`, `:368`, and `:373`; `:939` requires replay error and `:943`
-//!   requires only sequence 1. This covers recovery in `apps/lumen/src/aof.rs:226-243`,
-//!   `apps/lumen/src/aof.rs:259-274`, and
-//!   `apps/lumen/src/bin/lumen.rs:3609-3636`.
-//! - Security: `apps/lumen/e2e/segment_startup_fail_closed_e2e.rs:928`
+//!   requires only sequence 1. This covers recovery in `src/aof.rs:226-243`,
+//!   `src/aof.rs:259-274`, and
+//!   `src/bin/lumen.rs:3609-3636`.
+//! - Security: `e2e/segment_startup_fail_closed_e2e.rs:928`
 //!   preserves the valid baseline, while `:364`, `:368`, `:373`, and `:933`
 //!   reject a file-controlled complete, CRC-valid, undecodable middle frame
 //!   before it binds a listener or mutates the root in those recovery paths.
 //! - Performance: Gap. The change reaches startup, but
-//!   `apps/lumen/README.md:358-373` promises recovery without a current
+//!   `README.md:358-373` promises recovery without a current
 //!   numerical startup or refusal budget. `STARTUP_DEADLINE` below is fixture
 //!   cleanup only. The approved full performance gate owns restart telemetry.
-//! - Gate: `cargo test -p lumen` (`apps/lumen/CONTRIBUTING.md:93-96`).
+//! - Gate: `cargo test -p lumen` (`CONTRIBUTING.md:93-96`).
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};

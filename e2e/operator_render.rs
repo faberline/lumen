@@ -7,14 +7,14 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! These 9 sentences were the whole of the `// Contract:` comment in 9 AW-EC shells
-//! under `apps/lumen/e2e/`, each of which ran `cargo test -p lumen --features operator
+//! under `e2e/`, each of which ran `cargo test -p lumen --features operator
 //! --test operator_render` in a subprocess and asserted the child's exit status.
 //!
 //! Until 2026-08-20 these shells could not be deleted. The project's only declared gate
 //! was `cargo test -p lumen`, and with `default = []` that command compiled every
 //! `#![cfg(feature = "operator")]` target into an empty binary that printed `0 passed`
 //! and exited 0 — so the shells were the sole surviving record that these checks should
-//! run at all. `apps/lumen/CONTRIBUTING.md` declared `cargo test -p lumen --features
+//! run at all. `CONTRIBUTING.md` declared `cargo test -p lumen --features
 //! "operator delegated-auth"` as a required second gate row that day, and that run
 //! executes this target directly. That made each shell a second, nested run of a target
 //! the gate already covers, so they were deleted the same day. The sentence is the only
@@ -1290,8 +1290,8 @@ fn checked_in_crd_yaml_matches_the_renderer() {
     let checked_in = include_str!("../k8s/operator/crd.yaml");
     assert_eq!(
         checked_in, rendered,
-        "apps/lumen/k8s/operator/crd.yaml is stale — regenerate with \
-         `lumen k8s crd render --out apps/lumen/k8s/operator/crd.yaml`"
+        "k8s/operator/crd.yaml is stale — regenerate with \
+         `lumen k8s crd render --out k8s/operator/crd.yaml`"
     );
 }
 

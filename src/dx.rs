@@ -21,7 +21,7 @@ use serde_json::{json, Value};
 
 use crate::types::FieldType;
 
-const DX_CONTRACT_REF: &str = "apps/lumen/src/dx-contract.yaml";
+const DX_CONTRACT_REF: &str = "src/dx-contract.yaml";
 const DX_CONTRACT_SOURCE: &str = include_str!("dx-contract.yaml");
 
 /// Field declarations and query operations emitted by `lumen spec --fields`.

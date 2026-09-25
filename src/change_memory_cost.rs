@@ -1,7 +1,7 @@
 //! Scratch proposal for Lumen #4246: admission-owned change-memory cost.
 //!
 //! This file is deliberately self-contained.  The controller can move this
-//! into `apps/lumen/src/` after choosing the admission owner.
+//! into `src/` after choosing the admission owner.
 
 /// `FastHashMap` / `HashMap` bucket, key/value slots, and control-byte slack.
 /// The stored Rust values are smaller, but 64 B stays above the 64-bit current

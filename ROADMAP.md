@@ -12,9 +12,9 @@ destination without copying tracker state.
 ## Near-term outcomes
 
 Milestone #8 (`0.6.0`) delivers only the sealed Keyword update correction in
-[report #4164](https://github.com/chrischeng-c4/axiom/issues/4164) and the
+[report #4164](https://github.com/faberline/axiom/issues/4164) and the
 `bounded-raft-shutdown-and-failover` outcome in
-[issue #4069](https://github.com/chrischeng-c4/axiom/issues/4069). Standalone
+[issue #4069](https://github.com/faberline/axiom/issues/4069). Standalone
 gains no new feature in this release. Its existing bind smoke remains a
 regression gate. Search v2 is outside this release, and its activation remains
 `lumen@0.37.0`.
@@ -121,7 +121,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   before commit, after commit, before apply, and after apply. Acknowledged
   values survive restart, rejected values do not appear, and in-memory startup
   and status identify the mode as ephemeral.
-- Tracking: [Milestone #9](https://github.com/chrischeng-c4/axiom/milestone/9).
+- Tracking: [Milestone #9](https://github.com/faberline/lumen/milestone/9).
 
 ### Idempotent write replay
 
@@ -135,7 +135,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   prove default and caller-supplied keys, exact response replay, `409` for a
   different payload, restart and multi-process retention, expiry after the
   stated window, redaction, and no second mutation under concurrent retry.
-- Tracking: [Milestone #10](https://github.com/chrischeng-c4/axiom/milestone/10).
+- Tracking: [Milestone #10](https://github.com/faberline/lumen/milestone/10).
 
 ### Item-atomic batch writes
 
@@ -148,7 +148,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   failures between the fields of an item. They prove no partial item becomes
   visible, accepted siblings remain committed, response order is stable, and a
   safe retry uses the idempotency contract.
-- Tracking: [Milestone #11](https://github.com/chrischeng-c4/axiom/milestone/11).
+- Tracking: [Milestone #11](https://github.com/faberline/lumen/milestone/11).
 
 ### Versioned deletes and tombstones
 
@@ -161,7 +161,7 @@ regression gate. Search v2 is outside this release, and its activation remains
 - Completion evidence: Ordered and out-of-order tests cover document and field
   deletes, equal and older versions, restart, compaction, replication, rebuild,
   and retention. No accepted old write resurrects a deleted value.
-- Tracking: [Milestone #11](https://github.com/chrischeng-c4/axiom/milestone/11).
+- Tracking: [Milestone #11](https://github.com/faberline/lumen/milestone/11).
 
 ### Shadow rebuild generations
 
@@ -178,7 +178,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   status, explicit seal, stale ETag refusal, activation, rollback, retention
   expiry, and cancellation back to active-only writes without acknowledged
   data loss.
-- Tracking: [Milestone #16](https://github.com/chrischeng-c4/axiom/milestone/16).
+- Tracking: [Milestone #16](https://github.com/faberline/lumen/milestone/16).
 
 ### Strict search schema types
 
@@ -196,7 +196,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   rejection of overflow. Migration tests prove an existing field needs a
   shadow rebuild to become facetable while a new field with no history can be
   added online.
-- Tracking: [Milestone #15](https://github.com/chrischeng-c4/axiom/milestone/15).
+- Tracking: [Milestone #15](https://github.com/faberline/lumen/milestone/15).
 
 ### Unified search contract
 
@@ -215,7 +215,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   tie-breaks, page size 1,000, offset 10,000, live and PIT cursors, `400`
   mismatch, `409` stale generation, `410` expiry, tagged totals, and collapse
   totals, missing values, representative order, and field eligibility.
-- Tracking: [Milestone #17](https://github.com/chrischeng-c4/axiom/milestone/17).
+- Tracking: [Milestone #17](https://github.com/faberline/lumen/milestone/17).
 
 ### Exact search facets metrics
 
@@ -234,7 +234,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   deterministic compensated float sums marked approximate, decimal-string
   counts, `facets` and `metrics` maps, alias grammar, snake-case fields, and
   explicit `kind` discriminators.
-- Tracking: [Milestone #19](https://github.com/chrischeng-c4/axiom/milestone/19).
+- Tracking: [Milestone #19](https://github.com/faberline/lumen/milestone/19).
 
 ### Facet resource governance
 
@@ -258,7 +258,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   p95 and peak memory and rejects latency regression above 20% or memory above
   10%. It also reports write throughput and segment bytes for review above 30%
   and 50% change.
-- Tracking: [Milestone #20](https://github.com/chrischeng-c4/axiom/milestone/20).
+- Tracking: [Milestone #20](https://github.com/faberline/lumen/milestone/20).
 
 ### Distributed facet convergence
 
@@ -273,7 +273,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   metrics, missing and unbucketed counts, and truncation with a single-shard
   oracle. Fault tests cover leader movement, retry, timeout, shard failure,
   cancellation, resource cleanup, and no partial response.
-- Tracking: [Milestone #21](https://github.com/chrischeng-c4/axiom/milestone/21).
+- Tracking: [Milestone #21](https://github.com/faberline/lumen/milestone/21).
 
 ### Generated-client Search v2 parity
 
@@ -290,7 +290,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   Rust does not fall back to JSON values or strings for the new unions and
   enums. No language can silently skip because a toolchain or dependency is
   absent.
-- Tracking: [Milestone #22](https://github.com/chrischeng-c4/axiom/milestone/22).
+- Tracking: [Milestone #22](https://github.com/faberline/lumen/milestone/22).
 
 ### Search v2 migration
 
@@ -308,7 +308,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   numeric and set schema rebuild requirements, ambiguous request refusal, no
   network or runtime write, stable reports, and round-trip validation against
   the Search v2 schema.
-- Tracking: [Milestone #41](https://github.com/chrischeng-c4/axiom/milestone/41).
+- Tracking: [Milestone #41](https://github.com/faberline/lumen/milestone/41).
 
 ### Search capability activation
 
@@ -325,7 +325,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   restart, member replacement, and refusal of mixed-version search fields.
   `/version` reports each dimension without claiming a capability active before
   convergence.
-- Tracking: [Milestone #27](https://github.com/chrischeng-c4/axiom/milestone/27).
+- Tracking: [Milestone #27](https://github.com/faberline/lumen/milestone/27).
 
 ### Runtime configuration parity
 
@@ -344,7 +344,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   Secret values do not enter status, and a stable effective-config hash rolls
   pods only when restart-required inputs change. Referenced Secret and
   ConfigMap resource versions affect that hash. TLS file rotation stays hot.
-- Tracking: [Milestone #24](https://github.com/chrischeng-c4/axiom/milestone/24).
+- Tracking: [Milestone #24](https://github.com/faberline/lumen/milestone/24).
 
 ### Managed runtime KSA access
 
@@ -371,7 +371,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   per-object failure. Condition tests prove `AccessPolicyReady=False` blocks
   `Ready=True`, while a converged deny-all policy reports
   `AccessPolicyReady=True`.
-- Tracking: [Milestone #39](https://github.com/chrischeng-c4/axiom/milestone/39).
+- Tracking: [Milestone #39](https://github.com/faberline/lumen/milestone/39).
 
 ### Projected KSA client auth
 
@@ -400,7 +400,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   rejection of expired, wrong-audience, and malformed tokens, no anonymous
   fallback after `401`, and no credential in arguments, environment, status,
   Events, logs, or error text.
-- Tracking: [Milestone #30](https://github.com/chrischeng-c4/axiom/milestone/30).
+- Tracking: [Milestone #30](https://github.com/faberline/lumen/milestone/30).
 
 ### Managed auth unification
 
@@ -421,7 +421,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   Route tests prove the exact anonymous set and protect `/debug/cluster`.
   Migration tests prove old resources receive an actionable message without
   leaking a token or silently widening access.
-- Tracking: [Milestone #25](https://github.com/chrischeng-c4/axiom/milestone/25).
+- Tracking: [Milestone #25](https://github.com/faberline/lumen/milestone/25).
 
 ### Protocol contract completeness
 
@@ -439,7 +439,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   media type is absent from OpenAPI. Snapshot tests prove the committed
   document is byte-identical to live generation, and stream-reindex tests prove
   its declared framing matches the runtime.
-- Tracking: [Milestone #12](https://github.com/chrischeng-c4/axiom/milestone/12).
+- Tracking: [Milestone #12](https://github.com/faberline/lumen/milestone/12).
 
 ### Generated-client protocol parity
 
@@ -460,7 +460,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   generated dependency metadata. Tests cover success, malformed stream data,
   early disconnect, error redaction, and POST fallback without buffering the
   whole stream.
-- Tracking: [Milestone #13](https://github.com/chrischeng-c4/axiom/milestone/13).
+- Tracking: [Milestone #13](https://github.com/faberline/lumen/milestone/13).
 
 ### Strict generated-client gates
 
@@ -475,7 +475,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   prerequisite and proves the required gate fails. The normal gate records all
   three executed languages and passes create, index, QUERY with POST fallback,
   search, stats, delete, and collection-drop behavior for each generated client.
-- Tracking: [Milestone #13](https://github.com/chrischeng-c4/axiom/milestone/13).
+- Tracking: [Milestone #13](https://github.com/faberline/lumen/milestone/13).
 
 ### Generated-client request resilience
 
@@ -494,7 +494,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   cancellation propagation, read retry, unkeyed write refusal, keyed write
   replay, ambiguous mutation failure, token rotation during a request, typed
   redacted errors, and a strict three-language gate with no silent skip.
-- Tracking: [Milestone #14](https://github.com/chrischeng-c4/axiom/milestone/14).
+- Tracking: [Milestone #14](https://github.com/faberline/lumen/milestone/14).
 
 ### Generated-client source-integration helpers
 
@@ -512,7 +512,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   ID handling, callback failure and cancellation, preservation of score and
   cursor metadata, no source credential in generated state, and no hidden
   per-record fetch.
-- Tracking: [Milestone #14](https://github.com/chrischeng-c4/axiom/milestone/14).
+- Tracking: [Milestone #14](https://github.com/faberline/lumen/milestone/14).
 
 ### Versioned client workload template
 
@@ -533,7 +533,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   optional egress policy, no created namespace, KSA, or token Secret, and no
   token value in rendered YAML, environment, arguments, logs, Events, or
   status.
-- Tracking: [Milestone #30](https://github.com/chrischeng-c4/axiom/milestone/30).
+- Tracking: [Milestone #30](https://github.com/faberline/lumen/milestone/30).
 
 ### Fleet production convergence
 
@@ -553,7 +553,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   failure isolation, ready and degraded counts, desired and observed generation
   reporting, retained-orphan warnings, and recovery after a failed dependency
   returns.
-- Tracking: [Milestone #38](https://github.com/chrischeng-c4/axiom/milestone/38).
+- Tracking: [Milestone #38](https://github.com/faberline/lumen/milestone/38).
 
 ### Fleet safe rollout
 
@@ -569,7 +569,7 @@ regression gate. Search v2 is outside this release, and its activation remains
 - Completion evidence: Reconcile tests prove one-at-a-time default rollout,
   explicit concurrency, manual pause, generation gating, Ready gating, stop on
   degradation, leader failover, and automatic continuation after recovery.
-- Tracking: [Milestone #40](https://github.com/chrischeng-c4/axiom/milestone/40).
+- Tracking: [Milestone #40](https://github.com/faberline/lumen/milestone/40).
 
 ### GKE regional production profile
 
@@ -590,7 +590,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   KSA auth, WIF-backed operator duties, certificate and CA rotation, backup and
   restore, node drain, Pod loss, zone loss, interrupted rollout, recovery, and
   deterministic teardown without using a GCE machine type in the core CRD.
-- Tracking: [Milestone #33](https://github.com/chrischeng-c4/axiom/milestone/33).
+- Tracking: [Milestone #33](https://github.com/faberline/lumen/milestone/33).
 
 ### Per-shard failure-domain placement
 
@@ -608,7 +608,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   three-zone voter placement, allowed node sharing across different shards and
   runtimes, correct unschedulable status when domains are insufficient, and
   continued quorum through one Pod, node, or zone loss.
-- Tracking: [Milestone #31](https://github.com/chrischeng-c4/axiom/milestone/31).
+- Tracking: [Milestone #31](https://github.com/faberline/lumen/milestone/31).
 
 ### Quorum-safe runtime rollout
 
@@ -626,7 +626,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   member loss, recovery and continuation, leader movement, voluntary drain
   within PDB limits, direct StatefulSet update safety, interrupted operator
   recovery, and no second unavailable voter.
-- Tracking: [Milestone #32](https://github.com/chrischeng-c4/axiom/milestone/32).
+- Tracking: [Milestone #32](https://github.com/faberline/lumen/milestone/32).
 
 ### Kubernetes-native placement
 
@@ -646,7 +646,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   storage requests reach each Pod and PVC, placement intent maps to standard
   scheduling fields, and a GKE profile selects a custom ComputeClass without
   placing a GCE machine type in the core API.
-- Tracking: [Milestone #31](https://github.com/chrischeng-c4/axiom/milestone/31).
+- Tracking: [Milestone #31](https://github.com/faberline/lumen/milestone/31).
 
 ### Managed runtime certificates
 
@@ -665,7 +665,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   issuer outage and recovery, hot reload without unsafe member fan-out,
   ownership and adoption refusal, redaction, compatibility with pre-created
   Secrets, and no private key outside the owned Secret volume.
-- Tracking: [Milestone #26](https://github.com/chrischeng-c4/axiom/milestone/26).
+- Tracking: [Milestone #26](https://github.com/faberline/lumen/milestone/26).
 
 ### Managed client trust
 
@@ -684,7 +684,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   adoption refusal, stale-object prune, retained foreign objects, per-object
   failure recovery, `ClientTrustReady` gating, public-only data, and no change
   to client Deployments.
-- Tracking: [Milestone #26](https://github.com/chrischeng-c4/axiom/milestone/26).
+- Tracking: [Milestone #26](https://github.com/faberline/lumen/milestone/26).
 
 ### Managed data retention
 
@@ -699,7 +699,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   PVCs, explicit data Delete removes only exact instance PVCs, unrelated PVCs
   remain, failed cleanup retains the finalizer and publishes a condition, and
   retry succeeds without broad deletion.
-- Tracking: [Milestone #34](https://github.com/chrischeng-c4/axiom/milestone/34).
+- Tracking: [Milestone #34](https://github.com/faberline/lumen/milestone/34).
 
 ### Distributed search routing and merge
 
@@ -710,7 +710,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   caller source-record ownership outside Lumen.
 - Completion evidence: Multi-shard tests prove routing, merge order, failure,
   cursor, retry, and resource cleanup behavior.
-- Tracking: [Milestone #18](https://github.com/chrischeng-c4/axiom/milestone/18).
+- Tracking: [Milestone #18](https://github.com/faberline/lumen/milestone/18).
 
 ### Regional topology migration and backup
 
@@ -721,7 +721,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   cutover.
 - Completion evidence: Regional drills prove backup, restore, topology
   cutover, failure handling, and data-consistency checks.
-- Tracking: [Milestone #35](https://github.com/chrischeng-c4/axiom/milestone/35).
+- Tracking: [Milestone #35](https://github.com/faberline/lumen/milestone/35).
 
 ### Regional upgrade rollback and recovery
 
@@ -731,7 +731,7 @@ regression gate. Search v2 is outside this release, and its activation remains
 - Boundary: The outcome does not assume that every upgrade is forward-only.
 - Completion evidence: Regional drills prove upgrade, rollback, restart,
   recovery, and acknowledged-write safety.
-- Tracking: [Milestone #36](https://github.com/chrischeng-c4/axiom/milestone/36).
+- Tracking: [Milestone #36](https://github.com/faberline/lumen/milestone/36).
 
 ### Fleet foundation extraction
 
@@ -742,7 +742,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   Fleet mechanism.
 - Completion evidence: Compatibility and integration tests prove the extracted
   API preserves declared Fleet convergence behavior.
-- Tracking: [Milestone #37](https://github.com/chrischeng-c4/axiom/milestone/37).
+- Tracking: [Milestone #37](https://github.com/faberline/lumen/milestone/37).
 
 ## Later outcomes
 
@@ -759,7 +759,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   supported topology, scheduling, storage, private networking, KSA access,
   certificate and CA rotation, backup and restore, upgrades, disruption drills,
   quotas, and documented limitations without a Standard-only node contract.
-- Tracking: [Milestone #127](https://github.com/chrischeng-c4/axiom/milestone/127).
+- Tracking: [Milestone #127](https://github.com/faberline/lumen/milestone/127).
 
 ### Vector hybrid facets
 
@@ -773,7 +773,7 @@ regression gate. Search v2 is outside this release, and its activation remains
 - Completion evidence: Single-shard and distributed tests cover filtered kNN,
   every RRF leg, candidate limits, recall fixtures, exact-versus-approximate
   labels, timeout, memory, and failure behavior against a declared oracle.
-- Tracking: [Milestone #128](https://github.com/chrischeng-c4/axiom/milestone/128).
+- Tracking: [Milestone #128](https://github.com/faberline/lumen/milestone/128).
 
 ### Membership-aware replica autoscaling
 
@@ -785,7 +785,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   stop on a failed transition.
 - Completion evidence: A multi-node failure test proves scale-out, scale-in,
   leader movement, restart recovery, and no acknowledged-write loss.
-- Tracking: [Milestone #28](https://github.com/chrischeng-c4/axiom/milestone/28).
+- Tracking: [Milestone #28](https://github.com/faberline/lumen/milestone/28).
 
 ### High-availability shard expansion
 
@@ -796,7 +796,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   routing ownership changes.
 - Completion evidence: A replicated-cluster test proves split, restart,
   retry, and rollback behavior while reads and writes continue.
-- Tracking: [Milestone #29](https://github.com/chrischeng-c4/axiom/milestone/29).
+- Tracking: [Milestone #29](https://github.com/faberline/lumen/milestone/29).
 
 ### Protocol compatibility policy
 
@@ -812,7 +812,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   breaking changes. Versioned integration tests prove the supported overlap
   window, and release fixtures prove every accepted breaking change carries the
   required version and migration note.
-- Tracking: [Milestone #23](https://github.com/chrischeng-c4/axiom/milestone/23).
+- Tracking: [Milestone #23](https://github.com/faberline/lumen/milestone/23).
 
 ## Non-goals
 

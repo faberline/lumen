@@ -30,19 +30,19 @@
 //!   checkpoint and cold open. `:215-292` and `:922-937` isolate each real
 //!   fixture so a retained worker cannot alter the other case. These assertions
 //!   exercise direct native delivery
-//!   at `apps/lumen/src/coordinator/committed_scalar.rs:16-86`, private scalar
-//!   attachment at `apps/lumen/src/storage/committed_index_apply.rs:436-505`,
-//!   and checkpoint publication at `apps/lumen/src/segment_checkpoint.rs:220-268`.
+//!   at `src/coordinator/committed_scalar.rs:16-86`, private scalar
+//!   attachment at `src/storage/committed_index_apply.rs:436-505`,
+//!   and checkpoint publication at `src/segment_checkpoint.rs:220-268`.
 //! - Security: this cap coordination adds no caller-controlled parser, path,
 //!   identity, or authorization decision in
-//!   `apps/lumen/src/coordinator/committed_scalar.rs:16-86` or
-//!   `apps/lumen/src/segment_checkpoint.rs:128-190`. The existing typed WAL
+//!   `src/coordinator/committed_scalar.rs:16-86` or
+//!   `src/segment_checkpoint.rs:128-190`. The existing typed WAL
 //!   input boundary remains fail-closed in
-//!   `apps/lumen/e2e/raft_oversized_committed_apply.rs:453-484`. The existing
+//!   `e2e/raft_oversized_committed_apply.rs:453-484`. The existing
 //!   process-written checkpoint/AOF recovery boundary remains fail-closed in
-//!   `apps/lumen/e2e/segment_startup_fail_closed_e2e.rs:908-947`; this case's
+//!   `e2e/segment_startup_fail_closed_e2e.rs:908-947`; this case's
 //!   cold-open behavior assertions are at `:773-789`.
-//! - Performance: `apps/lumen/docs/indexing.md:264-276` says, verbatim,
+//! - Performance: `docs/indexing.md:264-276` says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget." It
 //!   also promises "a field retains at most 16." The public ownership and
 //!   budget assertions at `:543-557`, called at `:708`, `:765`, `:871`, and

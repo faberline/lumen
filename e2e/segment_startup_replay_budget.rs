@@ -4,19 +4,19 @@
 //!   :95 require a real lumen serve process in segment mode to finish a valid
 //!   AOF replay, publish at least one replay-phase checkpoint, and answer
 //!   live and cold exact Keyword queries.
-//!   Change points: apps/lumen/src/bin/lumen.rs:3585-3610 starts replay, and
-//!   apps/lumen/src/segment_checkpoint.rs:221-255 publishes and trims a
+//!   Change points: src/bin/lumen.rs:3585-3610 starts replay, and
+//!   src/segment_checkpoint.rs:221-255 publishes and trims a
 //!   checkpoint.
 //! - Security: segment_startup_replay_budget.rs:86 invokes
 //!   support/serve_budget_support.rs:476, :483, and :488 over locally stored
 //!   aof.log: each missing caller-record sequence must be covered by CURRENT,
 //!   and every sequence later than CURRENT must remain.
 //!   This closed result protects the read/trim boundary in
-//!   apps/lumen/src/aof.rs:212-270 and
-//!   apps/lumen/src/segment_checkpoint.rs:221-255. Existing malformed-root
+//!   src/aof.rs:212-270 and
+//!   src/segment_checkpoint.rs:221-255. Existing malformed-root
 //!   refusal remains covered by
-//!   apps/lumen/e2e/segment_startup_fail_closed_e2e.rs:714-740.
-//! - Performance: apps/lumen/ROADMAP.md:60-70 promises, verbatim, "Pending
+//!   e2e/segment_startup_fail_closed_e2e.rs:714-740.
+//! - Performance: ROADMAP.md:60-70 promises, verbatim, "Pending
 //!   active, frozen, and reserved changes have a 256 MiB total budget" and
 //!   "At 128 MiB, the runtime requests an early checkpoint."
 //!   segment_startup_replay_budget.rs:45 and
@@ -249,19 +249,19 @@ mod large_aof_codec_compatibility {
     //!   `:327`, `:402`, `:499`, `:505`, `:518`, and `:524` require authentic
     //!   fast, generic CBOR, and legacy JSON frames, exact decoder output, full
     //!   live and cold Keyword matches, and all three applied documents. Change
-    //!   points are `apps/lumen/src/aof.rs:264-315` and
-    //!   `apps/lumen/src/wal.rs:142-166`.
+    //!   points are `src/aof.rs:264-315` and
+    //!   `src/wal.rs:142-166`.
     //! - Security: `segment_startup_replay_budget.rs:339`, `:428`, `:509`, and
     //!   `:527` keep every file-controlled payload below the 64 MiB framed-log
     //!   maximum and retain each AOF sequence until CURRENT covers it through
-    //!   `apps/lumen/e2e/support/serve_budget_support.rs:516` and `:522`.
+    //!   `e2e/support/serve_budget_support.rs:516` and `:522`.
     //!   Existing hostile-frame refusal remains covered by
-    //!   `apps/lumen/e2e/segment_startup_fail_closed_e2e.rs:923`, `:939`, and
+    //!   `e2e/segment_startup_fail_closed_e2e.rs:923`, `:939`, and
     //!   `:943`.
-    //! - Performance: no new number. `apps/lumen/e2e/support/serve_budget_support.rs:32`
+    //! - Performance: no new number. `e2e/support/serve_budget_support.rs:32`
     //!   gives each local 60 MiB HTTP request the existing bounded 30-second
-    //!   fixture deadline. The release command in `apps/lumen/README.md:253`
-    //!   and durable workload in `apps/lumen/e2e/perf_gate.rs:722-725` retain
+    //!   fixture deadline. The release command in `README.md:253`
+    //!   and durable workload in `e2e/perf_gate.rs:722-725` retain
     //!   the latency and RSS evidence for this AOF path.
 
     use std::collections::BTreeMap;

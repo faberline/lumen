@@ -1,6 +1,6 @@
 //! Router ↔ spec parity gate (#2482 regression class).
 //!
-//! `apps/lumen/src/api.rs`'s axum router (`router_with_admission`'s
+//! `src/api.rs`'s axum router (`router_with_admission`'s
 //! `.route(...)` literals) and its utoipa-derived `ApiDoc` `paths(...)` list
 //! are two hand-maintained registrations — nothing but code review stops a
 //! route from being served without ever being spec-documented, or the two

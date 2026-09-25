@@ -1147,16 +1147,16 @@ fn wal_codec_probe() {
 mod committed_publish_cancellation {
     //! # Facets
     //!
-    //! - Behavior: `apps/lumen/e2e/write_qps.rs:1305`, `:1313`, `:1321`,
+    //! - Behavior: `e2e/write_qps.rs:1305`, `:1313`, `:1321`,
     //!   and `:1337` require a committed write to remain in the recovery cut
     //!   through caller cancellation and delayed publish return. `:1355` and
     //!   `:1361` require the record to apply once, then reopen the fence.
-    //! - Security: `apps/lumen/e2e/write_qps.rs:1313`, `:1321`, and
+    //! - Security: `e2e/write_qps.rs:1313`, `:1321`, and
     //!   `:1337` cover the `WalLog` trust boundary. A cancelled caller must
     //!   not make the recovery fence honour a record the WAL already accepted.
-    //!   This is the fail-closed path in `apps/lumen/src/coordinator.rs:555-577`.
+    //!   This is the fail-closed path in `src/coordinator.rs:555-577`.
     //! - Performance: gap carried by the separate capacity case. The current
-    //!   promise is `apps/lumen/ROADMAP.md:60-70`; this case's 150 ms waits are
+    //!   promise is `ROADMAP.md:60-70`; this case's 150 ms waits are
     //!   test bounds, not a product latency budget. That capacity case needs the
     //!   pending-budget probe before it can assert the 128/256 MiB promise.
 
@@ -1372,13 +1372,13 @@ mod local_oversized_record_capacity {
     //! - Behavior: write_qps.rs:1583, :1589, :1594, :1599, :1604, :1609,
     //!   :1625, :1626, :1631, and :1636 require a valid oversized local index request
     //!   to return the capacity refusal, leave state unchanged, and then accept
-    //!   a small request. Change points: apps/lumen/src/coordinator.rs:776-800
-    //!   and apps/lumen/src/api.rs:3170-3178.
+    //!   a small request. Change points: src/coordinator.rs:776-800
+    //!   and src/api.rs:3170-3178.
     //! - Security: write_qps.rs:1583, :1599, :1604, and :1609 keep the
     //!   caller-controlled 100 MiB Keyword body outside WAL and the collection.
-    //!   The closed HTTP input boundary is apps/lumen/src/coordinator.rs:776-800
-    //!   through apps/lumen/src/api.rs:3170-3178.
-    //! - Performance: apps/lumen/docs/indexing.md:264-270 promises the 256 MiB
+    //!   The closed HTTP input boundary is src/coordinator.rs:776-800
+    //!   through src/api.rs:3170-3178.
+    //! - Performance: docs/indexing.md:264-270 promises the 256 MiB
     //!   pending budget and its pre-submit 429 response. write_qps.rs:1516 and
     //!   :1522 measure a real body below its child-only HTTP allowance and above
     //!   one third of that budget. Child and request timeouts are cleanup bounds,

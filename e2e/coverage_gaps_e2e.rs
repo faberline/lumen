@@ -7,7 +7,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! These 4 sentences were the whole of the `// Contract:` comment in 4 AW-EC shells
-//! under `apps/lumen/e2e/`, each of which ran `cargo test -p lumen --test
+//! under `e2e/`, each of which ran `cargo test -p lumen --test
 //! coverage_gaps_e2e` in a subprocess and asserted the child's exit status. `cargo test
 //! -p lumen` already runs this target directly, so the shells added a second, nested
 //! run and nothing else. They were deleted on 2026-08-20 with the EC machinery they

@@ -293,7 +293,7 @@ fn operator_cli_renders_requested_immutable_image_and_preserves_default() {
 
     let default_yaml = render(&[]);
     assert!(default_yaml.contains(&format!(
-        "image: ghcr.io/chrischeng-c4/lumen:{}",
+        "image: ghcr.io/faberline/lumen:{}",
         env!("CARGO_PKG_VERSION")
     )));
 
@@ -302,7 +302,7 @@ fn operator_cli_renders_requested_immutable_image_and_preserves_default() {
     assert!(immutable_yaml.contains("namespace: lumen-live"));
     assert!(immutable_yaml.contains(&format!("image: {immutable}")));
     assert!(!immutable_yaml.contains(&format!(
-        "image: ghcr.io/chrischeng-c4/lumen:{}",
+        "image: ghcr.io/faberline/lumen:{}",
         env!("CARGO_PKG_VERSION")
     )));
 
@@ -459,7 +459,7 @@ fn operator_manifest_pins_this_workspaces_version() {
     let deployment = include_str!("../k8s/operator/deployment.yaml");
     assert!(
         deployment.contains(&format!(
-            "image: ghcr.io/chrischeng-c4/lumen:{}",
+            "image: ghcr.io/faberline/lumen:{}",
             env!("CARGO_PKG_VERSION")
         )),
         "k8s/operator/deployment.yaml must pin {}; the release bump missed it",
@@ -470,7 +470,7 @@ fn operator_manifest_pins_this_workspaces_version() {
     // around it, so reflowing the comment does not break the test but deleting
     // the bump instruction does.
     assert!(
-        deployment.contains("grep target") && deployment.contains("`ghcr.io/chrischeng-c4/lumen:`"),
+        deployment.contains("grep target") && deployment.contains("`ghcr.io/faberline/lumen:`"),
         "the bump procedure's grep target comment must survive edits to this file"
     );
 }
@@ -668,11 +668,8 @@ fn every_runbook_url_resolves_to_a_file_in_this_repository() {
         .expect("alert rules");
     assert!(!rules.is_empty());
 
-    // e2e/ -> apps/lumen -> apps -> repo root.
-    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("repo root");
+    // Lumen's crate root is the repository root.
+    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
 
     for entry in rules {
         let annotations = &entry["annotations"];
@@ -1051,7 +1048,7 @@ fn the_backup_runner_is_given_a_path_and_only_when_auth_is_required() {
 #[test]
 fn the_control_plane_paths_reach_for_no_other_credential() {
     // Assembled from parts so this gate does not match itself if the sweep is
-    // ever widened to include `apps/lumen/e2e/`.
+    // ever widened to include `e2e/`.
     let forbidden: &[(&str, &str)] = &[
         (
             &["metadata", ".google.internal"].concat(),
@@ -1100,7 +1097,7 @@ fn the_control_plane_paths_reach_for_no_other_credential() {
             for (needle, why) in forbidden {
                 assert!(
                     !line.contains(needle),
-                    "apps/lumen/{rel}:{}: control-plane paths must present only their own \
+                    "{rel}:{}: control-plane paths must present only their own \
                      projected KSA token, but this line names `{needle}` — {why}\n  {}",
                     line_no + 1,
                     line.trim()

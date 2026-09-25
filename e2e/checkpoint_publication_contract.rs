@@ -521,10 +521,10 @@ async fn v2_save_required_fresh_engine_same_versions_never_reuses_other_data() {
 mod published_checkpoint_overlay_release {
     //! # Facets
     //!
-    //! - Behavior: `apps/lumen/e2e/indexing_durable_oracle.rs:5338` asserts
+    //! - Behavior: `e2e/indexing_durable_oracle.rs:5338` asserts
     //!   public IDs; `:5522` compares live/cold snapshots; calls at `:5540`,
     //!   `:5544`, `:5552`, and `:5556` cover both checkpoint layers.
-    //! - Security: `apps/lumen/src/segment_rdb.rs:500` starts the persisted
+    //! - Security: `src/segment_rdb.rs:500` starts the persisted
     //!   generation read; `:2543` and `:2569` mutate LocalRows; `:1138` and
     //!   `:1145` assert refusal and unchanged `CURRENT`. This release-only
     //!   path adds no caller-controlled byte, path, or identifier input.
@@ -921,16 +921,16 @@ mod first_sparse_checkpoint_contract {
     //!   indexing_durable_oracle.rs:11854-12024 create one fresh seven-field
     //!   collection, asserts each zero-row base and first sparse delta, writes
     //!   during real checkpoint file I/O, and checks live and cold results. It
-    //!   covers the first-capture changes in apps/lumen/src/storage.rs:13668-13691
-    //!   and apps/lumen/src/segment_rdb.rs:540-604.
-    //! - Security: apps/lumen/src/segment_rdb.rs:1910-2070 validates the
+    //!   covers the first-capture changes in src/storage.rs:13668-13691
+    //!   and src/segment_rdb.rs:540-604.
+    //! - Security: src/segment_rdb.rs:1910-2070 validates the
     //!   persisted catalog and local-row bytes this path reads. Existing
     //!   v2_current_refuses_keyword_delta_local_rows_count_mismatch and
     //!   v2_current_refuses_keyword_delta_duplicate_stable_local_rows at
     //!   indexing_durable_oracle.rs:2605-2656 feed the shared
     //!   lumen-local-eids-cbor-v1 boundary malformed bytes and require refusal
     //!   without changing CURRENT. This valid-generation case carries behavior.
-    //! - Performance: apps/lumen/ROADMAP.md:60-70 promises a 256 MiB total
+    //! - Performance: ROADMAP.md:60-70 promises a 256 MiB total
     //!   active/frozen/reserved budget and checkpoint progress at that limit.
     //!   indexing_durable_oracle.rs:10714-10941 already measures that budget.
     //!   The zero-row-base and bounded-local-row assertions below are

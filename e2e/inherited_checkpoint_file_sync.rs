@@ -33,17 +33,17 @@
 //!   `:832-914` drives four public deltas through one background merge, then
 //!   requires the unchanged field hard link, live exact search, and cold
 //!   recovery. It covers `libs/storage-durable/src/generation.rs:375-405,
-//!   663-709` and `apps/lumen/src/segment_background_merge.rs:711-779`.
+//!   663-709` and `src/segment_background_merge.rs:711-779`.
 //! - Security: the only boundary this change reaches is the process-written
 //!   staged generation and its `CURRENT` pointer at
 //!   `libs/storage-durable/src/generation.rs:375-405,773-813`. The fresh-file
 //!   faults at `inherited_checkpoint_file_sync.rs:739-773,939-973` assert
 //!   pre-publication failure keeps the exact old pointer and a cold reopen
-//!   readable. Existing `apps/lumen/e2e/segment_startup_fail_closed_e2e.rs:
+//!   readable. Existing `e2e/segment_startup_fail_closed_e2e.rs:
 //!   798-811,816-842,1119-1148` remains the gate for hostile symlink,
 //!   unknown-root, and unpointed-generation inputs; this change adds no caller
 //!   path, identifier, or network input.
-//! - Performance: `apps/lumen/ROADMAP.md:73-78` promises, verbatim, "One
+//! - Performance: `ROADMAP.md:73-78` promises, verbatim, "One
 //!   background merge runs per process. Four delta segments request a merge;
 //!   no field may retain more than 16." `:832-858` creates exactly four
 //!   deltas and requires that public merge to finish. No current document

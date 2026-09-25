@@ -15,9 +15,9 @@ const VERSION: &str = "0.4.28";
 const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const RUN_ID: &str = "123";
 const RELEASE_WORKFLOW_SHA256: &str =
-    "b316b4f893b6a3dabe2e67fdc14df994c84376a8148277a64aa5c0b18bac3ab0";
+    "c82d4eb1aefcbb99c4b8d7d28b04a346c7d7481070c549cf19ea3d1c917bf30f";
 const PROMOTION_VERIFIER_BYTES_SHA256: &str =
-    "43d7151493ba0847bf66856a1c27ed7be97187f3ef1b10a7fb7e0ae690e202de";
+    "97c5c7456d4e3c4a288378647f6bf07f8a60ce59af095e1bc7b0021b9269156f";
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const COSIGN_INSTALLER: &str = "sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6";
 const SETUP_BUILDX: &str = "docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f";
@@ -276,7 +276,7 @@ fn release_fixture() -> ReleaseFixture {
         .unwrap();
     }
     let manifest = format!(
-        r#"{{"schema":"cclab.lumen.candidate-manifest.v3","repository":"chrischeng-c4/axiom","workflow_path":".github/workflows/lumen-release-candidate.yml","workflow_id":1,"run_id":"{RUN_ID}","run_attempt":"1","run_url":"https://github.com/chrischeng-c4/axiom/actions/runs/{RUN_ID}/attempts/1","source_ref":"refs/heads/main","workflow_ref":"chrischeng-c4/axiom/.github/workflows/lumen-release-candidate.yml@refs/heads/main","commit":"{COMMIT}","version":"{VERSION}","tag":"{TAG}","candidate_tag":"release-candidate-{RUN_ID}-1","pr":{{"number":1,"url":"https://github.com/chrischeng-c4/axiom/pull/1"}},"image":{{"repository":"ghcr.io/chrischeng-c4/lumen","root_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","amd64_digest":"sha256:2222222222222222222222222222222222222222222222222222222222222222","arm64_digest":"sha256:3333333333333333333333333333333333333333333333333333333333333333"}},"artifacts":[{}],"sboms":{{"amd64":{{"file":"spdx-amd64.json","sha256":"{}"}},"arm64":{{"file":"spdx-arm64.json","sha256":"{}"}}}},"jobs":{{"identity":"success","build":"success","manifest":"success","ghcr-image-and-attest":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success","result":"success"}}}}"#,
+        r#"{{"schema":"cclab.lumen.candidate-manifest.v3","repository":"faberline/lumen","workflow_path":".github/workflows/lumen-release-candidate.yml","workflow_id":1,"run_id":"{RUN_ID}","run_attempt":"1","run_url":"https://github.com/faberline/lumen/actions/runs/{RUN_ID}/attempts/1","source_ref":"refs/heads/main","workflow_ref":"faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main","commit":"{COMMIT}","version":"{VERSION}","tag":"{TAG}","candidate_tag":"release-candidate-{RUN_ID}-1","pr":{{"number":1,"url":"https://github.com/faberline/lumen/pull/1"}},"image":{{"repository":"ghcr.io/faberline/lumen","root_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","amd64_digest":"sha256:2222222222222222222222222222222222222222222222222222222222222222","arm64_digest":"sha256:3333333333333333333333333333333333333333333333333333333333333333"}},"artifacts":[{}],"sboms":{{"amd64":{{"file":"spdx-amd64.json","sha256":"{}"}},"arm64":{{"file":"spdx-arm64.json","sha256":"{}"}}}},"jobs":{{"identity":"success","build":"success","manifest":"success","ghcr-image-and-attest":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success","result":"success"}}}}"#,
         artifacts.join(","),
         sha256(&candidate.join("spdx-amd64.json")),
         sha256(&candidate.join("spdx-arm64.json")),
@@ -300,7 +300,7 @@ fn run_fixture(fixture: &ReleaseFixture) -> std::process::Output {
         .arg(release_script())
         .args([
             "--repo",
-            "chrischeng-c4/axiom",
+            "faberline/lumen",
             "--tag",
             TAG,
             "--commit",
@@ -406,10 +406,10 @@ fn gke_receipt_fixture_for(version: &str) -> GkeReceiptFixture {
         "stage": "slice-b-live",
         "complete": true,
         "candidate": {
-            "repository": "chrischeng-c4/axiom",
+            "repository": "faberline/lumen",
             "version": version,
             "commit": COMMIT,
-            "workflow_ref": "chrischeng-c4/axiom/.github/workflows/lumen-release-candidate.yml@refs/heads/main",
+            "workflow_ref": "faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main",
             "run_id": RUN_ID,
             "run_attempt": "1",
             "manifest_sha256": sha256(&manifest_path),
@@ -489,7 +489,7 @@ fn run_gke_receipt_fixture(fixture: &GkeReceiptFixture) -> Output {
     let mut command = Command::new("bash");
     command
         .arg(release_script())
-        .args(["--repo", "chrischeng-c4/axiom", "--tag"])
+        .args(["--repo", "faberline/lumen", "--tag"])
         .arg(&fixture.tag)
         .args([
             "--commit",
@@ -560,7 +560,7 @@ fn rewrite_receipt(fixture: &GkeReceiptFixture, receipt: &serde_json::Value) {
 }
 
 fn workflow_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows/lumen-release.yml")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/lumen-release.yml")
 }
 
 const CANDIDATE_EXECUTION_NAMES: &[&str] = &[
@@ -739,7 +739,7 @@ fn execute_candidate_fetch(verifier: &str, jobs: &str) -> bool {
     let first = serde_json::to_string(&json!({"total_count": pages.as_array().unwrap().len(), "jobs": &pages.as_array().unwrap()[..split]})).unwrap();
     let second = serde_json::to_string(&json!({"total_count": pages.as_array().unwrap().len(), "jobs": &pages.as_array().unwrap()[split..]})).unwrap();
     let gh = format!(
-        "#!/usr/bin/env bash\nset -e\ncase \"$*\" in\n  *'/actions/runs/123'*) printf '%s\\n' '{{\"run_attempt\":\"1\",\"event\":\"workflow_dispatch\",\"status\":\"completed\",\"conclusion\":\"success\",\"head_branch\":\"main\",\"head_sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"workflow_id\":99,\"head_repository\":{{\"full_name\":\"chrischeng-c4/axiom\"}}}}' ;;\n  *'/actions/workflows/lumen-release-candidate.yml'*) printf '99\\n' ;;\n  *'/attempts/1/jobs'*) printf '%s\\n%s\\n' '{first}' '{second}' ;;\n  *'/artifacts?per_page=100'*) printf '%s\\n' '{{\"total_count\":1,\"artifacts\":[{{\"name\":\"lumen-release-candidate-123-1\",\"expired\":false,\"id\":7}}]}}' ;;\n  *'/artifacts/7/zip'*) touch \"$ARTIFACT_DOWNLOAD\"; exit 1 ;;\n  *) exit 2 ;;\nesac\n"
+        "#!/usr/bin/env bash\nset -e\ncase \"$*\" in\n  *'/actions/runs/123'*) printf '%s\\n' '{{\"run_attempt\":\"1\",\"event\":\"workflow_dispatch\",\"status\":\"completed\",\"conclusion\":\"success\",\"head_branch\":\"main\",\"head_sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"workflow_id\":99,\"head_repository\":{{\"full_name\":\"faberline/lumen\"}}}}' ;;\n  *'/actions/workflows/lumen-release-candidate.yml'*) printf '99\\n' ;;\n  *'/attempts/1/jobs'*) printf '%s\\n%s\\n' '{first}' '{second}' ;;\n  *'/artifacts?per_page=100'*) printf '%s\\n' '{{\"total_count\":1,\"artifacts\":[{{\"name\":\"lumen-release-candidate-123-1\",\"expired\":false,\"id\":7}}]}}' ;;\n  *'/artifacts/7/zip'*) touch \"$ARTIFACT_DOWNLOAD\"; exit 1 ;;\n  *) exit 2 ;;\nesac\n"
     );
     let gh = gh.replace(
         "case \"$*\" in\n",
@@ -762,7 +762,7 @@ fn execute_candidate_fetch(verifier: &str, jobs: &str) -> bool {
             "PATH",
             format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
         )
-        .env("REPO", "chrischeng-c4/axiom")
+        .env("REPO", "faberline/lumen")
         .env("TAG", "lumen@0.4.28")
         .env("COMMIT", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
         .env("CANDIDATE_RUN_ID", "123")
@@ -857,7 +857,7 @@ fn execute_validate_receipt(
         .env("COMMIT", COMMIT)
         .env("CANDIDATE_RUN_ID", RUN_ID)
         .env("CANDIDATE_ATTEMPT", attempt)
-        .env("REPO", "chrischeng-c4/axiom")
+        .env("REPO", "faberline/lumen")
         .output()
         .unwrap()
 }
@@ -870,7 +870,7 @@ fn execute_public_release_note_binding(verifier: &str, release_json: &serde_json
     fs::create_dir_all(&candidate).unwrap();
     fs::write(
         candidate.join("final-candidate-manifest.json"),
-        r#"{"image":{"root_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","amd64_digest":"sha256:2222222222222222222222222222222222222222222222222222222222222222","arm64_digest":"sha256:3333333333333333333333333333333333333333333333333333333333333333"},"pr":{"url":"https://github.com/chrischeng-c4/axiom/pull/1"},"run_url":"https://github.com/chrischeng-c4/axiom/actions/runs/123/attempts/1"}"#,
+        r#"{"image":{"root_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","amd64_digest":"sha256:2222222222222222222222222222222222222222222222222222222222222222","arm64_digest":"sha256:3333333333333333333333333333333333333333333333333333333333333333"},"pr":{"url":"https://github.com/faberline/lumen/pull/1"},"run_url":"https://github.com/faberline/lumen/actions/runs/123/attempts/1"}"#,
     )
     .unwrap();
     let bounded = verifier.replacen(
@@ -898,7 +898,7 @@ fn execute_public_release_note_binding(verifier: &str, release_json: &serde_json
             "PATH",
             format!("{}:{}", temp.0.display(), std::env::var("PATH").unwrap()),
         )
-        .env("REPO", "chrischeng-c4/axiom")
+        .env("REPO", "faberline/lumen")
         .env("TAG", "lumen@0.4.29")
         .env("COMMIT", COMMIT)
         .env("CANDIDATE_RECEIPT_DIR", candidate)
@@ -2929,7 +2929,7 @@ fn replace_last(text: &str, needle: &str, replacement: &str) -> String {
 }
 
 fn promotion_latest_run_script() -> String {
-    let workflow = include_str!("../../../.github/workflows/lumen-release.yml");
+    let workflow = include_str!("../.github/workflows/lumen-release.yml");
     let document: Value = serde_yaml::from_str(workflow).unwrap();
     let top = yaml_mapping(&document, "promotion workflow").unwrap();
     let jobs = yaml_mapping(
@@ -2984,10 +2984,10 @@ fn run_promotion_latest_case(
     fs::create_dir_all(&bin).unwrap();
     let state = temp.0.join("registry-state");
     let writes = temp.0.join("registry-writes");
-    let latest_ref = "ghcr.io/chrischeng-c4/lumen:latest";
+    let latest_ref = "ghcr.io/faberline/lumen:latest";
     let mut registry = String::new();
     for (version, digest) in published {
-        registry.push_str(&format!("ghcr.io/chrischeng-c4/lumen:{version} {digest}\n"));
+        registry.push_str(&format!("ghcr.io/faberline/lumen:{version} {digest}\n"));
     }
     if let Some(digest) = latest {
         registry.push_str(&format!("{latest_ref} {digest}\n"));
@@ -3012,7 +3012,7 @@ writes="${FAKE_DOCKER_WRITES:?}"
 case "$3" in
   inspect)
     ref="$4"
-    if [[ "$ref" == ghcr.io/chrischeng-c4/lumen:latest && -n "${FAKE_LATEST_RACE_DIGEST:-}" ]]; then
+    if [[ "$ref" == ghcr.io/faberline/lumen:latest && -n "${FAKE_LATEST_RACE_DIGEST:-}" ]]; then
       count_file="${state}.latest-count"
       count=0
       [[ ! -f "$count_file" ]] || read -r count < "$count_file"
@@ -3069,7 +3069,7 @@ esac
         .args(["-c", &promotion_latest_run_script(), "bash"])
         .current_dir(&temp.0)
         .env("PATH", path)
-        .env("GITHUB_REPOSITORY", "chrischeng-c4/axiom")
+        .env("GITHUB_REPOSITORY", "faberline/lumen")
         .env("FAKE_DOCKER_STATE", &state)
         .env("FAKE_DOCKER_WRITES", &writes)
         .env(
@@ -3094,7 +3094,7 @@ fn registry_digest<'a>(state: &'a str, reference: &str) -> Option<&'a str> {
 
 #[test]
 fn promotion_latest_policy_executes_fail_closed_registry_cases() {
-    let image = "ghcr.io/chrischeng-c4/lumen";
+    let image = "ghcr.io/faberline/lumen";
     let semver = format!("{image}:{}", RECOVERY_0430_VERSION);
     let latest = format!("{image}:latest");
 
@@ -3151,7 +3151,7 @@ fn promotion_latest_policy_executes_fail_closed_registry_cases() {
 
 #[test]
 fn promotion_workflow_is_semantically_frozen_and_exactly_hashed() {
-    let workflow = include_str!("../../../.github/workflows/lumen-release.yml");
+    let workflow = include_str!("../.github/workflows/lumen-release.yml");
     validate_promotion_workflow(workflow)
         .expect("promotion workflow must satisfy the fail-closed contract");
     assert_eq!(sha256(&workflow_path()), RELEASE_WORKFLOW_SHA256, "promotion workflow bytes changed; review and update the semantic validator before changing this digest");
@@ -3159,7 +3159,7 @@ fn promotion_workflow_is_semantically_frozen_and_exactly_hashed() {
 
 #[test]
 fn promotion_workflow_rejects_high_risk_source_mutations() {
-    let workflow = include_str!("../../../.github/workflows/lumen-release.yml");
+    let workflow = include_str!("../.github/workflows/lumen-release.yml");
     let yaml_comment = workflow.replacen(
         "        run: |\n          set -euo pipefail\n          cat > release-notes.md <<EOF",
         "        # run: |\n          set -euo pipefail\n          cat > release-notes.md <<EOF",
@@ -3227,16 +3227,16 @@ fn promotion_workflow_rejects_high_risk_source_mutations() {
         (
             "rebuild",
             workflow.replacen(
-                "set -euo pipefail\n          image_repo=ghcr.io/chrischeng-c4/lumen",
-                "set -euo pipefail\n          cargo build --release\n          image_repo=ghcr.io/chrischeng-c4/lumen",
+                "set -euo pipefail\n          image_repo=ghcr.io/faberline/lumen",
+                "set -euo pipefail\n          cargo build --release\n          image_repo=ghcr.io/faberline/lumen",
                 1,
             ),
         ),
         (
             "re-sign",
             workflow.replacen(
-                "set -euo pipefail\n          image_repo=ghcr.io/chrischeng-c4/lumen",
-                "set -euo pipefail\n          cosign sign ghcr.io/chrischeng-c4/lumen@sha256:deadbeef\n          image_repo=ghcr.io/chrischeng-c4/lumen",
+                "set -euo pipefail\n          image_repo=ghcr.io/faberline/lumen",
+                "set -euo pipefail\n          cosign sign ghcr.io/faberline/lumen@sha256:deadbeef\n          image_repo=ghcr.io/faberline/lumen",
                 1,
             ),
         ),
@@ -3343,10 +3343,10 @@ fn promotion_workflow_rejects_high_risk_source_mutations() {
 
 #[test]
 fn recovery_workflow_is_frozen_and_rejects_high_risk_mutations() {
-    let workflow = include_str!("../../../.github/workflows/lumen-release-recovery.yml");
+    let workflow = include_str!("../.github/workflows/lumen-release-recovery.yml");
     validate_recovery_workflow(workflow)
         .expect("recovery workflow must satisfy its frozen contract");
-    assert_eq!(sha256(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows/lumen-release-recovery.yml").as_path()), RECOVERY_WORKFLOW_SHA256, "recovery workflow bytes changed; review the semantic validator before changing this digest");
+    assert_eq!(sha256(Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/lumen-release-recovery.yml").as_path()), RECOVERY_WORKFLOW_SHA256, "recovery workflow bytes changed; review the semantic validator before changing this digest");
     let mutations = [
         ("extra trigger", workflow.replace("workflow_dispatch:\n", "push:\n    branches: [main]\n  workflow_dispatch:\n")),
         ("caller input", workflow.replace("workflow_dispatch:\n", "workflow_dispatch:\n    inputs:\n      version:\n        required: true\n        type: string\n")),
@@ -3383,13 +3383,13 @@ fn recovery_workflow_is_frozen_and_rejects_high_risk_mutations() {
 
 #[test]
 fn recovery_0429_workflow_is_frozen_and_rejects_high_risk_mutations() {
-    let workflow = include_str!("../../../.github/workflows/lumen-release-0.4.29-recovery.yml");
+    let workflow = include_str!("../.github/workflows/lumen-release-0.4.29-recovery.yml");
     validate_recovery_0429_workflow(workflow)
         .expect("0.4.29 recovery workflow must satisfy its frozen contract");
     assert_eq!(
         sha256(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../.github/workflows/lumen-release-0.4.29-recovery.yml")
+                .join(".github/workflows/lumen-release-0.4.29-recovery.yml")
                 .as_path(),
         ),
         RECOVERY_0429_WORKFLOW_SHA256,
@@ -3533,13 +3533,13 @@ fn recovery_0429_workflow_is_frozen_and_rejects_high_risk_mutations() {
 
 #[test]
 fn recovery_0430_workflow_is_frozen_and_rejects_high_risk_mutations() {
-    let workflow = include_str!("../../../.github/workflows/lumen-release-0.4.30-recovery.yml");
+    let workflow = include_str!("../.github/workflows/lumen-release-0.4.30-recovery.yml");
     validate_recovery_0430_workflow(workflow)
         .expect("0.4.30 recovery workflow must satisfy its frozen contract");
     assert_eq!(
         sha256(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../.github/workflows/lumen-release-0.4.30-recovery.yml")
+                .join(".github/workflows/lumen-release-0.4.30-recovery.yml")
                 .as_path(),
         ),
         RECOVERY_0430_WORKFLOW_SHA256,
@@ -3730,13 +3730,13 @@ fn recovery_0430_workflow_is_frozen_and_rejects_high_risk_mutations() {
 #[test]
 fn public_verify_0429_workflow_is_frozen_and_rejects_write_or_identity_mutations() {
     let workflow =
-        include_str!("../../../.github/workflows/lumen-release-0.4.29-public-verify.yml");
+        include_str!("../.github/workflows/lumen-release-0.4.29-public-verify.yml");
     validate_public_verify_0429_workflow(workflow)
         .expect("0.4.29 public verifier workflow must satisfy its frozen read-only contract");
     assert_eq!(
         sha256(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../.github/workflows/lumen-release-0.4.29-public-verify.yml")
+                .join(".github/workflows/lumen-release-0.4.29-public-verify.yml")
                 .as_path(),
         ),
         PUBLIC_VERIFY_0429_WORKFLOW_SHA256,
@@ -3766,7 +3766,7 @@ fn public_verify_0429_workflow_is_frozen_and_rejects_write_or_identity_mutations
 
 #[test]
 fn public_release_notes_are_bound_to_candidate_and_promotion_evidence() {
-    let workflow = include_str!("../../../.github/workflows/lumen-release.yml");
+    let workflow = include_str!("../.github/workflows/lumen-release.yml");
     let verifier = include_str!("../scripts/verify-release-artifacts.sh");
     for note_line in [
         "- Source commit: $GITHUB_SHA",
@@ -3955,7 +3955,7 @@ fn public_release_note_binding_passes_and_missing_tag_argument_fails() {
         "isDraft": false,
         "targetCommitish": COMMIT,
         "body": format!(
-            "- Source commit: {COMMIT}\n- Pull request: https://github.com/chrischeng-c4/axiom/pull/1\n- Candidate run: https://github.com/chrischeng-c4/axiom/actions/runs/123/attempts/1\n- Promotion run: https://github.com/chrischeng-c4/axiom/actions/runs/456/attempts/1\n- Root index digest: sha256:{}\n- linux/amd64 digest: sha256:{}\n- linux/arm64 digest: sha256:{}\n- Standalone GKE receipt SHA-256: {}\n{}\n{}\n{}\n{}",
+            "- Source commit: {COMMIT}\n- Pull request: https://github.com/faberline/lumen/pull/1\n- Candidate run: https://github.com/faberline/lumen/actions/runs/123/attempts/1\n- Promotion run: https://github.com/faberline/lumen/actions/runs/456/attempts/1\n- Root index digest: sha256:{}\n- linux/amd64 digest: sha256:{}\n- linux/arm64 digest: sha256:{}\n- Standalone GKE receipt SHA-256: {}\n{}\n{}\n{}\n{}",
             "1".repeat(64),
             "2".repeat(64),
             "3".repeat(64),

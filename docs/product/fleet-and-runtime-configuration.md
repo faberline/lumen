@@ -15,7 +15,7 @@
 - Problem: Standalone and Managed configuration can diverge.
 - Who: Runtime and Fleet operators.
 - Promise: Both paths use one classified configuration contract.
-- Outcome: `runtime-configuration-parity`. Tracking: [Milestone #24](https://github.com/chrischeng-c4/axiom/milestone/24).
+- Outcome: `runtime-configuration-parity`. Tracking: [Milestone #24](https://github.com/faberline/lumen/milestone/24).
 - Non-goals: Unrestricted raw overrides.
 - Open: Classify every option and restart effect.
 - Neighbours: Fleet production convergence.
@@ -25,7 +25,7 @@
 - Problem: Fleet needs durable, observable convergence across runtimes.
 - Who: Fleet operators.
 - Promise: Fleet converges declared instances and publishes complete readiness.
-- Outcome: `fleet-production-convergence`. Tracking: [Milestone #38](https://github.com/chrischeng-c4/axiom/milestone/38).
+- Outcome: `fleet-production-convergence`. Tracking: [Milestone #38](https://github.com/faberline/lumen/milestone/38).
 - Non-goals: Replacing in-runtime Raft safety.
 - Open: Define recovery and aggregate readiness evidence.
 - Neighbours: Fleet safe rollout and foundation extraction.
@@ -35,7 +35,7 @@
 - Problem: Fleet changes need a safe rollout boundary.
 - Who: Fleet operators.
 - Promise: Fleet rolls declared changes forward only when readiness evidence permits.
-- Outcome: `fleet-safe-rollout`. Tracking: [Milestone #40](https://github.com/chrischeng-c4/axiom/milestone/40).
+- Outcome: `fleet-safe-rollout`. Tracking: [Milestone #40](https://github.com/faberline/lumen/milestone/40).
 - Non-goals: Using workload ordering as a quorum proof.
 - Open: Define per-instance rollout controls.
 - Neighbours: Quorum-safe runtime rollout.
@@ -45,7 +45,7 @@
 - Problem: Fleet-specific foundations must be reusable without moving Lumen policy out of the app.
 - Who: Fleet and platform maintainers.
 - Promise: The shared Fleet foundation has a clear reusable boundary.
-- Outcome: `fleet-foundation-extraction`. Tracking: [Milestone #37](https://github.com/chrischeng-c4/axiom/milestone/37).
+- Outcome: `fleet-foundation-extraction`. Tracking: [Milestone #37](https://github.com/faberline/lumen/milestone/37).
 - Non-goals: Extracting Lumen search or Raft policy into a generic library.
 - Open: Define the reusable API and migration boundary.
 - Neighbours: Fleet production convergence.

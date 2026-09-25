@@ -86,7 +86,7 @@ validate_manifest() {
     .source_ref == "refs/heads/main" and .workflow_ref == $workflow_ref and
     .commit == $commit and .version == $version and .tag == $tag and .candidate_tag == $candidate and
     (.pr | type == "object" and (.number | type == "number" and . > 0) and (.url | type == "string" and test("^https://github\\.com/" + $repo + "/pull/"))) and
-    (.image | type == "object" and (.repository == "ghcr.io/chrischeng-c4/lumen") and (.root_digest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and (.amd64_digest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and (.arm64_digest | type == "string" and test("^sha256:[0-9a-f]{64}$"))) and
+    (.image | type == "object" and (.repository == "ghcr.io/faberline/lumen") and (.root_digest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and (.amd64_digest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and (.arm64_digest | type == "string" and test("^sha256:[0-9a-f]{64}$"))) and
     ([.image.root_digest, .image.amd64_digest, .image.arm64_digest] | unique | length == 3) and
     (.artifacts | type == "array" and length == 5 and map(.target) == $targets and all(.[];
       (keys | sort) == ["archive","archive_sha256","sidecar","sidecar_sha256","target"] and
@@ -188,7 +188,7 @@ verify_full_supply_chain() {
   [[ -n "$IMAGE" && -n "$AMD64_DIGEST" && -n "$ARM64_DIGEST" ]] || fail "full mode requires image and child digests"
   image_repo="${IMAGE%@*}"
   root_digest="${IMAGE#*@}"
-  [[ "$IMAGE" == "ghcr.io/chrischeng-c4/lumen@sha256:"* ]] || fail "invalid candidate image"
+  [[ "$IMAGE" == "ghcr.io/faberline/lumen@sha256:"* ]] || fail "invalid candidate image"
   [[ "$CANDIDATE_TAG" == "release-candidate-${RUN_ID}-${RUN_ATTEMPT}" ]] || fail "candidate tag is not scoped to this run attempt"
   jq -e --arg root "$root_digest" --arg amd64 "$AMD64_DIGEST" --arg arm64 "$ARM64_DIGEST" --arg tag "$CANDIDATE_TAG" '
     .image.root_digest == $root and .image.amd64_digest == $amd64 and .image.arm64_digest == $arm64 and .candidate_tag == $tag
@@ -206,7 +206,7 @@ verify_full_supply_chain() {
   for pair in "amd64:$AMD64_DIGEST" "arm64:$ARM64_DIGEST"; do
     labels="$(docker buildx imagetools inspect "${image_repo}@${pair#*:}" --format '{{json .Image.Config.Labels}}')" || fail "${pair%%:*} image labels cannot be read"
     jq -e --arg commit "$COMMIT" --arg version "$VERSION" --arg run_url "$expected_run_url" '
-      .["org.opencontainers.image.source"] == "https://github.com/chrischeng-c4/axiom" and .["org.opencontainers.image.revision"] == $commit and .["org.opencontainers.image.version"] == $version and .["org.opencontainers.image.url"] == $run_url
+      .["org.opencontainers.image.source"] == "https://github.com/faberline/lumen" and .["org.opencontainers.image.revision"] == $commit and .["org.opencontainers.image.version"] == $version and .["org.opencontainers.image.url"] == $run_url
     ' <<<"$labels" >/dev/null || fail "${pair%%:*} image labels do not bind candidate identity"
   done
   cosign verify --certificate-identity "$EXPECTED_CERT_ID" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$IMAGE" >/dev/null
@@ -238,7 +238,7 @@ while [[ $# -gt 0 ]]; do
   esac
   shift 2
 done
-[[ "$REPO" == "chrischeng-c4/axiom" ]] || fail "unsupported repository: $REPO"
+[[ "$REPO" == "faberline/lumen" ]] || fail "unsupported repository: $REPO"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "invalid version or commit"
 [[ "$RUN_ID" =~ ^[0-9]+$ && "$RUN_ATTEMPT" =~ ^[0-9]+$ ]] || fail "invalid run identity"
 [[ "$MODE" == local || "$MODE" == full ]] || fail "mode must be local or full"

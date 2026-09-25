@@ -26,9 +26,9 @@ Generate a client from the current Lumen contract:
 
 | Language | Command |
 |---|---|
-| TypeScript | `cargo run -q -p lumen --bin lumen -- spec gen --lang ts --out apps/lumen/clients/ts` |
-| Python | `cargo run -q -p lumen --bin lumen -- spec gen --lang py --out apps/lumen/clients/python` |
-| Rust | `cargo run -q -p lumen --bin lumen -- spec gen --lang rust --out apps/lumen/clients/rust` |
+| TypeScript | `cargo run -q -p lumen --bin lumen -- spec gen --lang ts --out clients/ts` |
+| Python | `cargo run -q -p lumen --bin lumen -- spec gen --lang py --out clients/python` |
+| Rust | `cargo run -q -p lumen --bin lumen -- spec gen --lang rust --out clients/rust` |
 
 Generated language directories are ignored. The committed
 [`codegen.toml`](codegen.toml) selects TypeScript 5.0, Python 3.14, and Rust
@@ -126,7 +126,7 @@ and [Protocol compatibility policy](../ROADMAP.md#protocol-compatibility-policy)
 Regenerate the committed OpenAPI reference with:
 
 ```bash
-cargo run -q -p lumen --bin lumen -- spec > apps/lumen/clients/openapi.json
+cargo run -q -p lumen --bin lumen -- spec > clients/openapi.json
 ```
 
 The local snapshot assertion is:

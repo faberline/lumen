@@ -18,7 +18,7 @@
 //!   publication, while `CURRENT`, both AOF frames, and cold replay remain
 //!   correct at :581-627. The healthy retry removes only covered frames and
 //!   retains the later one at :634-669. These assertions cover
-//!   `apps/lumen/src/segment_checkpoint.rs:174-189` and
+//!   `src/segment_checkpoint.rs:174-189` and
 //!   `libs/storage-durable/src/framed_log.rs:234-276`.
 //! - Security: the compact-temp pathname is a process-read filesystem boundary.
 //!   The directory obstacle is an input that trim must refuse without deleting
@@ -28,7 +28,7 @@
 //!   valid frame stream.  The `SyncFile` path is process-owned by
 //!   `libs/storage-durable/src/generation.rs:591-635`; its pre-publication
 //!   failure is closed by :455-475 without moving `CURRENT` or consuming AOF.
-//! - Performance: `apps/lumen/docs/indexing.md:264-276` says, verbatim,
+//! - Performance: `docs/indexing.md:264-276` says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   `assert_pending_budget` at :352-366 reads actual public `/metrics` total
 //!   and high-water samples after each failed recovery path at :489 and :614,
@@ -39,7 +39,7 @@
 //! # Root negative controls
 //!
 //! 1. Move the existing AOF trim block in
-//!    `apps/lumen/src/segment_checkpoint.rs` before `save_with_sequence`.
+//!    `src/segment_checkpoint.rs` before `save_with_sequence`.
 //!    The exact-byte AOF assertion at :472-475 must fail after the injected
 //!    pre-publication `SyncFile` error.
 //! 2. In `libs/storage-durable/src/framed_log.rs`, make compact-temp open

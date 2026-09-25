@@ -19,7 +19,7 @@
 //! ## Contracts inherited from the retired EC shells
 //!
 //! This sentence was the whole of the `// Contract:` comment in an AW-EC shell under
-//! `apps/lumen/e2e/`, which ran `cargo test -p lumen --bin lumen` in a subprocess and
+//! `e2e/`, which ran `cargo test -p lumen --bin lumen` in a subprocess and
 //! asserted the child's exit status. `cargo test -p lumen` already runs this binary's
 //! colocated unit tests directly, so the shell added a second, nested run and nothing
 //! else. It was deleted on 2026-08-20 with the EC machinery it belonged to, and the
@@ -386,7 +386,7 @@ struct K8sOperatorRenderArgs {
     /// Operator container image. Supply an immutable registry digest for
     /// reproducible cluster deployment; the default is this build's
     /// published GHCR release, matching the checked-in operator manifest.
-    #[arg(long, default_value_t = format!("ghcr.io/chrischeng-c4/lumen:{}", env!("CARGO_PKG_VERSION")))]
+    #[arg(long, default_value_t = format!("ghcr.io/faberline/lumen:{}", env!("CARGO_PKG_VERSION")))]
     image: String,
     /// Also emit the operator's ServiceMonitor and PrometheusRule (#2621).
     /// Off by default because both are `monitoring.coreos.com/v1` CRDs and a
@@ -1249,7 +1249,7 @@ async fn main() -> Result<()> {
 /// (`upgrade` / `issue`), per the CONTRIBUTING.md CLI convention.
 const TOOL: cli_std::ToolInfo = cli_std::ToolInfo {
     project: "lumen",
-    repo: "chrischeng-c4/axiom",
+    repo: "faberline/lumen",
     target: env!("LUMEN_TARGET"),
     version: env!("CARGO_PKG_VERSION"),
     git_sha: env!("LUMEN_GIT_SHA"),
@@ -2529,9 +2529,9 @@ fn render_release_dockerfile(version: Option<&str>) -> String {
         cli_std::artifact::strip_source_ownership_markers(include_str!("../../Dockerfile.release"));
     let mut out = String::new();
     for line in template.lines() {
-        if line.starts_with("#   docker build -f apps/lumen/Dockerfile.release -t lumen:") {
+        if line.starts_with("#   docker build -f Dockerfile.release -t lumen:") {
             out.push_str(&format!(
-                "#   docker build -f apps/lumen/Dockerfile.release -t lumen:{version} \\"
+                "#   docker build -f Dockerfile.release -t lumen:{version} \\"
             ));
         } else if line.starts_with("#     --build-arg LUMEN_VERSION=") {
             out.push_str(&format!("#     --build-arg LUMEN_VERSION={tag} ."));
@@ -2580,7 +2580,7 @@ fn render_operator_yaml(args: &K8sOperatorRenderArgs) -> Result<String> {
     // workspace's own version, so a release bump that misses `deployment.yaml`
     // fails this render instead of silently handing out a stale image.
     let checked_in_image = format!(
-        "          image: ghcr.io/chrischeng-c4/lumen:{}",
+        "          image: ghcr.io/faberline/lumen:{}",
         env!("CARGO_PKG_VERSION")
     );
     if !deployment.contains(&checked_in_image) {
@@ -2676,9 +2676,9 @@ fn render_instance_yaml(args: &K8sInstanceRenderArgs) -> String {
         K8sInstanceProfile::Staging => (
             "lumen",
             "staging",
-            // Published releases live at ghcr.io/chrischeng-c4/lumen:<version>
+            // Published releases live at ghcr.io/faberline/lumen:<version>
             // (digest in each release's notes); this is the handed-out default.
-            format!("ghcr.io/chrischeng-c4/lumen:{default_version}"),
+            format!("ghcr.io/faberline/lumen:{default_version}"),
             InstanceBody::Staging,
         ),
         K8sInstanceProfile::Prod => (
@@ -2686,7 +2686,7 @@ fn render_instance_yaml(args: &K8sInstanceRenderArgs) -> String {
             "production",
             // Same published GHCR default as staging; override with `--image`
             // to pin @sha256 or point at a mirrored registry.
-            format!("ghcr.io/chrischeng-c4/lumen:{default_version}"),
+            format!("ghcr.io/faberline/lumen:{default_version}"),
             InstanceBody::Prod,
         ),
         K8sInstanceProfile::Template => (
@@ -2806,7 +2806,7 @@ fn render_fleet_yaml(args: &K8sFleetRenderArgs) -> String {
         K8sFleetProfile::Dev => ("search", "lumen:latest".to_string(), InstanceBody::Dev),
         K8sFleetProfile::Prod => (
             "lumen",
-            format!("ghcr.io/chrischeng-c4/lumen:{default_version}"),
+            format!("ghcr.io/faberline/lumen:{default_version}"),
             InstanceBody::Prod,
         ),
         K8sFleetProfile::Template => (

@@ -22,17 +22,17 @@
 //!   checkpoint, and cold reopen. aof_recovered_catalog_layer_cap.rs:627-660
 //!   turns a retained baseline loop into the red without leaving a live child.
 //!   These assertions cover
-//!   apps/lumen/src/aof.rs:266-315,
-//!   apps/lumen/src/storage/committed_index_apply.rs:288-309, and
-//!   apps/lumen/src/segment_capacity.rs:261-274.
-//! - Security: apps/lumen/src/segment_capacity.rs:261-274 only drives
+//!   src/aof.rs:266-315,
+//!   src/storage/committed_index_apply.rs:288-309, and
+//!   src/segment_capacity.rs:261-274.
+//! - Security: src/segment_capacity.rs:261-274 only drives
 //!   checkpoint and merge work after established Engine state. The changed AOF
-//!   path at apps/lumen/src/aof.rs:266-315 passes persisted bytes through its
+//!   path at src/aof.rs:266-315 passes persisted bytes through its
 //!   existing frame validation. The existing closed-input case in
-//!   apps/lumen/e2e/aof_oversized_committed_apply.rs:445-503 feeds a complete,
+//!   e2e/aof_oversized_committed_apply.rs:445-503 feeds a complete,
 //!   CRC-valid truncated fast payload and requires refusal before its
 //!   watermark. This contract supplies only validated process-written frames.
-//! - Performance: apps/lumen/docs/indexing.md:264-276 says, verbatim,
+//! - Performance: docs/indexing.md:264-276 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   It also says "a field retains at most 16."
 //!   aof_recovered_catalog_layer_cap.rs:500-507, called at
@@ -48,7 +48,7 @@
 //!
 //! After the empty temporary-root fallback is implemented, remove its
 //! merge-without-CURRENT checkpoint branch in
-//! apps/lumen/src/segment_capacity.rs:261-274. The isolated-child behavior
+//! src/segment_capacity.rs:261-274. The isolated-child behavior
 //! assertion below must fail because a catalog-only 16-layer AOF suffix cannot
 //! make capacity progress. Restore the source hash before any other gate.
 //!

@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: apps/lumen/build.sh <debug|release>
+Usage: build.sh <debug|release>
 
 debug    Build lumen and install target/debug/lumen to ~/.cargo/bin/lumen.
 release  Prepare the local release candidate and print the next candidate workflow step.
@@ -19,7 +19,7 @@ fail_hint() {
   local mode="$1"
   echo ""
   echo "Build failed."
-  echo "Retry with: apps/lumen/build.sh ${mode}"
+  echo "Retry with: build.sh ${mode}"
   echo "Verify with: ~/.cargo/bin/lumen --version"
 }
 
@@ -65,16 +65,16 @@ sync_lumen_release_image_pins() {
 
   local manifest matches
   for manifest in "$@"; do
-    matches="$(awk '/^[[:space:]]*image:[[:space:]]*ghcr\.io\/chrischeng-c4\/lumen:[^[:space:]]+$/ { count++ } END { print count + 0 }' "$manifest")"
+    matches="$(awk '/^[[:space:]]*image:[[:space:]]*ghcr\.io\/faberline\/lumen:[^[:space:]]+$/ { count++ } END { print count + 0 }' "$manifest")"
     if [[ "$matches" -ne 1 ]]; then
       echo "error: expected exactly one Lumen GHCR image pin in ${manifest}; found ${matches}" >&2
       return 1
     fi
 
     LUMEN_RELEASE_IMAGE_VERSION="$version" perl -0pi -e \
-      's#(^[[:space:]]*image:[[:space:]]*ghcr\.io/chrischeng-c4/lumen:)\S+$#$1$ENV{LUMEN_RELEASE_IMAGE_VERSION}#m' \
+      's#(^[[:space:]]*image:[[:space:]]*ghcr\.io/faberline/lumen:)\S+$#$1$ENV{LUMEN_RELEASE_IMAGE_VERSION}#m' \
       "$manifest"
-    if ! grep -Fq "image: ghcr.io/chrischeng-c4/lumen:${version}" "$manifest"; then
+    if ! grep -Fq "image: ghcr.io/faberline/lumen:${version}" "$manifest"; then
       echo "error: failed to pin ${manifest} to Lumen ${version}" >&2
       return 1
     fi
@@ -82,8 +82,8 @@ sync_lumen_release_image_pins() {
 }
 
 if [[ "$MODE" == "debug" ]]; then
-  VERSION_FILES=(apps/lumen/Cargo.toml)
-  CURRENT_VERSION="$(project_build_read_version apps/lumen/Cargo.toml)"
+  VERSION_FILES=(Cargo.toml)
+  CURRENT_VERSION="$(project_build_read_version Cargo.toml)"
   project_build_prepare_debug_version lumen "$CURRENT_VERSION" "${VERSION_FILES[@]}"
   cargo build -p lumen --bin lumen --features raft-wal
   install_lumen debug
@@ -93,14 +93,14 @@ if [[ "$MODE" == "debug" ]]; then
   exit 0
 fi
 
-VERSION_FILES=(apps/lumen/Cargo.toml)
-CURRENT_VERSION="$(project_build_read_version apps/lumen/Cargo.toml)"
+VERSION_FILES=(Cargo.toml)
+CURRENT_VERSION="$(project_build_read_version Cargo.toml)"
 sync_lumen_release_image_pins "$CURRENT_VERSION" \
-  apps/lumen/k8s/base/deployment.yaml \
-  apps/lumen/k8s/operator/deployment.yaml
+  k8s/base/deployment.yaml \
+  k8s/operator/deployment.yaml
 
 cargo build --release --locked -p lumen --bin lumen --features release
-target/release/lumen spec --format openapi > apps/lumen/clients/openapi.json
+target/release/lumen spec --format openapi > clients/openapi.json
 cargo test -p lumen --test spec_cli openapi_committed_snapshot_matches_live_generation -- --exact
 install_lumen release
 

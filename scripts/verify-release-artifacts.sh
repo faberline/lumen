@@ -88,7 +88,7 @@ validate_receipt() {
     .jobs == {identity:"success",build:"success",manifest:"success","ghcr-image-and-attest":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success",result:"success"} and
     (.image | (
       (keys | sort) == ["amd64_digest","arm64_digest","repository","root_digest"] and
-      .repository == "ghcr.io/chrischeng-c4/lumen" and
+      .repository == "ghcr.io/faberline/lumen" and
       ([.root_digest,.amd64_digest,.arm64_digest] | all(test("^sha256:[0-9a-f]{64}$")))
     )) and
     (.artifacts | type == "array" and length == 5 and all(.[]; .archive == ("lumen-" + .target + ".tar.gz") and .sidecar == (.archive + ".sha256") and (.archive_sha256 | test("^[0-9a-f]{64}$")) and (.sidecar_sha256 | test("^[0-9a-f]{64}$")))) and
@@ -188,7 +188,7 @@ fetch_candidate_receipt() {
   jq -e --arg commit "$COMMIT" --argjson workflow "$candidate_workflow_id" '
     .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success" and
     .head_branch == "main" and .head_sha == $commit and .workflow_id == $workflow and
-    .head_repository.full_name == "chrischeng-c4/axiom"
+    .head_repository.full_name == "faberline/lumen"
   ' <<<"$run" >/dev/null || fail "candidate run identity or conclusion changed"
   jobs="$(gh api --paginate "repos/${REPO}/actions/runs/${CANDIDATE_RUN_ID}/attempts/${attempt}/jobs?filter=latest&per_page=100" | flatten_paginated_jobs)"
   validate_candidate_job_inventory <<<"$jobs"
@@ -207,10 +207,10 @@ fetch_candidate_receipt() {
 verify_candidate_supply_chain() {
   local manifest="$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json" root amd64 arm64 candidate_tag
   root="$(jq -er '.image.root_digest' "$manifest")"; amd64="$(jq -er '.image.amd64_digest' "$manifest")"; arm64="$(jq -er '.image.arm64_digest' "$manifest")"; candidate_tag="$(jq -er '.candidate_tag' "$manifest")"
-  apps/lumen/scripts/verify-release-candidate.sh \
+  scripts/verify-release-candidate.sh \
     --repo "$REPO" --version "${TAG#lumen@}" --commit "$COMMIT" --run-id "$CANDIDATE_RUN_ID" --run-attempt "$CANDIDATE_ATTEMPT" \
     --manifest "$manifest" --manifest-sidecar "$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json.sha256" --artifacts-dir "$CANDIDATE_RECEIPT_DIR" \
-    --image "ghcr.io/chrischeng-c4/lumen@${root}" --candidate-tag "$candidate_tag" --amd64-digest "$amd64" --arm64-digest "$arm64" --mode full
+    --image "ghcr.io/faberline/lumen@${root}" --candidate-tag "$candidate_tag" --amd64-digest "$amd64" --arm64-digest "$arm64" --mode full
 }
 
 validate_standalone_gke_receipt() {
@@ -236,8 +236,8 @@ validate_standalone_gke_receipt() {
     (keys | sort) == ["candidate","complete","matrix","redaction","schema","stage"] and
     .schema == "lumen.standalone-gke-receipt/v2" and .stage == "slice-b-live" and .complete == true and
     (.candidate | (keys | sort) == ["amd64_digest","arm64_digest","commit","controller_cli","manifest_sha256","repository","root_digest","run_attempt","run_id","version","workflow_ref"]) and
-    .candidate.repository == "chrischeng-c4/axiom" and .candidate.version == $version and .candidate.commit == $commit and
-    .candidate.workflow_ref == "chrischeng-c4/axiom/.github/workflows/lumen-release-candidate.yml@refs/heads/main" and
+    .candidate.repository == "faberline/lumen" and .candidate.version == $version and .candidate.commit == $commit and
+    .candidate.workflow_ref == "faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main" and
     .candidate.run_id == $run and .candidate.run_attempt == $attempt and .candidate.manifest_sha256 == $manifest_sha and
     .candidate.root_digest == $root and .candidate.amd64_digest == $amd64 and .candidate.arm64_digest == $arm64 and
     (.candidate.controller_cli | (keys | sort) == ["sha256","target"] and (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
@@ -281,7 +281,7 @@ verify_public_standalone_gke_receipt() {
 }
 
 verify_latest_is_safe() {
-  local root="$1" image_repo="ghcr.io/chrischeng-c4/lumen" latest releases tag version digest
+  local root="$1" image_repo="ghcr.io/faberline/lumen" latest releases tag version digest
   latest="$(image_digest_or_absent "${image_repo}:latest")"
   [[ -n "$latest" ]] || fail "public latest image tag is absent"
   [[ "$latest" == "$root" ]] && return 0
@@ -348,7 +348,7 @@ verify_public_release() {
   release_dir="$(mktemp -d)"; trap 'rm -rf "${release_dir:-}"' RETURN
   gh release download "$TAG" --repo "$REPO" --dir "$release_dir" --pattern 'lumen-*.tar.gz' --pattern 'lumen-*.tar.gz.sha256' --pattern 'spdx-*.json' --pattern 'lumen-standalone-gke-receipt.json' --pattern 'lumen-standalone-gke-receipt.json.sha256'
   verify_release_assets_against_receipt "$CANDIDATE_RECEIPT_DIR" "$release_dir"
-  semver="${TAG#lumen@}"; image_repo="ghcr.io/chrischeng-c4/lumen"
+  semver="${TAG#lumen@}"; image_repo="ghcr.io/faberline/lumen"
   [[ "$(docker buildx imagetools inspect "${image_repo}:${semver}" --format '{{json .Manifest}}' | jq -er '.digest')" == "$root" ]] || fail "semver image tag does not bind candidate root"
   verify_latest_is_safe "$root"
   rm -rf "$release_dir"; trap - RETURN
@@ -367,7 +367,7 @@ while [[ $# -gt 0 ]]; do
   esac
   shift 2
 done
-[[ "$REPO" == "chrischeng-c4/axiom" && "$TAG" =~ ^lumen@[0-9]+\.[0-9]+\.[0-9]+$ && "$COMMIT" =~ ^[0-9a-f]{40}$ && "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]] || fail "invalid promotion identity"
+[[ "$REPO" == "faberline/lumen" && "$TAG" =~ ^lumen@[0-9]+\.[0-9]+\.[0-9]+$ && "$COMMIT" =~ ^[0-9a-f]{40}$ && "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]] || fail "invalid promotion identity"
 [[ "$MODE" == candidate || "$MODE" == fixture || "$MODE" == public ]] || usage
 
 if [[ "$MODE" == fixture ]]; then

@@ -9,29 +9,29 @@
 //! # Facets
 //!
 //! - Behavior: exact-cut, compatibility, durable-CURRENT, and blocked-output assertions are at
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:213`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:218`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:223`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:228`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:236`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:241`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:246`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:251`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:326`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:429`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:443`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:454`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:464`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:472`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:482`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:662`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:666`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:670`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:693`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:702`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:712`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:738`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:751`, and `apps/lumen/e2e/raft_segment_snapshot_archive.rs:761`. These exercise `apps/lumen/src/raft_sm.rs:229` and
-//!   `apps/lumen/src/segment_rdb.rs:455`.
-//! - Security: `apps/lumen/e2e/raft_segment_snapshot_archive.rs:295`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:299`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:303`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:310`, and
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:314` reject each malformed archive and retain the Raft watermark and CURRENT.
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:259`, `apps/lumen/e2e/raft_segment_snapshot_archive.rs:264`,
-//!   `apps/lumen/e2e/raft_segment_snapshot_archive.rs:269`, and `apps/lumen/e2e/raft_segment_snapshot_archive.rs:274` retain live queries.
-//!   The peer/file archive boundary changes at `apps/lumen/src/raft_sm.rs:247` with segment archive files from
-//!   `apps/lumen/src/segment_rdb.rs:455`.
+//!   `e2e/raft_segment_snapshot_archive.rs:213`, `e2e/raft_segment_snapshot_archive.rs:218`,
+//!   `e2e/raft_segment_snapshot_archive.rs:223`, `e2e/raft_segment_snapshot_archive.rs:228`,
+//!   `e2e/raft_segment_snapshot_archive.rs:236`, `e2e/raft_segment_snapshot_archive.rs:241`,
+//!   `e2e/raft_segment_snapshot_archive.rs:246`, `e2e/raft_segment_snapshot_archive.rs:251`,
+//!   `e2e/raft_segment_snapshot_archive.rs:326`, `e2e/raft_segment_snapshot_archive.rs:429`,
+//!   `e2e/raft_segment_snapshot_archive.rs:443`, `e2e/raft_segment_snapshot_archive.rs:454`,
+//!   `e2e/raft_segment_snapshot_archive.rs:464`, `e2e/raft_segment_snapshot_archive.rs:472`,
+//!   `e2e/raft_segment_snapshot_archive.rs:482`, `e2e/raft_segment_snapshot_archive.rs:662`,
+//!   `e2e/raft_segment_snapshot_archive.rs:666`, `e2e/raft_segment_snapshot_archive.rs:670`,
+//!   `e2e/raft_segment_snapshot_archive.rs:693`, `e2e/raft_segment_snapshot_archive.rs:702`,
+//!   `e2e/raft_segment_snapshot_archive.rs:712`, `e2e/raft_segment_snapshot_archive.rs:738`, `e2e/raft_segment_snapshot_archive.rs:751`, and `e2e/raft_segment_snapshot_archive.rs:761`. These exercise `src/raft_sm.rs:229` and
+//!   `src/segment_rdb.rs:455`.
+//! - Security: `e2e/raft_segment_snapshot_archive.rs:295`, `e2e/raft_segment_snapshot_archive.rs:299`,
+//!   `e2e/raft_segment_snapshot_archive.rs:303`, `e2e/raft_segment_snapshot_archive.rs:310`, and
+//!   `e2e/raft_segment_snapshot_archive.rs:314` reject each malformed archive and retain the Raft watermark and CURRENT.
+//!   `e2e/raft_segment_snapshot_archive.rs:259`, `e2e/raft_segment_snapshot_archive.rs:264`,
+//!   `e2e/raft_segment_snapshot_archive.rs:269`, and `e2e/raft_segment_snapshot_archive.rs:274` retain live queries.
+//!   The peer/file archive boundary changes at `src/raft_sm.rs:247` with segment archive files from
+//!   `src/segment_rdb.rs:455`.
 //! - Performance: the approved work-item workload is a separate pending gate: 30 min on 2.5 CPU/16 GiB with checkpoint and merge,
 //!   10 QPS, 100 doc ops/s, p99 <= 1 s, each query <= 5 s, zero errors/timeouts, drain <= 60 s, and RSS <= 12 GiB.
 //!   `SNAPSHOT_OUTPUT_WATCHDOG` is test cleanup only, not an archive SLA; periodic wiring remains pending at
-//!   `apps/lumen/src/raft_sm.rs:229` and `apps/lumen/src/segment_rdb.rs:455`.
+//!   `src/raft_sm.rs:229` and `src/segment_rdb.rs:455`.
 
 use std::collections::BTreeMap;
 use std::io::{self, Write};
@@ -768,7 +768,7 @@ fn segment_raft_snapshot_entry_point_emits_archive_and_publishes_current() {
     assert_published_current_matches_capture(&receiver_store);
 }
 
-// Append to apps/lumen/e2e/raft_segment_snapshot_archive.rs.
+// Append to e2e/raft_segment_snapshot_archive.rs.
 //
 // This case uses the helpers and imports already defined in that contract.
 

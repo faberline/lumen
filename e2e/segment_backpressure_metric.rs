@@ -20,15 +20,15 @@
 //!   state, and increase `lumen_segment_backpressure_total` exactly once.
 //!   Assertions at :336-368 require one later small write to succeed without
 //!   changing the counter. These exercise
-//!   apps/lumen/src/coordinator.rs:1015-1088,
-//!   apps/lumen/src/coordinator.rs:875-912, and
-//!   apps/lumen/src/metrics.rs:296-297.
+//!   src/coordinator.rs:1015-1088,
+//!   src/coordinator.rs:875-912, and
+//!   src/metrics.rs:296-297.
 //! - Security: segment_backpressure_metric.rs:370-405 sends malformed external
 //!   JSON and requires `400`, no `Retry-After`, no WAL/applied/document change,
 //!   and no backpressure increment. This exercises the HTTP-byte boundary in
-//!   apps/lumen/src/api.rs:1554-1589 and its closed capacity mapping at
-//!   apps/lumen/src/api.rs:3269-3273.
-//! - Performance: apps/lumen/docs/indexing.md:264-276 says, verbatim,
+//!   src/api.rs:1554-1589 and its closed capacity mapping at
+//!   src/api.rs:3269-3273.
+//! - Performance: docs/indexing.md:264-276 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   segment_backpressure_metric.rs:201-212 proves the one-item body exceeds
 //!   one third of that budget, so the local raw record plus two transport
@@ -40,7 +40,7 @@
 //!
 //! Remove the production call that increments the counter from the
 //! pre-publication capacity refusal branch in
-//! `apps/lumen/src/coordinator.rs`. The assertion at :330-334 must fail because
+//! `src/coordinator.rs`. The assertion at :330-334 must fail because
 //! the metric remains at its baseline. Restore every changed source file by
 //! SHA-256.
 //!

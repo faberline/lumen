@@ -1,4 +1,4 @@
-// Intended new file: apps/lumen/src/wal/bounded_generic.rs
+// Intended new file: src/wal/bounded_generic.rs
 //
 // This module deliberately owns the generic wire representation.  The public
 // RaftLogEntry and FieldValue types remain unchanged.  In particular, the

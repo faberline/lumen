@@ -103,8 +103,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apps/lumen/scripts/verify-release-artifacts.sh \
-            --repo chrischeng-c4/axiom \
+          scripts/verify-release-artifacts.sh \
+            --repo faberline/lumen \
             --tag "lumen@${{ inputs.version }}" \
             --commit "$GITHUB_SHA" \
             --candidate-run-id "${{ inputs.candidate_run_id }}" \
@@ -187,8 +187,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apps/lumen/scripts/verify-release-artifacts.sh \
-            --repo chrischeng-c4/axiom \
+          scripts/verify-release-artifacts.sh \
+            --repo faberline/lumen \
             --tag "lumen@${{ inputs.version }}" \
             --commit "$GITHUB_SHA" \
             --candidate-run-id "${{ inputs.candidate_run_id }}" \
@@ -220,8 +220,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apps/lumen/scripts/verify-release-artifacts.sh \
-            --repo chrischeng-c4/axiom \
+          scripts/verify-release-artifacts.sh \
+            --repo faberline/lumen \
             --tag "lumen@${{ inputs.version }}" \
             --commit "$GITHUB_SHA" \
             --candidate-run-id "${{ inputs.candidate_run_id }}" \
@@ -245,7 +245,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          image_repo=ghcr.io/chrischeng-c4/lumen
+          image_repo=ghcr.io/faberline/lumen
           root_digest="${{ needs.verify-inputs.outputs.root_digest }}"
           version="${{ inputs.version }}"
           root_ref="${image_repo}@${root_digest}"
@@ -345,8 +345,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apps/lumen/scripts/verify-release-artifacts.sh \
-            --repo chrischeng-c4/axiom \
+          scripts/verify-release-artifacts.sh \
+            --repo faberline/lumen \
             --tag "lumen@${{ inputs.version }}" \
             --commit "$GITHUB_SHA" \
             --candidate-run-id "${{ inputs.candidate_run_id }}" \

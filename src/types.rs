@@ -2,7 +2,7 @@
 //! Wire types for the public HTTP API.
 //!
 //! These structs serialize to and from the JSON shapes documented in
-//! `apps/lumen/README.md`. They power the live router and the
+//! `README.md`. They power the live router and the
 //! OpenAPI schema served at `GET /openapi.json` — so they are the
 //! single source of truth consumers integrate against.
 

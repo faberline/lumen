@@ -17,7 +17,7 @@
 #   dist/linux/amd64/lumen
 #   dist/linux/arm64/lumen
 #
-#   docker buildx build -f apps/lumen/Dockerfile.test \
+#   docker buildx build -f Dockerfile.test \
 #     --platform linux/amd64,linux/arm64 \
 #     -t ghcr.io/<owner>/lumen:sha-<git12> --push .
 

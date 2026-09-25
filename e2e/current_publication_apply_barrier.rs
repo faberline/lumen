@@ -31,31 +31,31 @@
 //!   foreground checkpoints selected a real one-field background merge before
 //!   the same pointer hold is armed. Lines 1094-1165 require that merge's cold
 //!   cut, its retained AOF suffix, and the final cold cut. These assertions
-//!   exercise apps/lumen/src/segment_rdb.rs:839-885,
-//!   apps/lumen/src/segment_background_merge.rs:677-810, and the actual
+//!   exercise src/segment_rdb.rs:839-885,
+//!   src/segment_background_merge.rs:677-810, and the actual
 //!   pointer calls at libs/storage-durable/src/generation.rs:1135-1194.
 //! - Security: this change changes only the timing of process-written CURRENT
-//!   publication in apps/lumen/src/segment_rdb.rs:839-885 and
-//!   apps/lumen/src/segment_background_merge.rs:769-810. It opens no new
+//!   publication in src/segment_rdb.rs:839-885 and
+//!   src/segment_background_merge.rs:769-810. It opens no new
 //!   caller path, parser, identifier, or disk-input boundary. The cold/AOF
 //!   checks at current_publication_apply_barrier.rs:1094-1165 refuse a
 //!   publication that loses the later committed record. The existing durable
-//!   restore race assertion in apps/lumen/e2e/backup_restore_e2e.rs:342-433
+//!   restore race assertion in e2e/backup_restore_e2e.rs:342-433
 //!   keeps an old checkpoint from replacing an observed candidate CURRENT, and
 //!   the default gate runs that target.
 //! - Performance: this deterministic ordering case makes no latency claim;
 //!   its waits only clean up a held interleaving. The approved durable-workload
 //!   gate carries this path's performance account: the current limits are 100
 //!   docops/s, 10 QPS, p99 at most one second, and any request at most five
-//!   seconds in apps/lumen/e2e/support/perf_workload_ledger.rs:118-124.
-//!   apps/lumen/e2e/perf_gate.rs:4182-4226 runs all sixteen 30-minute cells,
+//!   seconds in e2e/support/perf_workload_ledger.rs:118-124.
+//!   e2e/perf_gate.rs:4182-4226 runs all sixteen 30-minute cells,
 //!   including checkpoint and merge observations. Its release command is
 //!   `cargo test -p lumen --test perf_gate -- --ignored`.
 //!
 //! # Root negative control
 //!
 //! After the repair, retain the original CaptureLease through the merge
-//! pointer calls in apps/lumen/src/segment_background_merge.rs:769-790
+//! pointer calls in src/segment_background_merge.rs:769-790
 //! instead of converting it to the short publication pin. The assertions at
 //! current_publication_apply_barrier.rs:1076-1086 must fail because the
 //! merge-interleaved HTTP write cannot report success before release. Restore

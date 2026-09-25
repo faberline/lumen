@@ -25,93 +25,93 @@ impl GatedTarget {
     }
 
     fn cargo_path(&self) -> &str {
-        self.path.strip_prefix("apps/lumen/").unwrap_or(self.path)
+        self.path.strip_prefix("").unwrap_or(self.path)
     }
 }
 
 const REGISTRY: &[GatedTarget] = &[
     GatedTarget {
-        path: "apps/lumen/e2e/hnsw_shutdown_cache.rs",
+        path: "e2e/hnsw_shutdown_cache.rs",
         gate: r#"#![cfg(unix)]"#,
         required_features: &[],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/inherited_checkpoint_file_sync.rs",
+        path: "e2e/inherited_checkpoint_file_sync.rs",
         gate: r#"#![cfg(unix)]"#,
         required_features: &[],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/aof_trim_append_progress.rs",
+        path: "e2e/aof_trim_append_progress.rs",
         gate: r#"#![cfg(unix)]"#,
         required_features: &[],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/jieba_bigram_fallback_e2e.rs",
+        path: "e2e/jieba_bigram_fallback_e2e.rs",
         gate: r#"#![cfg(not(feature = "jieba"))]"#,
         required_features: &[],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/jieba_fallback_staging.rs",
+        path: "e2e/jieba_fallback_staging.rs",
         gate: r#"#![cfg(not(feature = "jieba"))]"#,
         required_features: &[],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/access_render_cli.rs",
+        path: "e2e/access_render_cli.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/cli_client_ksa_token.rs",
+        path: "e2e/cli_client_ksa_token.rs",
         gate: r#"#![cfg(all(unix, feature = "delegated-auth", feature = "backup"))]"#,
         required_features: &["delegated-auth", "backup"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/operator_backup_kubernetes_wiring.rs",
+        path: "e2e/operator_backup_kubernetes_wiring.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/operator_render.rs",
+        path: "e2e/operator_render.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/operator_retired_credential_projection.rs",
+        path: "e2e/operator_retired_credential_projection.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/reshard_driver_e2e.rs",
+        path: "e2e/reshard_driver_e2e.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/routed_shard_e2e.rs",
+        path: "e2e/routed_shard_e2e.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/capacity_catalog_contract.rs",
+        path: "e2e/capacity_catalog_contract.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/capacity_retire_hpa.rs",
+        path: "e2e/capacity_retire_hpa.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/body_limit_configurable.rs",
+        path: "e2e/body_limit_configurable.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/capacity_catalog_client.rs",
+        path: "e2e/capacity_catalog_client.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],
     },
     GatedTarget {
-        path: "apps/lumen/e2e/standalone_backup_restore_cli.rs",
+        path: "e2e/standalone_backup_restore_cli.rs",
         gate: r#"#![cfg(unix)]"#,
         required_features: &[],
     },
@@ -122,12 +122,7 @@ const DIRECT_FEATURES: &[&str] = &["operator", "delegated-auth"];
 
 fn repo_root() -> PathBuf {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .parent()
-        .expect("manifest parent dir")
-        .parent()
-        .expect("repo root dir")
-        .to_path_buf()
+    manifest_dir.to_path_buf()
 }
 
 fn find_cfg_gate(content: &str) -> Option<&str> {
@@ -260,7 +255,7 @@ fn validate_manifest_and_gate(cargo_str: &str, contributing_str: &str) -> Result
 #[test]
 fn all_gated_files_in_tree_are_registered() {
     let root = repo_root();
-    let scan_roots = ["apps/lumen/e2e"];
+    let scan_roots = ["e2e"];
     let mut missing_or_mismatched = Vec::new();
 
     for scan_root in &scan_roots {

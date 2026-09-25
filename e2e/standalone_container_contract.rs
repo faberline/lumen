@@ -3,22 +3,18 @@
 use std::{fs, io::Write, path::PathBuf, process::Command};
 
 const EXPECTED_DOCKERFILES: &[&str] = &[
-    "apps/lumen/Dockerfile",
-    "apps/lumen/Dockerfile.release",
-    "apps/lumen/Dockerfile.test",
+    "Dockerfile",
+    "Dockerfile.release",
+    "Dockerfile.test",
 ];
 
 fn repo_root() -> PathBuf {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    dir.parent()
-        .and_then(|p| p.parent())
-        .map(PathBuf::from)
-        .unwrap_or(dir)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 fn discover_dockerfiles() -> Vec<String> {
     let mut files = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(repo_root().join("apps/lumen")) {
+    if let Ok(entries) = std::fs::read_dir(repo_root()) {
         for entry in entries.flatten() {
             let Ok(file_type) = entry.file_type() else {
                 continue;
@@ -28,7 +24,7 @@ fn discover_dockerfiles() -> Vec<String> {
             }
             let name = entry.file_name().to_string_lossy().to_string();
             if name.starts_with("Dockerfile") {
-                files.push(format!("apps/lumen/{name}"));
+                files.push(name);
             }
         }
     }
@@ -63,10 +59,10 @@ fn insert_after_first_from(source: &str, instruction: &str) -> String {
 const DURABLE_BEGIN: &str = "  # DURABLE-CONTRACT-BEGIN\n";
 const DURABLE_END: &str = "  # DURABLE-CONTRACT-END\n";
 const DURABLE_BLOCK_SHA256: &str =
-    "60f0319e1782721910b141428f06e8a654e5e5a9e23c2ec2195a3a9c060e35d8";
-const CANDIDATE_ROOT_REGEX: &str = "^ghcr\\.io/chrischeng-c4/lumen@sha256:[0-9a-f]{64}$";
+    "7ae73039416ce9c7860e7dbd285b29bd15838dfd307f5b05d4ebd22454788e40";
+const CANDIDATE_ROOT_REGEX: &str = "^ghcr\\.io/faberline/lumen@sha256:[0-9a-f]{64}$";
 const OLD_IMAGE: &str =
-    "ghcr.io/chrischeng-c4/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d";
+    "ghcr.io/faberline/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d";
 const DATA_MOUNT: &str = "--mount \"type=volume,src=$VOLUME,dst=/var/lib/lumen/data\"";
 const REJECT_DATA_MOUNT: &str =
     "--mount \"type=volume,src=$REJECT_VOLUME,dst=/var/lib/lumen/data\"";
@@ -771,7 +767,7 @@ fn assert_durable_rejected(label: &str, source: String) {
 
 #[test]
 fn test_durable_script_contract_and_negative_mutations() {
-    let path = repo_root().join("apps/lumen/scripts/standalone-container-smoke.sh");
+    let path = repo_root().join("scripts/standalone-container-smoke.sh");
     let source = fs::read_to_string(path).expect("read durable smoke script");
     validate_durable_script(&source).expect("durable script contract");
 
@@ -890,7 +886,7 @@ fn test_durable_script_contract_and_negative_mutations() {
     );
 
     for (label, replacement) in [
-        ("candidate tag", "\"ghcr.io/chrischeng-c4/lumen:latest\""),
+        ("candidate tag", "\"ghcr.io/faberline/lumen:latest\""),
         ("candidate local image", "\"./lumen\""),
         (
             "candidate child image",
@@ -927,7 +923,7 @@ fn test_durable_script_contract_and_negative_mutations() {
         replace_exact(
             &source,
             OLD_IMAGE,
-            "ghcr.io/chrischeng-c4/lumen@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "ghcr.io/faberline/lumen@sha256:0000000000000000000000000000000000000000000000000000000000000000",
         ),
     );
     for (label, replacement) in [
@@ -956,7 +952,7 @@ fn test_durable_script_contract_and_negative_mutations() {
             REPLACEMENT_RUN_SOURCE,
             &REPLACEMENT_RUN_SOURCE.replace(
                 "\"$LUMEN_STANDALONE_DURABLE_IMAGE\"",
-                "\"ghcr.io/chrischeng-c4/lumen:other\"",
+                "\"ghcr.io/faberline/lumen:other\"",
             ),
         ),
     );
@@ -1235,14 +1231,14 @@ fn validate_compose_contract(source: &str) -> Result<(), String> {
 
 #[test]
 fn test_checked_in_compose_satisfies_durability_contract() {
-    let source = std::fs::read_to_string(repo_root().join("apps/lumen/compose.yaml"))
+    let source = std::fs::read_to_string(repo_root().join("compose.yaml"))
         .expect("read compose file");
     validate_compose_contract(&source).expect("compose durability contract must hold");
 }
 
 #[test]
 fn test_negative_compose_durability_mutations() {
-    let source = std::fs::read_to_string(repo_root().join("apps/lumen/compose.yaml"))
+    let source = std::fs::read_to_string(repo_root().join("compose.yaml"))
         .expect("read compose file");
     let mount = "      - lumen-data:/var/lib/lumen/data\n";
     for replacement in [
@@ -1505,8 +1501,8 @@ fn test_negative_fixture_inventory_mismatch() {
 
     let mut extra = missing;
     extra.extend([
-        "apps/lumen/Dockerfile.test".into(),
-        "apps/lumen/Dockerfile.extra".into(),
+        "Dockerfile.test".into(),
+        "Dockerfile.extra".into(),
     ]);
     assert!(matches!(
         validate_inventory(&extra),
@@ -1519,9 +1515,9 @@ fn test_negative_fixture_no_stages_found() {
     let no_from = "# syntax=docker/dockerfile:1\nENV LUMEN_HOST=0.0.0.0\n\
         ENTRYPOINT [\"/usr/local/bin/lumen\"]\nCMD [\"serve\"]";
     assert_eq!(
-        validate_dockerfile_content("apps/lumen/Dockerfile", no_from),
+        validate_dockerfile_content("Dockerfile", no_from),
         Err(DockerfileValidationError::NoStagesFound(
-            "apps/lumen/Dockerfile".to_string()
+            "Dockerfile".to_string()
         ))
     );
 }

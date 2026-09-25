@@ -10,7 +10,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn repo_root() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest.parent().unwrap().parent().unwrap().into()
+    manifest
 }
 
 fn one(src: &str, from: &str, to: &str) -> String {
@@ -184,26 +184,25 @@ const COPY: &str =
 #[test]
 fn test_checked_in_and_rendered_dockerfiles_satisfy_contract() {
     let root = repo_root();
-    let mut discovered: Vec<String> = std::fs::read_dir(root.join("apps/lumen"))
+    let mut discovered: Vec<String> = std::fs::read_dir(&root)
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().to_string())
         .filter(|name| name.starts_with("Dockerfile"))
-        .map(|name| format!("apps/lumen/{name}"))
         .collect();
     discovered.sort();
     assert_eq!(
         discovered,
         [
-            "apps/lumen/Dockerfile",
-            "apps/lumen/Dockerfile.release",
-            "apps/lumen/Dockerfile.test",
+            "Dockerfile",
+            "Dockerfile.release",
+            "Dockerfile.test",
         ]
     );
     let targets = [
-        ("apps/lumen/Dockerfile", "builder", CC_BASE),
-        ("apps/lumen/Dockerfile.release", "seed", RELEASE_STATIC_BASE),
-        ("apps/lumen/Dockerfile.test", "seed", STATIC_BASE),
+        ("Dockerfile", "builder", CC_BASE),
+        ("Dockerfile.release", "seed", RELEASE_STATIC_BASE),
+        ("Dockerfile.test", "seed", STATIC_BASE),
     ];
     for (rel, seed, base) in targets {
         let content = std::fs::read_to_string(root.join(rel)).unwrap();
@@ -225,7 +224,7 @@ fn test_checked_in_and_rendered_dockerfiles_satisfy_contract() {
 #[test]
 fn test_release_dockerfile_rejects_mutable_final_base() {
     let root = repo_root();
-    let content = std::fs::read_to_string(root.join("apps/lumen/Dockerfile.release")).unwrap();
+    let content = std::fs::read_to_string(root.join("Dockerfile.release")).unwrap();
     let mutated = one(&content, RELEASE_STATIC_BASE, STATIC_BASE);
     assert_eq!(
         valid(&mutated, "seed", RELEASE_STATIC_BASE),
@@ -527,7 +526,7 @@ fn candidate_image() -> String {
 
 fn validate_candidate_image(image: &str) -> Result<(), &'static str> {
     let digest = image
-        .strip_prefix("ghcr.io/chrischeng-c4/lumen@sha256:")
+        .strip_prefix("ghcr.io/faberline/lumen@sha256:")
         .ok_or("candidate image must use canonical GHCR repository and @sha256 digest")?;
     if digest.len() != 64 {
         return Err("candidate sha256 must contain 64 hex digits");
@@ -544,16 +543,16 @@ fn validate_candidate_image(image: &str) -> Result<(), &'static str> {
 #[test]
 fn live_gate_accepts_only_the_exact_candidate_digest_shape() {
     let valid = format!(
-        "ghcr.io/chrischeng-c4/lumen@sha256:{}",
+        "ghcr.io/faberline/lumen@sha256:{}",
         "0123456789abcdef".repeat(4)
     );
     assert_eq!(validate_candidate_image(&valid), Ok(()));
     for invalid in [
-        "ghcr.io/chrischeng-c4/lumen:0.4.29".to_owned(),
+        "ghcr.io/faberline/lumen:0.4.29".to_owned(),
         "ghcr.io/other/lumen@sha256:".to_owned() + &"0".repeat(64),
-        "ghcr.io/chrischeng-c4/lumen@sha256:abc".to_owned(),
-        format!("ghcr.io/chrischeng-c4/lumen@sha256:{}", "A".repeat(64)),
-        format!("ghcr.io/chrischeng-c4/lumen@sha256:{}", "g".repeat(64)),
+        "ghcr.io/faberline/lumen@sha256:abc".to_owned(),
+        format!("ghcr.io/faberline/lumen@sha256:{}", "A".repeat(64)),
+        format!("ghcr.io/faberline/lumen@sha256:{}", "g".repeat(64)),
     ] {
         assert!(
             validate_candidate_image(&invalid).is_err(),

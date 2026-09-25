@@ -1,3 +1,50 @@
+[workspace]
+resolver = "2"
+members = ["."]
+
+[workspace.package]
+authors = ["Chris Cheng <chris.cheng.c4@gmail.com>"]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/faberline/lumen"
+
+[workspace.dependencies]
+tokio = { version = "1.40", features = ["full"] }
+futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+serde_path_to_error = "0.1"
+serde_yaml = "0.9"
+anyhow = "1.0"
+thiserror = "2.0"
+reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-tls-native-roots", "json", "cookies", "gzip", "brotli", "multipart", "stream"] }
+axum = { version = "0.8", features = ["ws"] }
+utoipa = "4"
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+base64 = "0.22"
+jsonwebtoken = "9"
+clap = { version = "4", features = ["derive", "string"] }
+wiremock = "0.6"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.test]
+opt-level = 1
+
+# Preserve jieba-rs 0.7.4 cuts while allowing Lumen to store the no-HMM route on disk.
+[patch.crates-io]
+jieba-rs = { path = "vendor/jieba-rs" }
+
 [package]
 name = "lumen"
 # lumen owns its version and releases independently (see CONTRIBUTING.md
@@ -36,6 +83,10 @@ path = "e2e/standalone_gke_acceptance_contract.rs"
 name = "index_text_parity"
 path = "e2e/index_text_parity.rs"
 
+[[test]]
+name = "certificate_ownership"
+path = "e2e/certificate_ownership.rs"
+
 [dependencies]
 anyhow.workspace = true
 async-trait = { workspace = true }
@@ -59,37 +110,37 @@ futures.workspace = true
 reqwest = { workspace = true, optional = true }
 # Shared h2c transport: `server` powers `serve` (HTTP/1.1 + h2c on one port via
 # hyper auto-builder, replacing the HTTP/1-only `axum::serve`).
-transport-h2c = { path = "../../libs/transport-h2c", features = ["server"] }
+transport-h2c = { git = "https://github.com/faberline/core", tag = "v0.4.13", features = ["server"] }
 # `lumen upgrade` / `lumen issue` — the standard agent-facing CLI ops,
 # shared across the ecosystem (CONTRIBUTING.md "CLI convention"). Offline paths
 # always build; the HTTPS paths are pulled in by lumen's `self-update` /
 # `issue` features via `cli-std/online`. `k8s` pulls in `cli_std::connect`
 # (#1376) — `lumen connect`'s port-forward lifecycle + token-registry Secret
 # resolution, always built (not behind a lumen feature flag).
-cli-std = { path = "../../libs/cli-std", default-features = false, features = ["k8s"] }
+cli-std = { git = "https://github.com/faberline/core", tag = "v0.4.13", default-features = false, features = ["k8s"] }
 # Shared request-auth plumbing. Lumen holds no credentials: `service_auth::k8s`
 # delegates authentication to TokenReview and authorization to
 # SubjectAccessReview, and Lumen supplies only the mapping from its own
 # operations onto Kubernetes resource attributes (#2869).
-service-auth = { path = "../../libs/service-auth" }
+service-auth = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 # Shared k8s-native HTTP service shell: standard probe routes, request tracing,
 # h2c serve wrapper, and SIGTERM drain sequencing.
-service-http = { path = "../../libs/service-http" }
+service-http = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 # One absolute shutdown deadline shared by Lumen's public HTTP drain and its
 # Raft host. The serving binary consumes it directly during SIGINT/SIGTERM.
-server-lifecycle = { path = "../../libs/server-lifecycle" }
+server-lifecycle = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 # Shared backup destination/policy/sink/runner contract. Lumen still owns
 # producing a consistent engine snapshot; this lib owns where/how bytes are kept.
-service-backup = { path = "../../libs/service-backup" }
+service-backup = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 # Shared durable local storage primitives: fsync policy, atomic snapshot replace,
 # and CRC-framed append logs. Lumen owns the domain codecs layered on top.
-storage-durable = { path = "../../libs/storage-durable" }
+storage-durable = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 # Shared analyzer and rebuildable text-index core. Lumen keeps its collection,
 # routing, scoring, and distributed state above this product-neutral base.
-index-text = { path = "../../libs/index-text" }
+index-text = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 # Lumen-owned HA: writes replicated through the shared raft-core engine (behind
 # the `raft-wal` feature). Peer RPCs ride the same h2c transport.
-raft-core = { path = "../../libs/raft-core", optional = true }
+raft-core = { git = "https://github.com/faberline/core", tag = "v0.4.13", optional = true }
 # Non-optional (#1002): `src/config.rs`/`src/raft.rs` delegate the StatefulSet
 # shard/replica/voter math + peer-DNS/`LUMEN_PEERS` override parsing to
 # `raft_runtime::cluster` unconditionally (those modules compile with no
@@ -98,9 +149,9 @@ raft-core = { path = "../../libs/raft-core", optional = true }
 # every transitive dep it pulls in (raft-core, h2c, axum, tokio, reqwest via
 # h2c) is already unconditional in this graph; only `raft-wal` still gates the
 # replication engine (raft-core) + peer-RPC HTTP client (reqwest) themselves.
-raft-runtime = { path = "../../libs/raft-runtime" }
+raft-runtime = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 # `lumen spec gen` — generate a typed client from lumen's own OpenAPI.
-openapi-codegen = { path = "../../libs/openapi-codegen", version = "0.5" }
+openapi-codegen = { git = "https://github.com/faberline/core", tag = "v0.4.13", version = "0.5" }
 rayon = "1.10"
 # simdeez_f compiles anndists' SIMD distance kernels (aarch64 NEON `asimd`,
 # x86 AVX2/SSE2) for DistL2/DistDot. The cosine path routes through DistDot on
@@ -116,7 +167,7 @@ k8s-openapi = { version = "0.24", features = ["v1_32"], optional = true }
 schemars = { version = "0.8", optional = true }
 # Shared operator scaffolding (reconcile loop + leader-election lease); lumen
 # supplies the `Lumen` CRD + render and composes the rest (epic #580).
-service-k8s = { path = "../../libs/service-k8s", default-features = false, features = ["render-only"] }
+service-k8s = { git = "https://github.com/faberline/core", tag = "v0.4.13", default-features = false, features = ["render-only"] }
 serde_yaml.workspace = true
 lz4_flex = "0.11"
 memmap2 = "0.9"
@@ -137,11 +188,11 @@ rustls = "0.23"
 # Shared peer-mTLS material loading (PEM cert/key/CA + rustls builders +
 # crypto-provider install); lumen keeps a thin adapter with its
 # `LUMEN_PEER_TLS_*`/`LUMEN_PEER_MTLS` env names (#971).
-peer-tls = { path = "../../libs/peer-tls" }
+peer-tls = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 # Shared lock-free counter/gauge/latency primitives + Prometheus text
 # encoder; lumen's `Metrics` reimplements on top with byte-identical
 # `render()` output (#974).
-metrics-prometheus = { path = "../../libs/metrics-prometheus" }
+metrics-prometheus = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 smallvec = "1"
 thiserror.workspace = true
 tokio = { workspace = true }
@@ -157,7 +208,7 @@ opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"], optional = true
 utoipa = { workspace = true, features = ["axum_extras"] }
 
 [build-dependencies]
-build-stamp = { path = "../../libs/build-stamp" }
+build-stamp = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 
 [features]
 default = []
@@ -222,10 +273,10 @@ ciborium = "0.2"
 criterion = "0.5"
 proptest = "1"
 rand = "0.8"
-rig = { path = "../rig" }
+rig = { git = "https://github.com/faberline/rig", rev = "1fbe487eb4a94d745447227dbc974c3eb3e9fbd5" }
 serde_json.workspace = true
 # Shared observability layer: JSON formatter + service-identity for subscriber-capture tests.
-service-observability = { path = "../../libs/service-observability" }
+service-observability = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 tracing-subscriber = { workspace = true, features = ["fmt", "json", "env-filter", "registry"] }
 # HTTP client for the perf-gate / write-qps harness (drives lumen + OpenSearch).
 # DEV-ONLY on purpose: the serving binary speaks REST/OpenAPI and ships no Rust

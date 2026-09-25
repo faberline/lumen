@@ -24,15 +24,15 @@
 //!   establish a small committed Text base, then replay and cold-open one valid >256 MiB
 //!   Unicode token, queries its exact full-string lowercase result, and applies
 //!   later version/delete records. These assertions cover
-//!   apps/lumen/src/aof.rs:285-315, apps/lumen/src/storage/committed_text_apply.rs:49-81,
-//!   apps/lumen/src/storage/text_preparation.rs:119-141 and :323-336, and
+//!   src/aof.rs:285-315, src/storage/committed_text_apply.rs:49-81,
+//!   src/storage/text_preparation.rs:119-141 and :323-336, and
 //!   libs/index-text/src/lib.rs:510-535.
 //! - Security: aof_oversized_committed_unicode_token.rs:347-358, :393-412,
 //!   and :521-604 corrupts the
 //!   real >256 MiB CRC-valid persisted Text frame after a valid prefix and
 //!   requires refusal before its row or watermark become visible. It covers
-//!   the AOF byte boundary in apps/lumen/src/aof.rs:285-315.
-//! - Performance: apps/lumen/docs/indexing.md:264-276 says, verbatim,
+//!   the AOF byte boundary in src/aof.rs:285-315.
+//! - Performance: docs/indexing.md:264-276 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   aof_oversized_committed_unicode_token.rs:482-519 reads public pending total
 //!   and high-water gauges after replay and checkpoints. The fixture source,
@@ -42,7 +42,7 @@
 //! # Root negative control
 //!
 //! Restore the current full-token lowercase workspace pricing in
-//! `apps/lumen/src/storage/text_preparation.rs`. The valid oversized replay
+//! `src/storage/text_preparation.rs`. The valid oversized replay
 //! assertion below must fail through its capacity refusal or the child cleanup
 //! watchdog. Restore the correct source hash before any other gate. Never lower
 //! the fixture threshold or replace its full-string oracle with per-character
