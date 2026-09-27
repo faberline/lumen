@@ -83,7 +83,7 @@ receipt SHA-256 in the release notes.
 | Install and upgrade order | [Deployment](deployment.md) | Use the commands for the selected current mode. |
 | Current Kubernetes API | Generated Lumen CRDs | `lumen k8s crd render --out <directory>` |
 | Current GCP substrate | [Installation Terraform](../terraform/README.md) | Read the current capacity-catalog and PKI boundaries. |
-| Current Managed GCP acceptance | [GCP acceptance](../../../acceptance/gcp/README.md) | Run `bash acceptance/gcp/scripts/check.sh` for the static contract. Use the linked controller-run path for live proof. |
+| Current Managed GCP acceptance | [GCP acceptance](https://github.com/faberline/workspace/blob/main/acceptance/gcp/README.md) | Run `bash acceptance/gcp/scripts/check.sh` for the static contract. Use the linked controller-run path for live proof. |
 
 ## Support tiers
 
@@ -307,4 +307,4 @@ row for the regional profile.
 - [Client integration](client-integration.md)
 - [Operator runbook](runbooks/operator-control-plane.md)
 - [Installation Terraform](../terraform/README.md)
-- [GCP acceptance](../../../acceptance/gcp/README.md)
+- [GCP acceptance](https://github.com/faberline/workspace/blob/main/acceptance/gcp/README.md)

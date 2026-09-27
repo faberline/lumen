@@ -158,4 +158,4 @@ real, but CI enforcement is a future outcome.
 - [Authentication](../docs/authentication.md)
 - [Client integration](../docs/client-integration.md)
 - [GKE support profile](../docs/gke.md)
-- [`openapi-codegen`](../../../libs/openapi-codegen/README.md)
+- [`openapi-codegen`](https://github.com/faberline/core/blob/v0.4.13/crates/openapi-codegen/README.md)

@@ -242,10 +242,10 @@ contract. Each source below states its direct contribution.
     segment formats, and the derived-index lifecycle. The
     [indexing guide](docs/indexing.md) separates current behavior from the
     Search v2 schema, write, durability, and rebuild target.
-  - [`libs/storage-durable`](../../libs/storage-durable/README.md) provides
+  - [`libs/storage-durable`](https://github.com/faberline/core/blob/v0.4.13/crates/storage-durable/README.md) provides
     durable files, atomic replacement, fsync, and framed logs.
-  - [`libs/raft-core`](../../libs/raft-core/README.md) orders replicated writes.
-  - [`libs/raft-runtime`](../../libs/raft-runtime/README.md) hosts replication,
+  - [`libs/raft-core`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-core/README.md) orders replicated writes.
+  - [`libs/raft-runtime`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-runtime/README.md) hosts replication,
     snapshots, and the replicated log lifecycle.
 - Gate: `cargo test -p lumen --test api_e2e --test drop_field_e2e --test reindex_stream_e2e --test stats_metadata_e2e`
 - Gate: `cargo test -p lumen --test indexing_durable_oracle`
@@ -273,7 +273,7 @@ contract. Each source below states its direct contribution.
 - Sources:
   - [`apps/lumen`](./) defines the CRD, defaults, topology policy, conditions,
     and Lumen resource composition.
-  - [`libs/service-k8s`](../../libs/service-k8s/README.md) provides reusable
+  - [`libs/service-k8s`](https://github.com/faberline/core/blob/v0.4.13/crates/service-k8s/README.md) provides reusable
     reconciliation, leader election, workload, Service, and status mechanisms.
   - `external:kubernetes` stores desired state and runs the workload, network,
     lease, RBAC, and Secret contracts.
@@ -290,7 +290,7 @@ contract. Each source below states its direct contribution.
   - [`apps/lumen`](./) defines the Fleet API, RFC 7386 merge behavior,
     Lumen-specific protected topology fields, adoption rule, prune policy, and
     current materialization status.
-  - [`libs/service-k8s`](../../libs/service-k8s/README.md) provides reusable
+  - [`libs/service-k8s`](https://github.com/faberline/core/blob/v0.4.13/crates/service-k8s/README.md) provides reusable
     Kubernetes lease and controller mechanisms used by the operator. The
     shared `service-k8s::fleet` controller is a future outcome, not a current
     library surface.
@@ -307,16 +307,16 @@ contract. Each source below states its direct contribution.
 - Sources:
   - [`apps/lumen`](./) defines the security posture, Lumen permission mapping,
     anonymous route set, identity separation, and integration policy.
-  - [`libs/service-auth`](../../libs/service-auth/README.md) provides token
+  - [`libs/service-auth`](https://github.com/faberline/core/blob/v0.4.13/crates/service-auth/README.md) provides token
     extraction, projected-token reading, TokenRequest, TokenReview,
     SubjectAccessReview, principal parsing, redaction, and fail-closed
     middleware.
-  - [`libs/service-k8s`](../../libs/service-k8s/README.md) provides projected
+  - [`libs/service-k8s`](https://github.com/faberline/core/blob/v0.4.13/crates/service-k8s/README.md) provides projected
     token, ServiceAccount, Role, RoleBinding, and auth-delegator rendering
     mechanisms used by Lumen-owned policy.
-  - [`libs/peer-tls`](../../libs/peer-tls/README.md) provides certificate
+  - [`libs/peer-tls`](https://github.com/faberline/core/blob/v0.4.13/crates/peer-tls/README.md) provides certificate
     validation, serving TLS, peer mTLS, trust handling, and certificate reload.
-  - [`libs/cli-std`](../../libs/cli-std/README.md) provides kubeconfig,
+  - [`libs/cli-std`](https://github.com/faberline/core/blob/v0.4.13/crates/cli-std/README.md) provides kubeconfig,
     TokenRequest, local proxy, and private-CA client mechanisms.
   - `external:certificate-provider` supplies the current serving and peer
     certificates, private keys, and trust roots. The planned operator-managed
@@ -338,14 +338,14 @@ contract. Each source below states its direct contribution.
   - [`apps/lumen`](./) defines virtual-bucket routing, shard ownership,
     reshard phases, write fences, checkpoints, and scatter/gather behavior.
     It also defines process-level shutdown order.
-  - [`libs/raft-core`](../../libs/raft-core/README.md) provides consensus,
+  - [`libs/raft-core`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-core/README.md) provides consensus,
     quorum, ordered replication, leader election, and canonical tick timing.
-  - [`libs/raft-runtime`](../../libs/raft-runtime/README.md) provides topology,
+  - [`libs/raft-runtime`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-runtime/README.md) provides topology,
     transport, forwarding, snapshots, log compaction, and four-phase bounded
     shutdown.
-  - [`libs/service-k8s`](../../libs/service-k8s/README.md) provides the workload
+  - [`libs/service-k8s`](https://github.com/faberline/core/blob/v0.4.13/crates/service-k8s/README.md) provides the workload
     and controller mechanisms that apply declared topology.
-  - [`libs/storage-durable`](../../libs/storage-durable/README.md) provides
+  - [`libs/storage-durable`](https://github.com/faberline/core/blob/v0.4.13/crates/storage-durable/README.md) provides
     durable state transitions at reshard and restart boundaries.
   - `external:kubernetes` runs the declared members and networking contracts.
 - Gate: `cargo test -p lumen --test reshard_admin_e2e --test reshard_driver_e2e --test routed_shard_e2e`
@@ -361,13 +361,13 @@ contract. Each source below states its direct contribution.
 - Sources:
   - [`apps/lumen`](./) defines WAL records, segment and snapshot formats,
     checkpoint boundaries, and restore behavior.
-  - [`libs/storage-durable`](../../libs/storage-durable/README.md) provides
+  - [`libs/storage-durable`](https://github.com/faberline/core/blob/v0.4.13/crates/storage-durable/README.md) provides
     durable-file, atomic-state, fsync, and framed-log mechanisms.
-  - [`libs/service-backup`](../../libs/service-backup/README.md) provides backup
+  - [`libs/service-backup`](https://github.com/faberline/core/blob/v0.4.13/crates/service-backup/README.md) provides backup
     destinations, transfer, retention, and object-store mechanisms.
-  - [`libs/raft-core`](../../libs/raft-core/README.md) replicates committed
+  - [`libs/raft-core`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-core/README.md) replicates committed
     writes inside a shard group.
-  - [`libs/raft-runtime`](../../libs/raft-runtime/README.md) installs replica
+  - [`libs/raft-runtime`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-runtime/README.md) installs replica
     snapshots and manages the replicated log lifecycle.
 - Gate: `cargo test -p lumen --test backup_restore_e2e --test indexing_durable_oracle`
 - Gate: `acceptance/gcp/scripts/run.sh`
@@ -380,13 +380,13 @@ contract. Each source below states its direct contribution.
 - Sources:
   - [`apps/lumen`](./) defines Lumen metrics, readiness inputs, conditions,
     alerts, and the meaning of domain state.
-  - [`libs/service-http`](../../libs/service-http/README.md) provides health,
+  - [`libs/service-http`](https://github.com/faberline/core/blob/v0.4.13/crates/service-http/README.md) provides health,
     readiness, admission, request tracing, and graceful drain.
-  - [`libs/metrics-prometheus`](../../libs/metrics-prometheus/README.md) provides
+  - [`libs/metrics-prometheus`](https://github.com/faberline/core/blob/v0.4.13/crates/metrics-prometheus/README.md) provides
     metric types and Prometheus encoding.
-  - [`libs/service-observability`](../../libs/service-observability/README.md)
+  - [`libs/service-observability`](https://github.com/faberline/core/blob/v0.4.13/crates/service-observability/README.md)
     provides shared structured logging and tracing setup.
-  - [`libs/service-k8s`](../../libs/service-k8s/README.md) provides controller
+  - [`libs/service-k8s`](https://github.com/faberline/core/blob/v0.4.13/crates/service-k8s/README.md) provides controller
     events, status, monitoring resources, and reconciliation mechanisms.
   - `external:kubernetes` stores status and events and runs probe contracts.
   - `external:prometheus-stack` consumes metrics and applies ServiceMonitor and
@@ -402,15 +402,15 @@ contract. Each source below states its direct contribution.
 - Sources:
   - [`apps/lumen`](./) defines routes, request and response types, CLI verbs,
     deployment commands, domain errors, and agent topics.
-  - [`libs/service-http`](../../libs/service-http/README.md) provides standard
+  - [`libs/service-http`](https://github.com/faberline/core/blob/v0.4.13/crates/service-http/README.md) provides standard
     routes, request policy, trace context, timing, and shared error envelopes.
-  - [`libs/server-http`](../../libs/server-http/README.md) owns the shared HTTP
+  - [`libs/server-http`](https://github.com/faberline/core/blob/v0.4.13/crates/server-http/README.md) owns the shared HTTP
     listener, lifecycle drain, and accept-time TLS configuration.
-  - [`libs/transport-h2c`](../../libs/transport-h2c/README.md) provides the
+  - [`libs/transport-h2c`](https://github.com/faberline/core/blob/v0.4.13/crates/transport-h2c/README.md) provides the
     per-connection HTTP/1.1 and h2c protocol and client transport helpers.
-  - [`libs/openapi-codegen`](../../libs/openapi-codegen/README.md) generates
+  - [`libs/openapi-codegen`](https://github.com/faberline/core/blob/v0.4.13/crates/openapi-codegen/README.md) generates
     typed clients from OpenAPI.
-  - [`libs/cli-std`](../../libs/cli-std/README.md) provides shared CLI
+  - [`libs/cli-std`](https://github.com/faberline/core/blob/v0.4.13/crates/cli-std/README.md) provides shared CLI
     conventions, output, operational commands, and agent discovery.
 - Gate: `cargo test -p lumen --test spec_cli --test spec_route_parity --test api_e2e`
 - Gate: `cargo test -p lumen --test cli_convention --test spec_gen_e2e --test generated_clients_crud_e2e`
