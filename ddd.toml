@@ -377,3 +377,30 @@ rule = "B2"
 paths = ["src/ingest/domain/change_budget/budget_wake.rs"]
 subject = "std::time::Instant::now"
 reason = "E4: wait_for_change_timeout turns its timeout into a deadline and re-reads the clock after each spurious Condvar wake. P2: a Clock port, or the wait moves to infrastructure with the wake port."
+
+# WalLog, the log seam writes publish through, moved to the ingest domain as-is
+# (D2); its signature still names the runtime types it was written against.
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/ingest/domain/wal_log.rs"]
+subject = "anyhow"
+reason = "WalLog's methods return anyhow::Result, the error type MemWal, the raft write sink and the apply loop already share. P2: a WAL error type in the domain that the backends map into, or the error type moves with the port."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/ingest/domain/wal_log.rs"]
+subject = "async_trait"
+reason = "WalLog is an async trait held as Arc<dyn WalLog> (SharedWal), so its methods are boxed with #[async_trait] to stay object-safe. P2: decided with where WalLog lives (see the domain->infrastructure exception below)."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/ingest/domain/wal_log.rs"]
+subject = "futures"
+reason = "WalStream and WalAdmissionStream are boxed futures::Stream subscriptions, and subscribe_admitted's default maps the resident stream with StreamExt. P2: the stream types move with WalLog (see the domain->infrastructure exception below)."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/ingest/domain/wal_log.rs"]
+subject = "domain->infrastructure"
+reason = "Only WalLog's signature references the delivery types: WalAdmissionStream yields WalDelivery and stage_source returns WalSourceRelease. They stay in infrastructure beside MemWal because WalSourceRecord holds MemWal's private slot and WalDelivery hands out mmap payloads. P2 chooses between a delivery handle trait the domain defines and infrastructure implements, or moving WalLog to ingest/application/ports."

@@ -1,10 +1,10 @@
 //! Colocated unit fixtures for `committed_replace_view.rs` integration.
 
 use super::*;
+use crate::ingest::domain::wal_record::WalRecord;
+use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
-use crate::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
-use crate::wal::WalRecord;
 use std::collections::BTreeSet;
 
 fn source_set(values: Vec<&str>) -> Vec<u8> {

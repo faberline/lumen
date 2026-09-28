@@ -6,10 +6,10 @@
 
 use super::committed_replace_plan::{ParsedValue, ParsedValues, ReplaceDocDescriptor};
 use super::*;
+use crate::ingest::infrastructure::wal::borrowed_replace_scanner::BorrowedReplaceScanner;
+use crate::ingest::infrastructure::wal::borrowed_replace_spool::BorrowedReplaceSpool;
+use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::capture_barrier::ApplyLease;
-use crate::wal::borrowed_replace_scanner::BorrowedReplaceScanner;
-use crate::wal::borrowed_replace_spool::BorrowedReplaceSpool;
-use crate::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use std::hash::Hasher;
 
 pub(super) struct ReplacementInput<'a> {

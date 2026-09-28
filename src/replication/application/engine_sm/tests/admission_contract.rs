@@ -10,6 +10,7 @@ use tower::ServiceExt;
 use crate::coordinator::WriteSink;
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::change_budget::{ChangeBudget, HARD_LIMIT};
+use crate::ingest::domain::wal_record::WalRecord;
 use crate::replication::application::engine_sm::write_sink::RaftWriteSink;
 use crate::replication::application::engine_sm::EngineSm;
 use crate::shared_kernel::log_entry::RaftLogEntry;
@@ -18,7 +19,6 @@ use crate::shared_kernel::types::{
     schema::{CreateCollectionRequest, FieldSpec, FieldType},
 };
 use crate::storage::Engine;
-use crate::wal::WalRecord;
 
 // Draft bytes for src/raft_sm.rs's existing `#[cfg(test)] mod tests`.
 // The host status is observed through its public router after apply cleanup.

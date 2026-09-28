@@ -1,9 +1,9 @@
 //! Unit tests to place in `committed_index_plan.rs` after integration.
 
 use super::*;
+use crate::ingest::domain::wal_record::WalRecord;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
-use crate::wal::WalRecord;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]

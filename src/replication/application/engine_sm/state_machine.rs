@@ -55,7 +55,9 @@ impl RaftStateMachine for EngineSm {
                 && command.len() > crate::ingest::domain::change_budget::HARD_LIMIT / 8
             {
                 if let Ok(scanner) =
-                    crate::wal::fast_index_scanner::FastIndexScanner::parse(command)
+                    crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner::parse(
+                        command,
+                    )
                 {
                     if self.engine.try_apply_committed_index_with_capacity_owner(
                         &scanner,

@@ -8394,8 +8394,8 @@ mod tests {
     /// staged into its own row reader before apply, so it lands in
     /// `TextIndex::staged_rows` instead of the in-RAM token map.
     fn committed_text(engine: &Arc<Engine>, external_id: &str, value: &str, sequence: u64) {
-        let bytes =
-            crate::wal::WalRecord::new(crate::shared_kernel::log_entry::RaftLogEntry::Index {
+        let bytes = crate::ingest::domain::wal_record::WalRecord::new(
+            crate::shared_kernel::log_entry::RaftLogEntry::Index {
                 collection_id: "u".into(),
                 req: IndexRequest {
                     items: vec![IndexItem {
@@ -8406,10 +8406,13 @@ mod tests {
                     }],
                     request_id: None,
                 },
-            })
-            .encode()
-            .unwrap();
-        let scanner = crate::wal::fast_index_scanner::FastIndexScanner::parse(&bytes).unwrap();
+            },
+        )
+        .encode()
+        .unwrap();
+        let scanner =
+            crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner::parse(&bytes)
+                .unwrap();
         let mut completed = None;
         assert!(engine
             .try_apply_committed_index(&scanner, sequence, |apply, outcome| {

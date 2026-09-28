@@ -8,10 +8,10 @@ use anyhow::Result;
 use raft_runtime::{ProposalBackpressure, RaftHost, RaftStateMachine};
 
 use crate::coordinator::WriteSink;
+use crate::ingest::domain::wal_record::WalRecord;
 use crate::replication::application::engine_sm::EngineSm;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::storage::{ApplyOutcome, Engine, RecordAdmissionError};
-use crate::wal::WalRecord;
 
 /// The [`WriteSink`] for `--wal raft`: a write proposes through the shared
 /// [`RaftHost`] (which handles leader-redirect + read-your-write), and the rich

@@ -20,11 +20,11 @@ use anyhow::Result;
 use raft_runtime::{Index, OutcomeWindow};
 
 use crate::ingest::domain::change_budget::AdmissionError;
+use crate::ingest::domain::wal_record::WalRecord;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::storage::{
     ApplyOutcome, Engine, RecordAdmissionError, RecordReservation, RepriceRecord,
 };
-use crate::wal::WalRecord;
 
 /// How many recent apply outcomes to retain for the write handler to claim,
 /// via [`OutcomeWindow`].
@@ -125,7 +125,8 @@ impl EngineSm {
             !self.failed.load(Ordering::Acquire),
             "Raft apply requires restart after an unresolved record"
         );
-        let workspace = crate::wal_wire_cost::scan_workspace_bytes(command.len())?;
+        let workspace =
+            crate::ingest::infrastructure::wire_cost::scan_workspace_bytes(command.len())?;
         // The node owns its original log command and the current apply delivery.
         // Admission also precedes the decoder's token and untagged-value buffers.
         let transport = command
@@ -145,7 +146,7 @@ impl EngineSm {
             }
             Err(error) => return Err(error.into()),
         };
-        let decoded_peak = crate::wal_wire_cost::decoded_peak_bound(command)?;
+        let decoded_peak = crate::ingest::infrastructure::wire_cost::decoded_peak_bound(command)?;
         let required = decoded_peak
             .checked_add(transport)
             .ok_or(RecordAdmissionError::Overflow)?;

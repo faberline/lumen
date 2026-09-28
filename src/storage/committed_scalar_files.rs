@@ -4,12 +4,14 @@
 //! captured collection version, reserves before allocation, and later rechecks
 //! that version before it publishes all of the files in one apply interval.
 
+use crate::ingest::infrastructure::wal::fast_index_scanner::{
+    FastIndexItem, FastIndexScanner, FastIndexValue,
+};
 use crate::segment::{
     stream::{self, ScalarProjectionScratch},
     SegmentReader,
 };
 use crate::shared_kernel::types::schema::FieldType;
-use crate::wal::fast_index_scanner::{FastIndexItem, FastIndexScanner, FastIndexValue};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -435,9 +437,9 @@ impl Drop for StageDirectory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ingest::domain::wal_record::WalRecord;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
-    use crate::wal::WalRecord;
 
     fn command(rows: Vec<(&str, FieldValue)>) -> Vec<u8> {
         WalRecord::new(RaftLogEntry::Index {

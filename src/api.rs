@@ -53,6 +53,8 @@ use crate::coordinator::{
     MutationGate, RestartRequired, StorageFullError, SubmitStalled, WriteCoordinator, WriteSink,
 };
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
+use crate::ingest::domain::wal_log::SharedWal;
+use crate::ingest::infrastructure::wal::mem_wal::MemWal;
 use crate::replication::domain::{
     cluster_state::ReadConsistency, cluster_state_view::ClusterStateView, raft_role::RaftRole,
 };
@@ -80,7 +82,6 @@ use crate::shared_kernel::types::{
     stats::{CacheStats, FieldStats, StatsResponse, StorageStats},
 };
 use crate::storage::{ApplyOutcome, DropOutcome, Engine, SnapshotV1, StorageError};
-use crate::wal::{MemWal, SharedWal};
 
 /// The `/metrics` body: the engine's domain counters plus the delegated-auth
 /// counters.
@@ -3839,7 +3840,7 @@ mod restore_sink_tests {
 #[cfg(test)]
 mod local_write_backend_tests {
     use super::*;
-    use crate::wal::WalLog;
+    use crate::ingest::domain::wal_log::WalLog;
 
     #[tokio::test]
     async fn invalid_batch_unindex_never_publishes_or_applies() {

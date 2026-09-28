@@ -8,9 +8,9 @@
 //! A plan owns identifiers and small metadata only.  Every `ordinal` points
 //! back into `FastIndexScanner`, so no field value is decoded or copied.
 
+use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::types::schema::FieldType;
 use crate::storage::{SortableF64, StorageError, MAX_INDEX_ITEMS};
-use crate::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use anyhow::{bail, ensure, Result};
 use std::collections::BTreeMap;
 use std::time::Instant;
@@ -635,7 +635,7 @@ fn borrowed_apply_cost(
 }
 
 fn set_bytes(
-    values: crate::wal::fast_index_scanner::FastStringList<'_>,
+    values: crate::ingest::infrastructure::wal::fast_index_scanner::FastStringList<'_>,
     eid_len: usize,
 ) -> std::result::Result<u64, BusinessError> {
     let mut total = 0u64;

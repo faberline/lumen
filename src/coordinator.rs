@@ -14,9 +14,10 @@
 //! Apply happens in exactly one place — the background loop subscribed to
 //! the log — so every node converges by applying the same ordered
 //! stream, and the node that received the write holds no special state.
-//! For [`MemWal`](crate::wal::MemWal) the loop runs in-process and the
-//! round-trip is sub-millisecond, so single-node writes feel synchronous
-//! and existing tests see their writes immediately.
+//! For [`MemWal`](crate::ingest::infrastructure::wal::mem_wal::MemWal) the
+//! loop runs in-process and the round-trip is sub-millisecond, so
+//! single-node writes feel synchronous and existing tests see their writes
+//! immediately.
 //!
 //! Apply errors (e.g. a type mismatch caught at apply time) are routed
 //! back as the original `anyhow::Error` — carrying the `StorageError` —
@@ -35,12 +36,14 @@ use tokio::sync::{
 
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::change_budget::AdmissionError;
+use crate::ingest::domain::wal_log::SharedWal;
+use crate::ingest::domain::wal_record::WalRecord;
+use crate::ingest::infrastructure::wal::delivery::WalDelivery;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::storage::{
     ApplyOutcome, Engine, RecordAdmissionError, RecordApplyGuard, RecordReservation,
     RecordTransientReservation, RepriceRecord,
 };
-use crate::wal::{SharedWal, WalDelivery, WalRecord};
 
 mod committed_scalar;
 use committed_scalar::MappedApply;
@@ -1683,11 +1686,12 @@ mod tests {
     use super::*;
     use crate::ingest::domain::change_admission::PendingChangeCapacity;
     use crate::ingest::domain::change_budget::ChangeBudget;
+    use crate::ingest::domain::wal_log::{WalLog, WalStream};
+    use crate::ingest::infrastructure::wal::mem_wal::MemWal;
     use crate::shared_kernel::types::{
         document::{FieldValue, IndexItem, IndexRequest},
         schema::{CreateCollectionRequest, FieldSpec, FieldType, VectorBackend, VectorMetric},
     };
-    use crate::wal::{MemWal, WalLog, WalStream};
     use std::collections::BTreeMap as Map;
     use std::sync::atomic::AtomicU8;
     use tokio::sync::Notify;
@@ -1823,13 +1827,17 @@ mod tests {
             async fn latest_seq(&self) -> Result<u64> {
                 self.inner.latest_seq().await
             }
-            async fn stage_source(&self, seq: u64) -> Result<Option<crate::wal::WalSourceRelease>> {
+            async fn stage_source(
+                &self,
+                seq: u64,
+            ) -> Result<Option<crate::ingest::infrastructure::wal::delivery::WalSourceRelease>>
+            {
                 self.inner.stage_source(seq).await
             }
             async fn subscribe_admitted(
                 &self,
                 from: u64,
-            ) -> Result<crate::wal::WalAdmissionStream> {
+            ) -> Result<crate::ingest::domain::wal_log::WalAdmissionStream> {
                 let stream = self.inner.subscribe_admitted(from).await?;
                 let state = (stream, self.released.clone(), self.changed.clone());
                 Ok(Box::pin(futures::stream::unfold(
@@ -3305,7 +3313,7 @@ mod tests {
     #[tokio::test]
     async fn full_raw_delivery_replays_the_same_head_before_later_records() {
         use crate::ingest::domain::change_budget::ChangeBudget;
-        use crate::wal::{WalLog, WalStream};
+        use crate::ingest::domain::wal_log::{WalLog, WalStream};
 
         struct ObservedWal {
             inner: MemWal,
@@ -3610,7 +3618,11 @@ mod tests {
             async fn latest_seq(&self) -> Result<u64> {
                 self.inner.latest_seq().await
             }
-            async fn stage_source(&self, seq: u64) -> Result<Option<crate::wal::WalSourceRelease>> {
+            async fn stage_source(
+                &self,
+                seq: u64,
+            ) -> Result<Option<crate::ingest::infrastructure::wal::delivery::WalSourceRelease>>
+            {
                 self.inner.stage_source(seq).await
             }
             async fn subscribe(&self, from: u64) -> Result<WalStream> {
@@ -3619,7 +3631,7 @@ mod tests {
             async fn subscribe_admitted(
                 &self,
                 from: u64,
-            ) -> Result<crate::wal::WalAdmissionStream> {
+            ) -> Result<crate::ingest::domain::wal_log::WalAdmissionStream> {
                 let stream = self.inner.subscribe_admitted(from).await?;
                 let state = (stream, self.released.clone(), self.changed.clone());
                 Ok(Box::pin(futures::stream::unfold(

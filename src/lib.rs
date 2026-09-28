@@ -120,9 +120,8 @@ pub use crate::access::infrastructure::tls;
 pub mod tokenize;
 pub use crate::compat::types;
 pub mod vector_index;
-pub mod wal;
+pub use crate::compat::wal;
 mod wal_source_stage;
-mod wal_wire_cost;
 
 /// Product-neutral text-index contracts used by Lumen and other products.
 /// Lumen keeps its existing public collection API and storage engine.

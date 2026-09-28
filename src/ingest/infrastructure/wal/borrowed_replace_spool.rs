@@ -12,9 +12,10 @@ use tempfile::NamedTempFile;
 
 use super::{
     borrowed_replace_scanner::{BorrowedReplaceScanner, BorrowedReplaceValue},
-    WAL_FAST_INDEX, WAL_FAST_MAGIC, WAL_FORMAT_VERSION, WAL_VALUE_NUMBER, WAL_VALUE_STRING,
-    WAL_VALUE_STRING_LIST, WAL_VALUE_VECTOR,
+    WAL_FAST_INDEX, WAL_FAST_MAGIC, WAL_VALUE_NUMBER, WAL_VALUE_STRING, WAL_VALUE_STRING_LIST,
+    WAL_VALUE_VECTOR,
 };
+use crate::ingest::domain::wal_record::WAL_FORMAT_VERSION;
 
 const WRITER_BYTES: usize = 64 * 1024;
 const FILE_AND_MAP_METADATA_BYTES: usize = 8192;
@@ -167,14 +168,16 @@ mod tests {
     use anyhow::bail;
 
     use crate::{
+        ingest::{
+            domain::wal_record::WalRecord,
+            infrastructure::wal::{
+                borrowed_replace_scanner::BorrowedReplaceScanner,
+                fast_index_scanner::{FastIndexScanner, FastIndexValue},
+            },
+        },
         shared_kernel::{
             log_entry::RaftLogEntry,
             types::document::{FieldValue, ReplaceDocItem, ReplaceDocsRequest},
-        },
-        wal::{
-            borrowed_replace_scanner::BorrowedReplaceScanner,
-            fast_index_scanner::{FastIndexScanner, FastIndexValue},
-            WalRecord,
         },
     };
 

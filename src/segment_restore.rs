@@ -389,9 +389,11 @@ mod tests {
     use super::*;
     use crate::aof::AofReader;
     use crate::coordinator::{RestartRequired, WriteCoordinator};
+    use crate::ingest::domain::wal_log::WalLog;
+    use crate::ingest::domain::wal_record::WalRecord;
+    use crate::ingest::infrastructure::wal::mem_wal::MemWal;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::schema::CreateCollectionRequest;
-    use crate::wal::{MemWal, WalLog, WalRecord};
     use std::path::Path;
     use std::sync::Mutex;
     use storage_durable::{CommitStep, FailureInjector, FailurePoint};

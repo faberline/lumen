@@ -4,7 +4,7 @@ mod committed_replace_apply_tests {
     use std::{collections::BTreeMap, sync::Arc};
 
     use crate::{
-        ingest::domain::change_budget::ChangeBudget,
+        ingest::domain::{change_budget::ChangeBudget, wal_record::WalRecord},
         shared_kernel::{
             log_entry::RaftLogEntry,
             types::{
@@ -13,7 +13,6 @@ mod committed_replace_apply_tests {
             },
         },
         storage::{ApplyOutcome, Engine},
-        wal::WalRecord,
     };
     use anyhow::Result;
 

@@ -8,9 +8,9 @@
 use super::committed_index_plan::{
     PlanStamp, PlanView, PlannedCell, RequestOutcome, ScalarAction, ScalarPlan,
 };
+use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::types::{document::MAX_BATCH_REPLACE_SIZE, schema::FieldType};
 use crate::storage::{SortableF64, StorageError};
-use crate::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use anyhow::{bail, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
@@ -18,7 +18,7 @@ use std::time::Instant;
 /// One document in request order. `fields_start..fields_end` names a sorted,
 /// unique range in the flattened source scanner. Empty documents use an empty
 /// range. The adapter must prove the range fields belong to `external_id`.
-pub(super) use crate::wal::borrowed_replace_spool::BorrowedReplaceSpoolDoc as ReplaceDocDescriptor;
+pub(super) use crate::ingest::infrastructure::wal::borrowed_replace_spool::BorrowedReplaceSpoolDoc as ReplaceDocDescriptor;
 
 /// The read-only replacement facts. All methods must remain allocation-free.
 /// `existing_unchanged` compares a source ordinal with an existing live cell.
@@ -726,7 +726,7 @@ fn same_source(
 /// Match `apply_value`: duplicate set members have one logical live value.
 /// Repeated lexical-min scans avoid materializing a giant source array.
 fn set_bytes(
-    values: crate::wal::fast_index_scanner::FastStringList<'_>,
+    values: crate::ingest::infrastructure::wal::fast_index_scanner::FastStringList<'_>,
     eid_len: usize,
 ) -> std::result::Result<u64, ValidationError> {
     let mut total = 0u64;
@@ -750,8 +750,8 @@ fn set_bytes(
 }
 
 fn same_set(
-    a: crate::wal::fast_index_scanner::FastStringList<'_>,
-    b: crate::wal::fast_index_scanner::FastStringList<'_>,
+    a: crate::ingest::infrastructure::wal::fast_index_scanner::FastStringList<'_>,
+    b: crate::ingest::infrastructure::wal::fast_index_scanner::FastStringList<'_>,
 ) -> bool {
     let mut left = None;
     let mut right = None;
@@ -770,7 +770,7 @@ fn same_set(
 }
 
 fn next_distinct<'a>(
-    values: crate::wal::fast_index_scanner::FastStringList<'a>,
+    values: crate::ingest::infrastructure::wal::fast_index_scanner::FastStringList<'a>,
     previous: Option<&'a str>,
 ) -> Option<&'a str> {
     values

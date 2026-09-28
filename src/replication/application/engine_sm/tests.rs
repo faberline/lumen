@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use raft_runtime::{HostConfig, Membership, RaftHost, RaftStateMachine, RaftStore};
 
+use crate::ingest::domain::wal_record::WalRecord;
 use crate::replication::application::engine_sm::EngineSm;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::{
@@ -10,7 +11,6 @@ use crate::shared_kernel::types::{
     schema::{CreateCollectionRequest, FieldSpec, FieldType},
 };
 use crate::storage::{ApplyOutcome, Engine};
-use crate::wal::WalRecord;
 
 fn number_field() -> FieldSpec {
     FieldSpec {

@@ -12,8 +12,8 @@ use super::committed_replace_apply::{ReplacementInput, ReplacementLedger};
 use super::committed_replace_plan as replace_plan;
 use super::*;
 use crate::composed_segment::ComposedSegmentReader;
+use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::capture_barrier::ApplyLease;
-use crate::wal::fast_index_scanner::FastIndexScanner;
 
 #[cfg(test)]
 thread_local! {
@@ -328,10 +328,7 @@ impl Engine {
                     .enumerate()
                     .filter_map(|(ordinal, item)| {
                         (!hashes.contains_key(&ordinal)
-                            && matches!(
-                                item.value,
-                                crate::wal::fast_index_scanner::FastIndexValue::String(_)
-                            )
+                            && matches!(item.value, FastIndexValue::String(_))
                             && state
                                 .collections
                                 .get(collection)
@@ -343,8 +340,7 @@ impl Engine {
             };
             for (ordinal, item) in scanner.items().enumerate() {
                 if hash_ordinals.contains(&ordinal) {
-                    let crate::wal::fast_index_scanner::FastIndexValue::String(value) = item.value
-                    else {
+                    let FastIndexValue::String(value) = item.value else {
                         unreachable!("selected Hash source is a String")
                     };
                     hashes.insert(ordinal, parse_hash_number(value).ok());
@@ -739,9 +735,7 @@ impl Engine {
                     .items()
                     .nth(*ordinal)
                     .expect("validated Vector ordinal");
-                let crate::wal::fast_index_scanner::FastIndexValue::Vector { values, len } =
-                    item.value
-                else {
+                let FastIndexValue::Vector { values, len } = item.value else {
                     unreachable!("planned Vector wire value")
                 };
                 let retained = prepared.retained;
@@ -1254,9 +1248,10 @@ mod tests;
 #[cfg(test)]
 mod timing_tests {
     use super::*;
+    use crate::ingest::domain::wal_record::WalRecord;
+    use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::document::IndexItem;
-    use crate::wal::{fast_index_scanner::FastIndexScanner, WalRecord};
 
     fn apply_committed_vector(engine: &Engine, vector: Vec<f32>, sequence: u64) {
         let bytes = WalRecord::new(RaftLogEntry::Index {

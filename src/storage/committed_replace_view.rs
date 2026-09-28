@@ -7,8 +7,10 @@
 use super::committed_index_plan::PlanView;
 use super::committed_replace_plan::{OldFieldsBound, ParsedValues, ReplacePlanView};
 use super::*;
+use crate::ingest::infrastructure::wal::fast_index_scanner::{
+    FastIndexScanner, FastIndexValue, FastStringList,
+};
 use crate::shared_kernel::types::schema::FieldType;
-use crate::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue, FastStringList};
 use std::time::Instant;
 
 pub(super) struct View<'state, 'scan, 'wire> {

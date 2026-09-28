@@ -5,8 +5,8 @@
 //! the original scanner bytes through the same-lease completion callback.
 
 use super::*;
+use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
 use crate::shared_kernel::capture_barrier::ApplyLease;
-use crate::wal::fast_index_scanner::FastIndexScanner;
 
 impl Engine {
     pub(crate) fn try_apply_committed_index(
@@ -161,14 +161,14 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ingest::domain::wal_record::WalRecord;
+    use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::{
         document::{FieldValue, IndexItem, IndexRequest},
         schema::CreateCollectionRequest,
         stats::StatsResponse,
     };
-    use crate::wal::fast_index_scanner::FastIndexScanner;
-    use crate::wal::WalRecord;
 
     fn engine() -> Engine {
         let engine = Engine::new();

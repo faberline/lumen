@@ -1,4 +1,4 @@
-//! Private streaming codec for a committed [`crate::wal::WalRecord`] stage.
+//! Private streaming codec for a committed [`crate::ingest::domain::wal_record::WalRecord`] stage.
 //!
 //! This format is only for the pre-apply durable-stage bridge. A caller must
 //! already hold bounded record-memory admission before it calls
@@ -9,8 +9,10 @@
 use std::io::{self, Read, Write};
 
 use crate::ingest::domain::change_admission::StagePayload;
+use crate::ingest::domain::wal_record::{
+    WalRecord, WAL_CONTROL_FORMAT_VERSION, WAL_FORMAT_VERSION,
+};
 use crate::shared_kernel::log_entry::RaftLogEntry;
-use crate::wal::{WalRecord, WAL_CONTROL_FORMAT_VERSION, WAL_FORMAT_VERSION};
 
 const MAGIC: [u8; 4] = *b"LWCS";
 const FORMAT_VERSION: u8 = 1;
@@ -66,7 +68,7 @@ pub(crate) fn staged_generic_cbor_payload(input: &[u8]) -> io::Result<&[u8]> {
     }
 
     let payload = &input[HEADER_LEN..];
-    crate::wal_wire_cost::validate_exact_cbor(payload)
+    crate::ingest::infrastructure::wire_cost::validate_exact_cbor(payload)
         .map_err(|error| invalid(format!("decode staged generic WAL CBOR: {error}")))?;
     Ok(payload)
 }

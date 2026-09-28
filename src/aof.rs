@@ -60,7 +60,7 @@ use std::fs::OpenOptions;
 #[cfg(test)]
 use std::io::{Read, Seek, SeekFrom, Write};
 
-use crate::wal::WalRecord;
+use crate::ingest::domain::wal_record::WalRecord;
 
 /// Fixed per-frame header width: `seq(8) + len(4) + crc(4)`.
 #[cfg(test)]
@@ -407,7 +407,9 @@ fn replay_aof_into_with_capacity_owner(
         // cannot become an owned record merely because recovery is replaying it.
         if encoded_bytes > crate::ingest::domain::change_budget::HARD_LIMIT / 8 {
             if let Ok(scanner) =
-                crate::wal::fast_index_scanner::FastIndexScanner::parse(frame.payload())
+                crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner::parse(
+                    frame.payload(),
+                )
             {
                 if engine.try_apply_committed_index_with_capacity_owner(&scanner, seq, || {
                     crate::segment_capacity::Fallback::ensure(capacity_owner, engine, None)
@@ -438,8 +440,9 @@ fn replay_aof_into_with_capacity_owner(
         // This first pass borrows mapped bytes and stores only token counters.
         // The source mapping is excluded from pending heap ownership. Reserve
         // before the typed scanner or decoder can allocate token buffers.
-        let workspace = crate::wal_wire_cost::scan_workspace_bound(frame.payload())
-            .with_context(|| format!("preflight complete AOF frame at sequence {seq}"))?;
+        let workspace =
+            crate::ingest::infrastructure::wire_cost::scan_workspace_bound(frame.payload())
+                .with_context(|| format!("preflight complete AOF frame at sequence {seq}"))?;
         let request = engine.record_ram_request_from_bound(workspace, 0);
         let mut reservation = match engine.try_reserve_record_ram(&request) {
             Ok(reservation) => reservation,
@@ -459,8 +462,9 @@ fn replay_aof_into_with_capacity_owner(
                 return Err(anyhow::Error::new(error).context("reserve AOF replay scanner"))
             }
         };
-        let decoded_peak = crate::wal_wire_cost::decoded_peak_bound(frame.payload())
-            .with_context(|| format!("price complete AOF frame at sequence {seq}"))?;
+        let decoded_peak =
+            crate::ingest::infrastructure::wire_cost::decoded_peak_bound(frame.payload())
+                .with_context(|| format!("price complete AOF frame at sequence {seq}"))?;
         match reservation.try_grow_to(decoded_peak) {
             Ok(()) => (),
             Err(crate::ingest::domain::change_budget::AdmissionError::Full { .. }) => {
@@ -974,7 +978,8 @@ mod tests {
             .unwrap();
         let record = rec(index_entry("u", "replayed", "after-capacity-release"));
         let payload = encode_payload(&record).unwrap();
-        let workspace = crate::wal_wire_cost::scan_workspace_bound(&payload).unwrap();
+        let workspace =
+            crate::ingest::infrastructure::wire_cost::scan_workspace_bound(&payload).unwrap();
         let raw = Engine::record_owned_bytes(&record.entry).unwrap();
         let crate::ingest::domain::change_record_cost::RecordEstimate::Ready(cost) =
             engine.estimate_record_cost(&record.entry)
@@ -1083,8 +1088,10 @@ mod tests {
             req: CreateCollectionRequest { fields },
         });
         let payload = encode_payload(&record).unwrap();
-        let workspace = crate::wal_wire_cost::scan_workspace_bound(&payload).unwrap();
-        let decoded = crate::wal_wire_cost::decoded_peak_bound(&payload).unwrap();
+        let workspace =
+            crate::ingest::infrastructure::wire_cost::scan_workspace_bound(&payload).unwrap();
+        let decoded =
+            crate::ingest::infrastructure::wire_cost::decoded_peak_bound(&payload).unwrap();
         assert!(
             workspace < decoded,
             "fixture must pass scanner reserve before decoded growth"
@@ -1168,8 +1175,10 @@ mod tests {
         );
         let record = rec(index_entry("u", "replayed", "after-reservation-release"));
         let payload = encode_payload(&record).unwrap();
-        let workspace = crate::wal_wire_cost::scan_workspace_bound(&payload).unwrap();
-        let decoded = crate::wal_wire_cost::decoded_peak_bound(&payload).unwrap();
+        let workspace =
+            crate::ingest::infrastructure::wire_cost::scan_workspace_bound(&payload).unwrap();
+        let decoded =
+            crate::ingest::infrastructure::wire_cost::decoded_peak_bound(&payload).unwrap();
         assert!(workspace > 0, "fixture must have scanner admission work");
         assert!(
             decoded < HARD,
@@ -1422,7 +1431,7 @@ mod tests {
         let path = dir.path().join("legacy.aof");
         let mut writer = AofWriter::open(&path).unwrap();
         let record = WalRecord {
-            version: crate::wal::WAL_FORMAT_VERSION,
+            version: crate::ingest::domain::wal_record::WAL_FORMAT_VERSION,
             entry: RaftLogEntry::DropCollection {
                 collection_id: "missing".into(),
                 force: true,

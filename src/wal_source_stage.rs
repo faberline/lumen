@@ -17,8 +17,8 @@ use crate::committed_record_codec::{read_staged_wal_record, staged_generic_cbor_
 use crate::committed_stage::StageFailureInjector;
 use crate::committed_stage::{DurableStage, SourceIdentity, SourceKind, StageStore};
 use crate::ingest::domain::change_admission::StagePayload;
+use crate::ingest::domain::wal_record::WalRecord;
 use crate::storage::{Engine, RecordAdmissionError};
-use crate::wal::WalRecord;
 
 /// The bounded read buffer is charged by the caller together with the decoded
 /// record before it asks this bridge to deserialize the record.
@@ -328,7 +328,7 @@ impl StagedWalRecord {
         }
         let file = self.stage.open()?;
         let mmap = unsafe { Mmap::map(&file)? };
-        crate::wal::fast_index_scanner::FastIndexScanner::parse(&mmap)
+        crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner::parse(&mmap)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
         Ok(Some(MappedFastIndexPayload {
             _stage: self.clone(),
@@ -682,7 +682,10 @@ mod tests {
         let mapped = staged.mapped_fast_index().unwrap().unwrap();
         assert_eq!(mapped.payload(), record.encode().unwrap());
         let scanner =
-            crate::wal::fast_index_scanner::FastIndexScanner::parse(mapped.payload()).unwrap();
+            crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner::parse(
+                mapped.payload(),
+            )
+            .unwrap();
         assert_eq!(scanner.collection_id(), "orders");
         drop(staged);
         assert!(

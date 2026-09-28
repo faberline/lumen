@@ -1062,12 +1062,12 @@ mod tests {
     use crate::aof::AofWriter;
     use crate::api::CheckpointSink;
     use crate::coordinator::WriteSink;
+    use crate::ingest::domain::wal_record::WalRecord;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::{
         document::{FieldValue, IndexItem, IndexRequest},
         schema::{CreateCollectionRequest, FieldSpec, FieldType},
     };
-    use crate::wal::WalRecord;
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -1139,7 +1139,7 @@ mod tests {
         let tail = root.path().join("aof.log");
         let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
         let writer = crate::coordinator::WriteCoordinator::start_from_with_aof(
-            Arc::new(crate::wal::MemWal::new()),
+            Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
             engine.clone(),
             0,
             aof.clone(),
@@ -1192,7 +1192,7 @@ mod tests {
         let tail = root.path().join("aof.log");
         let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
         let writer = crate::coordinator::WriteCoordinator::start_from_with_aof(
-            Arc::new(crate::wal::MemWal::new()),
+            Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
             engine.clone(),
             0,
             aof.clone(),
@@ -1251,7 +1251,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let engine = Arc::new(Engine::new());
         let writer = crate::coordinator::WriteCoordinator::start(
-            Arc::new(crate::wal::MemWal::new()),
+            Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
             engine.clone(),
         );
         let sink = Arc::new(SegmentCheckpointSink {
@@ -1279,7 +1279,7 @@ mod tests {
         let tail = root.path().join("aof.log");
         let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
         let writer = crate::coordinator::WriteCoordinator::start_from_with_aof(
-            Arc::new(crate::wal::MemWal::new()),
+            Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
             engine.clone(),
             0,
             aof.clone(),
@@ -1380,7 +1380,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let engine = Arc::new(Engine::new());
         let writer = crate::coordinator::WriteCoordinator::start(
-            Arc::new(crate::wal::MemWal::new()),
+            Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
             engine.clone(),
         );
         let gate = writer.mutation_gate();

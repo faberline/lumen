@@ -1,7 +1,7 @@
 use super::*;
+use crate::ingest::domain::wal_record::WalRecord;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::{document::IndexItem, schema::CreateCollectionRequest};
-use crate::wal::WalRecord;
 
 fn engine() -> Arc<Engine> {
     let engine = Arc::new(Engine::with_change_budget(
