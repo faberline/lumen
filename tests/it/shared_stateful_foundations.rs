@@ -34,7 +34,14 @@ const LUMEN_AUTH: &str = concat!(
     include_str!("../../src/access/interfaces/http.rs"),
 );
 const LUMEN_API: &str = include_str!("../../src/api.rs");
-const LUMEN_OPERATOR: &str = include_str!("../../src/operator/render.rs");
+const LUMEN_OPERATOR: &str = concat!(
+    include_str!("../../src/operator/application/render.rs"),
+    include_str!("../../src/operator/application/render/identity.rs"),
+    include_str!("../../src/operator/application/render/backup.rs"),
+    include_str!("../../src/operator/application/render/serving_statefulset.rs"),
+    include_str!("../../src/operator/application/render/serving_config.rs"),
+    include_str!("../../src/operator/application/render/monitoring.rs"),
+);
 const LUMEN_RIG_ADAPTER: &str = include_str!("rig_stateful_adapter.rs");
 
 #[test]

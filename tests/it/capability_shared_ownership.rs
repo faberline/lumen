@@ -27,7 +27,15 @@ const AUTH: &str = concat!(
     include_str!("../../src/access/infrastructure/lumen_verifier.rs"),
     include_str!("../../src/access/interfaces/http.rs"),
 );
-const OPERATOR_RENDER: &str = include_str!("../../src/operator/render.rs");
+/// The operator's renderer: every non-test file of `operator::application::render`.
+const OPERATOR_RENDER: &str = concat!(
+    include_str!("../../src/operator/application/render.rs"),
+    include_str!("../../src/operator/application/render/identity.rs"),
+    include_str!("../../src/operator/application/render/backup.rs"),
+    include_str!("../../src/operator/application/render/serving_statefulset.rs"),
+    include_str!("../../src/operator/application/render/serving_config.rs"),
+    include_str!("../../src/operator/application/render/monitoring.rs"),
+);
 
 const CAPABILITY_CONTRACT: &[(&str, &str)] = &[
     ("Indexing", "indexing"),

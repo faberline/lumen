@@ -127,6 +127,14 @@ application = "src/access/application"
 infrastructure = "src/access/infrastructure"
 interfaces = "src/access/interfaces"
 
+[[contexts]]
+name = "operator"
+depends_on = ["access"]
+[contexts.layers]
+domain = "src/operator/domain"
+application = "src/operator/application"
+infrastructure = "src/operator/infrastructure"
+
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
 # port the owning layer defines.
 
@@ -141,3 +149,73 @@ rule = "B3"
 paths = ["src/access/interfaces/http.rs"]
 subject = "interfaces->infrastructure"
 reason = "auth_middleware is service_auth::async_auth_middleware instantiated at LumenVerifier, so the middleware names the adapter type. P2: instantiate it at the application-side verifier port instead."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/operator/infrastructure/kube_hpa_control.rs",
+  "src/operator/infrastructure/kube_auth_delegator_control.rs",
+  "src/operator/infrastructure/kube_cluster_control.rs",
+]
+subject = "infrastructure->application"
+reason = "Each Kube*Control adapter implements a control trait the application layer defines next to its only caller (HpaControl, AuthDelegatorControl, ClusterControl); kube_cluster_control also reuses reconcile's Prometheus text parser. P2: the traits move to the operator domain and the parser to the adapter."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/operator/application/fleet_reconcile.rs",
+  "src/operator/application/reconcile/loops.rs",
+  "src/operator/application/reconcile/managed_service.rs",
+  "src/operator/application/reshard_driver/driver_loop.rs",
+]
+subject = "application->infrastructure"
+reason = "The leader-gated loops build their own Lease election and Kube*Control adapters, and ManagedService::apply builds KubeAuthDelegatorControl from the client it is handed. P2: the composition root builds the adapters and passes them in."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/operator/application/render/identity.rs"]
+subject = "access.domain"
+reason = "control_plane_token() mounts the projected token at access's AUDIENCE, the value the verifier checks. P2: access exposes the control-plane token's audience through its application layer, next to CONTROL_PLANE_TOKEN_MOUNT."
+
+# The Lumen and LumenFleet custom resources are the operator's domain model,
+# and their Rust types are also the CRD schema (E1). P2 splits the schema into
+# DTOs with a mapper; until then the domain names the crates the schema needs.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/operator/domain/lumen_spec.rs",
+  "src/operator/domain/lumen_fleet.rs",
+]
+subject = "kube"
+reason = "E1: #[derive(CustomResource)] on Lumen and LumenFleet. P2: CRD DTOs outside the domain."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/operator/domain/lumen_spec.rs",
+  "src/operator/domain/lumen_spec/serving.rs",
+  "src/operator/domain/lumen_spec/status.rs",
+  "src/operator/domain/lumen_spec/topology.rs",
+  "src/operator/domain/lumen_fleet.rs",
+]
+subject = "schemars"
+reason = "E1: #[derive(JsonSchema)] on the CRD spec and status types, plus LumenFleet's hand-written preserve-unknown-fields schema. P2: CRD DTOs outside the domain."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/operator/domain/lumen_spec/serving.rs"]
+subject = "service_backup"
+reason = "E1: ServingBackupSpec flattens the shared ScheduledBackupPolicy into the CRD, so spec.serving.backup's schema is the shared one. P2: the DTO keeps the flatten and the domain gets its own policy type."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/operator/domain/lumen_spec/status.rs"]
+subject = "service_k8s"
+reason = "E1: LumenStatus.conditions is the shared metav1.Condition type every service's status projects to. P2: the DTO keeps the shared type and the domain gets its own condition facts."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/operator/domain/lumen_fleet/plan.rs"]
+subject = "serde_path_to_error"
+reason = "plan() deserializes the merged per-namespace spec through serde_path_to_error so a rejection names the offending field. P2: the deserialization moves with the CRD DTOs."

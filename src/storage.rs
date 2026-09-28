@@ -8118,7 +8118,7 @@ impl Engine {
     /// timed right after this cutover's eviction would otherwise still
     /// report pre-eviction bytes even though it is chronologically
     /// post-cutover, defeating the cutover-generation freshness check in
-    /// [`crate::operator::crd::LumenSpec::reshard_status_with_usage`].
+    /// [`crate::operator::domain::lumen_spec::LumenSpec::reshard_status_with_usage`].
     pub fn evict_not_owned(
         &self,
         to: &VirtualBucketShardMap,

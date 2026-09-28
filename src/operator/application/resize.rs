@@ -1,4 +1,3 @@
-// HANDWRITE-BEGIN gap="missing-generator:logic:7b95a80b" tracker="1646" reason="Thin Lumen-specific adapter over the shared `service_k8s::resize` module (#970): fetches the named Lumen CR for spec.serving.raftStorage and delegates PVC listing/quantity-compare/patch logic (parse_storage_bytes, ResizeAction/decide, PvcResizeOutcome, resize_instance) to libs/service-k8s, supplying the `app.kubernetes.io/instance=<name>` label selector and the `raft-<name>-` PVC name filter. No generator primitive exists yet for this shape, so it stays HANDWRITE per CLAUDE.md until one covers it."
 //! `lumen k8s operator resize-storage` (#809) support module.
 //!
 //! StatefulSet `volumeClaimTemplates` are immutable after creation, so
@@ -14,7 +13,7 @@
 use anyhow::{Context, Result};
 use kube::api::Api;
 
-use super::crd::Lumen;
+use crate::operator::domain::lumen_spec::Lumen;
 
 pub use service_k8s::resize::{decide, parse_storage_bytes, PvcResizeOutcome, ResizeAction};
 
@@ -51,4 +50,3 @@ pub async fn resize_instance(
     )
     .await
 }
-// HANDWRITE-END

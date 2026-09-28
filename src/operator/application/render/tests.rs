@@ -4,8 +4,10 @@ use kube::api::ObjectMeta;
 use serde_json::{json, Value};
 
 use super::render;
-use crate::operator::crd::{
-    AuthMode, LogFormat, PlacementSpec, ReshardPolicy, ServingSpec, ShardMapSpec,
+use crate::operator::domain::lumen_spec::{
+    serving::{AuthMode, LogFormat, ServingSpec},
+    topology::{ReshardPolicy, ShardMapSpec},
+    PlacementSpec,
 };
 use crate::operator::{Lumen, LumenSpec};
 

@@ -5,3 +5,5 @@
 //! new paths.
 
 pub mod auth;
+#[cfg(feature = "operator")]
+pub mod operator;

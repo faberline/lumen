@@ -1,4 +1,3 @@
-// HANDWRITE-BEGIN gap="missing-generator:logic:lumen-certificate-profiles" tracker="#3110" reason="The DNS and SPIFFE identities a Lumen instance may claim are derived from its own topology; every other part of the certificate lifecycle is shared and lives in libs/service-k8s."
 //! Which identities a Lumen instance is allowed to claim.
 //!
 //! This is the whole of Lumen's share of the certificate lifecycle (#3110 AC6).
@@ -29,7 +28,7 @@ use service_k8s::certificate::profile::{
     CertificateIdentity, CertificateProfile, InstanceScope, ProfileError, Purpose,
 };
 
-use super::crd::Lumen;
+use crate::operator::domain::lumen_spec::Lumen;
 
 /// Leaf lifetime. Twelve hours, against the issuing pool's 24h ceiling (#3109).
 ///
@@ -168,7 +167,9 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::operator::crd::{LumenSpec, ServingSpec, ShardMapSpec};
+    use crate::operator::domain::lumen_spec::{
+        serving::ServingSpec, topology::ShardMapSpec, LumenSpec,
+    };
 
     const TRUST_DOMAIN: &str = "lumen-prod.svc.id.goog";
 
@@ -287,4 +288,3 @@ mod tests {
         );
     }
 }
-// HANDWRITE-END

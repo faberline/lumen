@@ -64,7 +64,7 @@ pub struct BucketMove {
 /// total bucket population rather than the chunk's own content, so a bucket
 /// whose id set alone serialized past the byte cap produced chunks over the
 /// route's hard body limit no matter how small `snapshot`/`external_ids`
-/// were — and [`crate::operator::reshard_driver::detect_oversized_batch`]
+/// were — and [`crate::operator::application::reshard_driver::transfer::detect_oversized_batch`]
 /// wrongly blamed whichever document happened to be first in the chunk. The
 /// authoritative-replace concern moved to its own dedicated, independently
 /// chunked message: [`ReshardPruneChunk`] /
