@@ -46,8 +46,8 @@ static HNSW_CACHE_SEALS: OnceLock<Mutex<HashMap<HnswCacheSealKey, HnswCacheSealM
 pub struct SegmentCheckpointSink {
     pub engine: Arc<Engine>,
     pub store: Arc<crate::segment_rdb::SegmentRdbStore>,
-    pub writer: Arc<dyn crate::coordinator::WriteSink>,
-    pub aof: Option<crate::coordinator::SharedAof>,
+    pub writer: Arc<dyn crate::ingest::application::write_coordinator::WriteSink>,
+    pub aof: Option<crate::ingest::application::write_coordinator::SharedAof>,
 }
 
 /// Identifies the scheduler that started a durable checkpoint. This is trace
@@ -648,9 +648,11 @@ impl SegmentCheckpointSink {
                 .mutation_gate()
                 .is_some_and(|gate| gate.is_restart_required())
             {
-                return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                    "checkpoint refused: restart required".into(),
-                )));
+                return Err(anyhow::Error::new(
+                    crate::ingest::application::write_coordinator::errors::RestartRequired(
+                        "checkpoint refused: restart required".into(),
+                    ),
+                ));
             }
             let sequence = store.save_with_sequence_diagnostic_context(
                 &self.engine,
@@ -813,7 +815,7 @@ impl SegmentCheckpointSink {
                             );
                         }
                         Err(error) => {
-                            if crate::coordinator::is_storage_full(&error) {
+                            if crate::ingest::application::write_coordinator::errors::is_storage_full(&error) {
                                 self.engine.metrics().mark_storage_degraded();
                             }
                             tracing::warn!(error = %format!("{error:#}"), "periodic segment checkpoint failed");
@@ -924,7 +926,7 @@ impl EngineWatermarkSink {
 }
 
 #[async_trait::async_trait]
-impl crate::coordinator::WriteSink for EngineWatermarkSink {
+impl crate::ingest::application::write_coordinator::WriteSink for EngineWatermarkSink {
     async fn submit(
         &self,
         _: crate::shared_kernel::log_entry::RaftLogEntry,
@@ -1061,7 +1063,7 @@ mod tests {
     use super::*;
     use crate::aof::AofWriter;
     use crate::api::CheckpointSink;
-    use crate::coordinator::WriteSink;
+    use crate::ingest::application::write_coordinator::WriteSink;
     use crate::ingest::domain::wal_record::WalRecord;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::{
@@ -1138,12 +1140,13 @@ mod tests {
         let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
         let tail = root.path().join("aof.log");
         let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
-        let writer = crate::coordinator::WriteCoordinator::start_from_with_aof(
-            Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
-            engine.clone(),
-            0,
-            aof.clone(),
-        );
+        let writer =
+            crate::ingest::application::write_coordinator::WriteCoordinator::start_from_with_aof(
+                Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
+                engine.clone(),
+                0,
+                aof.clone(),
+            );
         writer.submit(RaftLogEntry::CreateCollection {
             collection_id: "v".into(),
             req: serde_json::from_value(serde_json::json!({
@@ -1191,12 +1194,13 @@ mod tests {
         let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
         let tail = root.path().join("aof.log");
         let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
-        let writer = crate::coordinator::WriteCoordinator::start_from_with_aof(
-            Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
-            engine.clone(),
-            0,
-            aof.clone(),
-        );
+        let writer =
+            crate::ingest::application::write_coordinator::WriteCoordinator::start_from_with_aof(
+                Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
+                engine.clone(),
+                0,
+                aof.clone(),
+            );
         writer
             .submit(RaftLogEntry::CreateCollection {
                 collection_id: "v".into(),
@@ -1250,7 +1254,7 @@ mod tests {
     async fn failed_hnsw_cache_seal_clears_a_prior_marker() {
         let root = tempfile::tempdir().unwrap();
         let engine = Arc::new(Engine::new());
-        let writer = crate::coordinator::WriteCoordinator::start(
+        let writer = crate::ingest::application::write_coordinator::WriteCoordinator::start(
             Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
             engine.clone(),
         );
@@ -1278,12 +1282,13 @@ mod tests {
         let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
         let tail = root.path().join("aof.log");
         let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
-        let writer = crate::coordinator::WriteCoordinator::start_from_with_aof(
-            Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
-            engine.clone(),
-            0,
-            aof.clone(),
-        );
+        let writer =
+            crate::ingest::application::write_coordinator::WriteCoordinator::start_from_with_aof(
+                Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
+                engine.clone(),
+                0,
+                aof.clone(),
+            );
         writer
             .submit(RaftLogEntry::CreateCollection {
                 collection_id: "v".into(),
@@ -1379,7 +1384,7 @@ mod tests {
     async fn shutdown_cache_wait_for_inflight_writes_can_be_cancelled() {
         let root = tempfile::tempdir().unwrap();
         let engine = Arc::new(Engine::new());
-        let writer = crate::coordinator::WriteCoordinator::start(
+        let writer = crate::ingest::application::write_coordinator::WriteCoordinator::start(
             Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
             engine.clone(),
         );

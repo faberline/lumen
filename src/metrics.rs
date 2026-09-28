@@ -1025,8 +1025,8 @@ impl Metrics {
     /// #2516: flip into ENOSPC degraded read-only mode and count the hit.
     /// Called from every durable-write-path origin that classifies its
     /// failure as `io::ErrorKind::StorageFull` (see
-    /// `crate::coordinator::is_storage_full`) — the coordinator apply
-    /// loop's local AOF persist, the periodic RDB/segment checkpoint
+    /// `crate::ingest::application::write_coordinator::errors::is_storage_full`) —
+    /// the coordinator apply loop's local AOF persist, the periodic RDB/segment checkpoint
     /// snapshotters, and (when the `raft-wal` feature is active) raft log
     /// append. Idempotent: calling it while already degraded still counts
     /// the new hit but leaves the gauge at `1`.

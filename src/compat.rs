@@ -6,6 +6,7 @@
 
 pub mod auth;
 pub mod config;
+pub mod coordinator;
 #[cfg(feature = "operator")]
 pub mod operator;
 pub mod raft;

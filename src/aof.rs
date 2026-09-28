@@ -213,8 +213,10 @@ impl AofWriter {
     /// #2516: arm/disarm the next typed or raw append call on THIS writer to
     /// fail with a synthetic `io::ErrorKind::StorageFull` error instead of
     /// touching the real file — the fault-injection seam that exercises the
-    /// REAL production error-handling path (`crate::coordinator::is_storage_full`
-    /// -> `Metrics::mark_storage_degraded` -> `crate::coordinator::StorageFullError`
+    /// REAL production error-handling path
+    /// (`crate::ingest::application::write_coordinator::errors::is_storage_full`
+    /// -> `Metrics::mark_storage_degraded`
+    /// -> `crate::ingest::application::write_coordinator::errors::StorageFullError`
     /// -> `ApiErr`'s 507 mapping) end to end without needing a genuinely full
     /// disk.
     #[cfg(test)]

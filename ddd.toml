@@ -143,7 +143,7 @@ infrastructure = "src/operator/infrastructure"
 
 [[contexts]]
 name = "sharding"
-depends_on = []
+depends_on = ["ingest"]
 [contexts.layers]
 domain = "src/sharding/domain"
 application = "src/sharding/application"
@@ -161,6 +161,7 @@ name = "ingest"
 depends_on = []
 [contexts.layers]
 domain = "src/ingest/domain"
+application = "src/ingest/application"
 infrastructure = "src/ingest/infrastructure"
 
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
@@ -418,3 +419,38 @@ paths = [
 ]
 subject = "domain->infrastructure"
 reason = "SourceIdentity is carried by RamCharge and Reservation::commit_ram, and change_admission's staging bridge stages into a StageStore and holds the DurableStage it returns. SourceIdentity and SourceKind stay in infrastructure beside the marker encoding because SourceIdentity::new and SourceKind::decode return io::Result and the marker reads their private fields. P2: change that error type, move SourceIdentity and SourceKind into the ingest domain, and have the staging bridge depend on a stage-store port the domain defines."
+
+# The write coordinator moved to ingest/application as-is; it still holds and
+# parses WAL types that stay in infrastructure.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/ingest/application/write_coordinator.rs",
+  "src/ingest/application/write_coordinator/committed_scalar.rs",
+]
+subject = "application->infrastructure"
+reason = "PendingApply and MappedApply hold the WalDelivery the log handed the apply loop, and the committed scalar path parses the pinned payload with FastIndexScanner before it applies. Both stay in ingest/infrastructure/wal beside MemWal (see the wal_log exception above). P2: the delivery handle trait decided there, and scanning behind a port the application layer defines."
+
+# Replication's raft state machine admits and frames records with ingest's own
+# domain and WAL code. Now that ingest has an application layer, those uses
+# cross into layers other contexts may not use.
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/replication/application/engine_sm.rs",
+  "src/replication/application/engine_sm/state_machine.rs",
+  "src/replication/application/engine_sm/write_sink.rs",
+]
+subject = "ingest.domain"
+reason = "EngineSm admits each raft command against the change budget (it matches AdmissionError::Full and sizes against HARD_LIMIT), maps a refusal before publication to PendingChangeCapacity, and RaftWriteSink wraps each entry in a WalRecord before it proposes it. P2: ingest's application layer exposes the admission and record API both write paths call."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/replication/application/engine_sm.rs",
+  "src/replication/application/engine_sm/state_machine.rs",
+]
+subject = "ingest.infrastructure"
+reason = "EngineSm bounds a raft command's decode workspace with wire_cost::scan_workspace_bytes and applies a retained oversized fast-Index command through FastIndexScanner, the same bound and scanner the WAL path uses. P2: ingest's application layer exposes both."

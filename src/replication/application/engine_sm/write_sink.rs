@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use raft_runtime::{ProposalBackpressure, RaftHost, RaftStateMachine};
 
-use crate::coordinator::WriteSink;
+use crate::ingest::application::write_coordinator::WriteSink;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::replication::application::engine_sm::EngineSm;
 use crate::shared_kernel::log_entry::RaftLogEntry;
@@ -85,17 +85,19 @@ impl WriteSink for RaftWriteSink {
                 // an ENOSPC here (surfaced through `propose`'s error chain the
                 // same way an AOF ENOSPC is) must enter the same sticky
                 // degraded read-only mode, not just propagate a generic error.
-                if crate::coordinator::is_storage_full(&e) {
+                if crate::ingest::application::write_coordinator::errors::is_storage_full(&e) {
                     tracing::error!(
                         error = %e,
                         "raft log append hit ENOSPC — entering degraded read-only mode"
                     );
                     self.sm.engine().metrics().mark_storage_degraded();
-                    return Err(anyhow::Error::new(crate::coordinator::StorageFullError(
-                        "local storage is full (ENOSPC) appending to the raft log; node \
+                    return Err(anyhow::Error::new(
+                        crate::ingest::application::write_coordinator::errors::StorageFullError(
+                            "local storage is full (ENOSPC) appending to the raft log; node \
                          entered degraded read-only mode"
-                            .to_string(),
-                    )));
+                                .to_string(),
+                        ),
+                    ));
                 }
                 return Err(e);
             }

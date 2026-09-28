@@ -5,6 +5,9 @@
 //! AOF flush and applied watermark, including the uncertain-failure boundary.
 
 use super::*;
+use crate::ingest::application::write_coordinator::errors::{
+    is_storage_full, RestartRequired, StorageFullError,
+};
 use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
 
 pub(super) enum MappedApply {
@@ -102,11 +105,13 @@ mod tests {
     use super::*;
     use crate::aof::{AofReader, AofWriter};
     use crate::ingest::domain::wal_log::WalLog;
+    use crate::ingest::domain::wal_record::WalRecord;
     use crate::ingest::infrastructure::wal::mem_wal::MemWal;
     use crate::shared_kernel::types::{
         document::{FieldValue, IndexItem, IndexRequest},
         schema::{CreateCollectionRequest, FieldSpec, FieldType},
     };
+    use futures::StreamExt;
     use std::collections::BTreeMap;
     use std::time::Duration;
 

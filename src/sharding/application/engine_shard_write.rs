@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 
-use crate::coordinator::WriteCoordinator;
+use crate::ingest::application::write_coordinator::WriteCoordinator;
 use crate::sharding::domain::virtual_bucket_shard_map::{
     VirtualBucketShardMap, DEFAULT_VIRTUAL_BUCKET_COUNT,
 };

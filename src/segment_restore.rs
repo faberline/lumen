@@ -10,7 +10,9 @@ use futures::FutureExt;
 use storage_durable::{CommitError, CommitFailureClass};
 
 use crate::api::RestoreSink;
-use crate::coordinator::{MutationGate, SharedAof, StorageFullError, WriteSink};
+use crate::ingest::application::write_coordinator::{
+    errors::StorageFullError, mutation_gate::MutationGate, SharedAof, WriteSink,
+};
 use crate::segment_rdb::SegmentRdbStore;
 use crate::shared_kernel::capture_barrier::RestoreInhibition;
 use crate::storage::{Engine, SnapshotV1};
@@ -209,9 +211,12 @@ impl SegmentRestoreSink {
                 {
                     if commit.class() == CommitFailureClass::CommitUncertain {
                         self.restart_while_inhibited(&restore_inhibition);
-                        return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                            "segment restore commit outcome is uncertain; restart required".into(),
-                        ))
+                        return Err(anyhow::Error::new(
+                            crate::ingest::application::write_coordinator::errors::RestartRequired(
+                                "segment restore commit outcome is uncertain; restart required"
+                                    .into(),
+                            ),
+                        )
                         .context(error));
                     }
                 }
@@ -224,9 +229,11 @@ impl SegmentRestoreSink {
             }
             Err(join) => {
                 self.restart_while_inhibited(&restore_inhibition);
-                return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                    "segment restore save task panicked; restart required".into(),
-                ))
+                return Err(anyhow::Error::new(
+                    crate::ingest::application::write_coordinator::errors::RestartRequired(
+                        "segment restore save task panicked; restart required".into(),
+                    ),
+                )
                 .context(anyhow!("save task failed: {join}")));
             }
         };
@@ -242,9 +249,11 @@ impl SegmentRestoreSink {
                 Ok(loaded) => loaded,
                 Err(join) => {
                     self.restart_while_inhibited(&restore_inhibition);
-                    return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                        "segment restore reload task panicked; restart required".into(),
-                    ))
+                    return Err(anyhow::Error::new(
+                        crate::ingest::application::write_coordinator::errors::RestartRequired(
+                            "segment restore reload task panicked; restart required".into(),
+                        ),
+                    )
                     .context(anyhow!("CURRENT reload task failed: {join}")));
                 }
             };
@@ -252,15 +261,19 @@ impl SegmentRestoreSink {
             Ok(Some(loaded)) => loaded,
             Ok(None) => {
                 self.restart_while_inhibited(&restore_inhibition);
-                return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                    "segment restore committed without a CURRENT generation".into(),
-                )));
+                return Err(anyhow::Error::new(
+                    crate::ingest::application::write_coordinator::errors::RestartRequired(
+                        "segment restore committed without a CURRENT generation".into(),
+                    ),
+                ));
             }
             Err(error) => {
                 self.restart_while_inhibited(&restore_inhibition);
-                return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                    "segment restore could not reload CURRENT".into(),
-                ))
+                return Err(anyhow::Error::new(
+                    crate::ingest::application::write_coordinator::errors::RestartRequired(
+                        "segment restore could not reload CURRENT".into(),
+                    ),
+                )
                 .context(error));
             }
         };
@@ -272,17 +285,21 @@ impl SegmentRestoreSink {
         let forced_mismatch = false;
         if forced_mismatch || loaded.name != committed_name || loaded.sequence != watermark {
             self.restart_while_inhibited(&restore_inhibition);
-            return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                "segment restore CURRENT integrity check failed; restart required".into(),
-            )));
+            return Err(anyhow::Error::new(
+                crate::ingest::application::write_coordinator::errors::RestartRequired(
+                    "segment restore CURRENT integrity check failed; restart required".into(),
+                ),
+            ));
         }
         let fresh = match Arc::try_unwrap(loaded.engine) {
             Ok(engine) => engine,
             Err(_) => {
                 self.restart_while_inhibited(&restore_inhibition);
-                return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                    "segment restore reload retained unexpected engine references".into(),
-                )));
+                return Err(anyhow::Error::new(
+                    crate::ingest::application::write_coordinator::errors::RestartRequired(
+                        "segment restore reload retained unexpected engine references".into(),
+                    ),
+                ));
             }
         };
         #[cfg(test)]
@@ -293,18 +310,22 @@ impl SegmentRestoreSink {
         let activation_failure = false;
         if activation_failure {
             self.restart_while_inhibited(&restore_inhibition);
-            return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                "segment restore live activation failed; restart required".into(),
-            )));
+            return Err(anyhow::Error::new(
+                crate::ingest::application::write_coordinator::errors::RestartRequired(
+                    "segment restore live activation failed; restart required".into(),
+                ),
+            ));
         }
         let activation = restore_inhibition.activation_apply();
         let activated = self.live_engine.activate_replacement(fresh);
         if let Err(error) = activated {
             self.restart_while_inhibited(&restore_inhibition);
             drop(activation);
-            return Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                "segment restore live activation failed; restart required".into(),
-            ))
+            return Err(anyhow::Error::new(
+                crate::ingest::application::write_coordinator::errors::RestartRequired(
+                    "segment restore live activation failed; restart required".into(),
+                ),
+            )
             .context(error));
         }
         drop(activation);
@@ -368,17 +389,21 @@ impl RestoreSink for SegmentRestoreSink {
                 Ok(result) => result,
                 Err(_) => {
                     owned.restart();
-                    Err(anyhow::Error::new(crate::coordinator::RestartRequired(
-                        "segment restore task panicked; restart required".into(),
-                    )))
+                    Err(anyhow::Error::new(
+                        crate::ingest::application::write_coordinator::errors::RestartRequired(
+                            "segment restore task panicked; restart required".into(),
+                        ),
+                    ))
                 }
             }
         });
         task.await.map_err(|join| {
             self.restart();
-            anyhow::Error::new(crate::coordinator::RestartRequired(
-                "segment restore task stopped; restart required".into(),
-            ))
+            anyhow::Error::new(
+                crate::ingest::application::write_coordinator::errors::RestartRequired(
+                    "segment restore task stopped; restart required".into(),
+                ),
+            )
             .context(anyhow!("restore task failed: {join}"))
         })?
     }
@@ -388,7 +413,9 @@ impl RestoreSink for SegmentRestoreSink {
 mod tests {
     use super::*;
     use crate::aof::AofReader;
-    use crate::coordinator::{RestartRequired, WriteCoordinator};
+    use crate::ingest::application::write_coordinator::{
+        errors::RestartRequired, WriteCoordinator,
+    };
     use crate::ingest::domain::wal_log::WalLog;
     use crate::ingest::domain::wal_record::WalRecord;
     use crate::ingest::infrastructure::wal::mem_wal::MemWal;

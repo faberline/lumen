@@ -53,8 +53,8 @@ pub mod backup_sink;
 mod compat;
 mod composed_segment;
 pub use crate::compat::config;
+pub use crate::compat::coordinator;
 pub use crate::sharding::application::consumer;
-pub mod coordinator;
 pub mod dx;
 mod ingest;
 #[cfg(not(feature = "jieba"))]

@@ -49,8 +49,10 @@ use crate::access::{
     interfaces::http::auth_middleware,
 };
 use crate::backup_sink::{BackupSink, LocalFsSink};
-use crate::coordinator::{
-    MutationGate, RestartRequired, StorageFullError, SubmitStalled, WriteCoordinator, WriteSink,
+use crate::ingest::application::write_coordinator::{
+    errors::{RestartRequired, StorageFullError, SubmitStalled},
+    mutation_gate::MutationGate,
+    WriteCoordinator, WriteSink,
 };
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::wal_log::SharedWal;
@@ -1382,7 +1384,7 @@ fn enforce_collection_write_fence(state: &AppState) -> Result<(), ApiErr> {
 /// `docs:replace` (both `replace_docs` and `replace_doc`), delete,
 /// create/drop collection, and admin restore — so a node that has already
 /// taken a genuine ENOSPC hit on its durable write path (see
-/// `crate::coordinator::is_storage_full` /
+/// `crate::ingest::application::write_coordinator::errors::is_storage_full` /
 /// `Metrics::mark_storage_degraded`) fast-fails every subsequent mutating
 /// request with `507 Insufficient Storage` instead of re-attempting (and
 /// re-failing) the same durable write. Deliberately a pure gauge read: no
@@ -3154,7 +3156,7 @@ fn hnsw_cache_seal_api_error(error: anyhow::Error) -> ApiErr {
             error.to_string(),
         );
     }
-    if crate::coordinator::is_storage_full(&error)
+    if crate::ingest::application::write_coordinator::errors::is_storage_full(&error)
         || error.downcast_ref::<StorageFullError>().is_some()
     {
         return ApiErr::new(
