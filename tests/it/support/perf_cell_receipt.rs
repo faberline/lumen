@@ -993,7 +993,7 @@ pub fn validate_aggregate(
             Some(_) => {}
         }
     }
-    for cell in expected_ids.difference(&seen) {
+    if let Some(cell) = expected_ids.difference(&seen).next() {
         return Err(ReceiptError::MissingCell(cell.clone()));
     }
     Ok(Aggregate {
