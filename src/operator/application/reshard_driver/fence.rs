@@ -10,7 +10,7 @@ use service_auth::k8s::ProjectedToken;
 
 use crate::operator::application::reshard_driver::cluster_control::ClusterControl;
 use crate::operator::domain::lumen_spec::Lumen;
-use crate::routing::VirtualBucketShardMap;
+use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 
 /// `POST /admin/reshard:fence` (#1396 R2) against one shard: `buckets`
 /// non-empty arms a bounded write pause over those virtual buckets;

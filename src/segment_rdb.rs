@@ -7511,7 +7511,7 @@ mod tests {
     /// checkpoint completes) lives in `tests/it/reshard_driver_e2e.rs`.
     #[test]
     fn reshard_apply_and_evict_survive_checkpoint_and_cold_start() {
-        use crate::routing::VirtualBucketShardMap;
+        use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 
         let dir = tempfile::tempdir().unwrap();
         let store = SegmentRdbStore::new(dir.path()).unwrap();

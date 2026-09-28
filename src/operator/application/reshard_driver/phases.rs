@@ -16,7 +16,7 @@ use crate::operator::application::reshard_driver::trigger::{
 };
 use crate::operator::application::reshard_driver::{DriveOutcome, WRITE_FENCE_TTL_SECS};
 use crate::operator::domain::lumen_spec::Lumen;
-use crate::reshard::bucket_moves;
+use crate::sharding::domain::bucket_move::bucket_moves;
 
 pub(super) async fn start_split(
     control: &dyn ClusterControl,

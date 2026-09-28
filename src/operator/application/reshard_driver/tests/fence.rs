@@ -11,7 +11,7 @@ use crate::operator::application::reshard_driver::fence::set_write_fence;
 use crate::operator::application::reshard_driver::migration::evict_old_shards;
 use crate::operator::application::reshard_driver::tests::{http_client, lumen_with, spec};
 use crate::operator::domain::lumen_spec::Lumen;
-use crate::routing::VirtualBucketShardMap;
+use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 
 // ---- #1443 AC4: set_write_fence partial-arm cleanup -----------------
 

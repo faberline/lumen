@@ -85,7 +85,7 @@ impl LumenSpec {
     /// This function itself does **not** drive `workflow.phase` or move any
     /// data — it only computes the status this tick. The autonomous split
     /// executor (#1319 R2, #1381: computing a target topology, invoking
-    /// [`crate::reshard::bucket_moves`] / [`crate::reshard::
+    /// [`crate::sharding::domain::bucket_move::bucket_moves`] / [`crate::reshard::
     /// snapshot_reshard_batches`], and updating `shardMap.assignments`) is a
     /// separate loop ([`crate::operator::reshard_driver::
     /// should_start_split`] / `drive_tick`) that reads the

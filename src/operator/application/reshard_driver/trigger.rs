@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use crate::operator::domain::lumen_spec::topology::ReshardPhase;
 use crate::operator::domain::lumen_spec::Lumen;
-use crate::routing::VirtualBucketShardMap;
+use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 
 /// Pure trigger gate (R3 safety rail; AC4): whether `lumen` should start a
 /// **new** split this tick. `false` whenever `maxShardBytes` is unset —

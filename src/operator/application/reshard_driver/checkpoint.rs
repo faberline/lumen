@@ -11,7 +11,7 @@ use service_auth::k8s::ProjectedToken;
 use crate::operator::application::reshard_driver::cluster_control::ClusterControl;
 use crate::operator::application::reshard_driver::fence::maybe_rearm_fence;
 use crate::operator::domain::lumen_spec::Lumen;
-use crate::routing::VirtualBucketShardMap;
+use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 
 pub(super) async fn evict_shard(
     http: &reqwest::Client,

@@ -1,0 +1,3 @@
+//! The composition root: configuration and wiring that may use every context.
+
+pub(crate) mod config;

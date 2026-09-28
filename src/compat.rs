@@ -5,5 +5,10 @@
 //! new paths.
 
 pub mod auth;
+pub mod config;
 #[cfg(feature = "operator")]
 pub mod operator;
+pub mod reshard;
+pub mod routing;
+#[cfg(feature = "operator")]
+pub mod routing_remote;

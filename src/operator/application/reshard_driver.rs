@@ -38,8 +38,8 @@
 //!   `Splitting`. Restart-safe: re-reads the same live readiness fact every
 //!   tick.
 //! - **Splitting**: run one migration pass ([`run_migration_pass`] — the
-//!   production caller of [`crate::reshard::bucket_moves`] /
-//!   [`crate::reshard::snapshot_reshard_batches`]) copying every moved
+//!   production caller of [`crate::sharding::domain::bucket_move::bucket_moves`] /
+//!   [`crate::sharding::domain::reshard_batch::snapshot_reshard_batches`]) copying every moved
 //!   bucket from its old shard to the new shard via the admin verbs, then
 //!   phase -> `CatchingUp`. `POST /admin/reshard:apply` is an idempotent
 //!   additive merge (#1380), so re-running this same pass after a restart
@@ -163,9 +163,9 @@
 //! `VIRTUAL_BUCKET_COUNT`/`SHARD_MAP_ASSIGNMENTS` onto container env, and
 //! `src/bin/lumen.rs`'s `serve()` builds its `EngineShardSearch` via
 //! `EngineShardSearch::new_with_shard_map` fed by
-//! `crate::config::shard_map_from_env`, so a pod started after this driver's
+//! `crate::sharding::infrastructure::shard_map_env::shard_map_from_env`, so a pod started after this driver's
 //! cutover routes queries by the minimal-move target map computed by
-//! [`crate::routing::VirtualBucketShardMap::split_one_shard`] rather than the
+//! [`crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap::split_one_shard`] rather than the
 //! balanced default. [`trigger_rolling_restart`] is driven in the same
 //! cutover tick that patches `spec.shardMap` so every serving pod picks up
 //! the new map without manual intervention: it patches the serving
@@ -219,7 +219,7 @@ const DRIVER_POLL_INTERVAL: Duration = Duration::from_secs(20);
 const DRIVER_LEASE_NAME: &str = "lumen-reshard-driver";
 
 /// Upper bound on external_ids carried per `POST /admin/reshard:apply` call,
-/// matching the batching contract [`crate::reshard::snapshot_reshard_batches`]
+/// matching the batching contract [`crate::sharding::domain::reshard_batch::snapshot_reshard_batches`]
 /// already documents (checkpoint after every batch, not after one full-shard
 /// copy).
 const MAX_EXTERNAL_IDS_PER_BATCH: usize = 2000;

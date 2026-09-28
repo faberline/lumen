@@ -13,7 +13,7 @@ use crate::operator::application::reshard_driver::migration::{
 };
 use crate::operator::application::reshard_driver::DriveOutcome;
 use crate::operator::domain::lumen_spec::Lumen;
-use crate::routing::VirtualBucketShardMap;
+use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 
 /// The migrate/checkpoint/evict/checkpoint/cutover sequence proper, run
 /// under [`advance_catching_up`]'s write fence. Split out so the fence's

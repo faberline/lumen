@@ -1328,7 +1328,7 @@ mod tests {
 
         seal(sink.clone()).await;
         assert!(engine
-            .apply_reshard_prune_chunk(crate::reshard::ReshardPruneChunk {
+            .apply_reshard_prune_chunk(crate::sharding::domain::prune_chunk::ReshardPruneChunk {
                 to_map_version: 1,
                 bucket: 0,
                 virtual_bucket_count: 1,
@@ -1342,7 +1342,11 @@ mod tests {
         assert!(!sink.has_current_hnsw_cache_seal());
 
         seal(sink.clone()).await;
-        let one_shard = crate::routing::VirtualBucketShardMap::balanced(1, 1, 1).unwrap();
+        let one_shard =
+            crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap::balanced(
+                1, 1, 1,
+            )
+            .unwrap();
         assert_eq!(
             engine
                 .evict_not_owned(&one_shard, 0)

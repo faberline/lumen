@@ -13,7 +13,7 @@ use crate::operator::application::reshard_driver::transfer::{
     apply_reshard_batch, detect_oversized_batch,
 };
 use crate::operator::application::reshard_driver::DriveOutcome;
-use crate::reshard::ReshardBatch;
+use crate::sharding::domain::reshard_batch::ReshardBatch;
 use crate::storage::SnapshotV1;
 
 // ---- #1444 R2: oversized-doc reshard remediation --------------------
@@ -21,7 +21,7 @@ use crate::storage::SnapshotV1;
 /// A minimal, otherwise-empty [`ReshardBatch`] whose `external_ids` holds
 /// one collection/id pair with an `external_id` long enough on its own to
 /// push the batch's serialized size over
-/// [`crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES`] — the exact shape
+/// [`crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES`] — the exact shape
 /// `byte_cap_chunk` produces when it floors at a single oversized id.
 fn oversized_batch(collection: &str, external_id_len: usize) -> ReshardBatch {
     let mut external_ids = BTreeMap::new();
@@ -55,16 +55,16 @@ fn detect_oversized_batch_none_when_under_limit() {
 fn detect_oversized_batch_some_when_over_limit_names_first_id() {
     let batch = oversized_batch(
         "widgets",
-        crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1024,
+        crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1024,
     );
     let block = detect_oversized_batch(&batch)
         .expect("a batch over ADMIN_ROUTE_BODY_LIMIT_BYTES must be classified as oversized");
     assert_eq!(block.collection, "widgets");
     assert_eq!(
         block.external_id.len(),
-        crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1024
+        crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1024
     );
-    assert!(block.bytes > crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES);
+    assert!(block.bytes > crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES);
 }
 
 #[tokio::test]
@@ -82,7 +82,7 @@ async fn apply_reshard_batch_rejects_oversized_batch_without_sending_request() {
         .await;
     let batch = oversized_batch(
         "widgets",
-        crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1024,
+        crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1024,
     );
     let result = apply_reshard_batch(&http_client(), &server.uri(), None, &batch).await;
     let err = result.expect_err("an oversized batch must be rejected pre-flight");
@@ -112,7 +112,7 @@ fn oversize_block_cache_records_skips_then_exhausts_recheck_budget() {
     let block = OversizedDocumentBlock {
         collection: "widgets".to_string(),
         external_id: "abc".to_string(),
-        bytes: crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1,
+        bytes: crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1,
     };
     record_oversize_block(namespace, name, uid, block.clone());
     assert_eq!(
@@ -157,7 +157,7 @@ async fn advance_catching_up_skips_fence_arm_when_oversize_wedge_recorded() {
         OversizedDocumentBlock {
             collection: "widgets".to_string(),
             external_id: "abc".to_string(),
-            bytes: crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1,
+            bytes: crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES + 1,
         },
     );
 

@@ -22,8 +22,11 @@ use crate::operator::application::reshard_driver::trigger::{
 };
 use crate::operator::application::reshard_driver::MAX_EXTERNAL_IDS_PER_BATCH;
 use crate::operator::domain::lumen_spec::Lumen;
-use crate::reshard::{bucket_moves, snapshot_reshard_batches, snapshot_reshard_prune_chunks};
-use crate::routing::VirtualBucketShardMap;
+use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
+use crate::sharding::domain::{
+    bucket_move::bucket_moves, prune_chunk::snapshot_reshard_prune_chunks,
+    reshard_batch::snapshot_reshard_batches,
+};
 
 /// One migration pass: every bucket [`bucket_moves`] says moved between
 /// `current_shard_map` and [`compute_target_map`], grouped by its old
@@ -114,7 +117,7 @@ pub(super) async fn run_migration_pass_impl(
             .spec
             .body_limit_bytes
             .map(|b| b as usize)
-            .unwrap_or(crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES)
+            .unwrap_or(crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES)
             / 2;
         let batches = snapshot_reshard_batches(
             &snapshot,

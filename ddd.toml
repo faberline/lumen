@@ -113,10 +113,11 @@ shared_kernel_crate = "{repo}-shared-kernel"
 [policy.lints.clippy]
 mod_module_files = "deny"
 
-# Code that may use every context. `compat` keeps the module paths from before
-# the split alive until outside callers move to the new ones (D3).
+# Code that may use every context. `app` is the composition root (D1);
+# `compat` keeps the module paths from before the split alive until outside
+# callers move to the new ones (D3).
 [assembly]
-modules = ["src/compat"]
+modules = ["src/app", "src/compat"]
 
 [[contexts]]
 name = "access"
@@ -129,11 +130,19 @@ interfaces = "src/access/interfaces"
 
 [[contexts]]
 name = "operator"
-depends_on = ["access"]
+depends_on = ["access", "sharding"]
 [contexts.layers]
 domain = "src/operator/domain"
 application = "src/operator/application"
 infrastructure = "src/operator/infrastructure"
+
+[[contexts]]
+name = "sharding"
+depends_on = []
+[contexts.layers]
+domain = "src/sharding/domain"
+application = "src/sharding/application"
+infrastructure = "src/sharding/infrastructure"
 
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
 # port the owning layer defines.
@@ -177,6 +186,33 @@ paths = ["src/operator/application/render/identity.rs"]
 subject = "access.domain"
 reason = "control_plane_token() mounts the projected token at access's AUDIENCE, the value the verifier checks. P2: access exposes the control-plane token's audience through its application layer, next to CONTROL_PLANE_TOKEN_MOUNT."
 
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/operator/application/reshard_driver/catch_up_fenced.rs",
+  "src/operator/application/reshard_driver/checkpoint.rs",
+  "src/operator/application/reshard_driver/fence.rs",
+  "src/operator/application/reshard_driver/migration.rs",
+  "src/operator/application/reshard_driver/oversize.rs",
+  "src/operator/application/reshard_driver/phases.rs",
+  "src/operator/application/reshard_driver/transfer.rs",
+  "src/operator/application/reshard_driver/trigger.rs",
+]
+subject = "sharding.domain"
+reason = "The reshard driver plans and sizes each split with sharding's domain primitives: VirtualBucketShardMap, bucket_moves, snapshot_reshard_batches, snapshot_reshard_prune_chunks, ReshardBatch, ReshardPruneChunk and ADMIN_ROUTE_BODY_LIMIT_BYTES. P2: sharding's application layer exposes the split-planning API the driver calls."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/operator/domain/lumen_spec/topology.rs"]
+subject = "sharding.domain"
+reason = "The CRD's shardMap.virtualBucketCount default is sharding's DEFAULT_VIRTUAL_BUCKET_COUNT, so the operator never renders a map the data plane reads differently. P2: the constant moves to the shared kernel."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/sharding/infrastructure/routed_router/scatter.rs"]
+subject = "infrastructure->application"
+reason = "scatter_search merges the local and forwarded pages with search_fanout's merge_shard_search_responses and search_request_offset, the merge EngineShardSearch uses in-process, so both rank a scattered search the same way. P2: the merge moves to the sharding domain and both callers use it there."
+
 # The Lumen and LumenFleet custom resources are the operator's domain model,
 # and their Rust types are also the CRD schema (E1). P2 splits the schema into
 # DTOs with a mapper; until then the domain names the crates the schema needs.
@@ -219,3 +255,25 @@ rule = "B2"
 paths = ["src/operator/domain/lumen_fleet/plan.rs"]
 subject = "serde_path_to_error"
 reason = "plan() deserializes the merged per-namespace spec through serde_path_to_error so a rejection names the offending field. P2: the deserialization moves with the CRD DTOs."
+
+# The sharding domain moved as-is (D2): its map constructors and reshard
+# primitives report errors through anyhow, and the routing hash is CRC-32.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/sharding/domain/bucket_move.rs",
+  "src/sharding/domain/merge_delta.rs",
+  "src/sharding/domain/prune_chunk.rs",
+  "src/sharding/domain/reshard_batch.rs",
+  "src/sharding/domain/snapshot_subset.rs",
+  "src/sharding/domain/virtual_bucket_shard_map.rs",
+]
+subject = "anyhow"
+reason = "The map constructors and the reshard primitives return anyhow::Result, which api.rs, storage.rs and the reshard driver propagate with ?. P2: a sharding domain error type (thiserror) that the callers convert."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/sharding/domain/virtual_bucket_shard_map.rs"]
+subject = "crc32fast"
+reason = "route_hash is CRC-32 over the collection id and the routing key. Every stored document's bucket depends on it, so the algorithm is part of the routing contract and cannot change. P2: decide whether the domain may use crc32fast (pure, no I/O) or takes the hash from the shared kernel."

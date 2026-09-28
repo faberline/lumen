@@ -160,7 +160,7 @@ impl ReshardPhase {
 }
 
 fn default_virtual_bucket_count() -> u32 {
-    crate::routing::DEFAULT_VIRTUAL_BUCKET_COUNT
+    crate::sharding::domain::virtual_bucket_shard_map::DEFAULT_VIRTUAL_BUCKET_COUNT
 }
 
 fn default_reshard_prepare_percent() -> u8 {

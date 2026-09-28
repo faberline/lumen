@@ -7,7 +7,7 @@ use anyhow::{bail, Context, Result};
 use serde_json::json;
 
 use crate::operator::application::reshard_driver::oversize::OversizedDocumentBlock;
-use crate::reshard::{ReshardBatch, ReshardPruneChunk};
+use crate::sharding::domain::{prune_chunk::ReshardPruneChunk, reshard_batch::ReshardBatch};
 use crate::storage::SnapshotV1;
 
 pub(super) async fn fetch_scoped_backup(
@@ -44,7 +44,7 @@ pub(super) async fn fetch_scoped_backup(
 /// already satisfies this data-plane route's per-collection `Role::Read`
 /// filter for every collection id, so no new admin-only endpoint is needed
 /// here. This is deliberately **not** derived from a bucket-scoped
-/// snapshot's own `collections` keys: [`crate::reshard::snapshot_bucket_subset`]
+/// snapshot's own `collections` keys: [`crate::sharding::domain::snapshot_subset::snapshot_bucket_subset`]
 /// (backing `POST /admin/backup:scoped`) omits a collection entirely from
 /// its output when it has zero matching docs in the requested buckets — a
 /// collection a batch of deletes emptied out of a moved bucket would then be
@@ -52,7 +52,7 @@ pub(super) async fn fetch_scoped_backup(
 /// copies on the target unpruned (the exact edge #1443 disclosed and #1457
 /// R2 closes).
 ///
-/// [`snapshot_reshard_prune_chunks`]: crate::reshard::snapshot_reshard_prune_chunks
+/// [`snapshot_reshard_prune_chunks`]: crate::sharding::domain::prune_chunk::snapshot_reshard_prune_chunks
 pub(super) async fn fetch_all_collection_ids(
     http: &reqwest::Client,
     base_url: &str,
@@ -77,7 +77,7 @@ pub(super) async fn fetch_all_collection_ids(
 }
 
 /// If `batch`'s actual wire payload is over
-/// [`crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES`], name the collection and
+/// [`crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES`], name the collection and
 /// external_id to blame (#1444 R2). `snapshot_reshard_batches`'
 /// `byte_cap_chunk` only ever emits an over-the-limit batch when it floored
 /// at a single external_id (a bucket group's byte cap already keeps every
@@ -87,7 +87,7 @@ pub(super) fn detect_oversized_batch(batch: &ReshardBatch) -> Option<OversizedDo
     let bytes = serde_json::to_vec(batch)
         .map(|bytes| bytes.len())
         .unwrap_or(usize::MAX);
-    if bytes <= crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES {
+    if bytes <= crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES {
         return None;
     }
     let (collection, external_id) = batch.external_ids.iter().find_map(|(collection, ids)| {

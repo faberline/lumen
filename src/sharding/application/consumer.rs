@@ -1,4 +1,3 @@
-// CODEGEN-BEGIN
 //! Consumer adapter glue.
 //!
 //! lumen does not own the source of truth and does not bundle an
@@ -18,7 +17,7 @@
 //! single pod is the leader; legacy external-log modes can accept writes on any
 //! connected pod.
 
-use crate::routing::shard_index;
+use crate::sharding::domain::shard_index::shard_index;
 
 #[derive(Debug, Clone)]
 pub struct ShardRouter {
@@ -56,4 +55,3 @@ mod tests {
         assert!(url.ends_with("/collections/users/index"));
     }
 }
-// CODEGEN-END

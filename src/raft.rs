@@ -34,7 +34,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::config::ClusterConfig;
+use crate::app::config::ClusterConfig;
 
 /// Sentinel for [`ClusterState::leader_index`]: no leader currently known
 /// (mid-election, or the group hasn't elected one yet).
@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(view.applied_index, 5);
     }
 
-    use crate::config::ClusterConfig;
+    use crate::app::config::ClusterConfig;
     use std::sync::Mutex;
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 

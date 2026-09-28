@@ -55,9 +55,9 @@ use crate::coordinator::{
 };
 use crate::log_entry::RaftLogEntry;
 use crate::raft::{ClusterStateView, RaftRole, ReadConsistency};
-use crate::reshard::ReshardBatch;
-use crate::routing::VirtualBucketShardMap;
 use crate::segment_restore::{RestoreNotCommitted, RestoreUnavailable};
+use crate::sharding::domain::reshard_batch::ReshardBatch;
+use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 use crate::storage::{ApplyOutcome, DropOutcome, Engine, SnapshotV1, StorageError};
 use crate::types::{
     validate_batch_unindex_docs_request, Analyzer, ApiError, BatchSearchRequest,
@@ -506,7 +506,7 @@ pub trait WriteBackend: Send + Sync {
 /// never even constructs an implementation (AC5: no forwarding overhead).
 ///
 /// Every method takes the inbound request's `headers` verbatim: the sole
-/// concrete implementation ([`crate::routing_remote::RoutedRouter`], behind
+/// concrete implementation ([`crate::sharding::infrastructure::routed_router::RoutedRouter`], behind
 /// the `operator` feature) checks the `x-lumen-forwarded` one-hop guard
 /// first and, when forwarding, carries the caller's `Authorization` bearer
 /// and `x-read-consistency` through unchanged (R3).
@@ -516,10 +516,10 @@ pub trait RoutedBackend: Send + Sync {
     /// physical shard must register the schema, or a write that later
     /// routes to a shard that never heard `create_collection` 404s with
     /// `CollectionNotFound` even though the collection genuinely exists.
-    /// The sole implementation ([`crate::routing_remote::RoutedRouter`])
+    /// The sole implementation ([`crate::sharding::infrastructure::routed_router::RoutedRouter`])
     /// fans this out to every physical shard (local direct call plus one
     /// forward per remote shard), mirroring
-    /// [`crate::routing::EngineShardWrite::create_collection`]'s in-process
+    /// [`crate::sharding::application::engine_shard_write::EngineShardWrite::create_collection`]'s in-process
     /// fan-out/merge semantics over cross-pod HTTP instead of an in-process
     /// writer submit.
     async fn create_collection(
@@ -531,7 +531,7 @@ pub trait RoutedBackend: Send + Sync {
 
     /// #2496: same fan-out-to-every-shard requirement as
     /// [`Self::create_collection`], merged with
-    /// [`crate::routing::EngineShardWrite::drop_collection`]'s
+    /// [`crate::sharding::application::engine_shard_write::EngineShardWrite::drop_collection`]'s
     /// `Physical > Marked > AlreadyMarked > NotFound` precedence.
     async fn drop_collection(
         &self,
@@ -1124,13 +1124,13 @@ pub fn router_with_admission(
         // guard); 8MiB is the broker payload budget. Enforces the cap at the HTTP
         // layer with a structured 413 envelope and streams/chunked bodies bounded
         // mid-read, disabling axum's extractor-side default so this layer governs.
-        // Shared with `crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES` (#1444 R2)
+        // Shared with `crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES` (#1444 R2)
         // so the reshard driver's oversize-batch detection can never drift from the
         // limit actually enforced here. Probe routes (/healthz, /readyz, /metrics,
         // /version, /docs) are unaffected as they are merged separately and stay
         // unbounded.
         .layer(service_http::body_limit_layer(
-            crate::reshard::body_limit_bytes_from_env(),
+            crate::sharding::infrastructure::body_limit::body_limit_bytes_from_env(),
         ))
         .layer(axum::extract::DefaultBodyLimit::disable());
     let data_plane = match admission {
@@ -1327,7 +1327,7 @@ fn enforce_read_consistency(state: &AppState, consistency: ReadConsistency) -> R
 /// `delete_external_id` is fenced too (#1458 R2): an earlier revision left
 /// DELETE exempt on the theory that `apply_reshard_batch`'s
 /// authoritative-subset `replace_ids` scoping (see
-/// [`crate::reshard::snapshot_reshard_batches`]'s `replace_mode` and
+/// [`crate::sharding::domain::reshard_batch::snapshot_reshard_batches`]'s `replace_mode` and
 /// [`crate::storage::Engine::apply_reshard_batch`]'s `replace` parameter)
 /// already closes the resurrection gap for a delete acked *before* the
 /// final pass's scoped-backup read. That leaves a delete racing strictly
@@ -2888,7 +2888,7 @@ async fn reshard_apply(
 async fn reshard_prune(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthContext>,
-    Json(chunk): Json<crate::reshard::ReshardPruneChunk>,
+    Json(chunk): Json<crate::sharding::domain::prune_chunk::ReshardPruneChunk>,
 ) -> Result<Json<serde_json::Value>, ApiErr> {
     auth.ensure_admin(Role::Admin).await?;
     let _mutation_permit = acquire_direct_mutation_permit(&state).await?;
@@ -2953,9 +2953,12 @@ async fn backup_scoped(
 ) -> Result<Json<SnapshotV1>, ApiErr> {
     auth.ensure_admin(Role::Admin).await?;
     let full = state.engine.snapshot().map_err(ApiErr::from)?;
-    let scoped =
-        crate::reshard::snapshot_bucket_subset(&full, req.virtual_bucket_count, &req.buckets)
-            .map_err(ApiErr::from)?;
+    let scoped = crate::sharding::domain::snapshot_subset::snapshot_bucket_subset(
+        &full,
+        req.virtual_bucket_count,
+        &req.buckets,
+    )
+    .map_err(ApiErr::from)?;
     tracing::info!(
         target: "lumen.audit",
         event = "backup_scoped",

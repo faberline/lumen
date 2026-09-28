@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(super) const OVERSIZE_RECHECK_TICKS: u32 = 15;
 
 /// Distinguishes an apply failure caused by exactly one document's batch
-/// serializing past [`crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES`] — the
+/// serializing past [`crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES`] — the
 /// `snapshot_reshard_batches`/`byte_cap_chunk` floor case
 /// (`crate::reshard`'s module doc's "one document cannot be split further")
 /// — from any other reason `POST /admin/reshard:apply` can fail (#1444 R2).
@@ -52,7 +52,7 @@ impl std::fmt::Display for OversizedDocumentBlock {
             self.collection,
             self.external_id,
             self.bytes,
-            crate::reshard::ADMIN_ROUTE_BODY_LIMIT_BYTES
+            crate::sharding::domain::reshard_batch::ADMIN_ROUTE_BODY_LIMIT_BYTES
         )
     }
 }

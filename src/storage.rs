@@ -63,8 +63,8 @@ use thiserror::Error;
 
 use crate::composed_segment::TextPostingAt;
 use crate::metrics::{CommittedApplyTelemetry, Metrics};
-use crate::routing::VirtualBucketShardMap;
 use crate::segment::SortedIdCursor;
+use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 use crate::tokenize;
 use crate::types::{
     validate_batch_unindex_docs_request, Analyzer, BatchUnindexDocsRequest, CacheStats,
@@ -7838,8 +7838,8 @@ impl Engine {
     /// Reuses the same [`Collection::to_snapshot`]/[`Collection::from_snapshot`]
     /// machinery `snapshot`/`restore` use: for a collection the target
     /// already has, the live collection is snapshotted, merged with the
-    /// delta via [`crate::reshard::merge_snapshot_delta`] (bucket-batch
-    /// deltas are computed by [`crate::reshard::snapshot_reshard_batches`]),
+    /// delta via [`crate::sharding::domain::merge_delta::merge_snapshot_delta`] (bucket-batch
+    /// deltas are computed by [`crate::sharding::domain::reshard_batch::snapshot_reshard_batches`]),
     /// and rebuilt in one write-lock scope so a concurrent read never
     /// observes a torn state. A collection the target doesn't have yet is
     /// inserted straight from the delta.
@@ -7867,7 +7867,7 @@ impl Engine {
     pub fn apply_reshard_batch(
         &self,
         delta: SnapshotV1,
-        replace: Option<crate::reshard::ReshardBatchReplaceScope>,
+        replace: Option<crate::sharding::domain::prune_chunk::ReshardBatchReplaceScope>,
     ) -> Result<ReshardApplyOutcome> {
         let _apply = self.capture_barrier.apply();
         if !(1..=SNAPSHOT_VERSION).contains(&delta.version) {
@@ -7894,7 +7894,9 @@ impl Engine {
                         version: delta.version,
                         collections: BTreeMap::from([(collection_id.clone(), delta_collection)]),
                     };
-                    let merged = crate::reshard::merge_snapshot_delta(base, delta_wrap)?;
+                    let merged = crate::sharding::domain::merge_delta::merge_snapshot_delta(
+                        base, delta_wrap,
+                    )?;
                     merged
                         .collections
                         .into_iter()
@@ -7969,7 +7971,7 @@ impl Engine {
     }
 
     /// `POST /admin/reshard:prune` (#1457 R1, hardened #1467 R1/R2/R4):
-    /// accumulate one [`crate::reshard::ReshardPruneChunk`] of a final
+    /// accumulate one [`crate::sharding::domain::prune_chunk::ReshardPruneChunk`] of a final
     /// migration pass's authoritative "keep" set for one `(bucket,
     /// collection_id)` pair, and prune once every chunk in `0..total_chunks`
     /// has arrived.
@@ -7979,7 +7981,7 @@ impl Engine {
     /// into a set as each chunk lands. Once the set's length equals
     /// `total_chunks`, the accumulated key is removed and the union is
     /// applied via [`Self::apply_reshard_batch`] with an empty additive
-    /// delta and a single-collection [`crate::reshard::ReshardBatchReplaceScope`]
+    /// delta and a single-collection [`crate::sharding::domain::prune_chunk::ReshardBatchReplaceScope`]
     /// — reusing that method's already-tested prune logic rather than
     /// duplicating it.
     ///
@@ -8006,7 +8008,7 @@ impl Engine {
     /// a single migration pass, and never starts a second pass for the same
     /// `(bucket, collection_id)` before the first either completes or the
     /// driver gives up on it entirely — see
-    /// [`crate::reshard::ReshardPruneChunk`]'s doc comment for the sender-side
+    /// [`crate::sharding::domain::prune_chunk::ReshardPruneChunk`]'s doc comment for the sender-side
     /// half of this contract. So `chunk_index == 0` unambiguously marks the
     /// start of a new pass: it resets any stale partial left by an earlier
     /// pass for the same key that never reached completion (driver
@@ -8023,7 +8025,7 @@ impl Engine {
     /// grow the accumulator without bound.
     pub fn apply_reshard_prune_chunk(
         &self,
-        chunk: crate::reshard::ReshardPruneChunk,
+        chunk: crate::sharding::domain::prune_chunk::ReshardPruneChunk,
     ) -> Result<ReshardPruneOutcome> {
         let _apply = self.capture_barrier.apply();
         if chunk.total_chunks == 0 || chunk.total_chunks > PRUNE_ACCUM_MAX_TOTAL_CHUNKS {
@@ -8091,7 +8093,7 @@ impl Engine {
             version: SNAPSHOT_VERSION,
             collections: BTreeMap::new(),
         };
-        let scope = crate::reshard::ReshardBatchReplaceScope {
+        let scope = crate::sharding::domain::prune_chunk::ReshardBatchReplaceScope {
             bucket: chunk.bucket,
             virtual_bucket_count: chunk.virtual_bucket_count,
             replace_ids: BTreeMap::from([(chunk.collection_id, keep_ids)]),
@@ -26433,8 +26435,8 @@ mod tests {
         chunk_index: u32,
         total_chunks: u32,
         keep_ids: &[&str],
-    ) -> crate::reshard::ReshardPruneChunk {
-        crate::reshard::ReshardPruneChunk {
+    ) -> crate::sharding::domain::prune_chunk::ReshardPruneChunk {
+        crate::sharding::domain::prune_chunk::ReshardPruneChunk {
             to_map_version,
             bucket,
             virtual_bucket_count: 4,

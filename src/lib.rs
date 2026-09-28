@@ -38,6 +38,7 @@ mod access;
 /// drives the apply loop + cold-start through it.
 pub mod aof;
 pub mod api;
+mod app;
 pub use crate::compat::auth;
 /// `lumen backup` (#808): fetches a consistent snapshot from a running
 /// serving fleet's existing `GET /admin/backup` endpoint and hands it to a
@@ -59,8 +60,8 @@ mod committed_record_codec;
 mod committed_stage;
 mod compat;
 mod composed_segment;
-pub mod config;
-pub mod consumer;
+pub use crate::compat::config;
+pub use crate::sharding::application::consumer;
 pub mod coordinator;
 pub mod dx;
 #[cfg(not(feature = "jieba"))]
@@ -88,15 +89,15 @@ pub mod raft;
 #[cfg(feature = "raft-wal")]
 pub mod raft_sm;
 pub mod rdb;
-pub mod reshard;
-pub mod routing;
+pub use crate::compat::reshard;
+pub use crate::compat::routing;
 /// Cross-pod shard routing for operator/k8s serving pods (#1398 R1-R3): local
 /// reads/writes hit the engine directly, remote-owned buckets forward one hop
 /// over h2c. Behind `operator` because it is the only module that needs
 /// `reqwest` as a directly-nameable type; every real deployment already links
 /// it via `operator`'s `backup` feature, so this adds no new crate.
 #[cfg(feature = "operator")]
-pub mod routing_remote;
+pub use crate::compat::routing_remote;
 /// Columnar mmap disk segment (Stage 2 disk-tier): a single Number column
 /// for `n_docs` rows at one `applied_seq`, written page-aligned for zero-copy
 /// reads. Compiled by default; the disk tier is selected at runtime
@@ -112,6 +113,7 @@ pub mod segment_checkpoint;
 /// default binary keeps the CBOR RDB).
 pub mod segment_rdb;
 pub mod segment_restore;
+mod sharding;
 /// Offline machine-readable self-description (`lumen spec`): OpenAPI / JSON
 /// schema, the query-shape cookbook, and the field/analyzer catalog — the
 /// agent-integration surface, emitted without a running server.
