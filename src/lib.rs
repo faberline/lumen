@@ -81,13 +81,13 @@ mod ngram_stream;
 pub mod operator;
 /// Cluster-state view types backing the read/admin API. This surface is the
 /// compatibility bridge for Lumen-owned primary/replica replication.
-pub mod raft;
+pub use crate::compat::raft;
 /// `EngineSm` — lumen's `Engine` as a shared-`raft_runtime` state machine: the
 /// convergence onto `libs/raft-runtime` (#524). The host is the sole applier, so
 /// the per-service driver, durable hard state, and the WAL seam are no longer
 /// lumen's to own — they live in the shared lib.
 #[cfg(feature = "raft-wal")]
-pub mod raft_sm;
+pub use crate::compat::raft_sm;
 pub mod rdb;
 pub use crate::compat::reshard;
 pub use crate::compat::routing;
@@ -98,6 +98,7 @@ pub use crate::compat::routing;
 /// it via `operator`'s `backup` feature, so this adds no new crate.
 #[cfg(feature = "operator")]
 pub use crate::compat::routing_remote;
+mod replication;
 /// Columnar mmap disk segment (Stage 2 disk-tier): a single Number column
 /// for `n_docs` rows at one `applied_seq`, written page-aligned for zero-copy
 /// reads. Compiled by default; the disk tier is selected at runtime

@@ -8,6 +8,9 @@ pub mod auth;
 pub mod config;
 #[cfg(feature = "operator")]
 pub mod operator;
+pub mod raft;
+#[cfg(feature = "raft-wal")]
+pub mod raft_sm;
 pub mod reshard;
 pub mod routing;
 #[cfg(feature = "operator")]

@@ -144,6 +144,13 @@ domain = "src/sharding/domain"
 application = "src/sharding/application"
 infrastructure = "src/sharding/infrastructure"
 
+[[contexts]]
+name = "replication"
+depends_on = []
+[contexts.layers]
+domain = "src/replication/domain"
+application = "src/replication/application"
+
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
 # port the owning layer defines.
 
@@ -277,3 +284,36 @@ rule = "B2"
 paths = ["src/sharding/domain/virtual_bucket_shard_map.rs"]
 subject = "crc32fast"
 reason = "route_hash is CRC-32 over the collection id and the routing key. Every stored document's bucket depends on it, so the algorithm is part of the routing contract and cannot change. P2: decide whether the domain may use crc32fast (pure, no I/O) or takes the hash from the shared kernel."
+
+# The replication domain moved as-is (D2): it wraps raft_runtime's canonical
+# cluster shapes for OpenAPI, and its constructors report errors through anyhow.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/replication/domain/cluster_state_view.rs",
+  "src/replication/domain/peer_addr.rs",
+  "src/replication/domain/raft_role.rs",
+]
+subject = "utoipa"
+reason = "E1: #[derive(ToSchema)] on ClusterStateView, PeerAddr and RaftRole, the /debug/cluster response that clients/openapi.json publishes. These wrappers exist so raft_runtime's shared types need not derive ToSchema. P2: OpenAPI DTOs outside the domain."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/replication/domain/cluster_state.rs",
+  "src/replication/domain/cluster_state_view.rs",
+  "src/replication/domain/peer_addr.rs",
+  "src/replication/domain/raft_role.rs",
+]
+subject = "raft_runtime"
+reason = "ReadConsistency is raft_runtime's, re-exported; RaftRole, PeerAddr and ClusterStateView convert from raft_runtime's canonical shapes; RaftGroup::from_config takes peer ordinals and the LUMEN_PEERS override from raft_runtime::cluster, so the peers it lists match the ones the raft-wal wiring dials. P2: the conversions and the LUMEN_PEERS read move to an infrastructure adapter, and the domain decides whether raft_runtime's pure cluster types count as a shared kernel."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/replication/domain/cluster_state.rs",
+  "src/replication/domain/peer_addr.rs",
+]
+subject = "anyhow"
+reason = "ClusterState::new and RaftGroup::from_config return anyhow::Result, which the bin's --wal raft setup wraps with .context() and propagates. P2: a replication domain error type (thiserror) that the callers convert."

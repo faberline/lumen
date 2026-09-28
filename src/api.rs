@@ -54,7 +54,9 @@ use crate::coordinator::{
     MutationGate, RestartRequired, StorageFullError, SubmitStalled, WriteCoordinator, WriteSink,
 };
 use crate::log_entry::RaftLogEntry;
-use crate::raft::{ClusterStateView, RaftRole, ReadConsistency};
+use crate::replication::domain::{
+    cluster_state::ReadConsistency, cluster_state_view::ClusterStateView, raft_role::RaftRole,
+};
 use crate::segment_restore::{RestoreNotCommitted, RestoreUnavailable};
 use crate::sharding::domain::reshard_batch::ReshardBatch;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
@@ -173,7 +175,7 @@ pub struct AppState {
     pub engine: Arc<Engine>,
     pub auth: Arc<AuthConfig>,
     verifier: Arc<LumenVerifier>,
-    pub cluster: Option<Arc<crate::raft::ClusterState>>,
+    pub cluster: Option<Arc<crate::replication::domain::cluster_state::ClusterState>>,
     /// Read/search backend. Defaults to the local engine; sharded serving can
     /// replace it with a fan-in router while keeping writes/stats local.
     pub search_backend: Arc<dyn SearchBackend>,
@@ -764,7 +766,10 @@ impl AppState {
         Self::with_wal(engine, auth, Arc::new(MemWal::new()))
     }
 
-    pub fn with_cluster(mut self, cluster: Arc<crate::raft::ClusterState>) -> Self {
+    pub fn with_cluster(
+        mut self,
+        cluster: Arc<crate::replication::domain::cluster_state::ClusterState>,
+    ) -> Self {
         self.cluster = Some(cluster);
         self
     }
@@ -952,9 +957,9 @@ impl AppState {
         StorageStats,
         CacheStats,
         ApiError,
-        crate::raft::ClusterStateView,
-        crate::raft::PeerAddr,
-        crate::raft::RaftRole,
+        crate::replication::domain::cluster_state_view::ClusterStateView,
+        crate::replication::domain::peer_addr::PeerAddr,
+        crate::replication::domain::raft_role::RaftRole,
         HnswCacheSealMutationStamp,
         HnswCacheSealResponse,
     )),
@@ -1225,7 +1230,7 @@ async fn debug_cluster(State(state): State<AppState>) -> Json<ClusterStateView> 
             pod_name: "local".into(),
             shard_index: 0,
             replica_index: 0,
-            role: crate::raft::RaftRole::Leader,
+            role: crate::replication::domain::raft_role::RaftRole::Leader,
             peers: vec![],
             applied_index: 0,
             leader_term: 0,
