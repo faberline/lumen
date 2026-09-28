@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, Weak};
 
-use crate::change_budget::RetainedCharge;
+use crate::ingest::domain::change_budget::RetainedCharge;
 
 #[derive(Default)]
 struct State {
@@ -153,7 +153,7 @@ impl Clone for FrozenRecordCharges {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::change_budget::ChangeBudget;
+    use crate::ingest::domain::change_budget::ChangeBudget;
 
     #[test]
     fn acknowledged_cut_keeps_one_record_charge_until_its_last_capture_drops() {

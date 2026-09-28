@@ -369,7 +369,7 @@ impl Drop for BudgetRelay {
 
 fn run_budget_relay(
     engine: Arc<Engine>,
-    wake: Arc<crate::change_budget::BudgetWake>,
+    wake: Arc<crate::ingest::domain::change_budget::BudgetWake>,
     endpoint: Arc<Endpoint>,
     stop: Arc<AtomicBool>,
 ) {
@@ -704,7 +704,7 @@ impl Drop for Fallback {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::change_budget::ChangeBudget;
+    use crate::ingest::domain::change_budget::ChangeBudget;
     use std::sync::OnceLock;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc;

@@ -7,9 +7,9 @@ use raft_runtime::{
 };
 use tower::ServiceExt;
 
-use crate::change_admission::PendingChangeCapacity;
-use crate::change_budget::{ChangeBudget, HARD_LIMIT};
 use crate::coordinator::WriteSink;
+use crate::ingest::domain::change_admission::PendingChangeCapacity;
+use crate::ingest::domain::change_budget::{ChangeBudget, HARD_LIMIT};
 use crate::replication::application::engine_sm::write_sink::RaftWriteSink;
 use crate::replication::application::engine_sm::EngineSm;
 use crate::shared_kernel::log_entry::RaftLogEntry;

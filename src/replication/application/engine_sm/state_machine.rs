@@ -20,7 +20,7 @@ impl RaftStateMachine for EngineSm {
             Ok(record) => Ok(Some(Box::new(record))),
             Err(error) => {
                 if let Some(pending) = error.downcast_ref::<RecordAdmissionError>().and_then(
-                    crate::change_admission::PendingChangeCapacity::from_record_prepublication,
+                    crate::ingest::domain::change_admission::PendingChangeCapacity::from_record_prepublication,
                 ) {
                     return Err(ProposalBackpressure {
                         reason: pending.to_string(),
@@ -51,7 +51,9 @@ impl RaftStateMachine for EngineSm {
             // decoder. Its scalar values can be projected from the pinned
             // command into private immutable files before the apply interval.
             // Local proposals still go through pre-publication admission.
-            if permit.is_none() && command.len() > crate::change_budget::HARD_LIMIT / 8 {
+            if permit.is_none()
+                && command.len() > crate::ingest::domain::change_budget::HARD_LIMIT / 8
+            {
                 if let Ok(scanner) =
                     crate::wal::fast_index_scanner::FastIndexScanner::parse(command)
                 {

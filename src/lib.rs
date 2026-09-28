@@ -50,11 +50,6 @@ pub use crate::compat::auth;
 #[cfg(feature = "backup")]
 pub mod backup;
 pub mod backup_sink;
-mod change_admission;
-mod change_budget;
-mod change_journal;
-mod change_memory_cost;
-mod change_record_cost;
 mod committed_record_codec;
 mod committed_stage;
 mod compat;
@@ -63,6 +58,7 @@ pub use crate::compat::config;
 pub use crate::sharding::application::consumer;
 pub mod coordinator;
 pub mod dx;
+mod ingest;
 #[cfg(not(feature = "jieba"))]
 mod jieba_fallback_stream;
 /// Write-log entry vocabulary (always compiled; the active write path uses it).

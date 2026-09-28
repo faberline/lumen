@@ -33,8 +33,8 @@ use tokio::sync::{
     oneshot, Mutex as AsyncMutex, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock,
 };
 
-use crate::change_admission::PendingChangeCapacity;
-use crate::change_budget::AdmissionError;
+use crate::ingest::domain::change_admission::PendingChangeCapacity;
+use crate::ingest::domain::change_budget::AdmissionError;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::storage::{
     ApplyOutcome, Engine, RecordAdmissionError, RecordApplyGuard, RecordReservation,
@@ -346,7 +346,8 @@ pub struct WriteCoordinator {
     /// stays separate from the apply reservation because it never owns source
     /// retention or Engine state.
     failed_head_transient_reservations: Mutex<Vec<RecordTransientReservation>>,
-    failed_head_retentions: Mutex<FxHashMap<u64, crate::change_budget::SourceRetention>>,
+    failed_head_retentions:
+        Mutex<FxHashMap<u64, crate::ingest::domain::change_budget::SourceRetention>>,
     /// A non-owning self reference lets a cancelled request leave a publisher
     /// task alive without retaining the coordinator forever.
     self_weak: Weak<WriteCoordinator>,
@@ -1680,8 +1681,8 @@ impl WriteSink for WriteCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::change_admission::PendingChangeCapacity;
-    use crate::change_budget::ChangeBudget;
+    use crate::ingest::domain::change_admission::PendingChangeCapacity;
+    use crate::ingest::domain::change_budget::ChangeBudget;
     use crate::shared_kernel::types::{
         document::{FieldValue, IndexItem, IndexRequest},
         schema::{CreateCollectionRequest, FieldSpec, FieldType, VectorBackend, VectorMetric},
@@ -3303,7 +3304,7 @@ mod tests {
 
     #[tokio::test]
     async fn full_raw_delivery_replays_the_same_head_before_later_records() {
-        use crate::change_budget::ChangeBudget;
+        use crate::ingest::domain::change_budget::ChangeBudget;
         use crate::wal::{WalLog, WalStream};
 
         struct ObservedWal {

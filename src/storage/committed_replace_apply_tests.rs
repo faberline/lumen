@@ -4,7 +4,7 @@ mod committed_replace_apply_tests {
     use std::{collections::BTreeMap, sync::Arc};
 
     use crate::{
-        change_budget::ChangeBudget,
+        ingest::domain::change_budget::ChangeBudget,
         shared_kernel::{
             log_entry::RaftLogEntry,
             types::{

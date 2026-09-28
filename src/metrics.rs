@@ -16,7 +16,7 @@
 //! unchanged for callers, including the `otel` feature's direct
 //! `field.load(Ordering::Relaxed)` reads in `src/bin/lumen.rs`.
 
-use crate::change_budget::ChangeBudget;
+use crate::ingest::domain::change_budget::ChangeBudget;
 use metrics_prometheus::{Counter, Gauge, Label, LabeledSample, Sample, SampleGroup};
 use std::fmt::Write as _;
 use std::time::Duration;

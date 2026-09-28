@@ -3747,7 +3747,7 @@ struct Collection {
     checkpoint_lineage_schema: Option<u32>,
     field_dirty: BTreeMap<String, BTreeMap<String, u64>>,
     next_field_dirty_revision: u64,
-    change_journal: crate::change_journal::ChangeJournal<CheckpointValue>,
+    change_journal: crate::ingest::domain::change_journal::ChangeJournal<CheckpointValue>,
     requires_full_checkpoint: bool,
     /// True only while the journal describes every row since this collection
     /// was empty. A missing origin alone cannot prove this after restore or a
@@ -4133,7 +4133,7 @@ impl Collection {
             checkpoint_lineage_schema: None,
             field_dirty: BTreeMap::new(),
             next_field_dirty_revision: 0,
-            change_journal: crate::change_journal::ChangeJournal::new(),
+            change_journal: crate::ingest::domain::change_journal::ChangeJournal::new(),
             requires_full_checkpoint: false,
             journal_complete_since_empty: true,
             version: 1,
@@ -4247,7 +4247,7 @@ impl Collection {
         &mut self,
         field: &str,
         external_id: &str,
-        charge: Option<&crate::change_budget::RetainedCharge>,
+        charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
     ) -> Result<()> {
         if !matches!(
             self.fields.get(field),
@@ -4511,7 +4511,7 @@ struct EngineCostContext<'a> {
     state: &'a EngineState,
 }
 
-impl crate::change_record_cost::CostContext for EngineCostContext<'_> {
+impl crate::ingest::domain::change_record_cost::CostContext for EngineCostContext<'_> {
     fn collection_exists(&self, collection_id: &str) -> bool {
         self.state.collections.contains_key(collection_id)
     }
@@ -4636,7 +4636,7 @@ pub(crate) type CheckpointDeltas = BTreeMap<
     String,
     Vec<(
         String,
-        Option<crate::change_journal::SharedValue<CheckpointValue>>,
+        Option<crate::ingest::domain::change_journal::SharedValue<CheckpointValue>>,
     )>,
 >;
 
@@ -4659,7 +4659,8 @@ pub(crate) struct CheckpointCapture {
     pub collections: BTreeMap<String, CheckpointCollectionIdentity>,
     pub next_generation: u64,
     pub field_dirty: BTreeMap<String, FieldDirtySnapshot>,
-    pub frozen_changes: BTreeMap<String, crate::change_journal::FrozenChanges<CheckpointValue>>,
+    pub frozen_changes:
+        BTreeMap<String, crate::ingest::domain::change_journal::FrozenChanges<CheckpointValue>>,
     pub reused: BTreeSet<String>,
     /// A new empty base plus the complete frozen journal forms this first
     /// generation. These collections do not reuse any predecessor catalog.
@@ -4973,7 +4974,7 @@ fn capture_dirty_values(coll: &Collection, dirty: &FieldDirtySnapshot) -> Result
                     Ok((
                         eid.clone(),
                         coll.checkpoint_value(field, eid)?.map(|value| {
-                            crate::change_journal::SharedValue::new(
+                            crate::ingest::domain::change_journal::SharedValue::new(
                                 std::sync::Arc::new(value),
                                 None,
                             )
@@ -5372,13 +5373,13 @@ impl Engine {
     pub(crate) fn estimate_record_cost(
         &self,
         entry: &crate::shared_kernel::log_entry::RaftLogEntry,
-    ) -> crate::change_record_cost::RecordEstimate {
+    ) -> crate::ingest::domain::change_record_cost::RecordEstimate {
         let Ok(state) = self.state.read() else {
-            return crate::change_record_cost::RecordEstimate::Retain {
-                cause: crate::change_record_cost::NormalizeError::ContextMissing,
+            return crate::ingest::domain::change_record_cost::RecordEstimate::Retain {
+                cause: crate::ingest::domain::change_record_cost::text_upper_bound::NormalizeError::ContextMissing,
             };
         };
-        crate::change_record_cost::estimate_record_or_retain(
+        crate::ingest::domain::change_record_cost::estimate_record_or_retain(
             entry,
             &EngineCostContext { state: &state },
         )
@@ -5392,7 +5393,7 @@ impl Engine {
         let Ok(state) = self.state.read() else {
             return false;
         };
-        crate::change_record_cost::may_need_default_ngram_workspace(
+        crate::ingest::domain::change_record_cost::may_need_default_ngram_workspace(
             entry,
             &EngineCostContext { state: &state },
         )
@@ -5402,13 +5403,13 @@ impl Engine {
     pub(crate) fn estimate_record_exact_default_ngram_cost(
         &self,
         entry: &crate::shared_kernel::log_entry::RaftLogEntry,
-    ) -> crate::change_record_cost::RecordEstimate {
+    ) -> crate::ingest::domain::change_record_cost::RecordEstimate {
         let Ok(state) = self.state.read() else {
-            return crate::change_record_cost::RecordEstimate::Retain {
-                cause: crate::change_record_cost::NormalizeError::ContextMissing,
+            return crate::ingest::domain::change_record_cost::RecordEstimate::Retain {
+                cause: crate::ingest::domain::change_record_cost::text_upper_bound::NormalizeError::ContextMissing,
             };
         };
-        crate::change_record_cost::estimate_record_exact_default_ngram(
+        crate::ingest::domain::change_record_cost::estimate_record_exact_default_ngram(
             entry,
             &EngineCostContext { state: &state },
         )
@@ -6096,7 +6097,7 @@ impl Engine {
         &self,
         collection_id: &str,
         req: IndexRequest,
-        charge: Option<&crate::change_budget::RetainedCharge>,
+        charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
         prepared_text: Option<&text_preparation::PreparedTextRows>,
     ) -> Result<IndexResponse> {
         let _apply = self.capture_barrier.apply();
@@ -6136,7 +6137,7 @@ impl Engine {
         collection_id: &str,
         coll: &mut Collection,
         req: IndexRequest,
-        charge: Option<&crate::change_budget::RetainedCharge>,
+        charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
         prepared_text: Option<&text_preparation::PreparedTextRows>,
         telemetry: &mut CommittedApplyTelemetry<'_>,
     ) -> Result<IndexResponse> {
@@ -6347,7 +6348,7 @@ impl Engine {
         collection_id: &str,
         external_id: &str,
         field: Option<&str>,
-        charge: Option<&crate::change_budget::RetainedCharge>,
+        charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
     ) -> Result<()> {
         let _apply = self.capture_barrier.apply();
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
@@ -6407,7 +6408,7 @@ impl Engine {
         &self,
         collection_id: &str,
         req: BatchUnindexDocsRequest,
-        charge: Option<&crate::change_budget::RetainedCharge>,
+        charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
     ) -> Result<()> {
         let _apply = self.capture_barrier.apply();
         validate_batch_unindex_docs_request(&req)?;
@@ -6525,7 +6526,7 @@ impl Engine {
         &self,
         collection_id: &str,
         req: ReplaceDocsRequest,
-        charge: Option<&crate::change_budget::RetainedCharge>,
+        charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
         prepared_text: Option<&text_preparation::PreparedTextRows>,
     ) -> Result<ReplaceDocsResponse> {
         let _apply = self.capture_barrier.apply();
@@ -6565,7 +6566,7 @@ impl Engine {
         collection_id: &str,
         coll: &mut Collection,
         req: ReplaceDocsRequest,
-        charge: Option<&crate::change_budget::RetainedCharge>,
+        charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
         prepared_text: Option<&text_preparation::PreparedTextRows>,
         telemetry: &mut CommittedApplyTelemetry<'_>,
     ) -> Result<ReplaceDocsResponse> {
@@ -6644,7 +6645,7 @@ impl Engine {
         coll: &mut Collection,
         item: ReplaceDocItem,
         ordinal: usize,
-        charge: Option<&crate::change_budget::RetainedCharge>,
+        charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
         prepared_text: Option<&text_preparation::PreparedTextRows>,
         telemetry: &mut CommittedApplyTelemetry<'_>,
     ) -> (ReplaceDocResult, u64) {
@@ -8280,7 +8281,7 @@ impl Engine {
     fn dispatch_raft_entry(
         &self,
         entry: crate::shared_kernel::log_entry::RaftLogEntry,
-        charge: Option<&crate::change_budget::RetainedCharge>,
+        charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
         prepared_text: Option<&text_preparation::PreparedTextRows>,
     ) -> Result<ApplyOutcome> {
         let _apply = self.capture_barrier.apply();
@@ -14507,7 +14508,7 @@ impl Collection {
             checkpoint_lineage_schema: None,
             field_dirty: BTreeMap::new(),
             next_field_dirty_revision: 0,
-            change_journal: crate::change_journal::ChangeJournal::new(),
+            change_journal: crate::ingest::domain::change_journal::ChangeJournal::new(),
             requires_full_checkpoint: false,
             journal_complete_since_empty: false,
             version: snap.version,
@@ -15412,7 +15413,7 @@ impl Collection {
             checkpoint_lineage_schema: None,
             field_dirty: BTreeMap::new(),
             next_field_dirty_revision: 0,
-            change_journal: crate::change_journal::ChangeJournal::new(),
+            change_journal: crate::ingest::domain::change_journal::ChangeJournal::new(),
             requires_full_checkpoint: false,
             journal_complete_since_empty: false,
             version,
@@ -22601,16 +22602,16 @@ mod tests {
         CreateCollectionRequest { fields }
     }
 
-    fn estimated_total(record: crate::change_record_cost::RecordCost) -> usize {
+    fn estimated_total(record: crate::ingest::domain::change_record_cost::RecordCost) -> usize {
         record.active + record.frozen + record.prepublish
     }
 
     fn ready_record_cost(
         engine: &Engine,
         entry: &crate::shared_kernel::log_entry::RaftLogEntry,
-    ) -> crate::change_record_cost::RecordCost {
+    ) -> crate::ingest::domain::change_record_cost::RecordCost {
         match engine.estimate_record_cost(entry) {
-            crate::change_record_cost::RecordEstimate::Ready(cost) => cost,
+            crate::ingest::domain::change_record_cost::RecordEstimate::Ready(cost) => cost,
             retained => panic!("expected a decidable record cost, got {retained:?}"),
         }
     }
@@ -22766,7 +22767,7 @@ mod tests {
         };
         assert_eq!(
             ready_record_cost(&flat, &duplicate),
-            crate::change_record_cost::RecordCost::default()
+            crate::ingest::domain::change_record_cost::RecordCost::default()
         );
     }
 
@@ -22774,9 +22775,9 @@ mod tests {
     fn record_cost_ngram_bound_covers_public_tokenizer_for_ascii_and_unicode() {
         for input in ["abcd", "İstanbul 42"] {
             let actual = crate::tokenize::tokenize(input, Analyzer::Ngram);
-            let bound = crate::change_record_cost::text_upper_bound(
+            let bound = crate::ingest::domain::change_record_cost::text_upper_bound::text_upper_bound(
                 input,
-                crate::change_record_cost::AnalyzerKind::Ngram,
+                crate::ingest::domain::change_record_cost::text_upper_bound::AnalyzerKind::Ngram,
                 crate::tokenize::DEFAULT_NGRAM_MIN,
                 crate::tokenize::DEFAULT_NGRAM_MAX,
             )
@@ -29094,7 +29095,7 @@ mod scalar_checkpoint_cut_tests {
     #[test]
     fn scalar_checkpoint_retirement_keeps_a_mutation_after_preparation() {
         let engine = Engine::with_change_budget(
-            crate::change_budget::ChangeBudget::with_hard_limit(32 * 1024 * 1024),
+            crate::ingest::domain::change_budget::ChangeBudget::with_hard_limit(32 * 1024 * 1024),
         );
         engine
             .create_collection_inner(
@@ -29507,14 +29508,15 @@ mod checkpoint_publish_releases_retained_charge_tests {
     }
 
     /// Admit N committed rows that each retain a real
-    /// [`crate::change_budget::RetainedCharge`], run one real checkpoint
+    /// [`crate::ingest::domain::change_budget::RetainedCharge`], run one real checkpoint
     /// freeze + write + publish through the exact Engine code path, and
     /// assert the process-wide budget's `active + frozen` (its `total`) after
     /// publication. If publication does not release every payload, this must
     /// fail before any fix and pass after.
     #[test]
     fn checkpoint_publish_releases_every_committed_row_charge() {
-        let budget = crate::change_budget::ChangeBudget::with_hard_limit(8 * 1024 * 1024);
+        let budget =
+            crate::ingest::domain::change_budget::ChangeBudget::with_hard_limit(8 * 1024 * 1024);
         let engine = Engine::with_change_budget(budget.clone());
         let mut fields = BTreeMap::new();
         fields.insert("body".to_string(), text_field(Analyzer::WhitespaceLower));

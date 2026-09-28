@@ -12,11 +12,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use crate::change_admission::StagePayload;
 use crate::committed_record_codec::{read_staged_wal_record, staged_generic_cbor_payload};
 #[cfg(test)]
 use crate::committed_stage::StageFailureInjector;
 use crate::committed_stage::{DurableStage, SourceIdentity, SourceKind, StageStore};
+use crate::ingest::domain::change_admission::StagePayload;
 use crate::storage::{Engine, RecordAdmissionError};
 use crate::wal::WalRecord;
 

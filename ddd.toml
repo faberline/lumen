@@ -151,10 +151,17 @@ infrastructure = "src/sharding/infrastructure"
 
 [[contexts]]
 name = "replication"
-depends_on = []
+depends_on = ["ingest"]
 [contexts.layers]
 domain = "src/replication/domain"
 application = "src/replication/application"
+
+[[contexts]]
+name = "ingest"
+depends_on = []
+[contexts.layers]
+domain = "src/ingest/domain"
+infrastructure = "src/ingest/infrastructure"
 
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
 # port the owning layer defines.
@@ -351,3 +358,22 @@ rule = "B2"
 paths = ["src/shared_kernel/capture_barrier.rs"]
 subject = "std::time::Instant::now"
 reason = "E4: CaptureBarrier times how long each apply record and each capture holds it (HoldTiming); only its own tests read the timing today. P2: a Clock port, as for the index context's clock reads."
+
+# The ingest domain moved as-is (D2): the change budget wakes its async waiters
+# through tokio and bounds its blocking wait with the clock.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/ingest/domain/change_budget.rs",
+  "src/ingest/domain/change_budget/budget.rs",
+  "src/ingest/domain/change_budget/budget_wake.rs",
+]
+subject = "tokio"
+reason = "BudgetWake keeps a tokio::sync::Notify beside its Condvar, so the async checkpoint driver and async admissions wait for a budget change without holding a blocking thread; wait_for_change_async bounds that wait with tokio::time::timeout. P2: a wake port the domain signals, with the Condvar and the Notify behind it in infrastructure."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/ingest/domain/change_budget/budget_wake.rs"]
+subject = "std::time::Instant::now"
+reason = "E4: wait_for_change_timeout turns its timeout into a deadline and re-reads the clock after each spurious Condvar wake. P2: a Clock port, or the wait moves to infrastructure with the wake port."

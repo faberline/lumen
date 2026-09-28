@@ -688,7 +688,7 @@ impl WalDelivery {
     /// source until its resident slot is staged or truncated.
     pub(crate) fn retain_source(
         &self,
-        retention: crate::change_budget::SourceRetention,
+        retention: crate::ingest::domain::change_budget::SourceRetention,
     ) -> Result<()> {
         let Self::Deferred(source) = self else {
             return Ok(());
@@ -898,7 +898,10 @@ struct MemWalInner {
 }
 
 enum MemWalSlot {
-    Resident(WalRecord, Vec<crate::change_budget::SourceRetention>),
+    Resident(
+        WalRecord,
+        Vec<crate::ingest::domain::change_budget::SourceRetention>,
+    ),
     Staged(Arc<StagedWalRecord>),
 }
 
@@ -1163,7 +1166,7 @@ impl WalLog for MemWal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::change_budget::ChangeBudget;
+    use crate::ingest::domain::change_budget::ChangeBudget;
     use crate::shared_kernel::types::{
         document::{BatchUnindexDocsRequest, FieldValue, IndexItem, IndexRequest},
         schema::CreateCollectionRequest,
@@ -1417,7 +1420,9 @@ mod tests {
         }
     }
 
-    fn source_retention(budget: &ChangeBudget) -> crate::change_budget::SourceRetention {
+    fn source_retention(
+        budget: &ChangeBudget,
+    ) -> crate::ingest::domain::change_budget::SourceRetention {
         let owner = budget.owner();
         let mut reservation = owner.try_reserve(7).unwrap();
         let retention = reservation.source_retention();

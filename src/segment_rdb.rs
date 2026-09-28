@@ -512,7 +512,7 @@ impl CheckpointDiagnosticContext {
         self,
         reason: &'static str,
         resample_source: &'static str,
-        pending: crate::change_budget::Snapshot,
+        pending: crate::ingest::domain::change_budget::Snapshot,
     ) {
         let Some(checkpoint_attempt_id) = self.attempt_id() else {
             return;
@@ -531,7 +531,7 @@ impl CheckpointDiagnosticContext {
             pending_reserved_bytes = pending.reserved,
             pending_active_bytes = pending.active,
             pending_frozen_bytes = pending.frozen,
-            checkpoint_trigger_bytes = crate::change_budget::CHECKPOINT_TRIGGER,
+            checkpoint_trigger_bytes = crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
             "segment checkpoint diagnostic phase"
         );
     }
@@ -6479,11 +6479,11 @@ mod tests {
         );
         let _guard = tracing::subscriber::set_default(subscriber);
         let context = CheckpointDiagnosticContext::new("periodic", Some(73));
-        let pending = crate::change_budget::Snapshot {
+        let pending = crate::ingest::domain::change_budget::Snapshot {
             reserved: 11,
             active: 22,
             frozen: 33,
-            total: crate::change_budget::CHECKPOINT_TRIGGER,
+            total: crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
             work_revision: 1,
             checkpoint_request_revision: None,
         };
@@ -6528,7 +6528,7 @@ mod tests {
         let selected = &phases[0]["fields"];
         assert_eq!(
             selected["pending_total_bytes"],
-            crate::change_budget::CHECKPOINT_TRIGGER
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER
         );
         assert_eq!(selected["pending_reserved_bytes"], 11);
         assert_eq!(selected["pending_active_bytes"], 22);

@@ -8,7 +8,7 @@
 
 use std::io::{self, Read, Write};
 
-use crate::change_admission::StagePayload;
+use crate::ingest::domain::change_admission::StagePayload;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::wal::{WalRecord, WAL_CONTROL_FORMAT_VERSION, WAL_FORMAT_VERSION};
 

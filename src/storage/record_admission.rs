@@ -17,11 +17,11 @@
 //! like a Full at the fully-priced bound.
 
 use super::Engine;
-use crate::change_budget::{
+use crate::ingest::domain::change_budget::{
     AdmissionError, BudgetWake, ChangeBudget, Owner, OwnerCapacityState, Reservation,
     RetainedCharge,
 };
-use crate::change_record_cost::{NormalizeError, RecordEstimate};
+use crate::ingest::domain::change_record_cost::{text_upper_bound::NormalizeError, RecordEstimate};
 use crate::shared_kernel::capture_barrier::ApplyLease;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use std::cell::Cell;
@@ -106,7 +106,9 @@ impl RecordReservation {
         (self, Some(RecordTransientReservation { reservation }))
     }
 
-    pub(crate) fn source_retention(&mut self) -> crate::change_budget::SourceRetention {
+    pub(crate) fn source_retention(
+        &mut self,
+    ) -> crate::ingest::domain::change_budget::SourceRetention {
         self.reservation.source_retention()
     }
 
@@ -130,7 +132,7 @@ impl RecordReservation {
     pub(super) fn grow_preparation(&mut self, additional: usize) -> Result<(), AdmissionError> {
         let overflow = AdmissionError::Oversized {
             requested: usize::MAX,
-            hard_limit: crate::change_budget::HARD_LIMIT,
+            hard_limit: crate::ingest::domain::change_budget::HARD_LIMIT,
         };
         let required = self.bytes().checked_add(additional).ok_or(overflow)?;
         if self.wait_for_preparation {
@@ -302,7 +304,7 @@ impl Engine {
     #[cfg(test)]
     pub(crate) fn raw_capacity_state_for_test(
         &self,
-    ) -> Result<crate::change_budget::OwnerRawCapacityState, AdmissionError> {
+    ) -> Result<crate::ingest::domain::change_budget::OwnerRawCapacityState, AdmissionError> {
         self.changes.owner.raw_capacity_state_for_test()
     }
 
@@ -384,7 +386,7 @@ impl Engine {
         {
             return Ok(());
         }
-        let workspace = crate::change_record_cost::DEFAULT_NGRAM_COST_WORKSPACE_BYTES;
+        let workspace = crate::ingest::domain::change_record_cost::ngram_distinct_table::DEFAULT_NGRAM_COST_WORKSPACE_BYTES;
         let minimum = Self::record_owned_bytes(entry)
             .and_then(|raw| {
                 raw.checked_add(reserved.extra_owned)
@@ -447,7 +449,8 @@ impl Engine {
         let ordinary_with_workspace = ordinary
             .checked_add(reserved.ngram_cost_workspace_bytes)
             .ok_or(RecordAdmissionError::Overflow)?;
-        reserved.staged_text = ordinary_with_workspace > crate::change_budget::HARD_LIMIT;
+        reserved.staged_text =
+            ordinary_with_workspace > crate::ingest::domain::change_budget::HARD_LIMIT;
         let final_bound = if reserved.staged_text {
             self.record_memory_bound(entry, reserved.extra_owned, true)?
         } else {
@@ -611,7 +614,7 @@ impl Engine {
             }
             Err(error) => return Err(error),
         };
-        let staged_text = ordinary > crate::change_budget::HARD_LIMIT;
+        let staged_text = ordinary > crate::ingest::domain::change_budget::HARD_LIMIT;
         let bytes = if staged_text {
             self.record_memory_bound(entry, extra_owned, true)?
         } else {
@@ -681,7 +684,7 @@ impl Engine {
                     .record_memory_bound_with_workspace(&entry, &reserved, false)
                     .is_ok_and(|bytes| {
                         bytes.saturating_add(reserved.ngram_cost_workspace_bytes)
-                            > crate::change_budget::HARD_LIMIT
+                            > crate::ingest::domain::change_budget::HARD_LIMIT
                     })
             {
                 reserved.staged_text = true;
@@ -706,7 +709,7 @@ impl Engine {
                         error: RecordAdmissionError::Capacity(AdmissionError::Full {
                             requested: minimum,
                             used: self.changes.budget.snapshot().total,
-                            hard_limit: crate::change_budget::HARD_LIMIT,
+                            hard_limit: crate::ingest::domain::change_budget::HARD_LIMIT,
                         }),
                     });
                 }
@@ -788,7 +791,7 @@ impl Engine {
                 let error = RecordAdmissionError::Capacity(AdmissionError::Full {
                     requested: retry_required,
                     used: self.changes.budget.snapshot().total,
-                    hard_limit: crate::change_budget::HARD_LIMIT,
+                    hard_limit: crate::ingest::domain::change_budget::HARD_LIMIT,
                 });
                 drop(apply);
                 return Err(RepriceRecord {
@@ -853,7 +856,7 @@ impl Engine {
 /// One exact captured ownership cut. A background merge has no record cut.
 pub(crate) struct RecordCut {
     records: super::record_charges::FrozenRecordCharges,
-    budget: crate::change_budget::FrozenBatch,
+    budget: crate::ingest::domain::change_budget::FrozenBatch,
 }
 
 impl Engine {
@@ -956,7 +959,7 @@ mod tests {
         );
         assert!(result
             .unwrap_err()
-            .downcast_ref::<crate::change_admission::PendingChangeCapacity>()
+            .downcast_ref::<crate::ingest::domain::change_admission::PendingChangeCapacity>()
             .is_some());
         assert!(engine.state.read().unwrap().collections["c"]
             .interner
@@ -1338,20 +1341,21 @@ mod tests {
             Ok::<_, ()>(())
         })
         .unwrap();
-        let exact_field = crate::change_memory_cost::FieldCost::Text {
+        let exact_field = crate::ingest::domain::change_memory_cost::FieldCost::Text {
             distinct_terms: unique.len(),
             total_term_bytes: unique.iter().map(Vec::len).sum(),
         };
-        let index =
-            crate::change_memory_cost::estimate_change(&crate::change_memory_cost::Change::Index {
+        let index = crate::ingest::domain::change_memory_cost::estimate_change(
+            &crate::ingest::domain::change_memory_cost::Change::Index {
                 external_id_bytes: "repeated".len(),
                 new_document: true,
                 field: exact_field,
                 volatile_metadata_bytes: 0,
-            })
-            .unwrap();
-        let direct = crate::change_memory_cost::estimate_change(
-            &crate::change_memory_cost::Change::Direct {
+            },
+        )
+        .unwrap();
+        let direct = crate::ingest::domain::change_memory_cost::estimate_change(
+            &crate::ingest::domain::change_memory_cost::Change::Direct {
                 // Existing record-cost contract: field bytes plus direct metadata.
                 metadata_bytes: "body".len() + 96,
             },
@@ -1413,7 +1417,7 @@ mod tests {
         let accepted = engine.try_reserve_record(&entry, 0).unwrap();
         let full = accepted.bytes();
         let floor = Engine::record_owned_bytes(&entry).unwrap()
-            + crate::change_record_cost::DEFAULT_NGRAM_COST_WORKSPACE_BYTES;
+            + crate::ingest::domain::change_record_cost::ngram_distinct_table::DEFAULT_NGRAM_COST_WORKSPACE_BYTES;
         assert!(
             full > floor + 1,
             "raw input and workspace alone cannot cover normalized changes"
@@ -1453,7 +1457,7 @@ mod tests {
         let engine = engine(&budget);
         let entry = ngram_entry(&engine);
         let raw = Engine::record_owned_bytes(&entry).unwrap();
-        let workspace = crate::change_record_cost::DEFAULT_NGRAM_COST_WORKSPACE_BYTES;
+        let workspace = crate::ingest::domain::change_record_cost::ngram_distinct_table::DEFAULT_NGRAM_COST_WORKSPACE_BYTES;
         let accepted = engine.try_reserve_record(&entry, 0).unwrap();
         assert!(accepted.bytes() > raw + workspace + 1);
         drop(accepted);
@@ -1484,7 +1488,7 @@ mod tests {
         let engine = engine(&budget);
         let entry = ngram_entry(&engine);
         let raw = Engine::record_owned_bytes(&entry).unwrap();
-        let workspace = crate::change_record_cost::DEFAULT_NGRAM_COST_WORKSPACE_BYTES;
+        let workspace = crate::ingest::domain::change_record_cost::ngram_distinct_table::DEFAULT_NGRAM_COST_WORKSPACE_BYTES;
         let accepted = engine.try_reserve_record(&entry, 0).unwrap();
         let final_cost = accepted.bytes() - workspace;
         drop(accepted);

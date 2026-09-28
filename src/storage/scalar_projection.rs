@@ -23,7 +23,7 @@ pub(crate) fn write_checkpoint_rows(
     field_type: FieldType,
     rows: &[(
         String,
-        Option<crate::change_journal::SharedValue<CheckpointValue>>,
+        Option<crate::ingest::domain::change_journal::SharedValue<CheckpointValue>>,
     )],
 ) -> Result<()> {
     let projection = RowsProjection::new(field_type, rows)?;
@@ -50,7 +50,7 @@ struct RowsProjection<'a> {
     field_type: FieldType,
     rows: &'a [(
         String,
-        Option<crate::change_journal::SharedValue<CheckpointValue>>,
+        Option<crate::ingest::domain::change_journal::SharedValue<CheckpointValue>>,
     )],
     readers: Vec<ReaderSource>,
     /// This owns no strings.  The bounded tail is already held by the frozen
@@ -64,7 +64,7 @@ impl<'a> RowsProjection<'a> {
         field_type: FieldType,
         rows: &'a [(
             String,
-            Option<crate::change_journal::SharedValue<CheckpointValue>>,
+            Option<crate::ingest::domain::change_journal::SharedValue<CheckpointValue>>,
         )],
     ) -> Result<Self> {
         let mut readers = Vec::new();
@@ -490,7 +490,7 @@ impl NumberStreamProjection for RowsProjection<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::change_journal::SharedValue;
+    use crate::ingest::domain::change_journal::SharedValue;
     use crate::segment::{write_keyword_segment, write_number_segment, write_set_segment};
 
     fn owned(value: CheckpointValue) -> SharedValue<CheckpointValue> {

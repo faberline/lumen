@@ -525,7 +525,7 @@ impl Engine {
             .state
             .read()
             .map_err(|_| Error::Preparation("state poisoned".into()))?;
-        let cost = crate::change_record_cost::estimate_record_prepared_text(
+        let cost = crate::ingest::domain::change_record_cost::estimate_record_prepared_text(
             entry,
             &EngineCostContext { state: &state },
         )

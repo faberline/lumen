@@ -5,7 +5,7 @@ use crate::wal::WalRecord;
 
 fn engine() -> Arc<Engine> {
     let engine = Arc::new(Engine::with_change_budget(
-        crate::change_budget::ChangeBudget::with_hard_limit(32 * 1024 * 1024),
+        crate::ingest::domain::change_budget::ChangeBudget::with_hard_limit(32 * 1024 * 1024),
     ));
     engine
         .create_collection_inner(
@@ -706,7 +706,7 @@ mod borrowed_vector_apply_tests {
 
     fn vector_engine(backend: VectorBackend, sq: bool) -> Arc<Engine> {
         let engine = Arc::new(Engine::with_change_budget(
-            crate::change_budget::ChangeBudget::with_hard_limit(32 * 1024 * 1024),
+            crate::ingest::domain::change_budget::ChangeBudget::with_hard_limit(32 * 1024 * 1024),
         ));
         engine.create_collection_inner("docs", CreateCollectionRequest { fields: serde_json::from_value(serde_json::json!({
             "vec": {"type":"vector", "dim":3, "metric":"l2", "backend": if matches!(backend, VectorBackend::FlatCpu) { "flat-cpu" } else { "hnsw-cpu" }, "quantize": if sq { serde_json::json!("sq") } else { serde_json::Value::Null } }

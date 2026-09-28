@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use raft_runtime::{Index, OutcomeWindow};
 
-use crate::change_budget::AdmissionError;
+use crate::ingest::domain::change_budget::AdmissionError;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::storage::{
     ApplyOutcome, Engine, RecordAdmissionError, RecordReservation, RepriceRecord,

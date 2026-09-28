@@ -106,8 +106,8 @@ impl Engine {
                 // metadata and error-prefix costs still come from the same
                 // estimator used by ordinary Index admission.
                 let cost = match self.estimate_record_cost(&entry) {
-                    crate::change_record_cost::RecordEstimate::Ready(cost) => cost,
-                    crate::change_record_cost::RecordEstimate::Retain { cause } => {
+                    crate::ingest::domain::change_record_cost::RecordEstimate::Ready(cost) => cost,
+                    crate::ingest::domain::change_record_cost::RecordEstimate::Retain { cause } => {
                         return Err(RecordAdmissionError::NeedsPreparation(cause).into());
                     }
                 };

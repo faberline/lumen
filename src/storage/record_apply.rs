@@ -173,14 +173,16 @@ impl Engine {
         // Direct calls have no committed log source yet. Capacity refusal is
         // therefore safe only before the first state mutation. Never wait for
         // checkpoint work from a caller that may not have a background driver.
-        let admission_error = |error| match error {
+        let admission_error = |error| {
+            match error {
             RecordAdmissionError::Capacity(error) => {
-                match crate::change_admission::PendingChangeCapacity::from_prepublication(error) {
+                match crate::ingest::domain::change_admission::PendingChangeCapacity::from_prepublication(error) {
                     Ok(error) => anyhow::Error::new(error),
                     Err(error) => anyhow::Error::new(RecordAdmissionError::Capacity(error)),
                 }
             }
             error => anyhow::Error::new(error),
+        }
         };
         let mut reservation = self
             .try_reserve_record(&entry, 0)

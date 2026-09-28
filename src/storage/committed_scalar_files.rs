@@ -615,7 +615,7 @@ mod tests {
         })
         .encode()
         .unwrap();
-        assert!(bytes.len() > crate::change_budget::HARD_LIMIT);
+        assert!(bytes.len() > crate::ingest::domain::change_budget::HARD_LIMIT);
         let scanner = FastIndexScanner::parse(&bytes).unwrap();
         let rows: Vec<_> = (0..1000).rev().collect();
         let mut peak = 0;
@@ -629,7 +629,7 @@ mod tests {
             |required| {
                 peak = peak.max(required);
                 ensure!(
-                    required <= crate::change_budget::HARD_LIMIT,
+                    required <= crate::ingest::domain::change_budget::HARD_LIMIT,
                     "private scalar reservation exceeds 256 MiB"
                 );
                 Ok(())
@@ -677,7 +677,7 @@ mod tests {
             root.path(),
             |required| {
                 ensure!(
-                    required <= crate::change_budget::HARD_LIMIT,
+                    required <= crate::ingest::domain::change_budget::HARD_LIMIT,
                     "existing full Index item limit must remain reservable for small values"
                 );
                 Ok(())
@@ -754,7 +754,7 @@ mod tests {
             FieldValue::String("x".repeat(264 * 1024 * 1024)),
         )]);
         let scanner = FastIndexScanner::parse(&bytes).unwrap();
-        assert!(bytes.len() > crate::change_budget::HARD_LIMIT);
+        assert!(bytes.len() > crate::ingest::domain::change_budget::HARD_LIMIT);
         let mut peak = 0;
         let output = prepare(
             &scanner,
@@ -766,7 +766,7 @@ mod tests {
             |need| {
                 peak = peak.max(need);
                 ensure!(
-                    need <= crate::change_budget::HARD_LIMIT,
+                    need <= crate::ingest::domain::change_budget::HARD_LIMIT,
                     "single raw term must not need a whole-term heap reservation"
                 );
                 Ok(())

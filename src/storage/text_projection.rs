@@ -232,7 +232,7 @@ pub(crate) fn write_checkpoint_rows(
     seq: u64,
     rows: &[(
         String,
-        Option<crate::change_journal::SharedValue<CheckpointValue>>,
+        Option<crate::ingest::domain::change_journal::SharedValue<CheckpointValue>>,
     )],
 ) -> Result<()> {
     u32::try_from(rows.len()).map_err(|_| anyhow!("Text delta rows exceed u32"))?;
@@ -258,7 +258,7 @@ pub(crate) fn write_checkpoint_rows(
 struct RowsProjection<'a> {
     rows: &'a [(
         String,
-        Option<crate::change_journal::SharedValue<CheckpointValue>>,
+        Option<crate::ingest::domain::change_journal::SharedValue<CheckpointValue>>,
     )],
     current: RefCell<Option<CurrentPosting<'a>>>,
     #[cfg(test)]
@@ -533,8 +533,8 @@ mod tests {
     fn ordinary(
         doc_len: u32,
         terms: &[(&str, u32)],
-    ) -> crate::change_journal::SharedValue<CheckpointValue> {
-        crate::change_journal::SharedValue::new(
+    ) -> crate::ingest::domain::change_journal::SharedValue<CheckpointValue> {
+        crate::ingest::domain::change_journal::SharedValue::new(
             Arc::new(CheckpointValue::Text {
                 doc_len,
                 tokens: terms
@@ -546,7 +546,7 @@ mod tests {
         )
     }
 
-    fn staged(input: &str) -> crate::change_journal::SharedValue<CheckpointValue> {
+    fn staged(input: &str) -> crate::ingest::domain::change_journal::SharedValue<CheckpointValue> {
         let row = super::super::staged_text_row::StagedTextRow::stage(
             input,
             Analyzer::WhitespaceLower,
@@ -554,7 +554,7 @@ mod tests {
             |_| Ok(()),
         )
         .unwrap();
-        crate::change_journal::SharedValue::new(
+        crate::ingest::domain::change_journal::SharedValue::new(
             Arc::new(CheckpointValue::StagedText(Arc::new(row))),
             None,
         )
@@ -637,7 +637,7 @@ mod tests {
     fn checkpoint_rows_reject_non_text_values_before_streaming() {
         let rows = vec![(
             "wrong".to_owned(),
-            Some(crate::change_journal::SharedValue::new(
+            Some(crate::ingest::domain::change_journal::SharedValue::new(
                 Arc::new(CheckpointValue::Keyword("not text".to_owned())),
                 None,
             )),

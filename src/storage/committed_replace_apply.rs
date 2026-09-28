@@ -71,9 +71,9 @@ impl Engine {
         let request = self.record_ram_request_from_bound(FIXED, 0);
         let mut reservation = match self.try_reserve_record_ram(&request) {
             Ok(reservation) => reservation,
-            Err(RecordAdmissionError::Capacity(crate::change_budget::AdmissionError::Full {
-                ..
-            })) => self.wait_reserve_record_ram(&request)?,
+            Err(RecordAdmissionError::Capacity(
+                crate::ingest::domain::change_budget::AdmissionError::Full { .. },
+            )) => self.wait_reserve_record_ram(&request)?,
             Err(error) => return Err(error.into()),
         };
         let mut reserve = |metadata: usize| -> Result<()> {

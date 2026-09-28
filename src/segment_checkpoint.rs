@@ -12,7 +12,7 @@ use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
-use crate::change_budget::{BudgetWake, ChangeBudget, Snapshot};
+use crate::ingest::domain::change_budget::{BudgetWake, ChangeBudget, Snapshot};
 
 const WAITER_SHUTDOWN_POLL: Duration = Duration::from_millis(50);
 static NEXT_CHECKPOINT_ATTEMPT_ID: AtomicU64 = AtomicU64::new(1);
@@ -232,7 +232,8 @@ impl CheckpointResampleSource {
 // leave enough headroom before the next crossing can schedule an immediate
 // checkpoint. Successful publications and new capacity requests are separate
 // reasons to retry while the process remains above the threshold.
-const CHECKPOINT_REARM_THRESHOLD: usize = crate::change_budget::CHECKPOINT_TRIGGER / 2;
+const CHECKPOINT_REARM_THRESHOLD: usize =
+    crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER / 2;
 
 impl CheckpointSchedule {
     fn new(period: Duration, now: Instant) -> Self {
@@ -256,7 +257,7 @@ impl CheckpointSchedule {
         &mut self,
         now: Instant,
         pending: Snapshot,
-        owner: Option<crate::change_budget::OwnerCapacityState>,
+        owner: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
     ) -> Option<CheckpointSelectionReason> {
         // Preserve the established order exactly: even when a successor
         // selects this iteration, the ordinary selector must run to consume
@@ -316,7 +317,10 @@ impl CheckpointSchedule {
         self.next_deadline = now + self.period;
     }
 
-    fn take_successor(&mut self, owner: Option<crate::change_budget::OwnerCapacityState>) -> bool {
+    fn take_successor(
+        &mut self,
+        owner: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
+    ) -> bool {
         let Some(armed_revision) = self.immediate_successor else {
             return false;
         };
@@ -324,7 +328,7 @@ impl CheckpointSchedule {
             self.immediate_successor = None;
             return false;
         };
-        if owner.active < crate::change_budget::CHECKPOINT_TRIGGER {
+        if owner.active < crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER {
             // Reservations are not checkpointable. Keep the successful
             // publication's one successor until this owner's active work
             // crosses the existing trigger, rather than consuming it on a
@@ -339,19 +343,22 @@ impl CheckpointSchedule {
         &mut self,
         now: Instant,
         after: Snapshot,
-        owner_before: Option<crate::change_budget::OwnerCapacityState>,
-        owner_after: Option<crate::change_budget::OwnerCapacityState>,
+        owner_before: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
+        owner_after: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
     ) {
         self.next_deadline = now + self.period;
         self.early_attempted = after.total >= CHECKPOINT_REARM_THRESHOLD;
         self.immediate_successor = match (owner_before, owner_after) {
-            (Some(_), Some(after)) if after.active < crate::change_budget::CHECKPOINT_TRIGGER => {
+            (Some(_), Some(after))
+                if after.active < crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER =>
+            {
                 Some(after.work_revision)
             }
             (Some(before), Some(after))
                 if after.active > 0
                     && after.work_revision > before.work_revision
-                    && (after.active >= crate::change_budget::CHECKPOINT_TRIGGER
+                    && (after.active
+                        >= crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER
                         || after
                             .checkpoint_request_revision
                             .is_some_and(|revision| revision > before.work_revision)) =>
@@ -360,7 +367,7 @@ impl CheckpointSchedule {
             }
             _ => None,
         };
-        if after.total < crate::change_budget::CHECKPOINT_TRIGGER {
+        if after.total < crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER {
             self.early_attempted = false;
         }
     }
@@ -509,8 +516,8 @@ impl SegmentCheckpointSink {
     fn complete_periodic_checkpoint(
         schedule: &mut CheckpointSchedule,
         after: Snapshot,
-        owner_before: Option<crate::change_budget::OwnerCapacityState>,
-        owner_after: Option<crate::change_budget::OwnerCapacityState>,
+        owner_before: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
+        owner_after: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
     ) {
         schedule.completed_success(Instant::now(), after, owner_before, owner_after);
     }
@@ -1068,8 +1075,8 @@ mod tests {
 
     #[test]
     fn periodic_success_bookkeeping_does_not_consume_capacity_request() {
-        let budget = crate::change_budget::ChangeBudget::with_hard_limit(
-            crate::change_budget::CHECKPOINT_TRIGGER * 2,
+        let budget = crate::ingest::domain::change_budget::ChangeBudget::with_hard_limit(
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER * 2,
         );
         let engine = Arc::new(Engine::with_change_budget(budget.clone()));
         engine
@@ -1092,7 +1099,7 @@ mod tests {
             .unwrap();
         let _held = budget
             .owner()
-            .try_reserve(crate::change_budget::CHECKPOINT_TRIGGER)
+            .try_reserve(crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER)
             .unwrap()
             .commit_retained()
             .unwrap();
@@ -1691,7 +1698,9 @@ mod tests {
 
     #[tokio::test]
     async fn bootstrap_driver_high_budget_uses_capture_sequence_without_coordinator() {
-        let budget = ChangeBudget::with_hard_limit(crate::change_budget::CHECKPOINT_TRIGGER + 1);
+        let budget = ChangeBudget::with_hard_limit(
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER + 1,
+        );
         let engine = Arc::new(Engine::with_change_budget(budget.clone()));
         let apply = engine.capture_barrier.apply();
         apply.initialize_sequence(23);
@@ -1706,7 +1715,7 @@ mod tests {
         });
         let owner = budget.owner();
         let _charge = owner
-            .try_reserve(crate::change_budget::CHECKPOINT_TRIGGER)
+            .try_reserve(crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER)
             .unwrap()
             .commit_retained()
             .unwrap();
@@ -1934,7 +1943,11 @@ mod tests {
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(30), now);
         assert!(schedule.should_attempt(
             now,
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 1, None),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                1,
+                None
+            ),
             1
         ));
     }
@@ -1942,7 +1955,11 @@ mod tests {
     #[test]
     fn scheduler_selection_reports_the_real_branch_reason() {
         let now = Instant::now();
-        let high = snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 1, None);
+        let high = snapshot(
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+            1,
+            None,
+        );
 
         let mut threshold = CheckpointSchedule::new(Duration::from_secs(30), now);
         assert_eq!(
@@ -1962,8 +1979,8 @@ mod tests {
             successor.select_attempt(
                 now,
                 high,
-                Some(crate::change_budget::OwnerCapacityState {
-                    active: crate::change_budget::CHECKPOINT_TRIGGER,
+                Some(crate::ingest::domain::change_budget::OwnerCapacityState {
+                    active: crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
                     frozen: 0,
                     work_revision: 1,
                     checkpoint_request_revision: None,
@@ -1977,9 +1994,13 @@ mod tests {
         assert_eq!(
             successor_with_request.select_attempt(
                 now,
-                snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 1, Some(7)),
-                Some(crate::change_budget::OwnerCapacityState {
-                    active: crate::change_budget::CHECKPOINT_TRIGGER,
+                snapshot(
+                    crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                    1,
+                    Some(7)
+                ),
+                Some(crate::ingest::domain::change_budget::OwnerCapacityState {
+                    active: crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
                     frozen: 0,
                     work_revision: 1,
                     checkpoint_request_revision: None,
@@ -2001,19 +2022,31 @@ mod tests {
     fn high_work_does_not_recheckpoint_for_every_new_revision() {
         let now = Instant::now();
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(30), now);
-        let high = snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 1, None);
+        let high = snapshot(
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+            1,
+            None,
+        );
         assert!(schedule.should_attempt(now, high, 1));
         schedule.completed(now + Duration::from_secs(2), high);
         // New work remains covered by the completed high-water checkpoint.
         assert!(!schedule.should_attempt(
             now + Duration::from_secs(2),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 2, None),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                2,
+                None
+            ),
             2,
         ));
         assert!(!schedule.should_attempt(now + Duration::from_secs(2), snapshot(0, 2, None), 2,));
         assert!(schedule.should_attempt(
             now + Duration::from_secs(2),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 3, None),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                3,
+                None
+            ),
             3,
         ));
     }
@@ -2022,7 +2055,11 @@ mod tests {
     fn transient_dip_below_trigger_does_not_rearm_high_work() {
         let now = Instant::now();
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(30), now);
-        let high = snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 1, None);
+        let high = snapshot(
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+            1,
+            None,
+        );
         assert!(schedule.should_attempt(now, high, 1));
         schedule.completed(now + Duration::from_secs(1), high);
         assert!(!schedule.should_attempt(
@@ -2032,7 +2069,11 @@ mod tests {
         ));
         assert!(!schedule.should_attempt(
             now + Duration::from_secs(1),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 3, None),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                3,
+                None
+            ),
             3,
         ));
         assert!(!schedule.should_attempt(
@@ -2047,7 +2088,11 @@ mod tests {
     fn newer_request_revision_bypasses_high_water_period_once() {
         let now = Instant::now();
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(30), now);
-        let first = snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 10, Some(10));
+        let first = snapshot(
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+            10,
+            Some(10),
+        );
         assert!(schedule.should_attempt(now, first, 10));
         schedule.completed(now + Duration::from_secs(1), first);
 
@@ -2056,25 +2101,45 @@ mod tests {
         // without waiting for the normal period.
         assert!(schedule.should_attempt(
             now + Duration::from_secs(1),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 11, Some(11)),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                11,
+                Some(11)
+            ),
             11,
         ));
         schedule.completed(
             now + Duration::from_secs(2),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 11, Some(11)),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                11,
+                Some(11),
+            ),
         );
         assert!(!schedule.should_attempt(
             now + Duration::from_secs(31),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 12, Some(11)),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                12,
+                Some(11)
+            ),
             12,
         ));
         schedule.completed(
             now + Duration::from_secs(32),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 12, Some(11)),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                12,
+                Some(11),
+            ),
         );
         assert!(!schedule.should_attempt(
             now + Duration::from_secs(32),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 13, Some(11)),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                13,
+                Some(11)
+            ),
             13,
         ));
 
@@ -2086,7 +2151,11 @@ mod tests {
         ));
         assert!(schedule.should_attempt(
             now + Duration::from_secs(2),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 14, Some(14)),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                14,
+                Some(14)
+            ),
             14,
         ));
     }
@@ -2095,26 +2164,34 @@ mod tests {
     fn successful_high_checkpoint_immediately_retries_new_publishable_work() {
         let now = Instant::now();
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(3600), now);
-        let before = snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 10, Some(10));
+        let before = snapshot(
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+            10,
+            Some(10),
+        );
         assert!(schedule.should_attempt(now, before, 10));
         schedule.completed_success(
             now + Duration::from_secs(1),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER + 1, 11, Some(11)),
-            Some(crate::change_budget::OwnerCapacityState {
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER + 1,
+                11,
+                Some(11),
+            ),
+            Some(crate::ingest::domain::change_budget::OwnerCapacityState {
                 active: 0,
                 frozen: 0,
                 work_revision: 10,
                 checkpoint_request_revision: None,
             }),
-            Some(crate::change_budget::OwnerCapacityState {
-                active: crate::change_budget::CHECKPOINT_TRIGGER + 1,
+            Some(crate::ingest::domain::change_budget::OwnerCapacityState {
+                active: crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER + 1,
                 frozen: 0,
                 work_revision: 11,
                 checkpoint_request_revision: Some(11),
             }),
         );
-        let successor_owner = Some(crate::change_budget::OwnerCapacityState {
-            active: crate::change_budget::CHECKPOINT_TRIGGER + 1,
+        let successor_owner = Some(crate::ingest::domain::change_budget::OwnerCapacityState {
+            active: crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER + 1,
             frozen: 0,
             work_revision: 11,
             checkpoint_request_revision: Some(11),
@@ -2127,17 +2204,17 @@ mod tests {
     fn successful_successors_keep_new_high_work_runnable_without_a_refusal() {
         let now = Instant::now();
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(3600), now);
-        let high = crate::change_budget::CHECKPOINT_TRIGGER + 1;
+        let high = crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER + 1;
         assert!(schedule.should_attempt(now, snapshot(high, 10, None), 10));
 
         for revision in 11..=13 {
-            let before = crate::change_budget::OwnerCapacityState {
+            let before = crate::ingest::domain::change_budget::OwnerCapacityState {
                 active: high,
                 frozen: 0,
                 work_revision: revision - 1,
                 checkpoint_request_revision: None,
             };
-            let after = crate::change_budget::OwnerCapacityState {
+            let after = crate::ingest::domain::change_budget::OwnerCapacityState {
                 work_revision: revision,
                 ..before
             };
@@ -2159,7 +2236,7 @@ mod tests {
 
         // A high process total is not enough: unchanged owner work must never
         // form a busy loop, even after a chain of successful publications.
-        let unchanged = crate::change_budget::OwnerCapacityState {
+        let unchanged = crate::ingest::domain::change_budget::OwnerCapacityState {
             active: high,
             frozen: 0,
             work_revision: 13,
@@ -2183,18 +2260,26 @@ mod tests {
     fn successful_checkpoint_below_trigger_rearms_next_crossing() {
         let now = Instant::now();
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(3600), now);
-        let before = snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 10, Some(10));
+        let before = snapshot(
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+            10,
+            Some(10),
+        );
         assert!(schedule.should_attempt(now, before, 10));
         schedule.completed_success(
             now + Duration::from_secs(1),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER - 1, 10, Some(10)),
-            Some(crate::change_budget::OwnerCapacityState {
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER - 1,
+                10,
+                Some(10),
+            ),
+            Some(crate::ingest::domain::change_budget::OwnerCapacityState {
                 active: 0,
                 frozen: 0,
                 work_revision: 10,
                 checkpoint_request_revision: None,
             }),
-            Some(crate::change_budget::OwnerCapacityState {
+            Some(crate::ingest::domain::change_budget::OwnerCapacityState {
                 active: 0,
                 frozen: 0,
                 work_revision: 10,
@@ -2203,7 +2288,11 @@ mod tests {
         );
         assert!(schedule.should_attempt(
             now + Duration::from_secs(1),
-            snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 11, Some(11)),
+            snapshot(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+                11,
+                Some(11)
+            ),
             11,
         ));
     }
@@ -2211,16 +2300,16 @@ mod tests {
     #[test]
     fn new_owner_work_crossing_after_publication_is_not_hidden_by_reservations() {
         let now = Instant::now();
-        let trigger = crate::change_budget::CHECKPOINT_TRIGGER;
+        let trigger = crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER;
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(3600), now);
         assert!(schedule.should_attempt(now, snapshot(trigger, 10, None), 10));
-        let before = crate::change_budget::OwnerCapacityState {
+        let before = crate::ingest::domain::change_budget::OwnerCapacityState {
             active: trigger,
             frozen: 0,
             work_revision: 10,
             checkpoint_request_revision: None,
         };
-        let after = crate::change_budget::OwnerCapacityState {
+        let after = crate::ingest::domain::change_budget::OwnerCapacityState {
             active: trigger * 3 / 4,
             work_revision: 11,
             ..before
@@ -2245,7 +2334,7 @@ mod tests {
             "do not publish just for reservations"
         );
 
-        let crossed = crate::change_budget::OwnerCapacityState {
+        let crossed = crate::ingest::domain::change_budget::OwnerCapacityState {
             active: trigger,
             work_revision: 12,
             ..after
@@ -2263,15 +2352,15 @@ mod tests {
     #[test]
     fn reservations_after_a_complete_owner_drain_do_not_hide_new_work() {
         let now = Instant::now();
-        let trigger = crate::change_budget::CHECKPOINT_TRIGGER;
+        let trigger = crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER;
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(3600), now);
-        let before = crate::change_budget::OwnerCapacityState {
+        let before = crate::ingest::domain::change_budget::OwnerCapacityState {
             active: trigger,
             frozen: 0,
             work_revision: 10,
             checkpoint_request_revision: None,
         };
-        let drained = crate::change_budget::OwnerCapacityState {
+        let drained = crate::ingest::domain::change_budget::OwnerCapacityState {
             active: 0,
             ..before
         };
@@ -2288,7 +2377,7 @@ mod tests {
             assert!(!schedule.take_successor(Some(drained)));
             assert!(!schedule.should_attempt(now, reserved, 10));
         }
-        let new_work = crate::change_budget::OwnerCapacityState {
+        let new_work = crate::ingest::domain::change_budget::OwnerCapacityState {
             active: trigger,
             work_revision: 11,
             ..drained
@@ -2303,11 +2392,11 @@ mod tests {
     #[test]
     fn failed_publication_cancels_a_deferred_successor() {
         let now = Instant::now();
-        let trigger = crate::change_budget::CHECKPOINT_TRIGGER;
+        let trigger = crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER;
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(30), now);
         schedule.immediate_successor = Some(10);
         schedule.completed(now, snapshot(trigger, 11, None));
-        let owner = crate::change_budget::OwnerCapacityState {
+        let owner = crate::ingest::domain::change_budget::OwnerCapacityState {
             active: trigger,
             frozen: 0,
             work_revision: 11,
@@ -2328,10 +2417,10 @@ mod tests {
     #[test]
     fn missing_or_replaced_owner_cancels_a_deferred_successor() {
         let now = Instant::now();
-        let trigger = crate::change_budget::CHECKPOINT_TRIGGER;
+        let trigger = crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER;
         for owner in [
             None,
-            Some(crate::change_budget::OwnerCapacityState {
+            Some(crate::ingest::domain::change_budget::OwnerCapacityState {
                 active: trigger,
                 frozen: 0,
                 work_revision: 9,
@@ -2349,7 +2438,11 @@ mod tests {
     fn unchanged_high_failure_waits_for_completion_relative_period() {
         let now = Instant::now();
         let mut schedule = CheckpointSchedule::new(Duration::from_secs(10), now);
-        let high = snapshot(crate::change_budget::CHECKPOINT_TRIGGER, 1, None);
+        let high = snapshot(
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER,
+            1,
+            None,
+        );
         schedule.completed(now + Duration::from_secs(3), high);
         assert!(!schedule.should_attempt(now + Duration::from_secs(12), high, 1));
         assert!(schedule.should_attempt(now + Duration::from_secs(13), high, 1));
@@ -2404,29 +2497,61 @@ mod tests {
             aof: None,
         });
         let (mut driver, idle) = sink.spawn_driver_with_capture(
-            Duration::from_secs(3600), budget.clone(), capture.token(),
+            Duration::from_secs(3600),
+            budget.clone(),
+            capture.token(),
         );
-        tokio::time::timeout(Duration::from_secs(3), idle).await.unwrap().unwrap();
+        tokio::time::timeout(Duration::from_secs(3), idle)
+            .await
+            .unwrap()
+            .unwrap();
         assert!(capture.drain().is_empty());
         let filler = budget.owner();
-        let _held = filler.try_reserve(
-            crate::change_budget::CHECKPOINT_TRIGGER - budget.snapshot().total,
-        ).unwrap().commit_retained().unwrap();
+        let _held = filler
+            .try_reserve(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER - budget.snapshot().total,
+            )
+            .unwrap()
+            .commit_retained()
+            .unwrap();
         wait_for_checkpoint_count(&engine, 1).await;
         driver.shutdown().await.unwrap();
         let events = capture.drain();
-        let (attempt, pending) = events.iter().find_map(|event| match event {
-            Event::Selected { attempt_id, reason: "threshold", source: "budget_notice", pending_total } => Some((*attempt_id, *pending_total)),
-            _ => None,
-        }).expect("real driver must select threshold after a budget notice");
-        assert!(pending >= crate::change_budget::CHECKPOINT_TRIGGER);
-        let phases: Vec<_> = events.iter().filter_map(|event| match event {
-            Event::Phase { attempt_id, phase, pass, reused, frozen_bytes } if *attempt_id == attempt => Some((*phase, *pass, *reused, *frozen_bytes)),
-            _ => None,
-        }).collect();
-        assert_eq!(phases.iter().map(|item| item.0).collect::<Vec<_>>(), [
-            "checkpoint_started", "freeze_completed", "publish_completed", "terminal",
-        ]);
+        let (attempt, pending) = events
+            .iter()
+            .find_map(|event| match event {
+                Event::Selected {
+                    attempt_id,
+                    reason: "threshold",
+                    source: "budget_notice",
+                    pending_total,
+                } => Some((*attempt_id, *pending_total)),
+                _ => None,
+            })
+            .expect("real driver must select threshold after a budget notice");
+        assert!(pending >= crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER);
+        let phases: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Phase {
+                    attempt_id,
+                    phase,
+                    pass,
+                    reused,
+                    frozen_bytes,
+                } if *attempt_id == attempt => Some((*phase, *pass, *reused, *frozen_bytes)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            phases.iter().map(|item| item.0).collect::<Vec<_>>(),
+            [
+                "checkpoint_started",
+                "freeze_completed",
+                "publish_completed",
+                "terminal",
+            ]
+        );
         assert_eq!(phases[1].1, 1);
         assert!(!phases[1].2);
         assert!(phases[1].3 > 0, "the real local cut must report its bytes");
@@ -2500,21 +2625,38 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let sink = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),
-            store: Arc::new(crate::segment_rdb::SegmentRdbStore::new_with_failure_injector(root.path(), block).unwrap()),
+            store: Arc::new(
+                crate::segment_rdb::SegmentRdbStore::new_with_failure_injector(root.path(), block)
+                    .unwrap(),
+            ),
             writer: Arc::new(EngineWatermarkSink::new(engine.clone())),
             aof: None,
         });
-        let (mut driver, idle) = sink.spawn_driver_with_capture(Duration::from_secs(3600), budget.clone(), capture.token());
-        tokio::time::timeout(Duration::from_secs(3), idle).await.unwrap().unwrap();
+        let (mut driver, idle) = sink.spawn_driver_with_capture(
+            Duration::from_secs(3600),
+            budget.clone(),
+            capture.token(),
+        );
+        tokio::time::timeout(Duration::from_secs(3), idle)
+            .await
+            .unwrap()
+            .unwrap();
         let foreign = budget.owner();
-        let first_charge = foreign.try_reserve(crate::change_budget::CHECKPOINT_TRIGGER - budget.snapshot().total)
-            .unwrap().commit_retained().unwrap();
+        let first_charge = foreign
+            .try_reserve(
+                crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER - budget.snapshot().total,
+            )
+            .unwrap()
+            .commit_retained()
+            .unwrap();
         tokio::task::spawn_blocking(move || entered_rx.recv_timeout(Duration::from_secs(5)))
-            .await.unwrap().expect("first real publication must reach SyncFile");
+            .await
+            .unwrap()
+            .expect("first real publication must reach SyncFile");
         drop(first_charge);
         let local_active = engine.capacity_owner_state().unwrap().active;
         let _late_charge = engine.test_retained_owner_charge(
-            crate::change_budget::CHECKPOINT_TRIGGER - local_active,
+            crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER - local_active,
         );
         drop(release);
         wait_for_checkpoint_count(&engine, 2).await;
@@ -2605,7 +2747,7 @@ mod tests {
         let budget = ChangeBudget::new();
         let owner = budget.owner();
         owner
-            .try_reserve(crate::change_budget::CHECKPOINT_TRIGGER)
+            .try_reserve(crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER)
             .unwrap()
             .commit()
             .unwrap();

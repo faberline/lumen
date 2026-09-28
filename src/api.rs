@@ -49,10 +49,10 @@ use crate::access::{
     interfaces::http::auth_middleware,
 };
 use crate::backup_sink::{BackupSink, LocalFsSink};
-use crate::change_admission::PendingChangeCapacity;
 use crate::coordinator::{
     MutationGate, RestartRequired, StorageFullError, SubmitStalled, WriteCoordinator, WriteSink,
 };
+use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::replication::domain::{
     cluster_state::ReadConsistency, cluster_state_view::ClusterStateView, raft_role::RaftRole,
 };
@@ -3736,7 +3736,7 @@ mod restore_sink_tests {
     #[tokio::test]
     async fn pending_change_capacity_is_retryable_without_changing_other_error_mappings() {
         let pending = PendingChangeCapacity::from_prepublication(
-            crate::change_budget::AdmissionError::Full {
+            crate::ingest::domain::change_budget::AdmissionError::Full {
                 requested: 64,
                 used: 256,
                 hard_limit: 256,
@@ -3744,7 +3744,7 @@ mod restore_sink_tests {
         )
         .expect("pre-publication Full is retryable capacity pressure");
         let oversized = PendingChangeCapacity::from_prepublication(
-            crate::change_budget::AdmissionError::Oversized {
+            crate::ingest::domain::change_budget::AdmissionError::Oversized {
                 requested: 512,
                 hard_limit: 256,
             },

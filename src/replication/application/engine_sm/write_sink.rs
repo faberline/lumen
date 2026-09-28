@@ -31,7 +31,7 @@ impl RaftWriteSink {
     /// host has not appended a command when this returns an error.
     fn prepublication_backpressure(
         &self,
-        pending: crate::change_admission::PendingChangeCapacity,
+        pending: crate::ingest::domain::change_admission::PendingChangeCapacity,
     ) -> anyhow::Error {
         self.sm.engine().metrics().incr_segment_backpressure();
         anyhow::Error::new(pending)
@@ -44,13 +44,13 @@ impl WriteSink for RaftWriteSink {
         let record = WalRecord::new(entry);
         let raw = Engine::record_owned_bytes(&record.entry).map_err(|error| match error {
             RecordAdmissionError::Overflow => self.prepublication_backpressure(
-                crate::change_admission::PendingChangeCapacity::Overflow,
+                crate::ingest::domain::change_admission::PendingChangeCapacity::Overflow,
             ),
             other => anyhow::Error::new(other),
         })?;
         let extra = raw.checked_mul(2).ok_or_else(|| {
             self.prepublication_backpressure(
-                crate::change_admission::PendingChangeCapacity::Overflow,
+                crate::ingest::domain::change_admission::PendingChangeCapacity::Overflow,
             )
         })?;
         let request = self.sm.engine.record_ram_request_from_bound(raw, extra);
@@ -61,7 +61,7 @@ impl WriteSink for RaftWriteSink {
             .engine
             .try_reserve_record_ram(&request)
             .map_err(|error| {
-                match crate::change_admission::PendingChangeCapacity::from_record_prepublication(
+                match crate::ingest::domain::change_admission::PendingChangeCapacity::from_record_prepublication(
                     &error,
                 ) {
                     Some(pending) => self.prepublication_backpressure(pending),
@@ -75,7 +75,7 @@ impl WriteSink for RaftWriteSink {
             Err(e) => {
                 if let Some(backpressure) = e.downcast_ref::<ProposalBackpressure>() {
                     return Err(self.prepublication_backpressure(
-                        crate::change_admission::PendingChangeCapacity::Raft {
+                        crate::ingest::domain::change_admission::PendingChangeCapacity::Raft {
                             reason: backpressure.reason.clone(),
                         },
                     ));

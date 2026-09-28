@@ -405,7 +405,7 @@ fn replay_aof_into_with_capacity_owner(
         // A large fast Index frame remains mapped through its scalar projection.
         // Do this before scanner admission or generic decode, so one valid value
         // cannot become an owned record merely because recovery is replaying it.
-        if encoded_bytes > crate::change_budget::HARD_LIMIT / 8 {
+        if encoded_bytes > crate::ingest::domain::change_budget::HARD_LIMIT / 8 {
             if let Ok(scanner) =
                 crate::wal::fast_index_scanner::FastIndexScanner::parse(frame.payload())
             {
@@ -444,7 +444,7 @@ fn replay_aof_into_with_capacity_owner(
         let mut reservation = match engine.try_reserve_record_ram(&request) {
             Ok(reservation) => reservation,
             Err(crate::storage::RecordAdmissionError::Capacity(
-                crate::change_budget::AdmissionError::Full { .. },
+                crate::ingest::domain::change_budget::AdmissionError::Full { .. },
             )) => {
                 // A replay admission can hit the hard limit before the
                 // decode-growth path runs.  Publish the maintenance request
@@ -463,7 +463,7 @@ fn replay_aof_into_with_capacity_owner(
             .with_context(|| format!("price complete AOF frame at sequence {seq}"))?;
         match reservation.try_grow_to(decoded_peak) {
             Ok(()) => (),
-            Err(crate::change_budget::AdmissionError::Full { .. }) => {
+            Err(crate::ingest::domain::change_budget::AdmissionError::Full { .. }) => {
                 engine.request_pending_checkpoint();
                 reservation
                     .wait_grow_to(decoded_peak)
@@ -528,7 +528,9 @@ fn replay_aof_into_with_capacity_owner(
                     // returned repricing ownership. Only missing normalized or
                     // staged bytes wait here; the decoded entry remains charged.
                     let grown = match reprice.reservation.try_grow_to(required) {
-                        Err(crate::change_budget::AdmissionError::Full { .. }) => {
+                        Err(crate::ingest::domain::change_budget::AdmissionError::Full {
+                            ..
+                        }) => {
                             engine.request_pending_checkpoint();
                             reprice.reservation.wait_grow_to(required)
                         }
@@ -576,7 +578,7 @@ mod tests {
         writer.sync_strict().unwrap();
         assert_eq!(AofReader::replay(&path, 0, |_, _| {}).unwrap(), 1);
     }
-    use crate::change_budget::ChangeBudget;
+    use crate::ingest::domain::change_budget::ChangeBudget;
     use crate::segment_rdb::SegmentRdbStore;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::{
@@ -642,7 +644,7 @@ mod tests {
 
     #[test]
     fn replay_reserves_capacity_before_decoding_a_complete_frame() {
-        use crate::change_budget::ChangeBudget;
+        use crate::ingest::domain::change_budget::ChangeBudget;
         use crate::storage::Engine;
         use std::sync::{
             atomic::{AtomicUsize, Ordering},
@@ -974,7 +976,7 @@ mod tests {
         let payload = encode_payload(&record).unwrap();
         let workspace = crate::wal_wire_cost::scan_workspace_bound(&payload).unwrap();
         let raw = Engine::record_owned_bytes(&record.entry).unwrap();
-        let crate::change_record_cost::RecordEstimate::Ready(cost) =
+        let crate::ingest::domain::change_record_cost::RecordEstimate::Ready(cost) =
             engine.estimate_record_cost(&record.entry)
         else {
             panic!("known Keyword fixture must have a normalized cost")
@@ -1088,7 +1090,7 @@ mod tests {
             "fixture must pass scanner reserve before decoded growth"
         );
         let raw = Engine::record_owned_bytes(&record.entry).unwrap();
-        let crate::change_record_cost::RecordEstimate::Ready(cost) =
+        let crate::ingest::domain::change_record_cost::RecordEstimate::Ready(cost) =
             engine.estimate_record_cost(&record.entry)
         else {
             panic!("CreateCollection fixture must have a normalized cost")
@@ -1237,7 +1239,7 @@ mod tests {
         let value = "a".repeat(2048);
         let record = rec(index_entry("u", "replayed", &value));
         let raw = Engine::record_owned_bytes(&record.entry).unwrap();
-        let crate::change_record_cost::RecordEstimate::Ready(cost) =
+        let crate::ingest::domain::change_record_cost::RecordEstimate::Ready(cost) =
             engine.estimate_record_cost(&record.entry)
         else {
             panic!("Keyword fixture must have a known normalized cost")
@@ -1307,17 +1309,18 @@ mod tests {
             Ok::<_, ()>(())
         })
         .unwrap();
-        let normalized =
-            crate::change_memory_cost::estimate_change(&crate::change_memory_cost::Change::Index {
+        let normalized = crate::ingest::domain::change_memory_cost::estimate_change(
+            &crate::ingest::domain::change_memory_cost::Change::Index {
                 external_id_bytes: "not-applied".len(),
                 new_document: true,
-                field: crate::change_memory_cost::FieldCost::Text {
+                field: crate::ingest::domain::change_memory_cost::FieldCost::Text {
                     distinct_terms: distinct.len(),
                     total_term_bytes: distinct.iter().map(String::len).sum(),
                 },
                 volatile_metadata_bytes: 0,
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         assert!(
             normalized.total() > 64 * 1024,
             "distinct normalized data must exceed this test's budget before raw transport is added"

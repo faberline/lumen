@@ -227,7 +227,7 @@ mod tests {
             let bound = decoded_peak_bound(&bytes).unwrap();
             assert!(bound >= Engine::record_owned_bytes(&record.entry).unwrap());
             assert!(
-                bound <= crate::change_budget::HARD_LIMIT,
+                bound <= crate::ingest::domain::change_budget::HARD_LIMIT,
                 "one valid legacy frame must fit the change budget: json={json}, bound={bound}"
             );
         }

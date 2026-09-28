@@ -107,7 +107,7 @@ struct Prepared {
     /// Every source action remains alive through the ordered backend updates.
     vector_rows: BTreeMap<usize, VectorRows>,
     /// Replaced journal payloads may own files. Release them outside apply.
-    old_vector_rows: Vec<crate::change_journal::Row<CheckpointValue>>,
+    old_vector_rows: Vec<crate::ingest::domain::change_journal::Row<CheckpointValue>>,
     // The per-cell journal points into the same reader that queries use.
     rows: BTreeMap<PlannedCell, Option<Arc<CheckpointValue>>>,
     /// Final Text values use staged rows, not a scalar composed segment.
@@ -304,9 +304,9 @@ impl Engine {
         let request = self.record_ram_request_from_bound(floor, 0);
         let mut reservation = match self.try_reserve_record_ram(&request) {
             Ok(reservation) => reservation,
-            Err(RecordAdmissionError::Capacity(crate::change_budget::AdmissionError::Full {
-                ..
-            })) => self.wait_reserve_record_ram(&request)?,
+            Err(RecordAdmissionError::Capacity(
+                crate::ingest::domain::change_budget::AdmissionError::Full { .. },
+            )) => self.wait_reserve_record_ram(&request)?,
             Err(error) => return Err(error.into()),
         };
         let mut hashes = plan::ParsedHashes::new();

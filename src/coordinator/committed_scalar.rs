@@ -21,7 +21,7 @@ impl WriteCoordinator {
         delivery: WalDelivery,
         aof: Option<SharedAof>,
     ) -> Result<MappedApply> {
-        if delivery.decoded_owned_bytes()? <= crate::change_budget::HARD_LIMIT / 8 {
+        if delivery.decoded_owned_bytes()? <= crate::ingest::domain::change_budget::HARD_LIMIT / 8 {
             return Ok(MappedApply::Fallback(delivery));
         }
         let Some(proof) = self.wal.stage_source(seq).await? else {
