@@ -1725,7 +1725,7 @@ async fn dispatch_snapshot_import(_args: SnapshotImportArgs) -> Result<()> {
 /// answer, and against a file already suspected of being damaged — to compute
 /// something out of fields the parsed document already carries.
 /// `SnapshotV1::reindex_needed` and `Engine::reindex_needed` are held to one
-/// verdict by `e2e/reopen_names_the_fields_that_need_reindexing.rs`, which runs
+/// verdict by `tests/it/reopen_names_the_fields_that_need_reindexing.rs`, which runs
 /// both over the same bytes and requires the same rows.
 ///
 /// Deliberately not behind the `backup` feature. Reading a local file and
@@ -5017,7 +5017,7 @@ mod tests {
     // shared module (`select_token`, `cr_tokens_secret`, `secret_data_bytes`)
     // keeps its own tests there and is simply no longer called from here
     // (#2873) — the integration gate for that is
-    // `e2e/cli_credential_paths_retired.rs`.
+    // `tests/it/cli_credential_paths_retired.rs`.
 
     // -----------------------------------------------------------------
     // `spawn_cluster_state_poller` (#1349)

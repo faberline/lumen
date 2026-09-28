@@ -5812,7 +5812,7 @@ impl Engine {
     ///   supersede for a stale read. This holds across a *soft* delete only:
     ///   `force` and `sweep_deleted` drop the entry outright, and the next
     ///   create answers 1 again — that id has no history left to continue, and
-    ///   `e2e/collection_version_never_moves_backwards.rs` pins the reset. A
+    ///   `tests/it/collection_version_never_moves_backwards.rs` pins the reset. A
     ///   caller that keys a cache on `version` must therefore treat a
     ///   *decrease* as "different collection", not as a stale response.
     /// * If it exists, fields **missing** from the existing schema are
@@ -13820,7 +13820,7 @@ fn search_cache_key(req: &SearchRequest) -> Result<String> {
 /// 2 dropped the CONTENTS of the `terms` / `elements` inverted maps from the
 /// Keyword and Set arms. Reading forward is unaffected — a format-1 document's
 /// populated map is dropped on arrival and `forward` restores the field, which
-/// `e2e/snapshot_ships_only_the_forward_column.rs` pins.
+/// `tests/it/snapshot_ships_only_the_forward_column.rs` pins.
 ///
 /// Reading BACKWARD needed care, because 0.4.29 is released and a version gate
 /// does not work the way it looks like it does. `version` is a field of the
@@ -13865,7 +13865,7 @@ impl SnapshotV1 {
     /// The reindex audit, asked of the DOCUMENT instead of a restored engine.
     ///
     /// This must answer exactly what [`Engine::reindex_needed`] answers for the
-    /// same bytes, and `e2e/reopen_names_the_fields_that_need_reindexing.rs`
+    /// same bytes, and `tests/it/reopen_names_the_fields_that_need_reindexing.rs`
     /// runs both over one document and requires the same rows — the differential
     /// is what keeps the two from drifting.
     ///
@@ -14071,7 +14071,7 @@ pub struct ReshardPruneOutcome {
 /// reader.
 ///
 /// Delete this, and bump the format again, once no supported release still
-/// requires the key. `e2e/snapshot_ships_only_the_forward_column.rs` pins that
+/// requires the key. `tests/it/snapshot_ships_only_the_forward_column.rs` pins that
 /// it stays empty; nothing else may put a value in it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct LegacyInvertedIndex;
@@ -16493,7 +16493,7 @@ impl Engine {
     /// the named field: after a `flush_to_segments`, a sealed field reads
     /// `forward_or_tokens_len == 0` (driver dropped) AND `has_segment == true`
     /// (mmap attached). Mirrors the in-crate `__field_forward_probe`, but is a
-    /// real `pub` API (not `#[cfg(test)]`) so `e2e/perf_gate_vs_db.rs` — a
+    /// real `pub` API (not `#[cfg(test)]`) so `tests/perf_gate_vs_db.rs` — a
     /// separate crate — can read it. Experimental-gated alongside the rest of
     /// the disk tier.
     pub fn segment_field_probe(&self, collection_id: &str, field: &str) -> Result<(usize, bool)> {
@@ -26152,7 +26152,7 @@ mod tests {
     /// does cross the tombstone, because it is not content — it is the
     /// number the caller keys cached schema state on, and a supersede that
     /// re-answered 1 would move it backwards. See the supersede branch's own
-    /// comment, and `e2e/collection_version_never_moves_backwards.rs`.
+    /// comment, and `tests/it/collection_version_never_moves_backwards.rs`.
     #[test]
     fn create_collection_supersedes_tombstone_with_fresh_empty_collection() {
         let e = Engine::new();

@@ -569,29 +569,29 @@ jobs:
         run: |
           set -euo pipefail
           export CARGO_INCREMENTAL=0
-          cargo test --locked -p lumen --features operator --test capacity_catalog_client
-          cargo test --locked -p lumen --features operator --test capacity_catalog_contract
-          cargo test --locked -p lumen --features operator --test operator_render
+          cargo test --locked -p lumen --features operator --test it -- capacity_catalog_client::
+          cargo test --locked -p lumen --features operator --test it -- capacity_catalog_contract::
+          cargo test --locked -p lumen --features operator --test it -- operator_render::
           cargo clean
           df -h /
           cargo test --locked -p lumen --test segment_startup_fail_closed_e2e
-          cargo test --locked -p lumen --test cli_convention
-          cargo test --locked -p lumen --test release_artifacts
+          cargo test --locked -p lumen --test it -- cli_convention::
+          cargo test --locked -p lumen --test it -- release_artifacts::
           cargo clean
           df -h /
           cargo test --locked -p lumen --features raft-wal --lib raft_sm
-          cargo test --locked -p lumen --features raft-wal --test legacy-3073-app
+          cargo test --locked -p lumen --features raft-wal --test it -- legacy_3073_app::
           cargo test --locked -p lumen --features raft-wal --bin lumen cluster_state_poller_converges_role_to_live_election_result
           cargo clean
           df -h /
-          cargo test --locked -p lumen --test release_candidate
+          cargo test --locked -p lumen --test it -- release_candidate::
           cargo test --locked -p lumen
           cargo clean
           df -h /
           cargo test --locked -p lumen --features "operator delegated-auth"
           cargo clean
           df -h /
-          cargo test --locked -p lumen --features release --test release_feature_set
+          cargo test --locked -p lumen --features release --test it -- release_feature_set::
           cargo clean
           df -h /
           bash scripts/standalone-container-smoke.sh bind
@@ -614,7 +614,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${{ github.workspace }}/receipts"
-          cargo test --release --locked -p lumen --test perf_gate -- --ignored --test-threads=1 --nocapture
+          cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --test-threads=1 --nocapture
           test -f "$LUMEN_PERF_RECEIPT_PATH"
           test ! -L "$LUMEN_PERF_RECEIPT_PATH"
           test "$(find "${{ github.workspace }}/receipts" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" = 1
@@ -686,7 +686,7 @@ jobs:
           cargo test --locked --manifest-path "$core/Cargo.toml" -p raft-runtime
           cargo build --locked -p lumen --features raft-wal
           cargo test --locked -p lumen --features raft-wal --lib --no-run
-          cargo test --locked -p lumen --features raft-wal --test raft_oversized_committed_apply --no-run
+          cargo test --locked -p lumen --features raft-wal --test it --no-run
           git -c core.fsmonitor=false diff --check
 
   kind-amd64:

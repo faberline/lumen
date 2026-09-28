@@ -132,14 +132,14 @@ cargo run -q -p lumen --bin lumen -- spec > clients/openapi.json
 The local snapshot assertion is:
 
 ```bash
-cargo test -p lumen --test spec_cli openapi_committed_snapshot_matches_live_generation
+cargo test -p lumen --test it spec_cli::openapi_committed_snapshot_matches_live_generation
 ```
 
 The generator and current cross-language happy-path gates are:
 
 ```bash
-cargo test -p lumen --test spec_gen_e2e
-cargo test -p lumen --test generated_clients_crud_e2e -- --nocapture
+cargo test -p lumen --test it -- spec_gen_e2e::
+cargo test -p lumen --test it -- generated_clients_crud_e2e:: --nocapture
 cargo test -p openapi-codegen
 ```
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Local NON-QUALIFYING driver for the durable performance matrix.
 #
-# Wraps the existing contract of e2e/perf_gate.rs
-# (durable_workload::approved_30_minute_durable_workload in diagnostic mode)
+# Wraps the existing contract of tests/it/perf_gate.rs
+# (perf_gate::durable_workload::approved_30_minute_durable_workload in diagnostic mode)
 # so a whole local run is one command that leaves receipts behind. It never
 # produces acceptance evidence: qualifying receipts require a registry digest
 # (LUMEN_PERF_IMAGE=repo@sha256:...) and are only written by the
@@ -38,7 +38,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROOT="${LUMEN_PERF_LOCAL_ROOT:-/tmp/lumen-durable-perf-local}"
 GIT=(git -c core.fsmonitor=false)
-WORKLOAD_TEST="durable_workload::approved_30_minute_durable_workload"
+WORKLOAD_TEST="perf_gate::durable_workload::approved_30_minute_durable_workload"
 MATRIX_CELLS=(
   index-1-flat-cpu index-1-hnsw-cpu
   index-100-flat-cpu index-100-hnsw-cpu
@@ -81,7 +81,7 @@ print(f"{total.hexdigest()} {count}")
 }
 
 lane_is_idle() {
-  if pgrep -f 'perf_gate-[0-9a-f]+' >/dev/null 2>&1; then
+  if pgrep -f 'it-[0-9a-f]+ .*perf_gate::' >/dev/null 2>&1; then
     die "another perf_gate test process is running; one Cargo/Docker lane at a time"
   fi
   local containers
@@ -154,7 +154,7 @@ run_cell() {
       LUMEN_PERF_ENDPOINT="$endpoint" \
       LUMEN_PERF_BATCH="$batch" \
       LUMEN_PERF_BACKEND="$backend" \
-      cargo test --release --locked -p lumen --test perf_gate -- \
+      cargo test --release --locked -p lumen --test it -- \
         --ignored --exact "$WORKLOAD_TEST" --test-threads=1 --nocapture
   ) >"$log" 2>&1
   code=$?

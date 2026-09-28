@@ -16,7 +16,7 @@ impl Engine {
     ///   supersede for a stale read. This holds across a *soft* delete only:
     ///   `force` and `sweep_deleted` drop the entry outright, and the next
     ///   create answers 1 again — that id has no history left to continue, and
-    ///   `e2e/collection_version_never_moves_backwards.rs` pins the reset. A
+    ///   `tests/it/collection_version_never_moves_backwards.rs` pins the reset. A
     ///   caller that keys a cache on `version` must therefore treat a
     ///   *decrease* as "different collection", not as a stale response.
     /// * If it exists, fields **missing** from the existing schema are

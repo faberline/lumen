@@ -23,9 +23,11 @@
 
 ## Behaviour
 
-- [e2e/](e2e): one file per externally observable case, run by `cargo test -p lumen`.
-  `Cargo.toml` is the inventory --- `autotests = false` plus one `[[test]]` stanza
-  per file, so nothing starts or stops running without showing up in a diff.
+- [tests/](tests): integration tests, run by `cargo test -p lumen`.
+  `tests/it/main.rs` is the inventory --- one `mod` per externally observable case
+  in a single test binary, so nothing starts or stops running without showing up in
+  a diff. The few `tests/<name>.rs` binaries need their own process and say why
+  in their header.
 - Rules observable only inside the implementation stay as colocated unit tests
   under their `src/**` owner: `cargo test -p lumen --lib`.
 

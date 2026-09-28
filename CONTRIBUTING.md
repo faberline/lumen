@@ -30,7 +30,7 @@ Read these sources in order for the part you change:
     placement, the Standard Regional profile, and its acceptance contract.
 11. [Client integration](docs/client-integration.md) for connection profiles,
     workload projection, request mechanics, and source hydration helpers.
-12. `src/` and `e2e/` for behavior and executable
+12. `src/` and `tests/` for behavior and executable
    contracts.
 13. `src/operator/crd.rs` and
    `src/operator/fleet.rs` for the generated Kubernetes API.
@@ -94,9 +94,9 @@ docs-only change does not claim that product gates ran.
 |---|---|
 | default features and refusal paths | `cargo test -p lumen` |
 | operator and delegated-auth e2e targets | `cargo test -p lumen --features "operator delegated-auth"` |
-| release feature set | `cargo test -p lumen --locked --features release --test release_feature_set` |
-| landed-main release candidate oracle | `cargo test -p lumen --test release_candidate` |
-| protected-tag promotion oracle | `cargo test -p lumen --test release_promotion` |
+| release feature set | `cargo test -p lumen --locked --features release --test it -- release_feature_set::` |
+| landed-main release candidate oracle | `cargo test -p lumen --test it -- release_candidate::` |
+| protected-tag promotion oracle | `cargo test -p lumen --test it -- release_promotion::` |
 | full candidate verifier | `scripts/verify-release-candidate.sh --repo faberline/lumen --version <version> --commit <commit> --run-id <id> --run-attempt <attempt> --manifest <path> --manifest-sidecar <path> --artifacts-dir <path> --image <image> --candidate-tag <tag> --amd64-digest <digest> --arm64-digest <digest> --mode full` |
 | public release verifier | `scripts/verify-release-artifacts.sh --repo faberline/lumen --tag lumen@<version> --commit <commit> --candidate-run-id <id> --mode public --output <path>` |
 | standalone container bind smoke | `bash scripts/standalone-container-smoke.sh bind` |
@@ -112,7 +112,7 @@ capability gates in the README when the claim is narrower or requires a
 live-cluster script.
 
 The durable performance matrix (README gate `cargo test --release --locked -p
-lumen --test perf_gate -- --ignored --test-threads=1 --nocapture`) has a local
+lumen --test it -- perf_gate:: --ignored --test-threads=1 --nocapture`) has a local
 driver, `scripts/durable-perf-local.sh`: `build` makes a
 source-bound image from `Dockerfile`, `cell <endpoint> <batch>
 <backend>` runs one diagnostic cell, `matrix` runs all sixteen and resumes past
