@@ -5,8 +5,11 @@ use crate::sharding::domain::reshard_batch::{ADMIN_ROUTE_BODY_LIMIT_BYTES, MAX_B
 use crate::sharding::domain::snapshot_subset::snapshot_bucket_subset;
 use crate::sharding::domain::tests::{field, item};
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
+use crate::shared_kernel::types::{
+    document::{FieldValue, IndexRequest},
+    schema::{CreateCollectionRequest, FieldType},
+};
 use crate::storage::Engine;
-use crate::types::{CreateCollectionRequest, FieldType, FieldValue, IndexRequest};
 
 #[test]
 fn snapshot_bucket_subset_matches_route_document_membership() {

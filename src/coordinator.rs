@@ -35,7 +35,7 @@ use tokio::sync::{
 
 use crate::change_admission::PendingChangeCapacity;
 use crate::change_budget::AdmissionError;
-use crate::log_entry::RaftLogEntry;
+use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::storage::{
     ApplyOutcome, Engine, RecordAdmissionError, RecordApplyGuard, RecordReservation,
     RecordTransientReservation, RepriceRecord,
@@ -1682,9 +1682,9 @@ mod tests {
     use super::*;
     use crate::change_admission::PendingChangeCapacity;
     use crate::change_budget::ChangeBudget;
-    use crate::types::{
-        CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
-        VectorBackend, VectorMetric,
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        schema::{CreateCollectionRequest, FieldSpec, FieldType, VectorBackend, VectorMetric},
     };
     use crate::wal::{MemWal, WalLog, WalStream};
     use std::collections::BTreeMap as Map;

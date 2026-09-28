@@ -14,10 +14,10 @@ use serde::de::{self, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
 use super::WalRecord;
-use crate::log_entry::RaftLogEntry;
-use crate::types::{
-    CreateCollectionRequest, FieldSpec, FieldValue, IndexItem, IndexRequest, ReplaceDocItem,
-    ReplaceDocsRequest,
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::{
+    document::{FieldValue, IndexItem, IndexRequest, ReplaceDocItem, ReplaceDocsRequest},
+    schema::{CreateCollectionRequest, FieldSpec},
 };
 
 // Keep allocation pricing correct if wire or public layouts change.
@@ -265,8 +265,8 @@ struct WireBatchUnindexDocsRequest {
 }
 
 impl WireBatchUnindexDocsRequest {
-    fn into_request(self) -> crate::types::BatchUnindexDocsRequest {
-        crate::types::BatchUnindexDocsRequest {
+    fn into_request(self) -> crate::shared_kernel::types::document::BatchUnindexDocsRequest {
+        crate::shared_kernel::types::document::BatchUnindexDocsRequest {
             external_ids: self.external_ids.0,
         }
     }
@@ -427,7 +427,7 @@ impl<'de> Deserialize<'de> for WireFieldValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Analyzer, FieldType};
+    use crate::shared_kernel::types::schema::{Analyzer, FieldType};
 
     fn legacy_decode(bytes: &[u8]) -> Result<WalRecord> {
         match ciborium::de::from_reader(bytes) {
@@ -578,7 +578,7 @@ mod tests {
                 version: 2,
                 entry: RaftLogEntry::UnindexDocs {
                     collection_id: "docs".into(),
-                    req: crate::types::BatchUnindexDocsRequest {
+                    req: crate::shared_kernel::types::document::BatchUnindexDocsRequest {
                         external_ids: vec!["id".into()],
                     },
                 },

@@ -16,7 +16,7 @@ use std::cell::RefCell;
 
 use crate::segment::text_row_stage::{stage_text_row, TextRowStageOptions, TextTokenStream};
 use crate::segment::SegmentReader;
-use crate::types::Analyzer;
+use crate::shared_kernel::types::schema::Analyzer;
 
 static STAGED_TEXT_ROW_NONCE: AtomicU64 = AtomicU64::new(0);
 

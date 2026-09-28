@@ -135,8 +135,9 @@ impl RdbStore for LocalFsRdbStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{
-        CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        schema::{CreateCollectionRequest, FieldSpec, FieldType},
     };
     use std::collections::BTreeMap;
 

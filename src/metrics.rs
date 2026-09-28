@@ -177,7 +177,7 @@ const APPLY_SECONDS_BUCKETS_US: [(&str, u64); APPLY_SECONDS_BUCKET_COUNT] = [
 /// `lumen_coordinator_apply_items_total{kind=...}` families.
 pub const APPLY_KIND_COUNT: usize = 9;
 
-/// #4326: the `kind` label of one applied [`crate::log_entry::RaftLogEntry`]
+/// #4326: the `kind` label of one applied [`crate::shared_kernel::log_entry::RaftLogEntry`]
 /// — every variant maps 1:1, see [`ApplyKind::from_entry`]. A plain enum
 /// (not the borrowed `RaftLogEntry` itself) so
 /// [`Metrics::observe_coordinator_apply`] can index its per-kind atomic
@@ -264,8 +264,8 @@ impl ApplyKind {
 
     /// Classify one committed mutation for `lumen_coordinator_apply_seconds`
     /// / `lumen_coordinator_apply_items_total`.
-    pub const fn from_entry(entry: &crate::log_entry::RaftLogEntry) -> ApplyKind {
-        use crate::log_entry::RaftLogEntry;
+    pub const fn from_entry(entry: &crate::shared_kernel::log_entry::RaftLogEntry) -> ApplyKind {
+        use crate::shared_kernel::log_entry::RaftLogEntry;
         match entry {
             RaftLogEntry::CreateCollection { .. } => ApplyKind::CreateCollection,
             RaftLogEntry::Index { .. } => ApplyKind::Index,
@@ -284,7 +284,7 @@ impl ApplyKind {
 /// [`ApplyKind::from_entry`]. Kept as a standalone `&'static str` helper
 /// (in addition to [`ApplyKind`] itself) for call sites that only need the
 /// rendered label, not the enum.
-pub fn kind_label(entry: &crate::log_entry::RaftLogEntry) -> &'static str {
+pub fn kind_label(entry: &crate::shared_kernel::log_entry::RaftLogEntry) -> &'static str {
     ApplyKind::from_entry(entry).label()
 }
 
@@ -292,8 +292,8 @@ pub fn kind_label(entry: &crate::log_entry::RaftLogEntry) -> &'static str {
 /// observation — docs for `index`/`replace`, external ids for `unindex`,
 /// `1` for every single-record kind (`create_collection`, `truncate_docs`,
 /// `delete`, `drop_collection`, `add_field`, `drop_field`).
-pub fn apply_item_count(entry: &crate::log_entry::RaftLogEntry) -> u64 {
-    use crate::log_entry::RaftLogEntry;
+pub fn apply_item_count(entry: &crate::shared_kernel::log_entry::RaftLogEntry) -> u64 {
+    use crate::shared_kernel::log_entry::RaftLogEntry;
     match entry {
         RaftLogEntry::Index { req, .. } => req.items.len() as u64,
         RaftLogEntry::ReplaceDocs { req, .. } => req.docs.len() as u64,
@@ -2353,8 +2353,8 @@ lumen_raft_leader_known{shard=\"2\"} 1\n";
     /// per-kind atomic slot without disturbing a sibling kind.
     #[test]
     fn apply_kind_classifies_entries_and_counts_items() {
-        use crate::log_entry::RaftLogEntry;
-        use crate::types::{
+        use crate::shared_kernel::log_entry::RaftLogEntry;
+        use crate::shared_kernel::types::document::{
             BatchUnindexDocsRequest, FieldValue, IndexItem, IndexRequest, ReplaceDocItem,
             ReplaceDocsRequest,
         };

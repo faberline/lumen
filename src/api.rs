@@ -53,25 +53,33 @@ use crate::change_admission::PendingChangeCapacity;
 use crate::coordinator::{
     MutationGate, RestartRequired, StorageFullError, SubmitStalled, WriteCoordinator, WriteSink,
 };
-use crate::log_entry::RaftLogEntry;
 use crate::replication::domain::{
     cluster_state::ReadConsistency, cluster_state_view::ClusterStateView, raft_role::RaftRole,
 };
 use crate::segment_restore::{RestoreNotCommitted, RestoreUnavailable};
 use crate::sharding::domain::reshard_batch::ReshardBatch;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
-use crate::storage::{ApplyOutcome, DropOutcome, Engine, SnapshotV1, StorageError};
-use crate::types::{
-    validate_batch_unindex_docs_request, Analyzer, ApiError, BatchSearchRequest,
-    BatchSearchResponse, BatchSearchResult, BatchUnindexDocsRequest, CacheStats,
-    CreateCollectionRequest, CreateCollectionResponse, DuplicateGroup, DuplicatesRequest,
-    DuplicatesResponse, FieldSpec, FieldStats, FieldType, FieldValue, IndexItem, IndexRequest,
-    IndexResponse, KnnQuery, MatchOp, MatchQuery, QueryNode, RangeQuery, ReplaceDocBody,
-    ReplaceDocItem, ReplaceDocResult, ReplaceDocsRequest, ReplaceDocsResponse, SearchAllRequest,
-    SearchAllResponse, SearchHit, SearchRequest, SearchResponse, StatsResponse, StorageStats,
-    TermQuery, TermsQuery, VectorBackend, VectorMetric, VectorQuantize, VectorSpec,
-    MAX_BATCH_REPLACE_SIZE, MAX_BATCH_SEARCH_SIZE, MAX_INDEX_BATCH_SIZE,
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::{
+    api_error::ApiError,
+    document::{
+        validate_batch_unindex_docs_request, BatchUnindexDocsRequest, FieldValue, IndexItem,
+        IndexRequest, IndexResponse, ReplaceDocBody, ReplaceDocItem, ReplaceDocResult,
+        ReplaceDocsRequest, ReplaceDocsResponse, MAX_BATCH_REPLACE_SIZE, MAX_INDEX_BATCH_SIZE,
+    },
+    query::{KnnQuery, MatchOp, MatchQuery, QueryNode, RangeQuery, TermQuery, TermsQuery},
+    schema::{
+        Analyzer, CreateCollectionRequest, CreateCollectionResponse, FieldSpec, FieldType,
+        VectorBackend, VectorMetric, VectorQuantize, VectorSpec,
+    },
+    search::{
+        BatchSearchRequest, BatchSearchResponse, BatchSearchResult, DuplicateGroup,
+        DuplicatesRequest, DuplicatesResponse, SearchAllRequest, SearchAllResponse, SearchHit,
+        SearchRequest, SearchResponse, MAX_BATCH_SEARCH_SIZE,
+    },
+    stats::{CacheStats, FieldStats, StatsResponse, StorageStats},
 };
+use crate::storage::{ApplyOutcome, DropOutcome, Engine, SnapshotV1, StorageError};
 use crate::wal::{MemWal, SharedWal};
 
 /// The `/metrics` body: the engine's domain counters plus the delegated-auth
@@ -923,30 +931,30 @@ impl AppState {
         MatchOp,
         TermQuery,
         TermsQuery,
-        crate::types::PrefixQuery,
+        crate::shared_kernel::types::query::PrefixQuery,
         RangeQuery,
         // #1307: $ref'd by RangeQuery's gt/gte/lt/lte bounds (untagged f64 | String) —
         // same dangling-ref reason as the #200 note below, registered explicitly.
-        crate::types::RangeBound,
+        crate::shared_kernel::types::query::RangeBound,
         KnnQuery,
-        crate::types::RrfQuery,
-        crate::types::ExistsQuery,
-        crate::types::DuplicatedQuery,
+        crate::shared_kernel::types::query::RrfQuery,
+        crate::shared_kernel::types::query::ExistsQuery,
+        crate::shared_kernel::types::query::DuplicatedQuery,
         // #200: these are $ref'd by QueryNode / SearchRequest but were not
         // registered, so the emitted OpenAPI had dangling refs. SortSpec also
         // pulls in SortOrder + SortMissing.
-        crate::types::IdsQuery,
-        crate::types::HasChildQuery,
-        crate::types::HammingQuery,
-        crate::types::SortSpec,
-        crate::types::SortOrder,
-        crate::types::SortMissing,
+        crate::shared_kernel::types::query::IdsQuery,
+        crate::shared_kernel::types::query::HasChildQuery,
+        crate::shared_kernel::types::query::HammingQuery,
+        crate::shared_kernel::types::query::SortSpec,
+        crate::shared_kernel::types::query::SortOrder,
+        crate::shared_kernel::types::query::SortMissing,
         SearchHit,
         SearchResponse,
         SearchAllRequest,
         SearchAllResponse,
         BatchSearchRequest,
-        crate::types::BatchSearchItem,
+        crate::shared_kernel::types::search::BatchSearchItem,
         BatchSearchResponse,
         BatchSearchResult,
         DuplicatesRequest,
@@ -3355,9 +3363,9 @@ fn inject_query_twins(doc: &mut utoipa::openapi::OpenApi) {
 /// A newtype over the shared `service_http::ApiErr` (status + kind +
 /// message, `IntoResponse` renders `service_http::ErrorEnvelope` JSON) —
 /// this file keeps only the `StorageError` / `AuthErr` → (status, kind)
-/// classification arms. (`crate::types::ApiError` stays a distinct local
-/// struct of the same `{error, message}` shape purely for OpenAPI schema
-/// identity — see its doc comment.)
+/// classification arms. (`crate::shared_kernel::types::api_error::ApiError`
+/// stays a distinct local struct of the same `{error, message}` shape purely
+/// for OpenAPI schema identity — see its doc comment.)
 pub struct ApiErr(service_http::ApiErr);
 
 impl ApiErr {
@@ -3626,7 +3634,7 @@ impl From<crate::access::application::authorization::AuthErr> for ApiErr {
 #[cfg(test)]
 mod restore_sink_tests {
     use super::*;
-    use crate::types::CreateCollectionRequest;
+    use crate::shared_kernel::types::schema::CreateCollectionRequest;
     use std::collections::BTreeMap;
 
     fn collection_request() -> CreateCollectionRequest {
@@ -3879,7 +3887,7 @@ mod local_write_backend_tests {
 #[cfg(test)]
 mod stats_executor_tests {
     use super::*;
-    use crate::types::CreateCollectionRequest;
+    use crate::shared_kernel::types::schema::CreateCollectionRequest;
 
     fn collection_request() -> CreateCollectionRequest {
         serde_json::from_value(serde_json::json!({

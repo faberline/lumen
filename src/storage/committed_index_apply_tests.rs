@@ -1,6 +1,6 @@
 use super::*;
-use crate::log_entry::RaftLogEntry;
-use crate::types::{CreateCollectionRequest, IndexItem};
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::{document::IndexItem, schema::CreateCollectionRequest};
 use crate::wal::WalRecord;
 
 fn engine() -> Arc<Engine> {
@@ -702,7 +702,7 @@ fn borrowed_hash_large_leading_zero_source_retains_only_small_changes() {
 #[cfg(test)]
 mod borrowed_vector_apply_tests {
     use super::*;
-    use crate::types::VectorBackend;
+    use crate::shared_kernel::types::schema::VectorBackend;
 
     fn vector_engine(backend: VectorBackend, sq: bool) -> Arc<Engine> {
         let engine = Arc::new(Engine::with_change_budget(

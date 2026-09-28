@@ -46,7 +46,7 @@ impl WriteCoordinator {
                 let mut owner = coord.layer_capacity_owner.lock().map_err(|_| anyhow::anyhow!("capacity owner poisoned"))?;
                 crate::segment_capacity::Fallback::ensure(&mut owner, &coord.engine, None)
             };
-            let complete = |apply: &crate::capture_barrier::ApplyLease<'_>, mut outcome: Result<ApplyOutcome>| {
+            let complete = |apply: &crate::shared_kernel::capture_barrier::ApplyLease<'_>, mut outcome: Result<ApplyOutcome>| {
                 if coord.mutation_gate.is_restart_required() {
                     apply.mark_uncertain();
                     coord.fail_unresolved(seq, Err(anyhow::Error::new(RestartRequired(
@@ -101,8 +101,9 @@ impl WriteCoordinator {
 mod tests {
     use super::*;
     use crate::aof::{AofReader, AofWriter};
-    use crate::types::{
-        CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        schema::{CreateCollectionRequest, FieldSpec, FieldType},
     };
     use crate::wal::{MemWal, WalLog};
     use std::collections::BTreeMap;

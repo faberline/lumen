@@ -11,7 +11,7 @@ use crate::segment::stream::{
     KeywordStreamProjection, NumberStreamProjection, ScalarProjectionScratch, SetStreamProjection,
 };
 use crate::segment::{ScalarPayloadKind, SegmentReader};
-use crate::types::FieldType;
+use crate::shared_kernel::types::schema::FieldType;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BinaryHeap, HashMap};

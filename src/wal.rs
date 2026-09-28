@@ -20,7 +20,7 @@
 //!   single-node dev runs. Publish applies synchronously from the
 //!   caller's perspective (the subscriber sees it immediately).
 //!
-//! The record payload reuses [`crate::log_entry::RaftLogEntry`] — it
+//! The record payload reuses [`crate::shared_kernel::log_entry::RaftLogEntry`] — it
 //! already enumerates every mutation 1:1 with an `Engine` method and is
 //! the exact shape a replication record needs.
 
@@ -34,12 +34,12 @@ use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
-use crate::log_entry::RaftLogEntry;
-use crate::storage::Engine;
-use crate::types::{
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::document::{
     validate_batch_unindex_docs_request, BatchUnindexDocsRequest, FieldValue, IndexItem,
     IndexRequest, MAX_BATCH_UNINDEX_DOCS_SIZE,
 };
+use crate::storage::Engine;
 use crate::wal_source_stage::{
     MappedFastIndexPayload, MappedGenericCborPayload, StagedWalRecord, WalSourceStager,
 };
@@ -1164,8 +1164,9 @@ impl WalLog for MemWal {
 mod tests {
     use super::*;
     use crate::change_budget::ChangeBudget;
-    use crate::types::{
-        BatchUnindexDocsRequest, CreateCollectionRequest, FieldValue, IndexItem, IndexRequest,
+    use crate::shared_kernel::types::{
+        document::{BatchUnindexDocsRequest, FieldValue, IndexItem, IndexRequest},
+        schema::CreateCollectionRequest,
     };
     use futures::StreamExt;
     use std::collections::BTreeMap;

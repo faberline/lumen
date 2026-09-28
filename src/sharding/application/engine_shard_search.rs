@@ -11,8 +11,8 @@ use crate::sharding::domain::shard_route::SearchShardTarget;
 use crate::sharding::domain::virtual_bucket_shard_map::{
     VirtualBucketShardMap, DEFAULT_VIRTUAL_BUCKET_COUNT,
 };
+use crate::shared_kernel::types::search::{SearchRequest, SearchResponse};
 use crate::storage::Engine;
-use crate::types::{SearchRequest, SearchResponse};
 
 #[derive(Clone)]
 pub struct EngineShardSearch {

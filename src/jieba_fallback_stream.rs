@@ -165,7 +165,7 @@ pub(crate) fn is_cjk_char(character: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Analyzer;
+    use crate::shared_kernel::types::schema::Analyzer;
 
     fn streamed(input: &str) -> Vec<String> {
         let mut out = Vec::new();

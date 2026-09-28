@@ -2,8 +2,8 @@
 //! the original item ordinal, so duplicate cells retain arrival-order meaning.
 
 use super::*;
-use crate::log_entry::RaftLogEntry;
-use crate::types::{IndexItem, IndexRequest, MAX_INDEX_BATCH_SIZE};
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::document::{IndexItem, IndexRequest, MAX_INDEX_BATCH_SIZE};
 use crate::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use anyhow::bail;
 
@@ -733,7 +733,7 @@ impl Engine {
 #[cfg(test)]
 mod borrowed_tests {
     use super::*;
-    use crate::types::{CreateCollectionRequest, FieldSpec, FieldType};
+    use crate::shared_kernel::types::schema::{CreateCollectionRequest, FieldSpec, FieldType};
     use crate::wal::WalRecord;
 
     fn spec(field_type: FieldType, analyzer: Option<Analyzer>) -> FieldSpec {

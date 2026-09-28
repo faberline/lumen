@@ -31,7 +31,7 @@ use storage_durable::{
     GenerationStore, NoFailures, StagedGeneration,
 };
 
-use crate::capture_barrier::CaptureStamp;
+use crate::shared_kernel::capture_barrier::CaptureStamp;
 use crate::storage::{Engine, FrozenCheckpoint, RecoveryPhase, RecoveryProfile};
 
 #[path = "segment_background_merge.rs"]
@@ -2617,7 +2617,7 @@ impl SegmentRdbStore {
                                     .field
                                     .as_deref()
                                     .ok_or_else(|| anyhow!("delta has no field"))?;
-                                let spec: crate::types::FieldSpec = serde_json::from_value(
+                                let spec: crate::shared_kernel::types::schema::FieldSpec = serde_json::from_value(
                                     collection
                                         .schema
                                         .get(field)
@@ -2631,9 +2631,9 @@ impl SegmentRdbStore {
                                             .ok_or_else(|| anyhow!("missing local row"))
                                     })
                                     .collect::<Result<Vec<_>>>()?;
-                                if spec.field_type == crate::types::FieldType::Vector
+                                if spec.field_type == crate::shared_kernel::types::schema::FieldType::Vector
                                     && spec.vector_spec()?.is_some_and(|vector| {
-                                        vector.backend != crate::types::VectorBackend::FlatCpu
+                                        vector.backend != crate::shared_kernel::types::schema::VectorBackend::FlatCpu
                                     })
                                 {
                                     let values = read_delta_values(&reader, &spec)?;
@@ -2941,7 +2941,7 @@ fn catalog_collections(root: &Path, checkpoint_sequence: u64) -> Result<Vec<Coll
             .cloned()
             .ok_or_else(|| anyhow!("checkpoint schema has no fields: {}", schema_path.display()))?;
         // Derive roles from schema: a keyword called `tag.eids` is not a vector sidecar.
-        let specs: BTreeMap<String, crate::types::FieldSpec> =
+        let specs: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
             serde_json::from_value(fields.clone())?;
         let mut segments = vec![SegmentReference {
             role: SegmentRole::CollectionEids,
@@ -2967,7 +2967,7 @@ fn catalog_collections(root: &Path, checkpoint_sequence: u64) -> Result<Vec<Coll
                 applied_seq: None,
                 payload_sha256: None,
             });
-            if spec.field_type == crate::types::FieldType::Vector {
+            if spec.field_type == crate::shared_kernel::types::schema::FieldType::Vector {
                 segments.push(SegmentReference {
                     role: SegmentRole::VectorEids,
                     field: Some(name.clone()),
@@ -3050,13 +3050,13 @@ fn validate_catalog_references_with_prior(
         {
             bail!("catalog schema version does not match checkpoint schema");
         }
-        let fields: BTreeMap<String, crate::types::FieldSpec> =
+        let fields: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
             serde_json::from_value(collection.schema.clone()).context("decode catalog schema")?;
         let mut expected = BTreeSet::from([format!("{collection_dir}/_collection.lmeta.lseg")]);
         for (name, spec) in &fields {
             let stem = layout.field_stem(name);
             expected.insert(format!("{collection_dir}/{stem}.lseg"));
-            if spec.field_type == crate::types::FieldType::Vector {
+            if spec.field_type == crate::shared_kernel::types::schema::FieldType::Vector {
                 expected.insert(format!("{collection_dir}/{stem}.eids.lseg"));
             }
         }
@@ -3107,7 +3107,8 @@ fn validate_catalog_references_with_prior(
                         .get(name)
                         .ok_or_else(|| anyhow!("catalog segment field is absent from schema"))?;
                     if matches!(segment.role, SegmentRole::VectorEids) {
-                        if spec.field_type != crate::types::FieldType::Vector {
+                        if spec.field_type != crate::shared_kernel::types::schema::FieldType::Vector
+                        {
                             bail!("vector_eids segment must name a vector field");
                         }
                         format!("{collection_dir}/{stem}.eids.lseg")
@@ -3192,7 +3193,9 @@ fn validate_catalog_references_with_prior(
                         bail!("mapped base checksum differs from catalog");
                     }
                     let field = segment.field.as_deref().expect("mapped field validated");
-                    if fields[field].field_type == crate::types::FieldType::Vector {
+                    if fields[field].field_type
+                        == crate::shared_kernel::types::schema::FieldType::Vector
+                    {
                         let stem = layout.field_stem(field);
                         let ids = crate::segment::SegmentReader::open(
                             &disk_dir.join(format!("{stem}.eids.lseg")),
@@ -3316,17 +3319,18 @@ fn prepare_live_delta_readers(
         let Some(fields) = capture.field_deltas.get(&collection.collection_id) else {
             continue;
         };
-        let specs: BTreeMap<String, crate::types::FieldSpec> =
+        let specs: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
             serde_json::from_value(collection.schema.clone())?;
         for field in fields.keys() {
             let spec = specs
                 .get(field)
                 .ok_or_else(|| anyhow!("captured delta field is absent from schema"))?;
-            if matches!(spec.field_type, crate::types::FieldType::Vector)
-                && spec
-                    .vector_spec()?
-                    .is_some_and(|vector| vector.backend != crate::types::VectorBackend::FlatCpu)
-            {
+            if matches!(
+                spec.field_type,
+                crate::shared_kernel::types::schema::FieldType::Vector
+            ) && spec.vector_spec()?.is_some_and(|vector| {
+                vector.backend != crate::shared_kernel::types::schema::VectorBackend::FlatCpu
+            }) {
                 continue;
             }
             let segment = collection
@@ -3377,10 +3381,10 @@ fn prepare_live_delta_readers(
 
 fn read_delta_values(
     reader: &crate::segment::SegmentReader,
-    spec: &crate::types::FieldSpec,
+    spec: &crate::shared_kernel::types::schema::FieldSpec,
 ) -> Result<Vec<Option<crate::storage::CheckpointValue>>> {
+    use crate::shared_kernel::types::schema::FieldType;
     use crate::storage::CheckpointValue;
-    use crate::types::FieldType;
     if spec.field_type == FieldType::Text {
         let mut values: Vec<_> = (0..reader.n_docs())
             .map(|row| {
@@ -3490,7 +3494,7 @@ fn write_field_deltas(
         std::fs::create_dir_all(root.join(&segment_path).parent().unwrap())?;
         let ids: Vec<_> = rows.iter().map(|(id, _)| id.clone()).collect();
         use crate::storage::CheckpointValue;
-        let specs: BTreeMap<String, crate::types::FieldSpec> =
+        let specs: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
             serde_json::from_value(collection.schema.clone())?;
         let spec = specs
             .get(field)
@@ -3501,9 +3505,9 @@ fn write_field_deltas(
         if staged_scalar
             && matches!(
                 spec.field_type,
-                crate::types::FieldType::Keyword
-                    | crate::types::FieldType::Number
-                    | crate::types::FieldType::Set
+                crate::shared_kernel::types::schema::FieldType::Keyword
+                    | crate::shared_kernel::types::schema::FieldType::Number
+                    | crate::shared_kernel::types::schema::FieldType::Set
             )
         {
             crate::storage::write_scalar_checkpoint_rows(
@@ -3514,7 +3518,7 @@ fn write_field_deltas(
             )?;
         } else {
             match spec.field_type {
-                crate::types::FieldType::Keyword => {
+                crate::shared_kernel::types::schema::FieldType::Keyword => {
                     let values: Vec<_> = rows
                         .iter()
                         .map(|(_, value)| match value.as_deref() {
@@ -3539,7 +3543,7 @@ fn write_field_deltas(
                         &postings,
                     )?;
                 }
-                crate::types::FieldType::Number => {
+                crate::shared_kernel::types::schema::FieldType::Number => {
                     let values: Vec<_> = rows
                         .iter()
                         .map(|(_, value)| match value.as_deref() {
@@ -3554,7 +3558,7 @@ fn write_field_deltas(
                         &values,
                     )?;
                 }
-                crate::types::FieldType::Hash => {
+                crate::shared_kernel::types::schema::FieldType::Hash => {
                     let values: Vec<_> = rows
                         .iter()
                         .map(|(_, value)| match value.as_deref() {
@@ -3569,7 +3573,7 @@ fn write_field_deltas(
                         &values,
                     )?;
                 }
-                crate::types::FieldType::Set => {
+                crate::shared_kernel::types::schema::FieldType::Set => {
                     let values: Vec<_> = rows
                         .iter()
                         .map(|(_, value)| match value.as_deref() {
@@ -3596,14 +3600,14 @@ fn write_field_deltas(
                         &postings,
                     )?;
                 }
-                crate::types::FieldType::Text => {
+                crate::shared_kernel::types::schema::FieldType::Text => {
                     crate::storage::write_text_checkpoint_rows(
                         &root.join(&segment_path),
                         sequence,
                         rows,
                     )?;
                 }
-                crate::types::FieldType::Vector => {
+                crate::shared_kernel::types::schema::FieldType::Vector => {
                     let values: Vec<_> = rows
                         .iter()
                         .map(|(_, value)| match value.as_deref() {
@@ -4001,13 +4005,15 @@ fn finish_compacted_field(
     } else {
         inputs.clone()
     };
-    let specs: BTreeMap<String, crate::types::FieldSpec> =
+    let specs: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
         serde_json::from_value(collection.schema.clone())?;
     let is_hnsw = specs
         .get(&field)
         .ok_or_else(|| anyhow!("compacted field has no schema"))?
         .vector_spec()?
-        .is_some_and(|spec| spec.backend != crate::types::VectorBackend::FlatCpu);
+        .is_some_and(|spec| {
+            spec.backend != crate::shared_kernel::types::schema::VectorBackend::FlatCpu
+        });
     let live_inputs = if is_hnsw {
         Vec::new()
     } else {
@@ -4181,7 +4187,7 @@ fn validate_field_delta(
     checkpoint_sequence: u64,
     collection: &CollectionCatalog,
     segment: &SegmentReference,
-    fields: &BTreeMap<String, crate::types::FieldSpec>,
+    fields: &BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec>,
     paths: &mut BTreeSet<String>,
     ordinals: &mut BTreeMap<String, u32>,
     prior: PriorCatalog<'_>,
@@ -4194,12 +4200,12 @@ fn validate_field_delta(
         || !fields.get(field).is_some_and(|spec| {
             matches!(
                 spec.field_type,
-                crate::types::FieldType::Keyword
-                    | crate::types::FieldType::Number
-                    | crate::types::FieldType::Set
-                    | crate::types::FieldType::Hash
-                    | crate::types::FieldType::Text
-                    | crate::types::FieldType::Vector
+                crate::shared_kernel::types::schema::FieldType::Keyword
+                    | crate::shared_kernel::types::schema::FieldType::Number
+                    | crate::shared_kernel::types::schema::FieldType::Set
+                    | crate::shared_kernel::types::schema::FieldType::Hash
+                    | crate::shared_kernel::types::schema::FieldType::Text
+                    | crate::shared_kernel::types::schema::FieldType::Vector
             )
         })
     {
@@ -4877,16 +4883,17 @@ fn validate_generation_entry(
     }
     if v2 {
         let layout = crate::storage::CheckpointLayout::from_sidecar(&schema)?;
-        let fields: BTreeMap<String, crate::types::FieldSpec> = serde_json::from_value(
-            schema
-                .get("fields")
-                .cloned()
-                .ok_or_else(|| anyhow!("checkpoint schema has no fields"))?,
-        )?;
+        let fields: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
+            serde_json::from_value(
+                schema
+                    .get("fields")
+                    .cloned()
+                    .ok_or_else(|| anyhow!("checkpoint schema has no fields"))?,
+            )?;
         let mut bases = vec![(path.join("_collection.lmeta.lseg"), false)];
         for (name, spec) in fields {
             let stem = layout.field_stem(&name);
-            let vector = spec.field_type == crate::types::FieldType::Vector;
+            let vector = spec.field_type == crate::shared_kernel::types::schema::FieldType::Vector;
             bases.push((path.join(format!("{stem}.lseg")), vector));
             if vector {
                 bases.push((path.join(format!("{stem}.eids.lseg")), false));
@@ -6034,9 +6041,11 @@ mod tests {
         assert!(validate_catalog_references(&root, &manifest).is_err());
     }
 
-    use crate::types::{
-        CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
-        QueryNode, SearchRequest, TermQuery,
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        query::{QueryNode, TermQuery},
+        schema::{CreateCollectionRequest, FieldSpec, FieldType},
+        search::SearchRequest,
     };
     use std::collections::BTreeMap;
 
@@ -8010,10 +8019,11 @@ mod tests {
         release_tx.send(()).unwrap();
         writer.join().unwrap();
         store.save(&engine, 2).unwrap();
-        let request: crate::types::SearchRequest = serde_json::from_value(serde_json::json!({
-            "query":{"term":{"field":"email","value":"later"}}
-        }))
-        .unwrap();
+        let request: crate::shared_kernel::types::search::SearchRequest =
+            serde_json::from_value(serde_json::json!({
+                "query":{"term":{"field":"email","value":"later"}}
+            }))
+            .unwrap();
         assert_eq!(engine.search("u", request.clone()).unwrap().total, 1);
         let (cold, _) = store.load_latest().unwrap().unwrap();
         assert_eq!(cold.search("u", request).unwrap().total, 1);
@@ -8027,7 +8037,7 @@ mod tests {
         let store = Arc::new(SegmentRdbStore::new(dir.path()).unwrap());
         let engine = Arc::new(Engine::new());
         engine.create_collection("u", kw_schema()).unwrap();
-        let keep: crate::types::FieldSpec =
+        let keep: crate::shared_kernel::types::schema::FieldSpec =
             serde_json::from_value(serde_json::json!({"type":"keyword"})).unwrap();
         engine.add_field("u", "keep", keep).unwrap();
         for id in ["deleted", "updated"] {
@@ -8065,7 +8075,7 @@ mod tests {
         assert_eq!(search(&engine, "old"), 0);
         release_tx.send(()).unwrap();
         writer.join().unwrap();
-        let uncached: crate::types::SearchRequest = serde_json::from_value(
+        let uncached: crate::shared_kernel::types::search::SearchRequest = serde_json::from_value(
             serde_json::json!({"query":{"term":{"field":"email","value":"old"}},"limit":17}),
         )
         .unwrap();
@@ -8384,20 +8394,21 @@ mod tests {
     /// staged into its own row reader before apply, so it lands in
     /// `TextIndex::staged_rows` instead of the in-RAM token map.
     fn committed_text(engine: &Arc<Engine>, external_id: &str, value: &str, sequence: u64) {
-        let bytes = crate::wal::WalRecord::new(crate::log_entry::RaftLogEntry::Index {
-            collection_id: "u".into(),
-            req: IndexRequest {
-                items: vec![IndexItem {
-                    external_id: external_id.into(),
-                    field: "email".into(),
-                    value: FieldValue::String(value.into()),
-                    version: None,
-                }],
-                request_id: None,
-            },
-        })
-        .encode()
-        .unwrap();
+        let bytes =
+            crate::wal::WalRecord::new(crate::shared_kernel::log_entry::RaftLogEntry::Index {
+                collection_id: "u".into(),
+                req: IndexRequest {
+                    items: vec![IndexItem {
+                        external_id: external_id.into(),
+                        field: "email".into(),
+                        value: FieldValue::String(value.into()),
+                        version: None,
+                    }],
+                    request_id: None,
+                },
+            })
+            .encode()
+            .unwrap();
         let scanner = crate::wal::fast_index_scanner::FastIndexScanner::parse(&bytes).unwrap();
         let mut completed = None;
         assert!(engine
@@ -8650,8 +8661,8 @@ mod tests {
         let field = schema.fields.get_mut("email").unwrap();
         field.field_type = FieldType::Vector;
         field.dim = Some(2);
-        field.metric = Some(crate::types::VectorMetric::L2);
-        field.backend = Some(crate::types::VectorBackend::HnswCpu);
+        field.metric = Some(crate::shared_kernel::types::schema::VectorMetric::L2);
+        field.backend = Some(crate::shared_kernel::types::schema::VectorBackend::HnswCpu);
         engine.create_collection("u", schema).unwrap();
         let put = |id: &str, value: Vec<f32>| {
             engine
@@ -8698,7 +8709,7 @@ mod tests {
         let mut schema = kw_schema();
         let mut text = schema.fields["email"].clone();
         text.field_type = FieldType::Text;
-        text.analyzer = Some(crate::types::Analyzer::WhitespaceLower);
+        text.analyzer = Some(crate::shared_kernel::types::schema::Analyzer::WhitespaceLower);
         schema.fields.insert("body".into(), text);
         engine.create_collection("u", schema).unwrap();
         index_kw(&engine, "u1", "first");

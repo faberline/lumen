@@ -24,7 +24,7 @@ static NEXT_CHECKPOINT_ATTEMPT_ID: AtomicU64 = AtomicU64::new(1);
 struct HnswCacheSealMarker {
     engine: Weak<Engine>,
     store: Weak<crate::segment_rdb::SegmentRdbStore>,
-    stamp: crate::capture_barrier::MutationStamp,
+    stamp: crate::shared_kernel::capture_barrier::MutationStamp,
 }
 
 type HnswCacheSealKey = (usize, usize);
@@ -400,7 +400,10 @@ impl SegmentCheckpointSink {
             })
     }
 
-    fn record_hnsw_cache_seal(&self, stamp: crate::capture_barrier::MutationStamp) -> Result<()> {
+    fn record_hnsw_cache_seal(
+        &self,
+        stamp: crate::shared_kernel::capture_barrier::MutationStamp,
+    ) -> Result<()> {
         let mut markers = HNSW_CACHE_SEALS
             .get_or_init(|| Mutex::new(HashMap::new()))
             .lock()
@@ -917,7 +920,7 @@ impl EngineWatermarkSink {
 impl crate::coordinator::WriteSink for EngineWatermarkSink {
     async fn submit(
         &self,
-        _: crate::log_entry::RaftLogEntry,
+        _: crate::shared_kernel::log_entry::RaftLogEntry,
     ) -> Result<crate::storage::ApplyOutcome> {
         anyhow::bail!("bootstrap checkpoint watermark is not a write sink")
     }
@@ -1052,9 +1055,10 @@ mod tests {
     use crate::aof::AofWriter;
     use crate::api::CheckpointSink;
     use crate::coordinator::WriteSink;
-    use crate::log_entry::RaftLogEntry;
-    use crate::types::{
-        CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        schema::{CreateCollectionRequest, FieldSpec, FieldType},
     };
     use crate::wal::WalRecord;
     use std::collections::BTreeMap;
@@ -1531,7 +1535,7 @@ mod tests {
     impl WriteSink for Watermark {
         async fn submit(
             &self,
-            _: crate::log_entry::RaftLogEntry,
+            _: crate::shared_kernel::log_entry::RaftLogEntry,
         ) -> Result<crate::storage::ApplyOutcome> {
             anyhow::bail!("checkpoint test has no publisher")
         }

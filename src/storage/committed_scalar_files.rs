@@ -8,7 +8,7 @@ use crate::segment::{
     stream::{self, ScalarProjectionScratch},
     SegmentReader,
 };
-use crate::types::FieldType;
+use crate::shared_kernel::types::schema::FieldType;
 use crate::wal::fast_index_scanner::{FastIndexItem, FastIndexScanner, FastIndexValue};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use std::collections::BTreeSet;
@@ -435,8 +435,8 @@ impl Drop for StageDirectory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::log_entry::RaftLogEntry;
-    use crate::types::{FieldValue, IndexItem, IndexRequest};
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
     use crate::wal::WalRecord;
 
     fn command(rows: Vec<(&str, FieldValue)>) -> Vec<u8> {

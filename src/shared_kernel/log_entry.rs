@@ -1,4 +1,3 @@
-// CODEGEN-BEGIN
 //! The write-log entry vocabulary: the committed-mutation enum that flows
 //! through the active write path (broker/embedded WAL → `WriteCoordinator` →
 //! `Engine::apply_raft_entry`) and the apply-step response marker.
@@ -11,8 +10,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{
-    BatchUnindexDocsRequest, CreateCollectionRequest, FieldSpec, IndexRequest, ReplaceDocsRequest,
+use crate::shared_kernel::types::{
+    document::{BatchUnindexDocsRequest, IndexRequest, ReplaceDocsRequest},
+    schema::{CreateCollectionRequest, FieldSpec},
 };
 
 /// One committed mutation against the lumen storage engine.
@@ -77,4 +77,3 @@ pub enum RaftLogEntry {
 /// this is a unit-shaped marker (the `R` of the consensus type config).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RaftLogResponse;
-// CODEGEN-END

@@ -8,7 +8,7 @@
 use super::*;
 use crate::composed_segment::compose_checkpoint_layers;
 use crate::segment::{self, stream, SegmentReader};
-use crate::types::FieldType;
+use crate::shared_kernel::types::schema::FieldType;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static COMPACTION_TEMP_NONCE: AtomicU64 = AtomicU64::new(0);
@@ -39,7 +39,7 @@ pub(super) fn write_compacted_field(
     includes_base: bool,
 ) -> Result<CompactedField> {
     validate_compaction_inputs(collection, field, inputs, includes_base)?;
-    let specs: BTreeMap<String, crate::types::FieldSpec> =
+    let specs: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
         serde_json::from_value(collection.schema.clone()).context("decode compaction schema")?;
     let spec = specs
         .get(field)
@@ -290,7 +290,7 @@ fn input_external_ids(
 }
 
 fn is_vector_field(collection: &CollectionCatalog, field: &str) -> Result<bool> {
-    let specs: BTreeMap<String, crate::types::FieldSpec> =
+    let specs: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
         serde_json::from_value(collection.schema.clone())?;
     Ok(specs
         .get(field)

@@ -30,7 +30,7 @@
 
 use std::borrow::Cow;
 
-use crate::types::Analyzer;
+use crate::shared_kernel::types::schema::Analyzer;
 
 /// Default n-gram window (inclusive on both sides).
 pub const DEFAULT_NGRAM_MIN: usize = index_text::DEFAULT_NGRAM_MIN;

@@ -6,8 +6,10 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 use std::collections::BTreeMap;
 
-use crate::log_entry::RaftLogEntry;
-use crate::types::{FieldValue, IndexItem, IndexRequest, ReplaceDocItem, ReplaceDocsRequest};
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::document::{
+    FieldValue, IndexItem, IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
+};
 use crate::wal::WalRecord;
 
 #[derive(Clone, Copy, Default, Debug)]

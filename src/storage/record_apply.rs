@@ -2,7 +2,7 @@
 //! Requests move into this boundary; no field payload is cloned for routing.
 
 use super::*;
-use crate::log_entry::RaftLogEntry;
+use crate::shared_kernel::log_entry::RaftLogEntry;
 
 impl Engine {
     /// Create-or-merge a collection schema.

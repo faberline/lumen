@@ -9,7 +9,7 @@ use axum::response::{IntoResponse, Json, Response};
 
 use crate::access::application::authorization::AuthErr;
 use crate::access::infrastructure::lumen_verifier::LumenVerifier;
-use crate::types::ApiError;
+use crate::shared_kernel::types::api_error::ApiError;
 
 pub async fn auth_middleware(
     State(verifier): State<Arc<LumenVerifier>>,

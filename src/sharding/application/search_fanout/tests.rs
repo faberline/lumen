@@ -1,7 +1,8 @@
 use crate::sharding::application::search_fanout::{make_cursor, merge_shard_search_responses};
-use crate::types::{
-    FieldValue, QueryNode, SearchHit, SearchRequest, SearchResponse, SortMissing, SortOrder,
-    SortSpec, TermQuery,
+use crate::shared_kernel::types::{
+    document::FieldValue,
+    query::{QueryNode, SortMissing, SortOrder, SortSpec, TermQuery},
+    search::{SearchHit, SearchRequest, SearchResponse},
 };
 
 #[test]

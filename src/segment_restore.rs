@@ -10,9 +10,9 @@ use futures::FutureExt;
 use storage_durable::{CommitError, CommitFailureClass};
 
 use crate::api::RestoreSink;
-use crate::capture_barrier::RestoreInhibition;
 use crate::coordinator::{MutationGate, SharedAof, StorageFullError, WriteSink};
 use crate::segment_rdb::SegmentRdbStore;
+use crate::shared_kernel::capture_barrier::RestoreInhibition;
 use crate::storage::{Engine, SnapshotV1};
 
 #[derive(Debug)]
@@ -389,8 +389,8 @@ mod tests {
     use super::*;
     use crate::aof::AofReader;
     use crate::coordinator::{RestartRequired, WriteCoordinator};
-    use crate::log_entry::RaftLogEntry;
-    use crate::types::CreateCollectionRequest;
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::schema::CreateCollectionRequest;
     use crate::wal::{MemWal, WalLog, WalRecord};
     use std::path::Path;
     use std::sync::Mutex;

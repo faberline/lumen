@@ -10,11 +10,14 @@ use crate::sharding::infrastructure::routed_router::{
     drop_outcome_from_status, merge_drop_outcomes, percent_encode_component, RoutedRouter,
     FORWARDED_HEADER, MAP_VERSION_HEADER,
 };
-use crate::storage::{DropOutcome, Engine};
-use crate::types::{
-    BatchUnindexDocsRequest, CreateCollectionRequest, CreateCollectionResponse, IndexRequest,
-    IndexResponse, ReplaceDocsRequest, ReplaceDocsResponse,
+use crate::shared_kernel::types::{
+    document::{
+        BatchUnindexDocsRequest, IndexRequest, IndexResponse, ReplaceDocsRequest,
+        ReplaceDocsResponse,
+    },
+    schema::{CreateCollectionRequest, CreateCollectionResponse},
 };
+use crate::storage::{DropOutcome, Engine};
 
 #[cfg(test)]
 use crate::sharding::infrastructure::routed_router::cursor_offset;

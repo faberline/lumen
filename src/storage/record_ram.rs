@@ -6,10 +6,13 @@
 use std::collections::BTreeMap;
 use std::mem::size_of;
 
-use crate::log_entry::RaftLogEntry;
-use crate::types::{
-    BatchUnindexDocsRequest, CreateCollectionRequest, FieldSpec, FieldValue, IndexItem,
-    IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::{
+    document::{
+        BatchUnindexDocsRequest, FieldValue, IndexItem, IndexRequest, ReplaceDocItem,
+        ReplaceDocsRequest,
+    },
+    schema::{CreateCollectionRequest, FieldSpec},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -202,7 +205,7 @@ fn map<K, V>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::FieldType;
+    use crate::shared_kernel::types::schema::FieldType;
 
     #[test]
     fn staged_numeric_vector_bound_includes_serde_content_and_output_together() {

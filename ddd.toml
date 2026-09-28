@@ -113,6 +113,11 @@ shared_kernel_crate = "{repo}-shared-kernel"
 [policy.lints.clippy]
 mod_module_files = "deny"
 
+# The vocabulary every context shares: the public API's wire types, the
+# committed-mutation log entry, and the apply/capture barrier.
+[shared_kernel]
+path = "src/shared_kernel"
+
 # Code that may use every context. `app` is the composition root (D1);
 # `compat` keeps the module paths from before the split alive until outside
 # callers move to the new ones (D3).
@@ -317,3 +322,32 @@ paths = [
 ]
 subject = "anyhow"
 reason = "ClusterState::new and RaftGroup::from_config return anyhow::Result, which the bin's --wal raft setup wraps with .context() and propagates. P2: a replication domain error type (thiserror) that the callers convert."
+
+# The shared kernel moved as-is (D2): the wire types carry their OpenAPI schema
+# and report a malformed vector field through anyhow, and the capture barrier
+# times how long it is held.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/shared_kernel/types/api_error.rs",
+  "src/shared_kernel/types/document.rs",
+  "src/shared_kernel/types/query.rs",
+  "src/shared_kernel/types/schema.rs",
+  "src/shared_kernel/types/search.rs",
+  "src/shared_kernel/types/stats.rs",
+]
+subject = "utoipa"
+reason = "E1: #[derive(ToSchema)] on the public HTTP API's request and response types, which clients/openapi.json publishes. The engine uses the same types as its domain vocabulary. P2: OpenAPI DTOs outside the kernel, with mappers; their serde is also the RDB, AOF and WAL CBOR format, so the wire bytes must stay identical."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/shared_kernel/types/schema.rs"]
+subject = "anyhow"
+reason = "FieldSpec::vector_spec returns anyhow::Result, which storage.rs and segment_rdb.rs propagate with ?. P2: a kernel error type (thiserror) that the callers convert."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/shared_kernel/capture_barrier.rs"]
+subject = "std::time::Instant::now"
+reason = "E4: CaptureBarrier times how long each apply record and each capture holds it (HoldTiming); only its own tests read the timing today. P2: a Clock port, as for the index context's clock reads."

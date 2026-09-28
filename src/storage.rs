@@ -65,17 +65,28 @@ use crate::composed_segment::TextPostingAt;
 use crate::metrics::{CommittedApplyTelemetry, Metrics};
 use crate::segment::SortedIdCursor;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
-use crate::tokenize;
-use crate::types::{
-    validate_batch_unindex_docs_request, Analyzer, BatchUnindexDocsRequest, CacheStats,
-    CreateCollectionRequest, CreateCollectionResponse, DuplicateGroup, DuplicatesRequest,
-    DuplicatesResponse, FieldSpec, FieldStats, FieldType, FieldValue, HammingQuery, HasChildQuery,
-    IdsQuery, IndexRequest, IndexResponse, KnnQuery, MatchOp, MatchQuery, PrefixQuery, QueryNode,
-    RangeBound, RangeQuery, ReplaceDocItem, ReplaceDocResult, ReplaceDocsRequest,
-    ReplaceDocsResponse, RrfQuery, SearchHit, SearchRequest, SearchResponse, SortMissing,
-    SortOrder, SortSpec, StatsResponse, StorageStats, TermQuery, TermsQuery, VectorSpec,
-    MAX_BATCH_REPLACE_SIZE,
+use crate::shared_kernel::types::{
+    document::{
+        validate_batch_unindex_docs_request, BatchUnindexDocsRequest, FieldValue, IndexRequest,
+        IndexResponse, ReplaceDocItem, ReplaceDocResult, ReplaceDocsRequest, ReplaceDocsResponse,
+        MAX_BATCH_REPLACE_SIZE,
+    },
+    query::{
+        HammingQuery, HasChildQuery, IdsQuery, KnnQuery, MatchOp, MatchQuery, PrefixQuery,
+        QueryNode, RangeBound, RangeQuery, RrfQuery, SortMissing, SortOrder, SortSpec, TermQuery,
+        TermsQuery,
+    },
+    schema::{
+        Analyzer, CreateCollectionRequest, CreateCollectionResponse, FieldSpec, FieldType,
+        VectorSpec,
+    },
+    search::{
+        DuplicateGroup, DuplicatesRequest, DuplicatesResponse, SearchHit, SearchRequest,
+        SearchResponse,
+    },
+    stats::{CacheStats, FieldStats, StatsResponse, StorageStats},
 };
+use crate::tokenize;
 use crate::vector_index::{open_backend, FlatCpuIndex, HnswCpuIndex, ScalarCodebook, VectorIndex};
 use roaring::RoaringBitmap;
 
@@ -185,7 +196,11 @@ impl RecoveryProfile {
         }
     }
 
-    pub(crate) fn vector_opened(&self, backend: crate::types::VectorBackend, elapsed: Duration) {
+    pub(crate) fn vector_opened(
+        &self,
+        backend: crate::shared_kernel::types::schema::VectorBackend,
+        elapsed: Duration,
+    ) {
         if self.enabled {
             let elapsed_ms = elapsed.as_millis() as u64;
             let mut data = self
@@ -193,11 +208,11 @@ impl RecoveryProfile {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             match backend {
-                crate::types::VectorBackend::FlatCpu => {
+                crate::shared_kernel::types::schema::VectorBackend::FlatCpu => {
                     data.vector_flat_open_count += 1;
                     data.vector_flat_open_ms += elapsed_ms;
                 }
-                crate::types::VectorBackend::HnswCpu => {
+                crate::shared_kernel::types::schema::VectorBackend::HnswCpu => {
                     data.vector_hnsw_open_count += 1;
                     data.vector_hnsw_open_ms += elapsed_ms;
                 }
@@ -4395,7 +4410,7 @@ fn ensure_real_cache_directory(path: &std::path::Path) -> Result<()> {
 
 #[derive(Default)]
 pub struct Engine {
-    pub(crate) capture_barrier: crate::capture_barrier::CaptureBarrier,
+    pub(crate) capture_barrier: crate::shared_kernel::capture_barrier::CaptureBarrier,
     state: RwLock<EngineState>,
     metrics: Metrics,
     draining: AtomicBool,
@@ -4910,7 +4925,9 @@ impl FrozenCheckpoint {
                                     sequence,
                                     &ids,
                                 )?;
-                                if spec.backend == crate::types::VectorBackend::FlatCpu {
+                                if spec.backend
+                                    == crate::shared_kernel::types::schema::VectorBackend::FlatCpu
+                                {
                                     let reader =
                                         std::sync::Arc::new(crate::segment::SegmentReader::open(
                                             &dir.join(format!("{stem}.lseg")),
@@ -5354,7 +5371,7 @@ impl Engine {
     /// or collection.
     pub(crate) fn estimate_record_cost(
         &self,
-        entry: &crate::log_entry::RaftLogEntry,
+        entry: &crate::shared_kernel::log_entry::RaftLogEntry,
     ) -> crate::change_record_cost::RecordEstimate {
         let Ok(state) = self.state.read() else {
             return crate::change_record_cost::RecordEstimate::Retain {
@@ -5370,7 +5387,7 @@ impl Engine {
     /// Allocation-free selection before reserving the exact cost workspace.
     pub(crate) fn may_need_default_ngram_workspace(
         &self,
-        entry: &crate::log_entry::RaftLogEntry,
+        entry: &crate::shared_kernel::log_entry::RaftLogEntry,
     ) -> bool {
         let Ok(state) = self.state.read() else {
             return false;
@@ -5384,7 +5401,7 @@ impl Engine {
     /// The admission owner reserves the fixed Ngram table before this call.
     pub(crate) fn estimate_record_exact_default_ngram_cost(
         &self,
-        entry: &crate::log_entry::RaftLogEntry,
+        entry: &crate::shared_kernel::log_entry::RaftLogEntry,
     ) -> crate::change_record_cost::RecordEstimate {
         let Ok(state) = self.state.read() else {
             return crate::change_record_cost::RecordEstimate::Retain {
@@ -5408,7 +5425,7 @@ impl Engine {
         for (collection_name, coll) in &mut state.collections {
             for (field_name, field) in &mut coll.fields {
                 if let FieldIndex::Vector { spec, idx, bytes } = field {
-                    if spec.backend == crate::types::VectorBackend::HnswCpu {
+                    if spec.backend == crate::shared_kernel::types::schema::VectorBackend::HnswCpu {
                         let field_started = Instant::now();
                         let snapshot_started = Instant::now();
                         let (vectors, codebook) = match idx.dump_for_snapshot() {
@@ -5514,7 +5531,7 @@ impl Engine {
         let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
         Ok(state.collections.values().any(|collection| collection.fields.values().any(|field| {
             matches!(field, FieldIndex::Vector { spec, idx, .. }
-                if spec.backend == crate::types::VectorBackend::HnswCpu && idx.len() > 0)
+                if spec.backend == crate::shared_kernel::types::schema::VectorBackend::HnswCpu && idx.len() > 0)
         })))
     }
 
@@ -5525,7 +5542,8 @@ impl Engine {
         for (collection_name, collection) in &state.collections {
             for (field_name, field) in &collection.fields {
                 if matches!(field, FieldIndex::Vector { spec, idx, .. }
-                    if spec.backend == crate::types::VectorBackend::HnswCpu && idx.len() > 0) {
+                    if spec.backend == crate::shared_kernel::types::schema::VectorBackend::HnswCpu && idx.len() > 0)
+                {
                     live_paths.insert(graph_cache_field_path(root, collection_name, field_name));
                 }
             }
@@ -5548,7 +5566,9 @@ impl Engine {
         for (collection_name, collection) in &state.collections {
             for (field_name, field) in &collection.fields {
                 if let FieldIndex::Vector { spec, idx, .. } = field {
-                    if spec.backend != crate::types::VectorBackend::HnswCpu || idx.len() == 0 {
+                    if spec.backend != crate::shared_kernel::types::schema::VectorBackend::HnswCpu
+                        || idx.len() == 0
+                    {
                         continue;
                     }
                     ensure_real_cache_directory(root)?;
@@ -6691,7 +6711,7 @@ impl Engine {
                     if matches!(
                         &*fi,
                         FieldIndex::Vector { spec, .. }
-                            if matches!(spec.backend, crate::types::VectorBackend::HnswCpu)
+                            if matches!(spec.backend, crate::shared_kernel::types::schema::VectorBackend::HnswCpu)
                     ) {
                         let FieldIndex::Vector { idx, .. } = fi else {
                             unreachable!("matched HNSW Vector field")
@@ -6742,7 +6762,7 @@ impl Engine {
                 if matches!(
                     &*fi,
                     FieldIndex::Vector { spec, .. }
-                        if matches!(spec.backend, crate::types::VectorBackend::HnswCpu)
+                        if matches!(spec.backend, crate::shared_kernel::types::schema::VectorBackend::HnswCpu)
                 ) {
                     let FieldIndex::Vector { idx, .. } = fi else {
                         unreachable!("matched HNSW Vector field")
@@ -8259,12 +8279,12 @@ impl Engine {
     /// engine's RwLock is taken per call, identical to a direct API call.
     fn dispatch_raft_entry(
         &self,
-        entry: crate::log_entry::RaftLogEntry,
+        entry: crate::shared_kernel::log_entry::RaftLogEntry,
         charge: Option<&crate::change_budget::RetainedCharge>,
         prepared_text: Option<&text_preparation::PreparedTextRows>,
     ) -> Result<ApplyOutcome> {
         let _apply = self.capture_barrier.apply();
-        use crate::log_entry::RaftLogEntry;
+        use crate::shared_kernel::log_entry::RaftLogEntry;
         Ok(match entry {
             RaftLogEntry::CreateCollection { collection_id, req } => {
                 ApplyOutcome::Created(self.create_collection_inner(&collection_id, req)?)
@@ -8516,7 +8536,10 @@ fn apply_value(
                     v.len()
                 );
             }
-            if matches!(spec.backend, crate::types::VectorBackend::HnswCpu) {
+            if matches!(
+                spec.backend,
+                crate::shared_kernel::types::schema::VectorBackend::HnswCpu
+            ) {
                 let hnsw_add_started = Instant::now();
                 let add = idx.add(eid, v);
                 let hnsw_write_lock_timing = idx.take_hnsw_write_lock_timing();
@@ -14643,7 +14666,7 @@ impl FieldIndex {
                 // restore exact; HNSW restores its graph (the graph is
                 // rebuildable, the raw vectors persist).
                 let idx: Box<dyn VectorIndex> = match spec.backend {
-                    crate::types::VectorBackend::FlatCpu => {
+                    crate::shared_kernel::types::schema::VectorBackend::FlatCpu => {
                         Box::new(FlatCpuIndex::restore(spec, vectors, codebook)?)
                     }
                     _ => Box::new(HnswCpuIndex::restore(spec, vectors, codebook)?),
@@ -15178,7 +15201,7 @@ impl FieldIndex {
                 // and honouring it is what keeps a restarted node answering
                 // kNN the same way its unrestarted peers do.
                 let (idx, bytes): (Box<dyn VectorIndex>, u64) = match vs.backend {
-                    crate::types::VectorBackend::HnswCpu => {
+                    crate::shared_kernel::types::schema::VectorBackend::HnswCpu => {
                         // The graph needs its vectors in RAM, so the field's
                         // footprint comes back too. Account it exactly as the
                         // live index path does (`dim * 4 + eid.len()` per row),
@@ -15201,7 +15224,7 @@ impl FieldIndex {
                         };
                         (idx, bytes)
                     }
-                    crate::types::VectorBackend::FlatCpu => {
+                    crate::shared_kernel::types::schema::VectorBackend::FlatCpu => {
                         // The rows stay on the mmap and are read demand-paged,
                         // so nothing is resident to report.
                         let idx = FlatCpuIndex::open_from_segment(vs, reader, row_eids)?;
@@ -17046,13 +17069,13 @@ mod segment_predicate_diff_tests {
     /// `age` is `Some` (so absent-value docs are part of the corpus).
     fn index_doc(e: &Engine, eid: &str, age: Option<f64>, kw: &str, tok: bool) {
         let mut items = vec![
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "kw".into(),
                 value: FieldValue::String(kw.into()),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "body".into(),
                 value: FieldValue::String(if tok {
@@ -17064,7 +17087,7 @@ mod segment_predicate_diff_tests {
             },
         ];
         if let Some(a) = age {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "age".into(),
                 value: FieldValue::Number(a),
@@ -17303,7 +17326,7 @@ mod segment_keyword_diff_tests {
     /// Index one doc: always writes `body`; writes `kw` only when `kw` is
     /// `Some` (so absent-keyword docs are part of the corpus).
     fn index_doc(e: &Engine, eid: &str, kw: Option<&str>, tok: bool) {
-        let mut items = vec![crate::types::IndexItem {
+        let mut items = vec![crate::shared_kernel::types::document::IndexItem {
             external_id: eid.into(),
             field: "body".into(),
             value: FieldValue::String(if tok {
@@ -17314,7 +17337,7 @@ mod segment_keyword_diff_tests {
             version: None,
         }];
         if let Some(k) = kw {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "kw".into(),
                 value: FieldValue::String(k.into()),
@@ -17545,7 +17568,7 @@ mod segment_keyword_inverted_diff_tests {
     fn index_kw(e: &Engine, eid: &str, kw: Option<&str>, cat: Option<&str>) {
         let mut items = Vec::new();
         if let Some(k) = kw {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "kw".into(),
                 value: FieldValue::String(k.into()),
@@ -17553,7 +17576,7 @@ mod segment_keyword_inverted_diff_tests {
             });
         }
         if let Some(c) = cat {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "cat".into(),
                 value: FieldValue::String(c.into()),
@@ -17563,7 +17586,7 @@ mod segment_keyword_inverted_diff_tests {
         // A doc with neither field would have no postings anywhere; ensure at
         // least the kw field so the doc is interned.
         if items.is_empty() {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "kw".into(),
                 value: FieldValue::String("zzz_filler".into()),
@@ -17820,7 +17843,7 @@ mod segment_keyword_inverted_diff_tests {
     fn dup_map(e: &Engine, field: &str) -> BTreeMap<String, BTreeSet<String>> {
         e.duplicates(
             "c",
-            crate::types::DuplicatesRequest {
+            crate::shared_kernel::types::search::DuplicatesRequest {
                 field: field.into(),
                 min_group_size: 2,
                 limit: 100_000,
@@ -18109,7 +18132,7 @@ mod segment_number_range_diff_tests {
             offset: 0,
             cursor: None,
             routing_key: None,
-            sort: Some(vec![crate::types::SortSpec {
+            sort: Some(vec![crate::shared_kernel::types::query::SortSpec {
                 field: field.into(),
                 order,
                 missing: SortMissing::Exclude,
@@ -18150,7 +18173,7 @@ mod segment_number_range_diff_tests {
     fn index_num(e: &Engine, eid: &str, price: Option<f64>, cat: Option<&str>) {
         let mut items = Vec::new();
         if let Some(p) = price {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "price".into(),
                 value: FieldValue::Number(p),
@@ -18158,7 +18181,7 @@ mod segment_number_range_diff_tests {
             });
         }
         if let Some(c) = cat {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "cat".into(),
                 value: FieldValue::String(c.into()),
@@ -18167,7 +18190,7 @@ mod segment_number_range_diff_tests {
         }
         // Ensure the doc is interned even when both fields are absent.
         if items.is_empty() {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "cat".into(),
                 value: FieldValue::String("zzz_filler".into()),
@@ -18298,7 +18321,7 @@ mod segment_number_range_diff_tests {
     fn dup_map(e: &Engine, field: &str) -> BTreeMap<String, BTreeSet<String>> {
         e.duplicates(
             "c",
-            crate::types::DuplicatesRequest {
+            crate::shared_kernel::types::search::DuplicatesRequest {
                 field: field.into(),
                 min_group_size: 2,
                 limit: 100_000,
@@ -18989,7 +19012,7 @@ mod segment_set_diff_tests {
     /// `Some` (so absent-set docs are part of the corpus). A present-but-empty
     /// set is `Some(&[])`.
     fn index_doc(e: &Engine, eid: &str, tags: Option<&[&str]>, tok: bool) {
-        let mut items = vec![crate::types::IndexItem {
+        let mut items = vec![crate::shared_kernel::types::document::IndexItem {
             external_id: eid.into(),
             field: "body".into(),
             value: FieldValue::String(if tok {
@@ -19000,7 +19023,7 @@ mod segment_set_diff_tests {
             version: None,
         }];
         if let Some(ts) = tags {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "tags".into(),
                 value: FieldValue::StringList(ts.iter().map(|s| (*s).to_string()).collect()),
@@ -19247,7 +19270,7 @@ mod segment_set_inverted_diff_tests {
     fn index_set(e: &Engine, eid: &str, tags: Option<&[&str]>, cat: Option<&[&str]>) {
         let mut items = Vec::new();
         if let Some(ts) = tags {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "tags".into(),
                 value: FieldValue::StringList(ts.iter().map(|s| (*s).to_string()).collect()),
@@ -19255,7 +19278,7 @@ mod segment_set_inverted_diff_tests {
             });
         }
         if let Some(cs) = cat {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "cat".into(),
                 value: FieldValue::StringList(cs.iter().map(|s| (*s).to_string()).collect()),
@@ -19263,7 +19286,7 @@ mod segment_set_inverted_diff_tests {
             });
         }
         if items.is_empty() {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "tags".into(),
                 value: FieldValue::StringList(vec!["zzz_filler".into()]),
@@ -19498,7 +19521,7 @@ mod segment_set_inverted_diff_tests {
     fn dup_map(e: &Engine, field: &str) -> BTreeMap<String, BTreeSet<String>> {
         e.duplicates(
             "c",
-            crate::types::DuplicatesRequest {
+            crate::shared_kernel::types::search::DuplicatesRequest {
                 field: field.into(),
                 min_group_size: 2,
                 limit: 100_000,
@@ -19813,14 +19836,14 @@ mod segment_text_diff_tests {
     /// body is a tf-realistic bag: each chosen token is repeated `tf` times so
     /// the stored term-frequencies vary across the corpus.
     fn index_doc(e: &Engine, eid: &str, body: &str, price: Option<f64>) {
-        let mut items = vec![crate::types::IndexItem {
+        let mut items = vec![crate::shared_kernel::types::document::IndexItem {
             external_id: eid.into(),
             field: "body".into(),
             value: FieldValue::String(body.into()),
             version: None,
         }];
         if let Some(p) = price {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "price".into(),
                 value: FieldValue::Number(p),
@@ -20685,7 +20708,7 @@ mod segment_text_diff_tests {
             e.index(
                 "c",
                 IndexRequest {
-                    items: vec![crate::types::IndexItem {
+                    items: vec![crate::shared_kernel::types::document::IndexItem {
                         external_id: eid.into(),
                         field: "body".into(),
                         value: FieldValue::String(body.into()),
@@ -20700,7 +20723,7 @@ mod segment_text_diff_tests {
             e.index(
                 "c",
                 IndexRequest {
-                    items: vec![crate::types::IndexItem {
+                    items: vec![crate::shared_kernel::types::document::IndexItem {
                         external_id: eid.into(),
                         field: "price".into(),
                         value: FieldValue::Number(price),
@@ -20869,7 +20892,7 @@ mod segment_text_diff_tests {
             e.index(
                 "c",
                 IndexRequest {
-                    items: vec![crate::types::IndexItem {
+                    items: vec![crate::shared_kernel::types::document::IndexItem {
                         external_id: eid.into(),
                         field: "body".into(),
                         value: FieldValue::String(body.into()),
@@ -20884,7 +20907,7 @@ mod segment_text_diff_tests {
             e.index(
                 "c",
                 IndexRequest {
-                    items: vec![crate::types::IndexItem {
+                    items: vec![crate::shared_kernel::types::document::IndexItem {
                         external_id: eid.into(),
                         field: "price".into(),
                         value: FieldValue::Number(price),
@@ -21719,7 +21742,7 @@ mod segment_hash_diff_tests {
         e.index(
             "c",
             IndexRequest {
-                items: vec![crate::types::IndexItem {
+                items: vec![crate::shared_kernel::types::document::IndexItem {
                     external_id: eid.into(),
                     field: "sig".into(),
                     value: FieldValue::String(format!("{hash:016x}")),
@@ -21883,13 +21906,13 @@ mod exact_hamming_filter_tests {
             "c",
             IndexRequest {
                 items: vec![
-                    crate::types::IndexItem {
+                    crate::shared_kernel::types::document::IndexItem {
                         external_id: eid.into(),
                         field: "sig".into(),
                         value: FieldValue::String(format!("{hash:016x}")),
                         version: None,
                     },
-                    crate::types::IndexItem {
+                    crate::shared_kernel::types::document::IndexItem {
                         external_id: eid.into(),
                         field: "body".into(),
                         value: FieldValue::String(text.into()),
@@ -22241,7 +22264,7 @@ mod exact_hamming_filter_tests {
 #[cfg(test)]
 mod segment_vector_diff_tests {
     use super::*;
-    use crate::types::{VectorBackend, VectorMetric};
+    use crate::shared_kernel::types::schema::{VectorBackend, VectorMetric};
     use proptest::prelude::*;
     use std::sync::Arc;
 
@@ -22270,7 +22293,7 @@ mod segment_vector_diff_tests {
         e.index(
             "c",
             IndexRequest {
-                items: vec![crate::types::IndexItem {
+                items: vec![crate::shared_kernel::types::document::IndexItem {
                     external_id: eid.into(),
                     field: "emb".into(),
                     value: FieldValue::Vector(v.to_vec()),
@@ -22284,7 +22307,7 @@ mod segment_vector_diff_tests {
 
     fn knn(query: Vec<f32>, k: u32) -> SearchRequest {
         SearchRequest {
-            query: QueryNode::Knn(crate::types::KnnQuery {
+            query: QueryNode::Knn(crate::shared_kernel::types::query::KnnQuery {
                 field: "emb".into(),
                 vector: query,
                 k,
@@ -22400,11 +22423,11 @@ mod tests {
         profile.collection_opened(Duration::from_millis(3));
         profile.collection_opened(Duration::from_millis(9));
         profile.vector_opened(
-            crate::types::VectorBackend::FlatCpu,
+            crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
             Duration::from_millis(2),
         );
         profile.vector_opened(
-            crate::types::VectorBackend::HnswCpu,
+            crate::shared_kernel::types::schema::VectorBackend::HnswCpu,
             Duration::from_millis(4),
         );
         profile.coverage_rebuilt(Duration::from_millis(5));
@@ -22465,7 +22488,7 @@ mod tests {
         );
     }
 
-    use crate::types::{DuplicatedQuery, ExistsQuery};
+    use crate::shared_kernel::types::query::{DuplicatedQuery, ExistsQuery};
 
     fn build_users_schema() -> CreateCollectionRequest {
         let mut fields = BTreeMap::new();
@@ -22520,8 +22543,12 @@ mod tests {
         CreateCollectionRequest { fields }
     }
 
-    fn item(eid: &str, field: &str, value: FieldValue) -> crate::types::IndexItem {
-        crate::types::IndexItem {
+    fn item(
+        eid: &str,
+        field: &str,
+        value: FieldValue,
+    ) -> crate::shared_kernel::types::document::IndexItem {
+        crate::shared_kernel::types::document::IndexItem {
             external_id: eid.into(),
             field: field.into(),
             value,
@@ -22530,7 +22557,7 @@ mod tests {
     }
 
     fn record_cost_schema(
-        vector_backend: Option<crate::types::VectorBackend>,
+        vector_backend: Option<crate::shared_kernel::types::schema::VectorBackend>,
     ) -> CreateCollectionRequest {
         let mut fields = BTreeMap::new();
         fields.insert(
@@ -22565,7 +22592,7 @@ mod tests {
                     analyzer: None,
                     multi: None,
                     dim: Some(3),
-                    metric: Some(crate::types::VectorMetric::Cosine),
+                    metric: Some(crate::shared_kernel::types::schema::VectorMetric::Cosine),
                     backend: Some(backend),
                     quantize: None,
                 },
@@ -22580,7 +22607,7 @@ mod tests {
 
     fn ready_record_cost(
         engine: &Engine,
-        entry: &crate::log_entry::RaftLogEntry,
+        entry: &crate::shared_kernel::log_entry::RaftLogEntry,
     ) -> crate::change_record_cost::RecordCost {
         match engine.estimate_record_cost(entry) {
             crate::change_record_cost::RecordEstimate::Ready(cost) => cost,
@@ -22594,7 +22621,7 @@ mod tests {
         engine
             .create_collection("c", record_cost_schema(None))
             .unwrap();
-        let entry = crate::log_entry::RaftLogEntry::Index {
+        let entry = crate::shared_kernel::log_entry::RaftLogEntry::Index {
             collection_id: "c".into(),
             req: IndexRequest {
                 items: vec![item(
@@ -22646,10 +22673,10 @@ mod tests {
             )
             .unwrap();
 
-        let replace = crate::log_entry::RaftLogEntry::ReplaceDocs {
+        let replace = crate::shared_kernel::log_entry::RaftLogEntry::ReplaceDocs {
             collection_id: "c".into(),
             req: ReplaceDocsRequest {
-                docs: vec![crate::types::ReplaceDocItem {
+                docs: vec![crate::shared_kernel::types::document::ReplaceDocItem {
                     external_id: "doc".into(),
                     version: None,
                     fields: BTreeMap::from([(
@@ -22660,18 +22687,18 @@ mod tests {
             },
         };
         let replace_cost = ready_record_cost(&engine, &replace);
-        let unindex = crate::log_entry::RaftLogEntry::UnindexDocs {
+        let unindex = crate::shared_kernel::log_entry::RaftLogEntry::UnindexDocs {
             collection_id: "c".into(),
-            req: crate::types::BatchUnindexDocsRequest {
+            req: crate::shared_kernel::types::document::BatchUnindexDocsRequest {
                 external_ids: vec!["doc".into()],
             },
         };
         let covered_unindex = ready_record_cost(&engine, &unindex);
         let missing_unindex = ready_record_cost(
             &engine,
-            &crate::log_entry::RaftLogEntry::UnindexDocs {
+            &crate::shared_kernel::log_entry::RaftLogEntry::UnindexDocs {
                 collection_id: "c".into(),
-                req: crate::types::BatchUnindexDocsRequest {
+                req: crate::shared_kernel::types::document::BatchUnindexDocsRequest {
                     external_ids: vec!["missing".into()],
                 },
             },
@@ -22693,25 +22720,30 @@ mod tests {
         let hnsw = Engine::new();
         flat.create_collection(
             "c",
-            record_cost_schema(Some(crate::types::VectorBackend::FlatCpu)),
+            record_cost_schema(Some(
+                crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
+            )),
         )
         .unwrap();
         hnsw.create_collection(
             "c",
-            record_cost_schema(Some(crate::types::VectorBackend::HnswCpu)),
+            record_cost_schema(Some(
+                crate::shared_kernel::types::schema::VectorBackend::HnswCpu,
+            )),
         )
         .unwrap();
-        let vector_entry = |collection_id: &str| crate::log_entry::RaftLogEntry::Index {
-            collection_id: collection_id.into(),
-            req: IndexRequest {
-                items: vec![item(
-                    "doc",
-                    "vector",
-                    FieldValue::Vector(vec![1.0, 2.0, 3.0]),
-                )],
-                request_id: None,
-            },
-        };
+        let vector_entry =
+            |collection_id: &str| crate::shared_kernel::log_entry::RaftLogEntry::Index {
+                collection_id: collection_id.into(),
+                req: IndexRequest {
+                    items: vec![item(
+                        "doc",
+                        "vector",
+                        FieldValue::Vector(vec![1.0, 2.0, 3.0]),
+                    )],
+                    request_id: None,
+                },
+            };
         assert_eq!(
             ready_record_cost(&flat, &vector_entry("c")),
             ready_record_cost(&hnsw, &vector_entry("c")),
@@ -22728,7 +22760,7 @@ mod tests {
             request_id: Some(request_id.into()),
         };
         flat.index("c", valid_request.clone()).unwrap();
-        let duplicate = crate::log_entry::RaftLogEntry::Index {
+        let duplicate = crate::shared_kernel::log_entry::RaftLogEntry::Index {
             collection_id: "c".into(),
             req: valid_request,
         };
@@ -22819,7 +22851,7 @@ mod tests {
                 .search(
                     "c",
                     SearchRequest {
-                        query: QueryNode::Term(crate::types::TermQuery {
+                        query: QueryNode::Term(crate::shared_kernel::types::query::TermQuery {
                             field: "email".into(),
                             value: FieldValue::String("captured@example.test".into()),
                         }),
@@ -22839,10 +22871,10 @@ mod tests {
                 .search(
                     "c",
                     SearchRequest {
-                        query: QueryNode::Match(crate::types::MatchQuery {
+                        query: QueryNode::Match(crate::shared_kernel::types::query::MatchQuery {
                             field: "bio".into(),
                             text: "captured".into(),
-                            op: crate::types::MatchOp::And,
+                            op: crate::shared_kernel::types::query::MatchOp::And,
                         }),
                         limit: 10,
                         offset: 0,
@@ -22928,8 +22960,8 @@ mod tests {
     #[test]
     fn first_checkpoint_freeze_does_not_clone_live_field_rows() {
         for backend in [
-            crate::types::VectorBackend::FlatCpu,
-            crate::types::VectorBackend::HnswCpu,
+            crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
+            crate::shared_kernel::types::schema::VectorBackend::HnswCpu,
         ] {
             let engine = Engine::new();
             let mut schema = build_users_schema();
@@ -22994,8 +23026,8 @@ mod tests {
     #[test]
     fn checkpoint_freeze_exchanges_journal_for_all_field_backends() {
         for backend in [
-            crate::types::VectorBackend::FlatCpu,
-            crate::types::VectorBackend::HnswCpu,
+            crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
+            crate::shared_kernel::types::schema::VectorBackend::HnswCpu,
         ] {
             let engine = std::sync::Arc::new(Engine::new());
             let mut schema = build_users_schema();
@@ -23209,7 +23241,7 @@ mod tests {
             .search(
                 "users",
                 SearchRequest {
-                    query: QueryNode::Match(crate::types::MatchQuery {
+                    query: QueryNode::Match(crate::shared_kernel::types::query::MatchQuery {
                         field: "bio".into(),
                         text: "rust".into(),
                         op: MatchOp::And,
@@ -23218,7 +23250,7 @@ mod tests {
                     offset: 0,
                     cursor: None,
                     routing_key: None,
-                    sort: Some(vec![crate::types::SortSpec {
+                    sort: Some(vec![crate::shared_kernel::types::query::SortSpec {
                         field: "bio".into(),
                         order: SortOrder::Asc,
                         missing: SortMissing::Exclude,
@@ -23267,7 +23299,7 @@ mod tests {
             (SortOrder::Desc, vec!["u00", "u02", "u04", "u01", "u03"]),
         ] {
             let base = SearchRequest {
-                query: QueryNode::Range(crate::types::RangeQuery {
+                query: QueryNode::Range(crate::shared_kernel::types::query::RangeQuery {
                     field: "age".into(),
                     gt: None,
                     gte: None,
@@ -23278,7 +23310,7 @@ mod tests {
                 offset: 0,
                 cursor: None,
                 routing_key: None,
-                sort: Some(vec![crate::types::SortSpec {
+                sort: Some(vec![crate::shared_kernel::types::query::SortSpec {
                     field: "email".into(),
                     order,
                     missing: SortMissing::Exclude,
@@ -23323,7 +23355,7 @@ mod tests {
         )
         .unwrap();
         let base = SearchRequest {
-            query: QueryNode::Range(crate::types::RangeQuery {
+            query: QueryNode::Range(crate::shared_kernel::types::query::RangeQuery {
                 field: "age".into(),
                 gt: None,
                 gte: None,
@@ -23335,12 +23367,12 @@ mod tests {
             cursor: None,
             routing_key: None,
             sort: Some(vec![
-                crate::types::SortSpec {
+                crate::shared_kernel::types::query::SortSpec {
                     field: "email".into(),
                     order: SortOrder::Asc,
                     missing: SortMissing::Exclude,
                 },
-                crate::types::SortSpec {
+                crate::shared_kernel::types::query::SortSpec {
                     field: "age".into(),
                     order: SortOrder::Desc,
                     missing: SortMissing::Exclude,
@@ -23404,7 +23436,7 @@ mod tests {
         .unwrap();
 
         let base = SearchRequest {
-            query: QueryNode::Range(crate::types::RangeQuery {
+            query: QueryNode::Range(crate::shared_kernel::types::query::RangeQuery {
                 field: "age".into(),
                 gt: None,
                 gte: None,
@@ -23415,7 +23447,7 @@ mod tests {
             offset: 0,
             cursor: None,
             routing_key: None,
-            sort: Some(vec![crate::types::SortSpec {
+            sort: Some(vec![crate::shared_kernel::types::query::SortSpec {
                 field: "email".into(),
                 order: SortOrder::Asc,
                 missing: SortMissing::Exclude,
@@ -23455,7 +23487,7 @@ mod tests {
 
         for order in [SortOrder::Asc, SortOrder::Desc] {
             let base = SearchRequest {
-                query: QueryNode::Range(crate::types::RangeQuery {
+                query: QueryNode::Range(crate::shared_kernel::types::query::RangeQuery {
                     field: "age".into(),
                     gt: None,
                     gte: None,
@@ -23466,7 +23498,7 @@ mod tests {
                 offset: 0,
                 cursor: None,
                 routing_key: None,
-                sort: Some(vec![crate::types::SortSpec {
+                sort: Some(vec![crate::shared_kernel::types::query::SortSpec {
                     field: "age".into(),
                     order,
                     missing: SortMissing::Exclude,
@@ -23519,7 +23551,7 @@ mod tests {
 
         // Filtered (query predicate) + sorted + paged.
         let base = SearchRequest {
-            query: QueryNode::Term(crate::types::TermQuery {
+            query: QueryNode::Term(crate::shared_kernel::types::query::TermQuery {
                 field: "email".into(),
                 value: FieldValue::String("even@x.com".into()),
             }),
@@ -23527,7 +23559,7 @@ mod tests {
             offset: 0,
             cursor: None,
             routing_key: None,
-            sort: Some(vec![crate::types::SortSpec {
+            sort: Some(vec![crate::shared_kernel::types::query::SortSpec {
                 field: "age".into(),
                 order: SortOrder::Desc,
                 missing: SortMissing::Exclude,
@@ -23578,7 +23610,7 @@ mod tests {
         .unwrap();
 
         let base = SearchRequest {
-            query: QueryNode::Match(crate::types::MatchQuery {
+            query: QueryNode::Match(crate::shared_kernel::types::query::MatchQuery {
                 field: "bio".into(),
                 text: "rust".into(),
                 op: MatchOp::And,
@@ -23627,7 +23659,7 @@ mod tests {
         )
         .unwrap();
         let req = SearchRequest {
-            query: QueryNode::Range(crate::types::RangeQuery {
+            query: QueryNode::Range(crate::shared_kernel::types::query::RangeQuery {
                 field: "age".into(),
                 gt: None,
                 gte: Some(RangeBound::Number(0.0)),
@@ -23694,7 +23726,7 @@ mod tests {
 
         for order in [SortOrder::Asc, SortOrder::Desc] {
             let base = SearchRequest {
-                query: QueryNode::Range(crate::types::RangeQuery {
+                query: QueryNode::Range(crate::shared_kernel::types::query::RangeQuery {
                     field: "age".into(),
                     gt: None,
                     gte: None,
@@ -23705,7 +23737,7 @@ mod tests {
                 offset: 0,
                 cursor: None,
                 routing_key: None,
-                sort: Some(vec![crate::types::SortSpec {
+                sort: Some(vec![crate::shared_kernel::types::query::SortSpec {
                     field: "age".into(),
                     order,
                     missing: SortMissing::Exclude,
@@ -23751,7 +23783,7 @@ mod tests {
             .unwrap();
         }
         let base = SearchRequest {
-            query: QueryNode::Range(crate::types::RangeQuery {
+            query: QueryNode::Range(crate::shared_kernel::types::query::RangeQuery {
                 field: "age".into(),
                 gt: None,
                 gte: None,
@@ -23762,7 +23794,7 @@ mod tests {
             offset: 0,
             cursor: None,
             routing_key: None,
-            sort: Some(vec![crate::types::SortSpec {
+            sort: Some(vec![crate::shared_kernel::types::query::SortSpec {
                 field: "age".into(),
                 order: SortOrder::Asc,
                 missing: SortMissing::Exclude,
@@ -24968,7 +25000,7 @@ mod tests {
             "users",
             IndexRequest {
                 items: vec![
-                    crate::types::IndexItem {
+                    crate::shared_kernel::types::document::IndexItem {
                         external_id: "u1".into(),
                         field: "email".into(),
                         value: FieldValue::String("u1@example.com".into()),
@@ -26685,7 +26717,7 @@ mod tests {
 #[cfg(test)]
 mod triple_path_diff_tests {
     use super::*;
-    use crate::types::{VectorBackend, VectorMetric};
+    use crate::shared_kernel::types::schema::{VectorBackend, VectorMetric};
     use proptest::prelude::*;
     use std::sync::Arc;
 
@@ -26797,19 +26829,19 @@ mod triple_path_diff_tests {
         emb: &[f32],
     ) {
         let mut items = vec![
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "kw".into(),
                 value: FieldValue::String(kw.into()),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "tags".into(),
                 value: FieldValue::StringList(tags.iter().map(|s| s.to_string()).collect()),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "body".into(),
                 value: FieldValue::String(if tok {
@@ -26819,13 +26851,13 @@ mod triple_path_diff_tests {
                 }),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "sig".into(),
                 value: FieldValue::String(format!("{sig:016x}")),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "emb".into(),
                 value: FieldValue::Vector(emb.to_vec()),
@@ -26833,7 +26865,7 @@ mod triple_path_diff_tests {
             },
         ];
         if let Some(n) = num {
-            items.push(crate::types::IndexItem {
+            items.push(crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "num".into(),
                 value: FieldValue::Number(n),
@@ -26971,10 +27003,10 @@ mod triple_path_diff_tests {
             let q_bm25 = || QueryNode::Match(MatchQuery {
                 field: "body".into(), text: "tok".into(), op: MatchOp::And,
             });
-            let q_knn = || QueryNode::Knn(crate::types::KnnQuery {
+            let q_knn = || QueryNode::Knn(crate::shared_kernel::types::query::KnnQuery {
                 field: "emb".into(), vector: qraw.clone(), k: 8,
             });
-            let q_ham = || QueryNode::Hamming(crate::types::HammingQuery {
+            let q_ham = || QueryNode::Hamming(crate::shared_kernel::types::query::HammingQuery {
                 field: "sig".into(), hash: format!("{qsig:016x}"), max_distance: 6,
             });
 
@@ -27063,9 +27095,9 @@ mod triple_path_diff_tests {
 #[cfg(test)]
 mod checkpoint_engine_tests {
     use super::*;
-    use crate::types::{
-        KnnQuery, MatchOp, MatchQuery, RangeQuery, TermQuery, TermsQuery, VectorBackend,
-        VectorMetric,
+    use crate::shared_kernel::types::{
+        query::{KnnQuery, MatchOp, MatchQuery, RangeQuery, TermQuery, TermsQuery},
+        schema::{VectorBackend, VectorMetric},
     };
     use std::sync::Arc;
 
@@ -27123,25 +27155,25 @@ mod checkpoint_engine_tests {
         emb: &[f32],
     ) {
         let items = vec![
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "num".into(),
                 value: FieldValue::Number(n),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "kw".into(),
                 value: FieldValue::String(kw.into()),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "tags".into(),
                 value: FieldValue::StringList(vec![tag.into()]),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "body".into(),
                 value: FieldValue::String(if tok {
@@ -27151,13 +27183,13 @@ mod checkpoint_engine_tests {
                 }),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "sig".into(),
                 value: FieldValue::String(format!("{sig:016x}")),
                 version: None,
             },
-            crate::types::IndexItem {
+            crate::shared_kernel::types::document::IndexItem {
                 external_id: eid.into(),
                 field: "emb".into(),
                 value: FieldValue::Vector(emb.to_vec()),
@@ -27242,7 +27274,7 @@ mod checkpoint_engine_tests {
                 text: "tok".into(),
                 op: MatchOp::And,
             }),
-            QueryNode::Hamming(crate::types::HammingQuery {
+            QueryNode::Hamming(crate::shared_kernel::types::query::HammingQuery {
                 field: "sig".into(),
                 hash: format!("{:016x}", 0u64),
                 max_distance: 8,
@@ -27500,7 +27532,9 @@ mod checkpoint_engine_tests {
             set_of(&run(
                 &reopened,
                 "alpha",
-                QueryNode::Exists(crate::types::ExistsQuery { field: "kw".into() }),
+                QueryNode::Exists(crate::shared_kernel::types::query::ExistsQuery {
+                    field: "kw".into()
+                }),
                 100,
             )),
             BTreeSet::from(["d0".to_string(), "d2".to_string(), "d3".to_string()]),
@@ -27697,7 +27731,7 @@ mod checkpoint_engine_tests {
 #[cfg(test)]
 mod offset_sort_guard_tests {
     use super::*;
-    use crate::types::IndexItem;
+    use crate::shared_kernel::types::document::IndexItem;
 
     fn fieldspec(t: FieldType) -> FieldSpec {
         FieldSpec {
@@ -27911,7 +27945,7 @@ mod offset_sort_guard_tests {
 #[cfg(test)]
 mod external_version_lww_tests {
     use super::*;
-    use crate::types::IndexItem;
+    use crate::shared_kernel::types::document::IndexItem;
 
     fn schema() -> CreateCollectionRequest {
         let mut fields = BTreeMap::new();
@@ -28022,7 +28056,10 @@ mod external_version_lww_tests {
 #[cfg(test)]
 mod sort_missing_tests {
     use super::*;
-    use crate::types::{ExistsQuery, IndexItem, SortMissing};
+    use crate::shared_kernel::types::{
+        document::IndexItem,
+        query::{ExistsQuery, SortMissing},
+    };
 
     fn fieldspec(t: FieldType) -> FieldSpec {
         FieldSpec {
@@ -28364,7 +28401,7 @@ mod sort_missing_tests {
 #[cfg(test)]
 mod has_child_sort_tests {
     use super::*;
-    use crate::types::IndexItem;
+    use crate::shared_kernel::types::document::IndexItem;
 
     fn kw() -> FieldSpec {
         FieldSpec {
@@ -28598,7 +28635,7 @@ mod has_child_sort_tests {
 #[cfg(test)]
 mod ids_query_tests {
     use super::*;
-    use crate::types::{IdsQuery, IndexItem};
+    use crate::shared_kernel::types::{document::IndexItem, query::IdsQuery};
 
     fn fieldspec(t: FieldType) -> FieldSpec {
         FieldSpec {
@@ -28813,7 +28850,7 @@ mod ids_query_tests {
 #[cfg(test)]
 mod multikey_sort_cap_tests {
     use super::*;
-    use crate::types::IndexItem;
+    use crate::shared_kernel::types::document::IndexItem;
 
     fn schema() -> CreateCollectionRequest {
         let num = || FieldSpec {
@@ -29071,14 +29108,14 @@ mod scalar_checkpoint_cut_tests {
             )
             .unwrap();
         let write = |value: &str, include_number: bool| {
-            let mut items = vec![crate::types::IndexItem {
+            let mut items = vec![crate::shared_kernel::types::document::IndexItem {
                 external_id: "e".into(),
                 field: "keyword".into(),
                 value: FieldValue::String(value.into()),
                 version: None,
             }];
             if include_number {
-                items.push(crate::types::IndexItem {
+                items.push(crate::shared_kernel::types::document::IndexItem {
                     external_id: "e".into(),
                     field: "number".into(),
                     value: FieldValue::Number(3.0),
@@ -29157,7 +29194,7 @@ mod scalar_checkpoint_cut_tests {
 #[cfg(test)]
 mod batch_unindex_docs_tests {
     use super::*;
-    use crate::types::{BatchUnindexDocsRequest, IndexItem};
+    use crate::shared_kernel::types::document::{BatchUnindexDocsRequest, IndexItem};
 
     #[test]
     fn batch_unindex_removes_a_known_document() {
@@ -29455,7 +29492,7 @@ mod staged_text_stats_tests {
 #[cfg(test)]
 mod checkpoint_publish_releases_retained_charge_tests {
     use super::*;
-    use crate::types::IndexItem;
+    use crate::shared_kernel::types::document::IndexItem;
 
     fn text_field(analyzer: Analyzer) -> FieldSpec {
         FieldSpec {

@@ -14,12 +14,15 @@ use crate::sharding::domain::shard_route::SearchShardTarget;
 use crate::sharding::infrastructure::routed_router::{
     drop_outcome_from_status, merge_drop_outcomes, percent_encode_component, RoutedRouter,
 };
-use crate::storage::DropOutcome;
-use crate::types::{
-    validate_batch_unindex_docs_request, BatchUnindexDocsRequest, CreateCollectionRequest,
-    CreateCollectionResponse, IndexItem, IndexRequest, IndexResponse, ReplaceDocItem,
-    ReplaceDocsRequest, ReplaceDocsResponse, SearchRequest, SearchResponse,
+use crate::shared_kernel::types::{
+    document::{
+        validate_batch_unindex_docs_request, BatchUnindexDocsRequest, IndexItem, IndexRequest,
+        IndexResponse, ReplaceDocItem, ReplaceDocsRequest, ReplaceDocsResponse,
+    },
+    schema::{CreateCollectionRequest, CreateCollectionResponse},
+    search::{SearchRequest, SearchResponse},
 };
+use crate::storage::DropOutcome;
 
 #[async_trait]
 impl RoutedBackend for RoutedRouter {
@@ -339,7 +342,7 @@ impl RoutedBackend for RoutedRouter {
                 ),
             })
         };
-        let mut results: Vec<Option<crate::types::ReplaceDocResult>> =
+        let mut results: Vec<Option<crate::shared_kernel::types::document::ReplaceDocResult>> =
             (0..total).map(|_| None).collect();
         if let Some((shard, sent, resp)) = local_resp {
             if resp.results.len() != sent {

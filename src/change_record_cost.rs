@@ -134,8 +134,11 @@ fn mul(left: usize, right: usize) -> Result<usize, NormalizeError> {
 use crate::change_memory_cost::{
     estimate_change, Change, Cost, CostError, FieldCost, VectorBackendCost,
 };
-use crate::log_entry::RaftLogEntry;
-use crate::types::{Analyzer, FieldSpec, FieldType, FieldValue, VectorBackend};
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::{
+    document::FieldValue,
+    schema::{Analyzer, FieldSpec, FieldType, VectorBackend},
+};
 
 /// One fixed table, reserved before exact pricing starts. The table never owns
 /// input or heap tokens. All other analyzers keep their allocation-free bound.
@@ -603,7 +606,7 @@ fn charge_index_error_prefix(
     out: &mut RecordCost,
     ctx: &impl CostContext,
     collection_id: &str,
-    item: &crate::types::IndexItem,
+    item: &crate::shared_kernel::types::document::IndexItem,
     declared_field: bool,
 ) -> Result<(), NormalizeError> {
     if !ctx.known_external_id(collection_id, &item.external_id) {
@@ -635,7 +638,7 @@ fn charge_replace_invalid_prefix(
     out: &mut RecordCost,
     ctx: &impl CostContext,
     collection_id: &str,
-    doc: &crate::types::ReplaceDocItem,
+    doc: &crate::shared_kernel::types::document::ReplaceDocItem,
 ) -> Result<(), NormalizeError> {
     if !ctx.known_external_id(collection_id, &doc.external_id) {
         out.add_change(&Change::Direct {
@@ -737,7 +740,9 @@ mod tests {
     use super::*;
     use std::collections::{BTreeMap, BTreeSet};
 
-    use crate::types::{IndexItem, IndexRequest, ReplaceDocItem, ReplaceDocsRequest};
+    use crate::shared_kernel::types::document::{
+        IndexItem, IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
+    };
 
     #[derive(Default)]
     struct TestContext {

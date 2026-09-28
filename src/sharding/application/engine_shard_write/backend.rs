@@ -7,14 +7,16 @@ use async_trait::async_trait;
 use futures::future::{join_all, try_join_all};
 
 use crate::api::WriteBackend;
-use crate::log_entry::RaftLogEntry;
 use crate::sharding::application::engine_shard_write::EngineShardWrite;
-use crate::storage::{ApplyOutcome, DropOutcome};
-use crate::types::{
-    validate_batch_unindex_docs_request, BatchUnindexDocsRequest, CreateCollectionRequest,
-    CreateCollectionResponse, IndexRequest, IndexResponse, ReplaceDocItem, ReplaceDocResult,
-    ReplaceDocsRequest, ReplaceDocsResponse,
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::{
+    document::{
+        validate_batch_unindex_docs_request, BatchUnindexDocsRequest, IndexRequest, IndexResponse,
+        ReplaceDocItem, ReplaceDocResult, ReplaceDocsRequest, ReplaceDocsResponse,
+    },
+    schema::{CreateCollectionRequest, CreateCollectionResponse},
 };
+use crate::storage::{ApplyOutcome, DropOutcome};
 
 #[async_trait]
 impl WriteBackend for EngineShardWrite {

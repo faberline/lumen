@@ -11,8 +11,8 @@ use super::committed_index_plan::{
 use super::committed_replace_apply::{ReplacementInput, ReplacementLedger};
 use super::committed_replace_plan as replace_plan;
 use super::*;
-use crate::capture_barrier::ApplyLease;
 use crate::composed_segment::ComposedSegmentReader;
+use crate::shared_kernel::capture_barrier::ApplyLease;
 use crate::wal::fast_index_scanner::FastIndexScanner;
 
 #[cfg(test)]
@@ -1039,7 +1039,7 @@ impl Engine {
                 let hnsw_write = matches!(
                     &*index,
                     FieldIndex::Vector { spec, .. }
-                        if matches!(spec.backend, crate::types::VectorBackend::HnswCpu)
+                        if matches!(spec.backend, crate::shared_kernel::types::schema::VectorBackend::HnswCpu)
                 );
                 index.drop_eid(cell.id, eid);
                 if hnsw_write {
@@ -1057,7 +1057,10 @@ impl Engine {
                     else {
                         unreachable!("matched Vector kind")
                     };
-                    let add = if matches!(spec.backend, crate::types::VectorBackend::HnswCpu) {
+                    let add = if matches!(
+                        spec.backend,
+                        crate::shared_kernel::types::schema::VectorBackend::HnswCpu
+                    ) {
                         let hnsw_add_started = Instant::now();
                         let add = idx.add(eid, row.raw.as_f32_slice());
                         if let Some((wait, held)) = idx.take_hnsw_write_lock_timing() {
@@ -1251,8 +1254,8 @@ mod tests;
 #[cfg(test)]
 mod timing_tests {
     use super::*;
-    use crate::log_entry::RaftLogEntry;
-    use crate::types::IndexItem;
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::document::IndexItem;
     use crate::wal::{fast_index_scanner::FastIndexScanner, WalRecord};
 
     fn apply_committed_vector(engine: &Engine, vector: Vec<f32>, sequence: u64) {

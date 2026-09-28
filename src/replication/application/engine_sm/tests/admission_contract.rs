@@ -10,13 +10,14 @@ use tower::ServiceExt;
 use crate::change_admission::PendingChangeCapacity;
 use crate::change_budget::{ChangeBudget, HARD_LIMIT};
 use crate::coordinator::WriteSink;
-use crate::log_entry::RaftLogEntry;
 use crate::replication::application::engine_sm::write_sink::RaftWriteSink;
 use crate::replication::application::engine_sm::EngineSm;
-use crate::storage::Engine;
-use crate::types::{
-    CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::{
+    document::{FieldValue, IndexItem, IndexRequest},
+    schema::{CreateCollectionRequest, FieldSpec, FieldType},
 };
+use crate::storage::Engine;
 use crate::wal::WalRecord;
 
 // Draft bytes for src/raft_sm.rs's existing `#[cfg(test)] mod tests`.

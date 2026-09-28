@@ -442,8 +442,8 @@ impl<'a> Cursor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::log_entry::RaftLogEntry;
-    use crate::types::{FieldValue, IndexItem, IndexRequest};
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
     use crate::wal::WalRecord;
 
     fn all_shapes(versioned: bool) -> Vec<u8> {
@@ -577,8 +577,8 @@ mod tests {
 #[cfg(test)]
 mod validated_iteration_tests {
     use super::*;
-    use crate::log_entry::RaftLogEntry;
-    use crate::types::{FieldValue, IndexItem, IndexRequest};
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
     use crate::wal::WalRecord;
 
     fn all_shapes(versioned: bool) -> Vec<u8> {

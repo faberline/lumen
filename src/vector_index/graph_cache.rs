@@ -503,7 +503,7 @@ mod tests {
         let spec = VectorSpec {
             dim: 2,
             metric: VectorMetric::Cosine,
-            backend: crate::types::VectorBackend::HnswCpu,
+            backend: crate::shared_kernel::types::schema::VectorBackend::HnswCpu,
             quantize: Some(VectorQuantize::Sq),
         };
         let index = HnswCpuIndex::new(spec);
@@ -550,7 +550,7 @@ mod tests {
         let spec = VectorSpec {
             dim: 2,
             metric,
-            backend: crate::types::VectorBackend::HnswCpu,
+            backend: crate::shared_kernel::types::schema::VectorBackend::HnswCpu,
             quantize: None,
         };
         let index = HnswCpuIndex::new(spec);
@@ -722,7 +722,7 @@ mod tests {
         let spec = VectorSpec {
             dim: 2,
             metric: VectorMetric::L2,
-            backend: crate::types::VectorBackend::HnswCpu,
+            backend: crate::shared_kernel::types::schema::VectorBackend::HnswCpu,
             quantize: None,
         };
         let index = HnswCpuIndex::new(spec);

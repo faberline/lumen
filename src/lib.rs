@@ -50,7 +50,6 @@ pub use crate::compat::auth;
 #[cfg(feature = "backup")]
 pub mod backup;
 pub mod backup_sink;
-mod capture_barrier;
 mod change_admission;
 mod change_budget;
 mod change_journal;
@@ -67,7 +66,7 @@ pub mod dx;
 #[cfg(not(feature = "jieba"))]
 mod jieba_fallback_stream;
 /// Write-log entry vocabulary (always compiled; the active write path uses it).
-pub mod log_entry;
+pub use crate::shared_kernel::log_entry;
 pub mod metrics;
 /// Native length-prefixed CBOR search wire for Rust clients that need the engine
 /// over a lower fixed-cost transport than HTTP/JSON.
@@ -115,6 +114,7 @@ pub mod segment_checkpoint;
 pub mod segment_rdb;
 pub mod segment_restore;
 mod sharding;
+mod shared_kernel;
 /// Offline machine-readable self-description (`lumen spec`): OpenAPI / JSON
 /// schema, the query-shape cookbook, and the field/analyzer catalog — the
 /// agent-integration surface, emitted without a running server.
@@ -122,7 +122,7 @@ pub mod spec;
 pub mod storage;
 pub use crate::access::infrastructure::tls;
 pub mod tokenize;
-pub mod types;
+pub use crate::compat::types;
 pub mod vector_index;
 pub mod wal;
 mod wal_source_stage;

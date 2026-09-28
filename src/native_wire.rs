@@ -18,11 +18,12 @@ use tokio::{
 };
 
 use crate::{
-    storage::Engine,
-    types::{
-        FieldValue, QueryNode, RangeBound, RangeQuery, SearchHit, SearchRequest, SearchResponse,
-        TermQuery,
+    shared_kernel::types::{
+        document::FieldValue,
+        query::{QueryNode, RangeBound, RangeQuery, TermQuery},
+        search::{SearchHit, SearchRequest, SearchResponse},
     },
+    storage::Engine,
 };
 
 const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;
@@ -454,7 +455,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{QueryNode, TermQuery};
+    use crate::shared_kernel::types::query::{QueryNode, TermQuery};
     use tokio::net::TcpStream;
 
     #[tokio::test]
@@ -463,11 +464,11 @@ mod tests {
         engine
             .create_collection(
                 "docs",
-                crate::types::CreateCollectionRequest {
+                crate::shared_kernel::types::schema::CreateCollectionRequest {
                     fields: [(
                         "city".to_string(),
-                        crate::types::FieldSpec {
-                            field_type: crate::types::FieldType::Keyword,
+                        crate::shared_kernel::types::schema::FieldSpec {
+                            field_type: crate::shared_kernel::types::schema::FieldType::Keyword,
                             analyzer: None,
                             multi: None,
                             dim: None,
@@ -484,11 +485,13 @@ mod tests {
         engine
             .index(
                 "docs",
-                crate::types::IndexRequest {
-                    items: vec![crate::types::IndexItem {
+                crate::shared_kernel::types::document::IndexRequest {
+                    items: vec![crate::shared_kernel::types::document::IndexItem {
                         external_id: "a".to_string(),
                         field: "city".to_string(),
-                        value: crate::types::FieldValue::String("taipei".to_string()),
+                        value: crate::shared_kernel::types::document::FieldValue::String(
+                            "taipei".to_string(),
+                        ),
                         version: None,
                     }],
                     request_id: None,
@@ -520,7 +523,9 @@ mod tests {
             &SearchRequest {
                 query: QueryNode::Term(TermQuery {
                     field: "city".to_string(),
-                    value: crate::types::FieldValue::String("taipei".to_string()),
+                    value: crate::shared_kernel::types::document::FieldValue::String(
+                        "taipei".to_string(),
+                    ),
                 }),
                 limit: 10,
                 offset: 0,

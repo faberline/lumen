@@ -9,7 +9,7 @@
 use std::io::{self, Read, Write};
 
 use crate::change_admission::StagePayload;
-use crate::log_entry::RaftLogEntry;
+use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::wal::{WalRecord, WAL_CONTROL_FORMAT_VERSION, WAL_FORMAT_VERSION};
 
 const MAGIC: [u8; 4] = *b"LWCS";
@@ -97,9 +97,12 @@ fn invalid(message: impl Into<String>) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{
-        BatchUnindexDocsRequest, CreateCollectionRequest, FieldSpec, FieldType, FieldValue,
-        IndexItem, IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
+    use crate::shared_kernel::types::{
+        document::{
+            BatchUnindexDocsRequest, FieldValue, IndexItem, IndexRequest, ReplaceDocItem,
+            ReplaceDocsRequest,
+        },
+        schema::{CreateCollectionRequest, FieldSpec, FieldType},
     };
     use std::collections::BTreeMap;
     use std::io::Cursor;

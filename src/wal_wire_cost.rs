@@ -3,8 +3,8 @@
 //! Callers reserve the scanner bound before typed decoding, then
 //! retain the returned decoded peak plus the transport's actual byte owners.
 
-use crate::log_entry::RaftLogEntry;
-use crate::types::{IndexItem, MAX_BATCH_UNINDEX_DOCS_SIZE};
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::document::{IndexItem, MAX_BATCH_UNINDEX_DOCS_SIZE};
 use anyhow::{bail, ensure, Result};
 use std::mem::size_of;
 
@@ -180,8 +180,11 @@ impl<'a> Cursor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared_kernel::types::document::{
+        BatchUnindexDocsRequest, FieldValue, IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
+    };
+    use crate::shared_kernel::types::schema::{CreateCollectionRequest, FieldSpec};
     use crate::storage::Engine;
-    use crate::types::*;
     use crate::wal::WalRecord;
     use std::collections::BTreeMap;
 

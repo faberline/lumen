@@ -8,8 +8,8 @@
 use super::committed_index_plan::{
     PlanStamp, PlanView, PlannedCell, RequestOutcome, ScalarAction, ScalarPlan,
 };
+use crate::shared_kernel::types::{document::MAX_BATCH_REPLACE_SIZE, schema::FieldType};
 use crate::storage::{SortableF64, StorageError};
-use crate::types::{FieldType, MAX_BATCH_REPLACE_SIZE};
 use crate::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use anyhow::{bail, Result};
 use std::collections::{BTreeMap, BTreeSet};

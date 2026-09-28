@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::types::{VectorMetric, VectorQuantize, VectorSpec};
+use crate::shared_kernel::types::schema::{VectorMetric, VectorQuantize, VectorSpec};
 
 thread_local! {
     // Committed apply serializes live HNSW mutations under the Engine writer
@@ -1904,8 +1904,12 @@ impl std::fmt::Debug for FlatCpuIndex {
 /// is a future chapter.
 pub fn open_backend(spec: VectorSpec) -> Box<dyn VectorIndex> {
     match spec.backend {
-        crate::types::VectorBackend::HnswCpu => Box::new(HnswCpuIndex::new(spec)),
-        crate::types::VectorBackend::FlatCpu => Box::new(FlatCpuIndex::new(spec)),
+        crate::shared_kernel::types::schema::VectorBackend::HnswCpu => {
+            Box::new(HnswCpuIndex::new(spec))
+        }
+        crate::shared_kernel::types::schema::VectorBackend::FlatCpu => {
+            Box::new(FlatCpuIndex::new(spec))
+        }
     }
 }
 
@@ -1989,7 +1993,7 @@ mod tests {
         VectorSpec {
             dim,
             metric,
-            backend: crate::types::VectorBackend::HnswCpu,
+            backend: crate::shared_kernel::types::schema::VectorBackend::HnswCpu,
             quantize: q,
         }
     }
@@ -2516,7 +2520,7 @@ mod tests {
             VectorSpec {
                 dim,
                 metric,
-                backend: crate::types::VectorBackend::FlatCpu,
+                backend: crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
                 quantize: None,
             }
         }
@@ -2665,7 +2669,7 @@ mod tests {
         let spec = VectorSpec {
             dim: 2,
             metric: VectorMetric::L2,
-            backend: crate::types::VectorBackend::FlatCpu,
+            backend: crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
             quantize: None,
         };
         let dir = tempfile::tempdir().unwrap();
@@ -2736,7 +2740,7 @@ mod tests {
         let spec = VectorSpec {
             dim: 2,
             metric: VectorMetric::L2,
-            backend: crate::types::VectorBackend::FlatCpu,
+            backend: crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
             quantize: None,
         };
         let dir = tempfile::tempdir().unwrap();
@@ -2776,7 +2780,7 @@ mod tests {
         let spec = VectorSpec {
             dim: 2,
             metric: VectorMetric::L2,
-            backend: crate::types::VectorBackend::FlatCpu,
+            backend: crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
             quantize: None,
         };
         let dir = tempfile::tempdir().unwrap();
@@ -2852,7 +2856,7 @@ mod tests {
         let spec = VectorSpec {
             dim: 2,
             metric: VectorMetric::L2,
-            backend: crate::types::VectorBackend::FlatCpu,
+            backend: crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
             quantize: None,
         };
         let dir = tempfile::tempdir().unwrap();
@@ -2928,7 +2932,7 @@ mod tests {
         let spec = VectorSpec {
             dim: 2,
             metric: VectorMetric::L2,
-            backend: crate::types::VectorBackend::FlatCpu,
+            backend: crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
             quantize: None,
         };
         let dir = tempfile::tempdir().unwrap();

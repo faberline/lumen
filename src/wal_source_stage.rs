@@ -379,10 +379,13 @@ fn record_admission_io_error(error: RecordAdmissionError) -> io::Error {
 mod tests {
     use super::*;
     use crate::committed_stage::{StageFailureInjector, StageFailurePoint};
-    use crate::log_entry::RaftLogEntry;
-    use crate::types::{
-        BatchUnindexDocsRequest, CreateCollectionRequest, FieldSpec, FieldType, FieldValue,
-        IndexItem, IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::{
+        document::{
+            BatchUnindexDocsRequest, FieldValue, IndexItem, IndexRequest, ReplaceDocItem,
+            ReplaceDocsRequest,
+        },
+        schema::{CreateCollectionRequest, FieldSpec, FieldType},
     };
     use std::collections::BTreeMap;
     use std::sync::Mutex;

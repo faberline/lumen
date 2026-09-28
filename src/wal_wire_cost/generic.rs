@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 use super::bounded_serde::Quiet;
 use super::{add, allocation, mul, token_stats};
-use crate::types::FieldSpec;
+use crate::shared_kernel::types::schema::FieldSpec;
 use crate::wal::bounded_generic::{FIELD_VALUE_WIDTH, INDEX_ITEM_WIDTH, REPLACE_ITEM_WIDTH};
 use anyhow::{ensure, Result};
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
@@ -389,7 +389,10 @@ impl HeapCost for Entry {
                 anyhow::bail!("control commands must use WAL v2 fast control encoding")
             }
         };
-        add(size_of::<crate::log_entry::RaftLogEntry>(), nested)
+        add(
+            size_of::<crate::shared_kernel::log_entry::RaftLogEntry>(),
+            nested,
+        )
     }
 }
 #[derive(Deserialize)]

@@ -6,11 +6,13 @@ use crate::sharding::domain::reshard_batch::{
     snapshot_reshard_batches, ADMIN_ROUTE_BODY_LIMIT_BYTES, MAX_BATCH_BYTES,
 };
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
-use crate::storage::{Engine, SnapshotV1};
-use crate::types::{
-    CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest, MatchOp,
-    MatchQuery, QueryNode, SearchRequest,
+use crate::shared_kernel::types::{
+    document::{FieldValue, IndexItem, IndexRequest},
+    query::{MatchOp, MatchQuery, QueryNode},
+    schema::{CreateCollectionRequest, FieldSpec, FieldType},
+    search::SearchRequest,
 };
+use crate::storage::{Engine, SnapshotV1};
 
 #[test]
 fn bucket_moves_reports_only_reassigned_buckets() {

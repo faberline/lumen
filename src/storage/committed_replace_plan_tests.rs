@@ -5,8 +5,8 @@
 //! image and the descriptors from its CBOR scanner.
 
 use super::*;
-use crate::log_entry::RaftLogEntry;
-use crate::types::{FieldValue, IndexItem, IndexRequest};
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
 use crate::wal::WalRecord;
 use std::collections::{BTreeMap, BTreeSet};
 

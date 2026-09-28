@@ -20,7 +20,7 @@ use anyhow::Result;
 use raft_runtime::{Index, OutcomeWindow};
 
 use crate::change_budget::AdmissionError;
-use crate::log_entry::RaftLogEntry;
+use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::storage::{
     ApplyOutcome, Engine, RecordAdmissionError, RecordReservation, RepriceRecord,
 };

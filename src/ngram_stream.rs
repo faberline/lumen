@@ -91,7 +91,7 @@ fn stream_width<E>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Analyzer;
+    use crate::shared_kernel::types::schema::Analyzer;
 
     #[test]
     fn stream_matches_the_shared_tokenizer_for_unicode_and_whitespace() {

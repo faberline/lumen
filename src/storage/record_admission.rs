@@ -17,13 +17,13 @@
 //! like a Full at the fully-priced bound.
 
 use super::Engine;
-use crate::capture_barrier::ApplyLease;
 use crate::change_budget::{
     AdmissionError, BudgetWake, ChangeBudget, Owner, OwnerCapacityState, Reservation,
     RetainedCharge,
 };
 use crate::change_record_cost::{NormalizeError, RecordEstimate};
-use crate::log_entry::RaftLogEntry;
+use crate::shared_kernel::capture_barrier::ApplyLease;
+use crate::shared_kernel::log_entry::RaftLogEntry;
 use std::cell::Cell;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -889,7 +889,10 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{CreateCollectionRequest, FieldSpec, FieldValue, IndexItem, IndexRequest};
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        schema::{CreateCollectionRequest, FieldSpec},
+    };
     use std::collections::BTreeMap;
 
     fn engine(budget: &ChangeBudget) -> Engine {

@@ -7,8 +7,11 @@ use std::time::Instant;
 use anyhow::Result;
 use rayon::prelude::*;
 
+use crate::shared_kernel::types::{
+    query::SortOrder,
+    search::{SearchHit, SearchRequest, SearchResponse},
+};
 use crate::storage::StorageError;
-use crate::types::{SearchHit, SearchRequest, SearchResponse, SortOrder};
 
 /// Query sealed/local shards in parallel and merge the top page into the same
 /// response shape as a single-engine search.

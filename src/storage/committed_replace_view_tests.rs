@@ -1,8 +1,8 @@
 //! Colocated unit fixtures for `committed_replace_view.rs` integration.
 
 use super::*;
-use crate::log_entry::RaftLogEntry;
-use crate::types::{FieldValue, IndexItem, IndexRequest};
+use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
 use crate::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::wal::WalRecord;
 use std::collections::BTreeSet;

@@ -36,7 +36,10 @@ fn validate_utf8(bytes: &[u8]) -> Result<&str> {
 #[cfg(test)]
 mod numeric_parity_tests {
     use super::*;
-    use crate::{log_entry::RaftLogEntry, types::FieldValue, wal::WalRecord};
+    use crate::{
+        shared_kernel::{log_entry::RaftLogEntry, types::document::FieldValue},
+        wal::WalRecord,
+    };
     use ciborium::Value;
 
     #[test]
@@ -945,8 +948,10 @@ mod tests {
     use anyhow::{bail, Result};
 
     use crate::{
-        log_entry::RaftLogEntry,
-        types::{FieldValue, ReplaceDocItem, ReplaceDocsRequest},
+        shared_kernel::{
+            log_entry::RaftLogEntry,
+            types::document::{FieldValue, ReplaceDocItem, ReplaceDocsRequest},
+        },
         wal::WalRecord,
     };
 

@@ -8,8 +8,8 @@ use crate::sharding::infrastructure::routed_router::tests::{shard_map, DummyWrit
 use crate::sharding::infrastructure::routed_router::{
     RoutedRouter, FORWARDED_HEADER, MAP_VERSION_HEADER,
 };
+use crate::shared_kernel::types::{schema::CreateCollectionRequest, search::SearchRequest};
 use crate::storage::Engine;
-use crate::types::{CreateCollectionRequest, SearchRequest};
 
 fn test_router(local_shard: u32) -> RoutedRouter {
     RoutedRouter::new(
@@ -68,8 +68,8 @@ async fn search_already_forwarded_keyless_ignores_map_version_mismatch() {
     let mut fields = BTreeMap::new();
     fields.insert(
         "city".to_string(),
-        crate::types::FieldSpec {
-            field_type: crate::types::FieldType::Keyword,
+        crate::shared_kernel::types::schema::FieldSpec {
+            field_type: crate::shared_kernel::types::schema::FieldType::Keyword,
             analyzer: None,
             multi: None,
             dim: None,
@@ -122,8 +122,8 @@ async fn search_already_forwarded_keyless_mismatch_increments_scatter_metric() {
     let mut fields = BTreeMap::new();
     fields.insert(
         "city".to_string(),
-        crate::types::FieldSpec {
-            field_type: crate::types::FieldType::Keyword,
+        crate::shared_kernel::types::schema::FieldSpec {
+            field_type: crate::shared_kernel::types::schema::FieldType::Keyword,
             analyzer: None,
             multi: None,
             dim: None,
@@ -191,8 +191,11 @@ async fn search_already_forwarded_keyless_mismatch_increments_scatter_metric() {
     );
 }
 
-fn search_req(sort: Option<Vec<crate::types::SortSpec>>) -> SearchRequest {
-    use crate::types::{FieldValue, QueryNode, TermQuery};
+fn search_req(sort: Option<Vec<crate::shared_kernel::types::query::SortSpec>>) -> SearchRequest {
+    use crate::shared_kernel::types::{
+        document::FieldValue,
+        query::{QueryNode, TermQuery},
+    };
     SearchRequest {
         query: QueryNode::Term(TermQuery {
             field: "city".into(),

@@ -527,7 +527,7 @@ impl TextStreamView for RowsProjection<'_> {
 mod tests {
     use super::*;
     use crate::segment::text_row_stage::TextRowStageOptions;
-    use crate::types::Analyzer;
+    use crate::shared_kernel::types::schema::Analyzer;
     use std::collections::BTreeMap;
 
     fn ordinary(

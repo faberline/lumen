@@ -1083,9 +1083,11 @@ impl SegmentRdbStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{
-        CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
-        QueryNode, SearchRequest, TermQuery,
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        query::{QueryNode, TermQuery},
+        schema::{CreateCollectionRequest, FieldSpec, FieldType},
+        search::SearchRequest,
     };
     use std::sync::mpsc;
 
@@ -1284,7 +1286,7 @@ mod tests {
     }
 
     fn vector_capacity_schema(
-        backend: Option<crate::types::VectorBackend>,
+        backend: Option<crate::shared_kernel::types::schema::VectorBackend>,
     ) -> CreateCollectionRequest {
         let mut fields = BTreeMap::new();
         fields.insert(
@@ -1294,7 +1296,7 @@ mod tests {
                 analyzer: None,
                 multi: None,
                 dim: Some(4),
-                metric: Some(crate::types::VectorMetric::L2),
+                metric: Some(crate::shared_kernel::types::schema::VectorMetric::L2),
                 backend,
                 quantize: None,
             },
@@ -1411,7 +1413,9 @@ mod tests {
     #[test]
     fn background_merge_compacts_the_whole_delta_stack_for_a_flat_cpu_vector_field() {
         assert_whole_delta_stack_compacts_in_one_job(
-            vector_capacity_schema(Some(crate::types::VectorBackend::FlatCpu)),
+            vector_capacity_schema(Some(
+                crate::shared_kernel::types::schema::VectorBackend::FlatCpu,
+            )),
             "v_capacity",
             |engine| {
                 for row in 0..2000 {
@@ -1438,7 +1442,9 @@ mod tests {
     #[test]
     fn background_merge_compacts_the_whole_delta_stack_for_an_hnsw_vector_field() {
         assert_whole_delta_stack_compacts_in_one_job(
-            vector_capacity_schema(Some(crate::types::VectorBackend::HnswCpu)),
+            vector_capacity_schema(Some(
+                crate::shared_kernel::types::schema::VectorBackend::HnswCpu,
+            )),
             "v_capacity",
             |engine| {
                 for row in 0..2000 {

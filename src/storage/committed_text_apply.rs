@@ -5,7 +5,7 @@
 //! the original scanner bytes through the same-lease completion callback.
 
 use super::*;
-use crate::capture_barrier::ApplyLease;
+use crate::shared_kernel::capture_barrier::ApplyLease;
 use crate::wal::fast_index_scanner::FastIndexScanner;
 
 impl Engine {
@@ -161,9 +161,11 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::log_entry::RaftLogEntry;
-    use crate::types::{
-        CreateCollectionRequest, FieldValue, IndexItem, IndexRequest, StatsResponse,
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        schema::CreateCollectionRequest,
+        stats::StatsResponse,
     };
     use crate::wal::fast_index_scanner::FastIndexScanner;
     use crate::wal::WalRecord;
@@ -201,7 +203,7 @@ mod tests {
         }
     }
 
-    fn search_request(text: &str) -> crate::types::SearchRequest {
+    fn search_request(text: &str) -> crate::shared_kernel::types::search::SearchRequest {
         serde_json::from_value(serde_json::json!({
             "query": {"match": {"field": "body", "text": text, "op": "and"}},
             "limit": 10

@@ -167,12 +167,14 @@ mod tests {
     use anyhow::bail;
 
     use crate::{
-        log_entry::RaftLogEntry,
-        types::{FieldValue, ReplaceDocItem, ReplaceDocsRequest},
-        wal::WalRecord,
+        shared_kernel::{
+            log_entry::RaftLogEntry,
+            types::document::{FieldValue, ReplaceDocItem, ReplaceDocsRequest},
+        },
         wal::{
             borrowed_replace_scanner::BorrowedReplaceScanner,
             fast_index_scanner::{FastIndexScanner, FastIndexValue},
+            WalRecord,
         },
     };
 

@@ -5,9 +5,14 @@ mod committed_replace_apply_tests {
 
     use crate::{
         change_budget::ChangeBudget,
-        log_entry::RaftLogEntry,
+        shared_kernel::{
+            log_entry::RaftLogEntry,
+            types::{
+                document::{FieldValue, ReplaceDocItem, ReplaceDocsRequest},
+                schema::CreateCollectionRequest,
+            },
+        },
         storage::{ApplyOutcome, Engine},
-        types::{CreateCollectionRequest, FieldValue, ReplaceDocItem, ReplaceDocsRequest},
         wal::WalRecord,
     };
     use anyhow::Result;
@@ -37,7 +42,7 @@ mod committed_replace_apply_tests {
         engine: &Engine,
         req: ReplaceDocsRequest,
         sequence: u64,
-    ) -> Result<crate::types::ReplaceDocsResponse> {
+    ) -> Result<crate::shared_kernel::types::document::ReplaceDocsResponse> {
         let bytes = wire(req);
         let mut owner = || Ok(());
         let mut completed = None;
@@ -58,7 +63,7 @@ mod committed_replace_apply_tests {
     fn owned(
         engine: &Engine,
         req: ReplaceDocsRequest,
-    ) -> Result<crate::types::ReplaceDocsResponse> {
+    ) -> Result<crate::shared_kernel::types::document::ReplaceDocsResponse> {
         engine.replace_docs_inner("docs", req, None, None)
     }
     fn parity(actual: &Engine, reference: &Engine, req: ReplaceDocsRequest, sequence: u64) {
@@ -301,7 +306,7 @@ mod committed_replace_apply_tests {
             .contains_key("body");
         if has_text {
             for text in ["snow", "next", "old", "same", "other"] {
-                let query: crate::types::SearchRequest =
+                let query: crate::shared_kernel::types::search::SearchRequest =
                     serde_json::from_value(serde_json::json!({
                         "query":{"match":{"field":"body","text":text,"op":"and"}},"limit":20
                     }))
@@ -345,16 +350,16 @@ mod committed_replace_apply_tests {
     fn index_then_equal_text_vector_replace_writes_once_then_skips() {
         let actual = engine();
         let reference = engine();
-        let req = crate::types::IndexRequest {
+        let req = crate::shared_kernel::types::document::IndexRequest {
             request_id: None,
             items: vec![
-                crate::types::IndexItem {
+                crate::shared_kernel::types::document::IndexItem {
                     external_id: "id".into(),
                     field: "body".into(),
                     version: Some(7),
                     value: FieldValue::String("same same".into()),
                 },
-                crate::types::IndexItem {
+                crate::shared_kernel::types::document::IndexItem {
                     external_id: "id".into(),
                     field: "v".into(),
                     version: Some(7),
@@ -382,7 +387,7 @@ mod committed_replace_apply_tests {
         );
         assert!(matches!(
             first.results[0],
-            crate::types::ReplaceDocResult::Ok {
+            crate::shared_kernel::types::document::ReplaceDocResult::Ok {
                 fields_written: 2,
                 fields_skipped: 0
             }
@@ -396,7 +401,7 @@ mod committed_replace_apply_tests {
         );
         assert!(matches!(
             second.results[0],
-            crate::types::ReplaceDocResult::Ok {
+            crate::shared_kernel::types::document::ReplaceDocResult::Ok {
                 fields_written: 0,
                 fields_skipped: 2
             }
@@ -406,7 +411,7 @@ mod committed_replace_apply_tests {
 
     #[test]
     fn thirty_two_documents_can_replace_more_than_one_thousand_fields() {
-        let fields: BTreeMap<String, crate::types::FieldSpec> = (0..33)
+        let fields: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> = (0..33)
             .map(|i| {
                 (
                     format!("f{i:02}"),

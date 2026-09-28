@@ -15,3 +15,4 @@ pub mod reshard;
 pub mod routing;
 #[cfg(feature = "operator")]
 pub mod routing_remote;
+pub mod types;

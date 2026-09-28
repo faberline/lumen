@@ -2,7 +2,7 @@
 //! Byte counts are logical file bytes, not filesystem block/device traffic.
 
 use super::{CollectionCatalog, SegmentKind};
-use crate::capture_barrier::CaptureLease;
+use crate::shared_kernel::capture_barrier::CaptureLease;
 use anyhow::{bail, Result};
 use std::collections::BTreeMap;
 use std::path::Path;

@@ -169,7 +169,7 @@ impl SegmentRaftCapture {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{CreateCollectionRequest, IndexRequest};
+    use crate::shared_kernel::types::{document::IndexRequest, schema::CreateCollectionRequest};
     use serde_json::json;
 
     fn seeded() -> (tempfile::TempDir, Arc<SegmentRdbStore>, Arc<Engine>) {

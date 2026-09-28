@@ -577,13 +577,15 @@ mod tests {
         assert_eq!(AofReader::replay(&path, 0, |_, _| {}).unwrap(), 1);
     }
     use crate::change_budget::ChangeBudget;
-    use crate::log_entry::RaftLogEntry;
     use crate::segment_rdb::SegmentRdbStore;
-    use crate::storage::Engine;
-    use crate::types::{
-        CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
-        MatchOp, MatchQuery, QueryNode, SearchRequest, TermQuery,
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        query::{MatchOp, MatchQuery, QueryNode, TermQuery},
+        schema::{CreateCollectionRequest, FieldSpec, FieldType},
+        search::SearchRequest,
     };
+    use crate::storage::Engine;
     use std::collections::BTreeMap;
     use std::sync::{mpsc, Arc};
     use std::time::Duration;
@@ -1280,7 +1282,7 @@ mod tests {
                         "body".into(),
                         FieldSpec {
                             field_type: FieldType::Text,
-                            analyzer: Some(crate::types::Analyzer::Ngram),
+                            analyzer: Some(crate::shared_kernel::types::schema::Analyzer::Ngram),
                             multi: None,
                             dim: None,
                             metric: None,
@@ -1614,13 +1616,18 @@ mod tests {
 #[cfg(test)]
 mod crux_recovery_tests {
     use super::*;
-    use crate::log_entry::RaftLogEntry;
-    use crate::storage::Engine;
-    use crate::types::{
-        Analyzer, CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem,
-        IndexRequest, KnnQuery, MatchOp, MatchQuery, QueryNode, RangeBound, RangeQuery,
-        SearchRequest, TermQuery, TermsQuery, VectorBackend, VectorMetric,
+    use crate::shared_kernel::log_entry::RaftLogEntry;
+    use crate::shared_kernel::types::{
+        document::{FieldValue, IndexItem, IndexRequest},
+        query::{
+            KnnQuery, MatchOp, MatchQuery, QueryNode, RangeBound, RangeQuery, TermQuery, TermsQuery,
+        },
+        schema::{
+            Analyzer, CreateCollectionRequest, FieldSpec, FieldType, VectorBackend, VectorMetric,
+        },
+        search::SearchRequest,
     };
+    use crate::storage::Engine;
     use std::collections::{BTreeMap, BTreeSet};
     use std::sync::Arc;
 
@@ -1793,7 +1800,7 @@ mod crux_recovery_tests {
                 text: "tok".into(),
                 op: MatchOp::And,
             }),
-            QueryNode::Hamming(crate::types::HammingQuery {
+            QueryNode::Hamming(crate::shared_kernel::types::query::HammingQuery {
                 field: "sig".into(),
                 hash: format!("{:016x}", 0u64),
                 max_distance: 8,
