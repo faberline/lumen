@@ -12,7 +12,7 @@ use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::delivery::{
     WalDelivery, WalSourceRecord, WalSourceRelease,
 };
-use crate::wal_source_stage::{StagedWalRecord, WalSourceStager};
+use crate::ingest::infrastructure::wal_source_stage::{StagedWalRecord, WalSourceStager};
 
 // ---------------------------------------------------------------------------
 // MemWal — in-process backend

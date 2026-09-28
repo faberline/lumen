@@ -8,8 +8,10 @@ use anyhow::{anyhow, Result};
 
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::mem_wal::MemWalSlot;
+use crate::ingest::infrastructure::wal_source_stage::{
+    MappedFastIndexPayload, MappedGenericCborPayload,
+};
 use crate::storage::Engine;
-use crate::wal_source_stage::{MappedFastIndexPayload, MappedGenericCborPayload};
 
 #[doc(hidden)]
 pub enum WalDelivery {

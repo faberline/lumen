@@ -2,11 +2,11 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::committed_stage::{
-    SourceIdentity, SourceKind, StageFailureInjector, StageFailurePoint, StageStore,
-};
 use crate::ingest::domain::change_admission::{CommittedRecord, RewindablePayload, StagePayload};
 use crate::ingest::domain::change_budget::ChangeBudget;
+use crate::ingest::infrastructure::committed_stage::{
+    SourceIdentity, SourceKind, StageFailureInjector, StageFailurePoint, StageStore,
+};
 
 struct FailOnce(Mutex<Option<StageFailurePoint>>);
 

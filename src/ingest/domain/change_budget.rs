@@ -242,7 +242,7 @@ pub(crate) struct RamCharge {
     bytes: usize,
     sequence: u64,
     engine_epoch: u64,
-    source: crate::committed_stage::SourceIdentity,
+    source: crate::ingest::infrastructure::committed_stage::SourceIdentity,
 }
 
 /// Shared ownership of payload bytes retained outside the checkpoint batch.

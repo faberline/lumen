@@ -404,3 +404,17 @@ rule = "B3"
 paths = ["src/ingest/domain/wal_log.rs"]
 subject = "domain->infrastructure"
 reason = "Only WalLog's signature references the delivery types: WalAdmissionStream yields WalDelivery and stage_source returns WalSourceRelease. They stay in infrastructure beside MemWal because WalSourceRecord holds MemWal's private slot and WalDelivery hands out mmap payloads. P2 chooses between a delivery handle trait the domain defines and infrastructure implements, or moving WalLog to ingest/application/ports."
+
+# Durable staging stays in ingest/infrastructure; three of its types still
+# appear in domain signatures.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/ingest/domain/change_admission.rs",
+  "src/ingest/domain/change_admission/tests.rs",
+  "src/ingest/domain/change_budget.rs",
+  "src/ingest/domain/change_budget/reservation.rs",
+]
+subject = "domain->infrastructure"
+reason = "SourceIdentity is carried by RamCharge and Reservation::commit_ram, and change_admission's staging bridge stages into a StageStore and holds the DurableStage it returns. SourceIdentity and SourceKind stay in infrastructure beside the marker encoding because SourceIdentity::new and SourceKind::decode return io::Result and the marker reads their private fields. P2: change that error type, move SourceIdentity and SourceKind into the ingest domain, and have the staging bridge depend on a stage-store port the domain defines."

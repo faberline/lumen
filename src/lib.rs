@@ -50,8 +50,6 @@ pub use crate::compat::auth;
 #[cfg(feature = "backup")]
 pub mod backup;
 pub mod backup_sink;
-mod committed_record_codec;
-mod committed_stage;
 mod compat;
 mod composed_segment;
 pub use crate::compat::config;
@@ -121,7 +119,6 @@ pub mod tokenize;
 pub use crate::compat::types;
 pub mod vector_index;
 pub use crate::compat::wal;
-mod wal_source_stage;
 
 /// Product-neutral text-index contracts used by Lumen and other products.
 /// Lumen keeps its existing public collection API and storage engine.

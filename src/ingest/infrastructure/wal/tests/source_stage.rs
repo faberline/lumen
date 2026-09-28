@@ -8,10 +8,10 @@ use crate::ingest::domain::wal_record::{WalRecord, WAL_FORMAT_VERSION};
 use crate::ingest::infrastructure::wal::delivery::WalDelivery;
 use crate::ingest::infrastructure::wal::mem_wal::{MemWal, MemWalSlot};
 use crate::ingest::infrastructure::wal::tests::{create_entry, index_entry, source_retention};
+use crate::ingest::infrastructure::wal_source_stage::WalSourceStager;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::FieldValue;
 use crate::storage::Engine;
-use crate::wal_source_stage::WalSourceStager;
 
 // Append inside `src/wal.rs`'s existing `#[cfg(test)] mod tests`.
 // The injected-fault test needs this test-only helper in `wal_source_stage.rs`:
@@ -181,7 +181,7 @@ async fn staged_descriptor_rejects_a_different_sequence() {
 
 #[tokio::test]
 async fn failed_source_stage_keeps_resident_until_a_durable_retry() {
-    use crate::committed_stage::{StageFailureInjector, StageFailurePoint};
+    use crate::ingest::infrastructure::committed_stage::{StageFailureInjector, StageFailurePoint};
     struct FailOnce(Mutex<Option<StageFailurePoint>>);
     impl StageFailureInjector for FailOnce {
         fn check(&self, point: StageFailurePoint) -> std::io::Result<()> {

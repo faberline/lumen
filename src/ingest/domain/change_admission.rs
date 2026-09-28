@@ -8,8 +8,8 @@
 use std::fmt;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 
-use crate::committed_stage::{DurableStage, SourceIdentity, StageStore};
 use crate::ingest::domain::change_budget::{AdmissionError, RamCharge, Reservation};
+use crate::ingest::infrastructure::committed_stage::{DurableStage, SourceIdentity, StageStore};
 
 /// A local write could not reserve the pending-change budget before it was
 /// published to the WAL. Full, oversized, and unrepresentable local requests

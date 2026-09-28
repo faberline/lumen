@@ -262,7 +262,7 @@ impl Reservation {
         mut self,
         sequence: u64,
         engine_epoch: u64,
-        source: crate::committed_stage::SourceIdentity,
+        source: crate::ingest::infrastructure::committed_stage::SourceIdentity,
     ) -> Result<RamCharge, AdmissionError> {
         let mut state = self
             .budget
