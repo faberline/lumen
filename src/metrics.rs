@@ -2117,7 +2117,7 @@ mod tests {
     }
 
     // Process-global env mutex shared across LUMEN_SLOW_QUERY_MS-mutating
-    // tests (mirrors `auth.rs`'s `AUTH_ENV_LOCK`).
+    // tests (mirrors `access::application::auth_config`'s `AUTH_ENV_LOCK`).
     static SLOW_QUERY_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// #2519 AC: the "threshold=0 trick" — `LUMEN_SLOW_QUERY_MS=0` makes

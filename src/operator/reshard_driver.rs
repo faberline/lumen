@@ -186,6 +186,7 @@ use serde_json::json;
 
 use service_auth::k8s::{ProjectedToken, ProjectedTokenFile};
 
+use crate::access::application::control_plane_token::control_plane_token_file;
 use crate::operator::crd::{AuthMode, Lumen, ReshardPhase};
 use crate::operator::lease::{self, Election};
 use crate::reshard::{
@@ -666,7 +667,7 @@ impl KubeClusterControl {
     pub fn new(client: Client) -> Self {
         Self {
             client,
-            token_file: crate::auth::control_plane_token_file(),
+            token_file: control_plane_token_file(),
         }
     }
 

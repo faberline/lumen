@@ -18,7 +18,15 @@ const README: &str = include_str!("../../README.md");
 const CARGO_TOML: &str = include_str!("../../Cargo.toml");
 const CLI: &str = include_str!("../../src/bin/lumen.rs");
 const API: &str = include_str!("../../src/api.rs");
-const AUTH: &str = include_str!("../../src/auth.rs");
+/// The auth adapter: every non-test file of the `access` context except TLS.
+const AUTH: &str = concat!(
+    include_str!("../../src/access/domain/identity.rs"),
+    include_str!("../../src/access/application/authorization.rs"),
+    include_str!("../../src/access/application/auth_config.rs"),
+    include_str!("../../src/access/application/control_plane_token.rs"),
+    include_str!("../../src/access/infrastructure/lumen_verifier.rs"),
+    include_str!("../../src/access/interfaces/http.rs"),
+);
 const OPERATOR_RENDER: &str = include_str!("../../src/operator/render.rs");
 
 const CAPABILITY_CONTRACT: &[(&str, &str)] = &[

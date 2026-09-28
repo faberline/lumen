@@ -29,6 +29,7 @@
 //! - `lumen-claim-security-tls-rustls` — The rustls-backed TLS surface passes the
 //!   runtime TLS gate.
 
+mod access;
 /// Local append-only log (Stage 2 Phase 2f-3): the binary's "AOF" — a framed,
 /// crash-safe record of every APPLIED `(seq, WalRecord)`. Recovery is RDB (the
 /// segment checkpoint, up to seq S) → AOF replay (S+1..A) → broker tail (A+1..),
@@ -37,7 +38,7 @@
 /// drives the apply loop + cold-start through it.
 pub mod aof;
 pub mod api;
-pub mod auth;
+pub use crate::compat::auth;
 /// `lumen backup` (#808): fetches a consistent snapshot from a running
 /// serving fleet's existing `GET /admin/backup` endpoint and hands it to a
 /// `libs/service-backup` destination sink. No new snapshot mechanism — this
@@ -56,6 +57,7 @@ mod change_memory_cost;
 mod change_record_cost;
 mod committed_record_codec;
 mod committed_stage;
+mod compat;
 mod composed_segment;
 pub mod config;
 pub mod consumer;
@@ -115,7 +117,7 @@ pub mod segment_restore;
 /// agent-integration surface, emitted without a running server.
 pub mod spec;
 pub mod storage;
-pub mod tls;
+pub use crate::access::infrastructure::tls;
 pub mod tokenize;
 pub mod types;
 pub mod vector_index;

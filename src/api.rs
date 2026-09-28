@@ -40,7 +40,14 @@ use utoipa::{
 use axum::http::HeaderMap;
 use axum::middleware::{from_fn, Next};
 
-use crate::auth::{auth_middleware, AuthConfig, AuthContext, LumenVerifier, Role};
+use crate::access::{
+    application::{
+        auth_config::AuthConfig,
+        authorization::{AuthContext, Role},
+    },
+    infrastructure::lumen_verifier::LumenVerifier,
+    interfaces::http::auth_middleware,
+};
 use crate::backup_sink::{BackupSink, LocalFsSink};
 use crate::change_admission::PendingChangeCapacity;
 use crate::coordinator::{
@@ -1486,7 +1493,9 @@ async fn list_collections(
             async move {
                 match auth.ensure(&id, Role::Read).await {
                     Ok(()) => Ok(Some(id)),
-                    Err(crate::auth::AuthErr::Forbidden { .. }) => Ok(None),
+                    Err(crate::access::application::authorization::AuthErr::Forbidden {
+                        ..
+                    }) => Ok(None),
                     Err(e) => Err(ApiErr::from(e)),
                 }
             }
@@ -2355,7 +2364,9 @@ fn batch_search_storage_error(e: anyhow::Error) -> BatchSearchResult {
 /// SubjectAccessReview — with the same code and the same wording. One item's
 /// failure never fails the batch: the caller may legitimately hold read on
 /// some of the collections it asked about and not others.
-fn batch_search_auth_error(e: crate::auth::AuthErr) -> BatchSearchResult {
+fn batch_search_auth_error(
+    e: crate::access::application::authorization::AuthErr,
+) -> BatchSearchResult {
     let (_, code, message) = e.wire();
     BatchSearchResult::Error {
         code: code.to_string(),
@@ -3593,8 +3604,8 @@ impl IntoResponse for ApiErr {
     }
 }
 
-impl From<crate::auth::AuthErr> for ApiErr {
-    fn from(e: crate::auth::AuthErr) -> Self {
+impl From<crate::access::application::authorization::AuthErr> for ApiErr {
+    fn from(e: crate::access::application::authorization::AuthErr) -> Self {
         // A denial and an unanswered SubjectAccessReview reach the wire as
         // different statuses (403 vs 503); `AuthErr::wire` owns that split so
         // this conversion cannot quietly flatten it into one.

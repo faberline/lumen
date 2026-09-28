@@ -420,15 +420,20 @@ fn backup_service_account(cx: &RenderCtx<'_>) -> Value {
 /// instance (#2877): the operator's reshard driver and the backup runner.
 ///
 /// One definition, two consumers, and the mount path is the same constant
-/// [`crate::auth::control_plane_token_file`] reads — a renderer that invented
-/// its own path would produce a pod with a token mounted somewhere the client
-/// never looks, and the symptom would be an authentication failure rather than
-/// a missing file.
+/// [`control_plane_token_file`] reads — a renderer that invented its own path
+/// would produce a pod with a token mounted somewhere the client never looks,
+/// and the symptom would be an authentication failure rather than a missing
+/// file.
+///
+/// [`control_plane_token_file`]: crate::access::application::control_plane_token::control_plane_token_file
 pub(crate) fn control_plane_token() -> ProjectedServiceAccountToken<'static> {
+    use crate::access::application::control_plane_token::{
+        CONTROL_PLANE_TOKEN_MOUNT, CONTROL_PLANE_TOKEN_VOLUME,
+    };
     ProjectedServiceAccountToken::new(
-        crate::auth::CONTROL_PLANE_TOKEN_VOLUME,
-        crate::auth::CONTROL_PLANE_TOKEN_MOUNT,
-        crate::auth::AUDIENCE,
+        CONTROL_PLANE_TOKEN_VOLUME,
+        CONTROL_PLANE_TOKEN_MOUNT,
+        crate::access::domain::identity::AUDIENCE,
     )
 }
 

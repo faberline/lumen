@@ -25,7 +25,14 @@
 // HANDWRITE-BEGIN gap="missing-generator:unit-test:c90bbb42" tracker="#1646" reason="Lock Lumen's ownership boundary: shared OTLP tracing and shared reloadable peer transport, with no local duplicate tracer. generator gap: missing-generator:lumen-foundation-ownership-test (#1646)."
 const LUMEN_BIN: &str = include_str!("../../src/bin/lumen.rs");
 const LUMEN_MANIFEST: &str = include_str!("../../Cargo.toml");
-const LUMEN_AUTH: &str = include_str!("../../src/auth.rs");
+const LUMEN_AUTH: &str = concat!(
+    include_str!("../../src/access/domain/identity.rs"),
+    include_str!("../../src/access/application/authorization.rs"),
+    include_str!("../../src/access/application/auth_config.rs"),
+    include_str!("../../src/access/application/control_plane_token.rs"),
+    include_str!("../../src/access/infrastructure/lumen_verifier.rs"),
+    include_str!("../../src/access/interfaces/http.rs"),
+);
 const LUMEN_API: &str = include_str!("../../src/api.rs");
 const LUMEN_OPERATOR: &str = include_str!("../../src/operator/render.rs");
 const LUMEN_RIG_ADAPTER: &str = include_str!("rig_stateful_adapter.rs");

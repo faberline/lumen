@@ -101,7 +101,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde_path_to_error = "0.1"
 rustc-hash = "2.1"
-# Types only — `ServerConfig` / `ClientConfig` appear in `tls.rs`'s signatures.
+# Types only — `ServerConfig` / `ClientConfig` appear in
+# `access/infrastructure/tls.rs`'s signatures.
 # Every builder, PEM loader, and client verifier lives in `libs/peer-tls`
 # (#2890 R6), which is why there is no `rustls-pemfile` here to parse anything
 # locally.
