@@ -87,8 +87,8 @@ const EXPECTED_ROWS: &str = r#"
 P|src/bin/lumen.rs|5|// shared module (`select_token`, `cr_@5@`, `secret_data_bytes`)
 P|src/operator/fleet.rs|4|json!({ "@4@": "lumen-tokens" }),
 P|src/operator/fleet.rs|6|json!({ "@6@": ["https://lumen.example.com"] }),
-P|src/operator/mod.rs|4,6|for retired in ["@6@", "identities", "@4@"] {
-P|src/operator/mod.rs|4,8|assert!(!yaml.contains("@8@"), "{yaml}");
+P|src/operator.rs|4,6|for retired in ["@6@", "identities", "@4@"] {
+P|src/operator.rs|4,8|assert!(!yaml.contains("@8@"), "{yaml}");
 P|src/spec.rs|4|The CRD configures **no** credential source. `spec.@4@`,
 P|src/spec.rs|6|`spec.identities` and `spec.@6@` are gone (#2872): a Lumen CR
 E|tests/it/cli_convention.rs|4|"@4@",
