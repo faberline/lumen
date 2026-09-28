@@ -1,3 +1,4 @@
+//! isolation: its resource columns are `getrusage(RUSAGE_SELF)` and RSS samples of this process, and its truncate gate waits for the process-wide collection reclaimer to return to baseline, so any other case in the same process would change both.
 // CODEGEN-BEGIN
 //! Competitive perf-regression GATE — native Rust, no Python/GIL.
 //!

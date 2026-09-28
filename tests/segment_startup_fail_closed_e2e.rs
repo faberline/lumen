@@ -1,3 +1,4 @@
+//! isolation: each refusal case releases a reserved loopback port and then asserts nothing ever listens on it, which only holds while no other case in the process binds ephemeral ports.
 //! Process-level startup oracle for the segment checkpoint root.
 //!
 //! This test invokes the packaged `lumen` binary. It does not call the segment

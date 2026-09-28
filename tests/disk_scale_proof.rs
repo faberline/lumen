@@ -1,3 +1,4 @@
+//! isolation: its bound is on this process's resident set size and page faults, which any other case running in the same process would inflate.
 // CODEGEN-BEGIN
 //! Stage 2 Phase 2i — THE SCALE PROOF.
 //!

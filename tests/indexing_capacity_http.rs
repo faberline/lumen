@@ -1,3 +1,4 @@
+//! isolation: these cases fill the process-shared pending-change budget that every `Engine` in the process draws from, so any other case in the same process would both refuse at full capacity and change the fill arithmetic these cases assert.
 //! Capacity admission, checkpoint progress, and committed-record HTTP E2E.
 //!
 //! Its own test binary, not a `tests/it` case: these cases fill the
