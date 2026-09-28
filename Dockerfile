@@ -5,8 +5,8 @@
 # context). Multi-stage: the distroless runtime carries only the binaries + a
 # non-root user, not the toolchain.
 #
-# Note: this is a cargo-workspace build, so the build context must be the repo
-# root (cargo needs every workspace member's Cargo.toml). A .dockerignore that
+# Note: the build context must be the repo root (cargo needs Cargo.toml,
+# Cargo.lock, and the vendored `vendor/jieba-rs` patch). A .dockerignore that
 # excludes target/ and .git keeps that context sane.
 
 # Match the host toolchain (1.92): the resolved lockfile pulls deps that require
