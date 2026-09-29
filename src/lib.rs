@@ -109,7 +109,7 @@ pub mod storage;
 pub use crate::access::infrastructure::tls;
 pub use crate::compat::tokenize;
 pub use crate::compat::types;
-pub mod vector_index;
+pub use crate::compat::vector_index;
 pub use crate::compat::wal;
 
 /// Product-neutral text-index contracts used by Lumen and other products.

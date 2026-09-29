@@ -26,4 +26,5 @@ pub mod segment_rdb;
 pub mod segment_restore;
 pub mod tokenize;
 pub mod types;
+pub mod vector_index;
 pub mod wal;

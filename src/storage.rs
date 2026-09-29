@@ -59,6 +59,10 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 use crate::index::domain::analysis::{ngram_stream, tokenize};
+use crate::index::domain::vector::{
+    flat_cpu_index::FlatCpuIndex, hnsw_cpu_index::HnswCpuIndex, open_backend,
+    quantize::ScalarCodebook, VectorIndex,
+};
 use crate::metrics::{CommittedApplyTelemetry, Metrics};
 use crate::persistence::infrastructure::composed_segment::{
     ComposedSegmentReader, PreparedScalarPublication, PreparedScalarReplacement,
@@ -87,7 +91,6 @@ use crate::shared_kernel::types::{
     },
     stats::{CacheStats, FieldStats, StatsResponse, StorageStats},
 };
-use crate::vector_index::{open_backend, FlatCpuIndex, HnswCpuIndex, ScalarCodebook, VectorIndex};
 use roaring::RoaringBitmap;
 
 const IDEMPOTENCY_TTL: Duration = Duration::from_secs(300);

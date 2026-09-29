@@ -194,11 +194,11 @@ fn vector_checkpoint_delta_does_not_enumerate_hnsw_corpus() {
     put("u1", vec![1.0, 0.0]);
     put("u2", vec![0.0, 1.0]);
     store.save_required(&engine, 81).unwrap();
-    let scans = crate::vector_index::HNSW_CHECKPOINT_FULL_SCANS.with(|count| count.get());
+    let scans = crate::index::domain::vector::HNSW_CHECKPOINT_FULL_SCANS.with(|count| count.get());
     put("u1", vec![2.0, 0.0]);
     let next = store.save_required(&engine, 82).unwrap();
     assert_eq!(
-        crate::vector_index::HNSW_CHECKPOINT_FULL_SCANS.with(|count| count.get()),
+        crate::index::domain::vector::HNSW_CHECKPOINT_FULL_SCANS.with(|count| count.get()),
         scans,
         "incremental checkpoint must not enumerate the HNSW corpus"
     );

@@ -671,3 +671,84 @@ paths = [
 ]
 subject = "index.domain"
 reason = "The change-record cost prices a text value by the terms its analyzer will emit: it bounds with tokenize's DEFAULT_NGRAM_MIN and DEFAULT_NGRAM_MAX, and counts a default-ngram value's distinct terms by streaming it through ngram_stream. P2: the default n-gram bounds and stream move to the shared kernel, which both ingest's pricing and index's analysis read."
+
+# The vector backends moved to index/domain/vector as-is. They still return
+# anyhow, drive hnsw_rs, rayon and roaring directly, read the clock and an env
+# var, log, keep their graph cache in index/infrastructure, and hold persistence's
+# segment reader and writer for their checkpoint layers.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/vector.rs",
+  "src/index/domain/vector/flat_cpu_index.rs",
+  "src/index/domain/vector/flat_cpu_index/backend.rs",
+  "src/index/domain/vector/hnsw_cpu_index.rs",
+  "src/index/domain/vector/hnsw_cpu_index/backend.rs",
+  "src/index/domain/vector/vector_store.rs",
+]
+subject = "anyhow"
+reason = "VectorIndex's methods, the backends' constructors and VectorStore::put return anyhow::Result, which storage.rs, the checkpoint sink and graph_cache propagate with ?. P2: an index domain error type (thiserror) that the callers convert."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/vector/hnsw_cpu_index.rs"]
+subject = "hnsw_rs"
+reason = "HnswBackend holds one hnsw_rs::Hnsw per metric, the graph HnswCpuIndex searches, and graph_cache dumps and reloads that same graph. P2: an ANN graph port in the index domain (insert, search) that an hnsw_rs adapter in index/infrastructure implements."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/vector/flat_cpu_index.rs",
+  "src/index/domain/vector/flat_cpu_index/backend.rs",
+]
+subject = "roaring"
+reason = "FlatVecs keeps the checkpoint rows that are absent, removed or replaced in a RoaringBitmap (tomb), built when a base or compacted base is installed. P2 decides whether roaring joins the domain's crates, since the storage postings that move in 8c are RoaringBitmaps too, or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/vector/flat_cpu_index/backend.rs"]
+subject = "rayon"
+reason = "The flat backend's search_knn_filtered scores its rows in parallel with rayon's par_iter. P2: the parallel scan runs on an executor port the index domain defines and infrastructure implements, or rayon is allowed as a pure compute crate."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/vector/hnsw_cpu_index.rs"]
+subject = "std::env"
+reason = "hnsw_search_ef reads LUMEN_HNSW_EF for the default search beam width. P2: the value comes from config through the app composition root (D1) and the backend takes it at construction."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/vector/hnsw_cpu_index.rs",
+  "src/index/domain/vector/hnsw_cpu_index/backend.rs",
+]
+subject = "std::time::Instant::now"
+reason = "E4: the HNSW backend times its graph-cache restore and rebuild (HnswRestoreTiming), a sealed segment's graph rebuild, and each add and remove's write-lock wait and hold, which the committed apply publishes. P2: a Clock port, as for the index context's other clock reads."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/vector/hnsw_cpu_index.rs"]
+subject = "tracing"
+reason = "E3: restore_with_graph_cache_timed logs whether the optional graph cache loaded or was ignored, and open_from_segment logs the start and end of a graph rebuild so an operator can tell recovery from a hung node. P2: the backend returns these as events the caller logs, or takes an observer."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/domain/vector/hnsw_cpu_index.rs",
+  "src/index/domain/vector/hnsw_cpu_index/backend.rs",
+]
+subject = "domain->infrastructure"
+reason = "HnswBackend::Cached holds graph_cache's OwnedGraph, restore_with_graph_cache_timed loads through graph_cache's load_timed and records its LoadTiming, and save_graph_cache calls graph_cache::save. The cache is file IO (manifest, payload hashes, the hnsw_rs dump), so it stays in infrastructure. P2: a graph-cache port in the index domain (load, save and an opaque cached graph) that graph_cache implements, handed to the backend at construction."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/domain/vector.rs",
+  "src/index/domain/vector/flat_cpu_index.rs",
+  "src/index/domain/vector/flat_cpu_index/backend.rs",
+  "src/index/domain/vector/hnsw_cpu_index.rs",
+  "src/index/domain/vector/hnsw_cpu_index/backend.rs",
+]
+subject = "persistence.infrastructure"
+reason = "VectorIndex's checkpoint methods take and return Arc<SegmentReader>, the mmap reader of a sealed vector segment: the flat backend serves rows from its base and delta readers, both backends seal with write_vector_segment and reopen with SegmentReader::open, and HnswCpuIndex::open_from_segment rebuilds from one. P2: a vector-segment port in the index domain (row reads and a sealed writer) that the persistence segment implements."

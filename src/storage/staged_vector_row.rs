@@ -104,9 +104,9 @@ impl StagedVectorRow {
     /// and decode_sq. Only one bounded native-byte chunk is allocated.
     pub(crate) fn stage_sq_canonical(
         &self,
-        mut codebook: crate::vector_index::ScalarCodebook,
+        mut codebook: crate::index::domain::vector::quantize::ScalarCodebook,
         mut reserve: impl FnMut(usize) -> Result<()>,
-    ) -> Result<(Self, crate::vector_index::ScalarCodebook)> {
+    ) -> Result<(Self, crate::index::domain::vector::quantize::ScalarCodebook)> {
         codebook.widen(self.as_f32_slice());
         let scratch = DECODE_CHUNK_BYTES.min(
             self.dim
@@ -204,7 +204,7 @@ impl Drop for OwnedDirectory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vector_index::{decode_sq, encode_sq, ScalarCodebook};
+    use crate::index::domain::vector::quantize::{decode_sq, encode_sq, ScalarCodebook};
 
     fn le_words(bits: &[u32]) -> Vec<u8> {
         bits.iter().flat_map(|bits| bits.to_le_bytes()).collect()
