@@ -9,6 +9,7 @@ pub(crate) mod snapshot;
 
 use anyhow::{anyhow, Result};
 
+use crate::index::domain::collection::coverage::{FieldAudit, TEXT_UNAUDITABLE};
 use crate::index::domain::hash_index::HashIndex;
 use crate::index::domain::keyword_index::KeywordIndex;
 use crate::index::domain::number_index::NumberIndex;
@@ -16,7 +17,6 @@ use crate::index::domain::set_index::SetIndex;
 use crate::index::domain::text_index::TextIndex;
 use crate::index::domain::vector::{open_backend, VectorIndex};
 use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, FieldType, VectorSpec};
-use crate::storage::{FieldAudit, TEXT_UNAUDITABLE};
 
 /// One field's index. Vector fields hold a heap-allocated trait
 /// object pointing at the chosen backend.

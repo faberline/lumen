@@ -17,6 +17,7 @@
 //! like a Full at the fully-priced bound.
 
 use super::Engine;
+use crate::index::domain::record_ram::{estimate_record_decode_peak, estimate_record_ram};
 use crate::ingest::domain::change_budget::{
     AdmissionError, BudgetWake, ChangeBudget, Owner, OwnerCapacityState, Reservation,
     RetainedCharge,
@@ -325,12 +326,11 @@ impl Engine {
     }
 
     pub(crate) fn record_owned_bytes(entry: &RaftLogEntry) -> Result<usize, RecordAdmissionError> {
-        super::record_ram::estimate_record_ram(entry).map_err(|_| RecordAdmissionError::Overflow)
+        estimate_record_ram(entry).map_err(|_| RecordAdmissionError::Overflow)
     }
 
     pub(crate) fn record_decode_peak(entry: &RaftLogEntry) -> Result<usize, RecordAdmissionError> {
-        super::record_ram::estimate_record_decode_peak(entry)
-            .map_err(|_| RecordAdmissionError::Overflow)
+        estimate_record_decode_peak(entry).map_err(|_| RecordAdmissionError::Overflow)
     }
 
     /// Replace the scanning workspace price after a bounded wire decoder has

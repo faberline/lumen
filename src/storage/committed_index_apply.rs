@@ -11,6 +11,7 @@ use super::committed_index_plan::{
 use super::committed_replace_apply::{ReplacementInput, ReplacementLedger};
 use super::committed_replace_plan as replace_plan;
 use super::*;
+use crate::index::domain::collection::{Collection, IDEMPOTENCY_TTL};
 use crate::index::domain::field_coverage::FieldCoverage;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::hash_index::parse_hash_number;

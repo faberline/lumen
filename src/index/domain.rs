@@ -5,6 +5,7 @@
 //! key, the fast hash maps, and the storage error type.
 
 pub(crate) mod analysis;
+pub(crate) mod collection;
 pub(crate) mod fast_hash;
 pub(crate) mod field_coverage;
 pub(crate) mod field_index;
@@ -13,6 +14,8 @@ pub(crate) mod interner;
 pub(crate) mod keyword_index;
 pub(crate) mod number_index;
 pub(crate) mod postings;
+pub(crate) mod record_ram;
+pub(crate) mod schema_validation;
 pub(crate) mod set_index;
 pub(crate) mod sortable_f64;
 pub(crate) mod storage_error;

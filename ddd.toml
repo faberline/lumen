@@ -883,3 +883,54 @@ paths = [
 ]
 subject = "persistence.infrastructure"
 reason = "HashIndex holds its sealed base as an Arc<ComposedSegmentReader>, like the other field indexes. FieldIndex's seal writes each scalar field through the persistence segment's number, hash, keyword and set writers, and the seal and reopen open the written file with SegmentReader::open and wrap it in ComposedSegmentReader::from_base. P2: the sealed-segment reader port above, plus a scalar-segment writer port in the index domain that the persistence segment implements, as the vector-segment port."
+
+# The collection entity moved to index/domain as-is, with the schema and value
+# checks and the record RAM bound. Collection returns anyhow, reads the clock
+# for its request-id window and the recovery profile, creates its seal
+# directory, holds ingest's ChangeJournal and journals each write against the
+# change budget's RetainedCharge, and seals and reopens through persistence's
+# segment writers and readers (E16: persistence and index depend on each other).
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/collection.rs",
+  "src/index/domain/collection/checkpoint.rs",
+  "src/index/domain/collection/segments.rs",
+  "src/index/domain/collection/snapshot.rs",
+  "src/index/domain/schema_validation.rs",
+]
+subject = "anyhow"
+reason = "Collection::new, check_live (a StorageError::Gone converted with into), the dirty tracking and checkpoint_value, the snapshot conversion, and the seal and reopen return anyhow::Result, passing up FieldIndex's, the segment writers' and SegmentReader::open's anyhow errors; validate_schema bails on a bad field spec, and validate_value on a value its field cannot hold. The Engine in storage.rs propagates them with ?. P2: an index domain error type (with FieldIndex's, see the anyhow exceptions above) that the segment ports return and the Engine maps at the application boundary."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/collection.rs",
+  "src/index/domain/collection/segments.rs",
+]
+subject = "std::time::Instant::now"
+reason = "E4: check_request_id stamps each request id it admits and gc_requests expires them after IDEMPOTENCY_TTL, and the segment reopen times each vector field's open and each field's coverage rebuild for the RecoveryProfile. P2: a Clock port, as for the index context's other clock reads, with the request-id window taking its now from the caller."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/collection/segments.rs"]
+subject = "std::fs"
+reason = "seal_to_segments_with_layout creates the seal directory, and its fields subdirectory for the encoded layout, with std::fs::create_dir_all before it writes the segments. P2: the scalar-segment writer port below creates its own directory, and the seal and reopen move behind it to infrastructure."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/domain/collection.rs",
+  "src/index/domain/collection/checkpoint.rs",
+  "src/index/domain/collection/segments.rs",
+  "src/index/domain/collection/snapshot.rs",
+]
+subject = "ingest.domain"
+reason = "Collection holds a ChangeJournal<CheckpointValue> of the rows written since its last checkpoint, which new, from_snapshot and open_from_segments_with_vectors start empty, and mark_field_dirty_charged journals each row against the change budget's RetainedCharge. P2: the journal and its charge sit behind an ingest application port the Engine passes in, or move to shared_kernel if both contexts own them."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/index/domain/collection/segments.rs"]
+subject = "persistence.infrastructure"
+reason = "The seal writes the collection's external-id column and each vector field's row-id sidecar with eid_writer::write_eid_segment, and the reopen reads them back with SegmentReader::open and maps a field's loaded base rows with ComposedSegmentReader::from_mapped_base. P2: the sealed-segment reader port and the scalar-segment writer port above, with an external-id column in each."
