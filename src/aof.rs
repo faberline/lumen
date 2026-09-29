@@ -585,7 +585,7 @@ mod tests {
         assert_eq!(AofReader::replay(&path, 0, |_, _| {}).unwrap(), 1);
     }
     use crate::ingest::domain::change_budget::ChangeBudget;
-    use crate::segment_rdb::SegmentRdbStore;
+    use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::{
         document::{FieldValue, IndexItem, IndexRequest},

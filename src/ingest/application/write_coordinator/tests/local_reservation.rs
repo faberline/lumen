@@ -141,7 +141,12 @@ async fn future_local_reservation_cannot_starve_earlier_external_record() {
     assert_eq!(coord.applied_seq(), 0);
 
     let directory = tempfile::tempdir().unwrap();
-    let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(directory.path()).unwrap());
+    let store = Arc::new(
+        crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(
+            directory.path(),
+        )
+        .unwrap(),
+    );
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let checkpoint = tokio::spawn({
         let stop = stop.clone();

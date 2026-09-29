@@ -1,7 +1,7 @@
 //! Checkpoint measurements use real file identities and completed lock intervals.
 //! Byte counts are logical file bytes, not filesystem block/device traffic.
 
-use super::{CollectionCatalog, SegmentKind};
+use crate::persistence::domain::generation_manifest::{CollectionCatalog, SegmentKind};
 use crate::shared_kernel::capture_barrier::CaptureLease;
 use anyhow::{bail, Result};
 use std::collections::BTreeMap;
@@ -101,7 +101,10 @@ pub(super) fn generation_disk_bytes(root: &Path) -> Result<u64> {
     }
     sum(files.into_values())
 }
-pub(super) fn pending_deltas(root: &Path, collections: &[CollectionCatalog]) -> Result<(u64, u64)> {
+pub(in crate::persistence) fn pending_deltas(
+    root: &Path,
+    collections: &[CollectionCatalog],
+) -> Result<(u64, u64)> {
     let mut bytes = 0u64;
     let mut layers = 0u64;
     for segment in collections

@@ -617,7 +617,9 @@ fn borrowed_hash_large_leading_zero_source_retains_only_small_changes() {
     // The encoded value is larger than this Engine's entire change budget.
     let actual = hash_engine();
     let root = tempfile::tempdir().unwrap();
-    let store = crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap();
+    let store =
+        crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(root.path())
+            .unwrap();
     {
         let apply = actual.capture_barrier.apply();
         actual

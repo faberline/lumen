@@ -154,7 +154,10 @@ fn snapshot_reshard_batches_splits_oversized_bucket_delta_by_bytes() {
     let collection_id = "docs";
     let source = std::sync::Arc::new(Engine::new());
     let checkpoint_dir = tempfile::tempdir().unwrap();
-    let checkpoint = crate::segment_rdb::SegmentRdbStore::new(checkpoint_dir.path()).unwrap();
+    let checkpoint = crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(
+        checkpoint_dir.path(),
+    )
+    .unwrap();
     source
         .create_collection(
             collection_id,

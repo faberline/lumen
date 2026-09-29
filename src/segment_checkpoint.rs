@@ -13,6 +13,12 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::ingest::domain::change_budget::{BudgetWake, ChangeBudget, Snapshot};
+#[cfg(test)]
+use crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCaptureToken;
+use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
+    checkpoint_diagnostic_enabled, CheckpointDiagnosticContext,
+};
+use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 
 const WAITER_SHUTDOWN_POLL: Duration = Duration::from_millis(50);
 static NEXT_CHECKPOINT_ATTEMPT_ID: AtomicU64 = AtomicU64::new(1);
@@ -23,7 +29,7 @@ static NEXT_CHECKPOINT_ATTEMPT_ID: AtomicU64 = AtomicU64::new(1);
 /// memory is intentionally never written to the checkpoint or graph cache.
 struct HnswCacheSealMarker {
     engine: Weak<Engine>,
-    store: Weak<crate::segment_rdb::SegmentRdbStore>,
+    store: Weak<SegmentRdbStore>,
     stamp: crate::shared_kernel::capture_barrier::MutationStamp,
 }
 
@@ -45,7 +51,7 @@ static HNSW_CACHE_SEALS: OnceLock<Mutex<HashMap<HnswCacheSealKey, HnswCacheSealM
 /// ever-growing AOF tail).
 pub struct SegmentCheckpointSink {
     pub engine: Arc<Engine>,
-    pub store: Arc<crate::segment_rdb::SegmentRdbStore>,
+    pub store: Arc<SegmentRdbStore>,
     pub writer: Arc<dyn crate::ingest::application::write_coordinator::WriteSink>,
     pub aof: Option<crate::ingest::application::write_coordinator::SharedAof>,
 }
@@ -566,17 +572,16 @@ impl SegmentCheckpointSink {
         &self,
         fence: Option<crate::segment_capacity::PublicationFence>,
         origin: CheckpointTraceOrigin,
-        diagnostic_context: Option<crate::segment_rdb::CheckpointDiagnosticContext>,
+        diagnostic_context: Option<CheckpointDiagnosticContext>,
     ) -> Result<bool> {
         let diagnostic_context = diagnostic_context.or_else(|| {
-            (matches!(origin, CheckpointTraceOrigin::Manual)
-                && crate::segment_rdb::checkpoint_diagnostic_enabled())
-            .then(|| {
-                crate::segment_rdb::CheckpointDiagnosticContext::new(
-                    origin.label(),
-                    Some(NEXT_CHECKPOINT_ATTEMPT_ID.fetch_add(1, Ordering::Relaxed)),
-                )
-            })
+            (matches!(origin, CheckpointTraceOrigin::Manual) && checkpoint_diagnostic_enabled())
+                .then(|| {
+                    CheckpointDiagnosticContext::new(
+                        origin.label(),
+                        Some(NEXT_CHECKPOINT_ATTEMPT_ID.fetch_add(1, Ordering::Relaxed)),
+                    )
+                })
         });
         if let Some(context) = diagnostic_context {
             context.trace_phase("checkpoint_started");
@@ -623,10 +628,7 @@ impl SegmentCheckpointSink {
         Ok(true)
     }
 
-    pub(crate) fn checkpoint_sync(
-        &self,
-        store: &crate::segment_rdb::SegmentRdbStore,
-    ) -> Result<()> {
+    pub(crate) fn checkpoint_sync(&self, store: &SegmentRdbStore) -> Result<()> {
         let origin = if store.has_publication_fence() {
             CheckpointTraceOrigin::CapacityOwner
         } else {
@@ -637,9 +639,9 @@ impl SegmentCheckpointSink {
 
     fn checkpoint_sync_with_origin(
         &self,
-        store: &crate::segment_rdb::SegmentRdbStore,
+        store: &SegmentRdbStore,
         _origin: CheckpointTraceOrigin,
-        diagnostic_context: Option<crate::segment_rdb::CheckpointDiagnosticContext>,
+        diagnostic_context: Option<CheckpointDiagnosticContext>,
     ) -> Result<()> {
         let mut attempt = CheckpointAttempt::start(self.engine.metrics());
         let result = (|| {
@@ -728,7 +730,7 @@ impl SegmentCheckpointSink {
         self: Arc<Self>,
         period: Duration,
         budget: ChangeBudget,
-        token: crate::segment_rdb::DiagnosticCaptureToken,
+        token: DiagnosticCaptureToken,
     ) -> (SegmentCheckpointDriver, oneshot::Receiver<()>) {
         let (idle_tx, idle_rx) = oneshot::channel();
         (self.spawn_driver_inner(period, budget, true, Some((token, idle_tx))), idle_rx)
@@ -739,7 +741,7 @@ impl SegmentCheckpointSink {
         period: Duration,
         budget: ChangeBudget,
         configured: bool,
-        #[cfg(test)] diagnostic: Option<(crate::segment_rdb::DiagnosticCaptureToken, oneshot::Sender<()>)>,
+        #[cfg(test)] diagnostic: Option<(DiagnosticCaptureToken, oneshot::Sender<()>)>,
     ) -> SegmentCheckpointDriver {
         let capacity_owner = crate::segment_capacity::Owner::start(self.clone(), configured)
             .expect("start native layer capacity owner");
@@ -779,22 +781,31 @@ impl SegmentCheckpointSink {
                 let owner_before = self.engine.capacity_owner_state();
                 if let Some(reason) = schedule.select_attempt(now, pending, owner_before) {
                     #[cfg(not(test))]
-                    let diagnostic_context = crate::segment_rdb::checkpoint_diagnostic_enabled().then(|| {
-                        crate::segment_rdb::CheckpointDiagnosticContext::new(
+                    let diagnostic_context = checkpoint_diagnostic_enabled().then(|| {
+                        CheckpointDiagnosticContext::new(
                             CheckpointTraceOrigin::Periodic.label(),
                             Some(NEXT_CHECKPOINT_ATTEMPT_ID.fetch_add(1, Ordering::Relaxed)),
                         )
                     });
                     #[cfg(test)]
-                    let diagnostic_context = (capture_token.is_some() || crate::segment_rdb::checkpoint_diagnostic_enabled()).then(|| {
-                        let context = crate::segment_rdb::CheckpointDiagnosticContext::new(
-                            CheckpointTraceOrigin::Periodic.label(),
-                            Some(NEXT_CHECKPOINT_ATTEMPT_ID.fetch_add(1, Ordering::Relaxed)),
-                        );
-                        if let Some(token) = capture_token { context.with_capture(token) } else { context }
-                    });
+                    let diagnostic_context =
+                        (capture_token.is_some() || checkpoint_diagnostic_enabled()).then(|| {
+                            let context = CheckpointDiagnosticContext::new(
+                                CheckpointTraceOrigin::Periodic.label(),
+                                Some(NEXT_CHECKPOINT_ATTEMPT_ID.fetch_add(1, Ordering::Relaxed)),
+                            );
+                            if let Some(token) = capture_token {
+                                context.with_capture(token)
+                            } else {
+                                context
+                            }
+                        });
                     if let Some(context) = diagnostic_context {
-                        context.trace_scheduler_selected(reason.label(), resample_source.label(), pending);
+                        context.trace_scheduler_selected(
+                            reason.label(),
+                            resample_source.label(),
+                            pending,
+                        );
                     }
                     match self
                         .checkpoint_with_fence(
@@ -974,10 +985,10 @@ impl SpillDirectory {
     }
 }
 
-pub(crate) fn temporary_spill_store() -> Result<Arc<crate::segment_rdb::SegmentRdbStore>> {
+pub(crate) fn temporary_spill_store() -> Result<Arc<SegmentRdbStore>> {
     let root = Arc::new(SpillDirectory::create()?);
     Ok(Arc::new(
-        crate::segment_rdb::SegmentRdbStore::new(&root.path)?.with_root_guard(root),
+        SegmentRdbStore::new(&root.path)?.with_root_guard(root),
     ))
 }
 
@@ -1000,9 +1011,7 @@ impl PendingChangeSpill {
     #[doc(hidden)]
     pub fn temporary(engine: Arc<Engine>, period: Duration) -> Result<Self> {
         let root = Arc::new(SpillDirectory::create()?);
-        let store = Arc::new(
-            crate::segment_rdb::SegmentRdbStore::new(&root.path)?.with_root_guard(root.clone()),
-        );
+        let store = Arc::new(SegmentRdbStore::new(&root.path)?.with_root_guard(root.clone()));
         Ok(Self::start(engine, store, period, Some(root)))
     }
 
@@ -1011,7 +1020,7 @@ impl PendingChangeSpill {
     #[doc(hidden)]
     pub fn configured_replay(
         engine: Arc<Engine>,
-        store: Arc<crate::segment_rdb::SegmentRdbStore>,
+        store: Arc<SegmentRdbStore>,
         period: Duration,
     ) -> Self {
         Self::start(engine, store, period, None)
@@ -1019,7 +1028,7 @@ impl PendingChangeSpill {
 
     fn start(
         engine: Arc<Engine>,
-        store: Arc<crate::segment_rdb::SegmentRdbStore>,
+        store: Arc<SegmentRdbStore>,
         period: Duration,
         temporary_root: Option<Arc<SpillDirectory>>,
     ) -> Self {
@@ -1053,7 +1062,7 @@ impl PendingChangeSpill {
     }
 
     #[doc(hidden)]
-    pub fn store(&self) -> &Arc<crate::segment_rdb::SegmentRdbStore> {
+    pub fn store(&self) -> &Arc<SegmentRdbStore> {
         &self.sink.store
     }
 }
@@ -1111,7 +1120,7 @@ mod tests {
             .and_then(|state| state.checkpoint_request_revision)
             .expect("capacity request revision");
         let root = tempfile::tempdir().unwrap();
-        let store = crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap();
+        let store = SegmentRdbStore::new(root.path()).unwrap();
         let sink = SegmentCheckpointSink {
             engine: engine.clone(),
             store: Arc::new(store),
@@ -1137,7 +1146,7 @@ mod tests {
     async fn shutdown_graph_cache_preserves_current_and_durable_aof_tail() {
         let root = tempfile::tempdir().unwrap();
         let engine = Arc::new(Engine::new());
-        let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
+        let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
         let tail = root.path().join("aof.log");
         let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
         let writer =
@@ -1191,7 +1200,7 @@ mod tests {
     async fn sealed_hnsw_cache_is_reused_only_until_the_next_mutation() {
         let root = tempfile::tempdir().unwrap();
         let engine = Arc::new(Engine::new());
-        let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
+        let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
         let tail = root.path().join("aof.log");
         let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
         let writer =
@@ -1260,7 +1269,7 @@ mod tests {
         );
         let sink = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),
-            store: Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap()),
+            store: Arc::new(SegmentRdbStore::new(root.path()).unwrap()),
             writer,
             aof: None,
         });
@@ -1279,7 +1288,7 @@ mod tests {
     async fn sealed_hnsw_cache_is_invalidated_by_direct_reshard_and_restore_calls() {
         let root = tempfile::tempdir().unwrap();
         let engine = Arc::new(Engine::new());
-        let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
+        let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
         let tail = root.path().join("aof.log");
         let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
         let writer =
@@ -1392,7 +1401,7 @@ mod tests {
         let in_flight = gate.shared().await.unwrap();
         let sink = Arc::new(SegmentCheckpointSink {
             engine,
-            store: Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap()),
+            store: Arc::new(SegmentRdbStore::new(root.path()).unwrap()),
             writer,
             aof: None,
         });
@@ -1460,7 +1469,7 @@ mod tests {
         let root_path = root.path.clone();
         let sink = {
             let store = Arc::new(
-                crate::segment_rdb::SegmentRdbStore::new_with_failure_injector(&root.path, hold)
+                SegmentRdbStore::new_with_failure_injector(&root.path, hold)
                     .unwrap()
                     .with_root_guard(root.clone()),
             );
@@ -1652,7 +1661,7 @@ mod tests {
             .create_collection("captured", spill_keyword_schema())
             .unwrap();
         admitted_keyword(&engine, "old", "old");
-        let baseline = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
+        let baseline = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
         baseline.save_with_sequence(&engine, 1).unwrap();
         let apply = engine.capture_barrier.apply();
         apply.initialize_sequence(1);
@@ -1664,7 +1673,7 @@ mod tests {
             "admitted captured row must own pending bytes"
         );
         let store = Arc::new(
-            crate::segment_rdb::SegmentRdbStore::new_with_failure_injector(
+            SegmentRdbStore::new_with_failure_injector(
                 root.path(),
                 Arc::new(FailOnce(Mutex::new(Some(
                     storage_durable::CommitStep::SyncFile,
@@ -1711,7 +1720,7 @@ mod tests {
         apply.initialize_sequence(23);
         drop(apply);
         let root = tempfile::tempdir().unwrap();
-        let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
+        let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
         let sink = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),
             store: store.clone(),
@@ -1778,11 +1787,7 @@ mod tests {
             released: (Mutex::new(false), std::sync::Condvar::new()),
         });
         let store = Arc::new(
-            crate::segment_rdb::SegmentRdbStore::new_with_failure_injector(
-                root.path(),
-                hold.clone(),
-            )
-            .unwrap(),
+            SegmentRdbStore::new_with_failure_injector(root.path(), hold.clone()).unwrap(),
         );
         // Establish a durable predecessor first, then create a real changed
         // checkpoint payload. This makes the injected SyncFile pause belong
@@ -1867,7 +1872,7 @@ mod tests {
         let apply = engine.capture_barrier.apply();
         apply.initialize_sequence(7);
         drop(apply);
-        let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
+        let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
         let mut spill =
             PendingChangeSpill::configured_replay(engine, store.clone(), Duration::from_secs(3600));
         assert!(spill.temporary_root.is_none());
@@ -1900,7 +1905,7 @@ mod tests {
             )
             .unwrap();
         let writer = Arc::new(Watermark(AtomicU64::new(0)));
-        let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
+        let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
         let sink = SegmentCheckpointSink {
             engine: engine.clone(),
             store: store.clone(),
@@ -2487,7 +2492,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn real_driver_budget_notice_has_one_ordered_numeric_attempt() {
-        use crate::segment_rdb::{DiagnosticCapture, NumericCanonicalEvent as Event};
+        use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
+            DiagnosticCapture, NumericCanonicalEvent as Event,
+        };
 
         let capture = DiagnosticCapture::new();
         let budget = ChangeBudget::new();
@@ -2497,7 +2504,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let sink = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),
-            store: Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap()),
+            store: Arc::new(SegmentRdbStore::new(root.path()).unwrap()),
             writer: Arc::new(EngineWatermarkSink::new(engine.clone())),
             aof: None,
         });
@@ -2566,7 +2573,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn real_driver_zero_period_reports_deadline_tick() {
-        use crate::segment_rdb::{DiagnosticCapture, NumericCanonicalEvent as Event};
+        use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
+            DiagnosticCapture, NumericCanonicalEvent as Event,
+        };
 
         let capture = DiagnosticCapture::new();
         let budget = ChangeBudget::new();
@@ -2574,7 +2583,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let sink = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),
-            store: Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap()),
+            store: Arc::new(SegmentRdbStore::new(root.path()).unwrap()),
             writer: Arc::new(EngineWatermarkSink::new(engine.clone())),
             aof: None,
         });
@@ -2588,7 +2597,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn real_driver_reports_successor_after_blocked_first_publication() {
-        use crate::segment_rdb::{DiagnosticCapture, NumericCanonicalEvent as Event};
+        use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
+            DiagnosticCapture, NumericCanonicalEvent as Event,
+        };
 
         struct BlockFirstWrite {
             armed: AtomicBool,
@@ -2631,8 +2642,7 @@ mod tests {
         let sink = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),
             store: Arc::new(
-                crate::segment_rdb::SegmentRdbStore::new_with_failure_injector(root.path(), block)
-                    .unwrap(),
+                SegmentRdbStore::new_with_failure_injector(root.path(), block).unwrap(),
             ),
             writer: Arc::new(EngineWatermarkSink::new(engine.clone())),
             aof: None,
@@ -2684,26 +2694,40 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn real_driver_retries_frozen_pass_then_captures_fresh_pass() {
-        use crate::segment_rdb::{DiagnosticCapture, NumericCanonicalEvent as Event};
+        use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
+            DiagnosticCapture, NumericCanonicalEvent as Event,
+        };
 
         let capture = DiagnosticCapture::new();
         let budget = ChangeBudget::with_hard_limit(8 * 1024 * 1024);
         let engine = Arc::new(Engine::with_change_budget(budget.clone()));
-        engine.create_collection("captured", spill_keyword_schema()).unwrap();
+        engine
+            .create_collection("captured", spill_keyword_schema())
+            .unwrap();
         admitted_keyword(&engine, "old", "old");
         let root = tempfile::tempdir().unwrap();
-        crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap()
-            .save_with_sequence(&engine, 1).unwrap();
+        SegmentRdbStore::new(root.path())
+            .unwrap()
+            .save_with_sequence(&engine, 1)
+            .unwrap();
         let apply = engine.capture_barrier.apply();
         apply.initialize_sequence(1);
         drop(apply);
         admitted_keyword(&engine, "frozen", "frozen");
-        let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new_with_failure_injector(
-            root.path(), Arc::new(FailOnce(Mutex::new(Some(storage_durable::CommitStep::SyncFile)))),
-        ).unwrap());
+        let store = Arc::new(
+            SegmentRdbStore::new_with_failure_injector(
+                root.path(),
+                Arc::new(FailOnce(Mutex::new(Some(
+                    storage_durable::CommitStep::SyncFile,
+                )))),
+            )
+            .unwrap(),
+        );
         let sink = Arc::new(SegmentCheckpointSink {
-            engine: engine.clone(), store: store.clone(),
-            writer: Arc::new(EngineWatermarkSink::new(engine.clone())), aof: None,
+            engine: engine.clone(),
+            store: store.clone(),
+            writer: Arc::new(EngineWatermarkSink::new(engine.clone())),
+            aof: None,
         });
         assert!(sink.checkpoint_now().await.is_err());
         admitted_keyword(&engine, "fresh", "fresh");
@@ -2739,7 +2763,7 @@ mod tests {
     async fn budget_wake_does_not_repeat_high_checkpoint_for_each_small_change() {
         let root = tempfile::tempdir().unwrap();
         let engine = Arc::new(Engine::new());
-        let store = Arc::new(crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap());
+        let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
         let writer = Arc::new(Watermark(AtomicU64::new(7)));
         let sink = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),

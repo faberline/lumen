@@ -57,7 +57,9 @@ async fn full_local_admission_refuses_before_wal_publication() {
 
 #[tokio::test]
 async fn full_local_refusal_emits_one_numeric_diagnostic_without_wal_publish() {
-    use crate::segment_rdb::{DiagnosticCapture, NumericCanonicalEvent as Event};
+    use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
+        DiagnosticCapture, NumericCanonicalEvent as Event,
+    };
 
     let capture = DiagnosticCapture::new();
     let budget = ChangeBudget::with_hard_limit(1024 * 1024);
@@ -88,7 +90,9 @@ async fn full_local_refusal_emits_one_numeric_diagnostic_without_wal_publish() {
 
 #[tokio::test]
 async fn foreign_budget_full_without_local_work_has_unlinked_numeric_refusal() {
-    use crate::segment_rdb::{DiagnosticCapture, NumericCanonicalEvent as Event};
+    use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
+        DiagnosticCapture, NumericCanonicalEvent as Event,
+    };
 
     let capture = DiagnosticCapture::new();
     let budget = ChangeBudget::with_hard_limit(1024 * 1024);

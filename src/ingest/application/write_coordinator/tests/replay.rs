@@ -158,7 +158,10 @@ async fn full_raw_delivery_replays_the_same_head_before_later_records() {
     // real active schema work, which would make a synthetic Full assertion
     // race with maintenance rather than exercise the pinned raw head.
     let schema_dir = tempfile::tempdir().unwrap();
-    let schema_store = crate::segment_rdb::SegmentRdbStore::new(schema_dir.path()).unwrap();
+    let schema_store = crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(
+        schema_dir.path(),
+    )
+    .unwrap();
     schema_store.save(&engine, 0).unwrap();
     assert_eq!(
         budget.snapshot().active,

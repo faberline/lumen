@@ -100,7 +100,7 @@ pub mod segment_checkpoint;
 /// checkpoint never replaces a good one. Parallels [`rdb::LocalFsRdbStore`].
 /// Compiled by default; selected at runtime via `--persistence=segment` (the
 /// default binary keeps the CBOR RDB).
-pub mod segment_rdb;
+pub use crate::compat::segment_rdb;
 pub mod segment_restore;
 mod sharding;
 mod shared_kernel;

@@ -176,7 +176,10 @@ async fn committed_raft_head_waits_without_holding_capture_barrier() {
     // the new owner can correctly publish this schema while the test is
     // checking its capture-barrier behavior.
     let schema_dir = tempfile::tempdir().unwrap();
-    let schema_store = crate::segment_rdb::SegmentRdbStore::new(schema_dir.path()).unwrap();
+    let schema_store = crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(
+        schema_dir.path(),
+    )
+    .unwrap();
     schema_store.save(&engine, 0).unwrap();
     assert_eq!(
         budget.snapshot().active,

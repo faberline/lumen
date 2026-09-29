@@ -38,7 +38,7 @@ impl WriteCoordinator {
         let revision = revision.unwrap_or_default();
         #[cfg(test)]
         let capture = self.diagnostic_capture.lock().ok().and_then(|token| *token);
-        if !(crate::segment_rdb::checkpoint_diagnostic_enabled()
+        if !(crate::persistence::infrastructure::segment_rdb_store::diagnostic::checkpoint_diagnostic_enabled()
             || cfg!(test) && {
                 #[cfg(test)]
                 {
@@ -55,9 +55,9 @@ impl WriteCoordinator {
         }
         #[cfg(test)]
         if let Some(token) = capture {
-            crate::segment_rdb::send_numeric_event(
+            crate::persistence::infrastructure::segment_rdb_store::diagnostic::send_numeric_event(
                 token,
-                crate::segment_rdb::NumericCanonicalEvent::Refusal {
+                crate::persistence::infrastructure::segment_rdb_store::diagnostic::NumericCanonicalEvent::Refusal {
                     revision,
                     present: capacity_request_present,
                     requested: requested_bytes,
@@ -78,7 +78,10 @@ impl WriteCoordinator {
     }
 
     #[cfg(test)]
-    pub(crate) fn set_diagnostic_capture(&self, token: crate::segment_rdb::DiagnosticCaptureToken) {
+    pub(crate) fn set_diagnostic_capture(
+        &self,
+        token: crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCaptureToken,
+    ) {
         *self.diagnostic_capture.lock().unwrap() = Some(token);
     }
 

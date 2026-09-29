@@ -147,7 +147,7 @@ impl RaftStateMachine for EngineSm {
         let mut prefix = Vec::with_capacity(8);
         reader.take(8).read_to_end(&mut prefix)?;
         let mut input = prefix.as_slice().chain(reader);
-        if prefix == crate::segment_rdb::raft_archive::MAGIC {
+        if prefix == crate::persistence::infrastructure::segment_rdb_store::raft_archive::MAGIC {
             let store = self
                 .segment_store
                 .as_ref()
@@ -163,28 +163,29 @@ impl RaftStateMachine for EngineSm {
         let mut prefix = Vec::with_capacity(8);
         reader.take(8).read_to_end(&mut prefix)?;
         let mut input = prefix.as_slice().chain(reader);
-        let sequence = if prefix == crate::segment_rdb::raft_archive::MAGIC {
-            let store = self
-                .segment_store
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("segment archive needs a segment snapshot store"))?;
-            store.restore_raft_archive(&self.engine, &mut input, |sequence| {
-                self.applied.store(sequence, Ordering::Release)
-            })?
-        } else {
-            let rdb = read_legacy_snapshot(&mut input)?;
-            if let Some(store) = &self.segment_store {
-                store.restore_legacy_raft_snapshot(&self.engine, rdb, |sequence| {
+        let sequence =
+            if prefix == crate::persistence::infrastructure::segment_rdb_store::raft_archive::MAGIC
+            {
+                let store = self.segment_store.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("segment archive needs a segment snapshot store")
+                })?;
+                store.restore_raft_archive(&self.engine, &mut input, |sequence| {
                     self.applied.store(sequence, Ordering::Release)
                 })?
             } else {
-                let apply = self.engine.capture_barrier.apply();
-                self.engine.restore(rdb.snapshot)?;
-                apply.initialize_sequence(rdb.up_to_seq);
-                self.applied.store(rdb.up_to_seq, Ordering::Release);
-                rdb.up_to_seq
-            }
-        };
+                let rdb = read_legacy_snapshot(&mut input)?;
+                if let Some(store) = &self.segment_store {
+                    store.restore_legacy_raft_snapshot(&self.engine, rdb, |sequence| {
+                        self.applied.store(sequence, Ordering::Release)
+                    })?
+                } else {
+                    let apply = self.engine.capture_barrier.apply();
+                    self.engine.restore(rdb.snapshot)?;
+                    apply.initialize_sequence(rdb.up_to_seq);
+                    self.applied.store(rdb.up_to_seq, Ordering::Release);
+                    rdb.up_to_seq
+                }
+            };
         self.applied.store(sequence, Ordering::Release);
         Ok(())
     }
@@ -194,16 +195,20 @@ impl RaftStateMachine for EngineSm {
     }
 }
 
-impl SnapshotPreparation for crate::segment_rdb::raft_capture::SegmentRaftPreparation {
+impl SnapshotPreparation
+    for crate::persistence::infrastructure::segment_rdb_store::raft_capture::SegmentRaftPreparation
+{
     fn capture_at(self: Box<Self>, index: Index) -> Result<Box<dyn PreparedSnapshot>> {
         Ok(Box::new((*self).capture_at(index)?))
     }
 }
 
-impl PreparedSnapshot for crate::segment_rdb::raft_capture::SegmentRaftCapture {
+impl PreparedSnapshot
+    for crate::persistence::infrastructure::segment_rdb_store::raft_capture::SegmentRaftCapture
+{
     fn write_to(self: Box<Self>, writer: &mut dyn std::io::Write) -> Result<()> {
         let generation = (*self).publish()?;
-        crate::segment_rdb::raft_archive::write_archive(
+        crate::persistence::infrastructure::segment_rdb_store::raft_archive::write_archive(
             generation.path(),
             generation.sequence(),
             writer,

@@ -13,7 +13,7 @@ use crate::api::RestoreSink;
 use crate::ingest::application::write_coordinator::{
     errors::StorageFullError, mutation_gate::MutationGate, SharedAof, WriteSink,
 };
-use crate::segment_rdb::SegmentRdbStore;
+use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::capture_barrier::RestoreInhibition;
 use crate::storage::{Engine, SnapshotV1};
 

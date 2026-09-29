@@ -151,7 +151,7 @@ infrastructure = "src/sharding/infrastructure"
 
 [[contexts]]
 name = "replication"
-depends_on = ["ingest"]
+depends_on = ["ingest", "persistence"]
 [contexts.layers]
 domain = "src/replication/domain"
 application = "src/replication/application"
@@ -166,8 +166,10 @@ infrastructure = "src/ingest/infrastructure"
 
 [[contexts]]
 name = "persistence"
-depends_on = []
+depends_on = ["ingest"]
 [contexts.layers]
+domain = "src/persistence/domain"
+application = "src/persistence/application"
 infrastructure = "src/persistence/infrastructure"
 
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
@@ -460,3 +462,63 @@ paths = [
 ]
 subject = "ingest.infrastructure"
 reason = "EngineSm bounds a raft command's decode workspace with wire_cost::scan_workspace_bytes and applies a retained oversized fast-Index command through FastIndexScanner, the same bound and scanner the WAL path uses. P2: ingest's application layer exposes both."
+
+# The save gate is compiled twice: once as the checkpoint store's child and
+# once under segment_capacity, which must take the same gate type.
+
+[[exceptions]]
+rule = "B1"
+paths = ["src/persistence/infrastructure/segment_rdb_store.rs"]
+subject = "#[path]"
+reason = "mod save_gate reads src/persistence/infrastructure/segment_save_gate.rs, which segment_capacity.rs also includes with #[path], so SaveGate and SavePermit are defined in both places (D7). P2: the capacity worker moves into persistence and names the store's save gate instead of compiling its own copy."
+
+# The background merge moved to persistence/application as-is. It still
+# extends SegmentRdbStore and drives the store's staging helpers, and the
+# store, in turn, holds the merge scheduler and asks it for merges.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/application/background_merge.rs",
+  "src/persistence/application/background_merge/link.rs",
+  "src/persistence/application/background_merge/publish.rs",
+]
+subject = "application->infrastructure"
+reason = "The merge requests are methods on SegmentRdbStore, a Job carries the store, and merge_one stages, validates and publishes a generation with the store's manifest, layout and compaction helpers. request_merge enqueues on the worker queue in merge_worker. P2: the application layer defines a generation-store port the store implements, and the worker queue sits behind it."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/infrastructure/merge_worker.rs",
+  "src/persistence/infrastructure/segment_rdb_store.rs",
+  "src/persistence/infrastructure/segment_rdb_store/diagnostic.rs",
+  "src/persistence/infrastructure/segment_rdb_store/save.rs",
+  "src/persistence/infrastructure/segment_rdb_store/save_attempt.rs",
+]
+subject = "infrastructure->application"
+reason = "SegmentRdbStore holds its root's RootWork scheduler, a save waits on it for capacity (CapacityWait) and asks needs_merge before it requests a merge, and the merge worker runs merge_one on each Job it dequeues. The statics stay in infrastructure (E17). P2: the scheduler state becomes the port's implementation detail and the worker calls the application through that port."
+
+# ingest and persistence depend on each other (E16). depends_on declares
+# persistence -> ingest; the coordinator's use of the checkpoint diagnostic is
+# the other direction.
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/ingest/application/write_coordinator/capacity.rs"]
+subject = "persistence.infrastructure"
+reason = "The coordinator's capacity refusal records a numeric event in the checkpoint diagnostic trace (checkpoint_diagnostic_enabled, send_numeric_event, DiagnosticCaptureToken) so one trace shows both sides of a capacity wait. P2: ingest defines a capacity-trace port the persistence diagnostic implements, which breaks the cycle."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/infrastructure/segment_rdb_store/diagnostic.rs"]
+subject = "ingest.domain"
+reason = "The checkpoint diagnostic trace records the change budget's Snapshot when the scheduler selects a checkpoint. P2: ingest's application layer exposes the budget snapshot, or the trace takes the few counters it prints."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/replication/application/engine_sm.rs",
+  "src/replication/application/engine_sm/state_machine.rs",
+]
+subject = "persistence.infrastructure"
+reason = "EngineSm holds the SegmentRdbStore it checkpoints into, builds and restores Raft snapshots through the store's raft_capture and raft_archive (write_archive, the LSEGRAFT MAGIC sniff), and hands a SegmentRaftPreparation between the two phases. P2: persistence's application layer exposes snapshot capture and restore."

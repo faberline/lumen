@@ -208,7 +208,10 @@ mod tests {
                 "failed committed head must retain its staged payload"
             );
             let store =
-                crate::segment_rdb::SegmentRdbStore::new(dir.path().join("segments")).unwrap();
+                crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(
+                    dir.path().join("segments"),
+                )
+                .unwrap();
             assert!(
                 store.save_with_sequence(&engine, 1).is_err(),
                 "uncertain apply must refuse checkpoint publication"

@@ -2,4 +2,6 @@
 //! files and the readers over them, the checkpoint generations that publish
 //! them, the AOF, restore, background merge and compaction, and capacity.
 
+pub(crate) mod application;
+pub(crate) mod domain;
 pub(crate) mod infrastructure;

@@ -55,7 +55,9 @@ async fn check_slow_subscriber_capacity_relief(wait_for_capacity: bool) {
         .await
         .unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let store = crate::segment_rdb::SegmentRdbStore::new(dir.path()).unwrap();
+    let store =
+        crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(dir.path())
+            .unwrap();
     store.save(&engine, coord.applied_seq()).unwrap();
     let pinned = budget.snapshot().total;
     assert!(

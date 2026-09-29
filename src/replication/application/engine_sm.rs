@@ -21,6 +21,7 @@ use raft_runtime::{Index, OutcomeWindow};
 
 use crate::ingest::domain::change_budget::AdmissionError;
 use crate::ingest::domain::wal_record::WalRecord;
+use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::storage::{
     ApplyOutcome, Engine, RecordAdmissionError, RecordReservation, RepriceRecord,
@@ -36,7 +37,7 @@ pub struct EngineSm {
     applied: AtomicU64,
     outcomes: Mutex<OutcomeWindow<Result<ApplyOutcome>>>,
     failed: AtomicBool,
-    segment_store: Option<Arc<crate::segment_rdb::SegmentRdbStore>>,
+    segment_store: Option<Arc<SegmentRdbStore>>,
     layer_capacity_owner: Mutex<Option<crate::segment_capacity::Fallback>>,
 }
 
@@ -50,7 +51,7 @@ impl EngineSm {
     fn with_snapshot_store(
         engine: Arc<Engine>,
         from_seq: u64,
-        segment_store: Option<Arc<crate::segment_rdb::SegmentRdbStore>>,
+        segment_store: Option<Arc<SegmentRdbStore>>,
     ) -> Arc<Self> {
         engine.capture_barrier.apply().initialize_sequence(from_seq);
         Arc::new(EngineSm {
@@ -67,7 +68,7 @@ impl EngineSm {
     pub fn new_with_segment_store(
         engine: Arc<Engine>,
         from_seq: u64,
-        store: Arc<crate::segment_rdb::SegmentRdbStore>,
+        store: Arc<SegmentRdbStore>,
     ) -> Arc<Self> {
         Self::with_snapshot_store(engine, from_seq, Some(store))
     }

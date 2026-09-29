@@ -4428,7 +4428,8 @@ pub struct Engine {
     changes: record_admission::EngineChanges,
     pub(crate) layer_maintenance: Arc<crate::segment_capacity::Registry>,
     // Last: files remain available until live readers and pending payloads drop.
-    checkpoint_root_guards: Mutex<Vec<crate::segment_rdb::CheckpointRootGuard>>,
+    checkpoint_root_guards:
+        Mutex<Vec<crate::persistence::infrastructure::segment_rdb_store::CheckpointRootGuard>>,
 }
 
 /// `(to_map_version, bucket, collection_id, total_chunks)` — see
@@ -5789,7 +5790,7 @@ impl Engine {
 
     pub(crate) fn retain_checkpoint_root(
         &self,
-        root_guard: crate::segment_rdb::CheckpointRootGuard,
+        root_guard: crate::persistence::infrastructure::segment_rdb_store::CheckpointRootGuard,
     ) {
         let mut guards = self
             .checkpoint_root_guards
@@ -23116,7 +23117,11 @@ mod tests {
             schema.fields.insert("sig".into(), hash);
             engine.create_collection("c", schema).unwrap();
             let directory = tempfile::tempdir().unwrap();
-            let store = crate::segment_rdb::SegmentRdbStore::new(directory.path()).unwrap();
+            let store =
+                crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(
+                    directory.path(),
+                )
+                .unwrap();
             store.save(&engine, 0).unwrap();
             let fields = [
                 ("email", FieldValue::String("captured".into())),

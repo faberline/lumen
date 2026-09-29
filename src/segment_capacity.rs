@@ -2,15 +2,15 @@
 //! source and reservation while waiting outside every Engine/apply lock.
 //! A weak registry avoids an Engine -> checkpoint sink -> Engine ownership cycle.
 
+use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::segment_checkpoint::SegmentCheckpointSink;
-use crate::segment_rdb::SegmentRdbStore;
 use crate::storage::Engine;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::time::{Duration, Instant};
 
-#[path = "segment_save_gate.rs"]
+#[path = "persistence/infrastructure/segment_save_gate.rs"]
 mod publication_gate;
 
 #[derive(Default)]

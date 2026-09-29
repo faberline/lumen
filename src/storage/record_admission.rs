@@ -973,7 +973,10 @@ mod tests {
             "direct Engine changes must retain their actual pending charge"
         );
         let root = tempfile::tempdir().unwrap();
-        let store = crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap();
+        let store = crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(
+            root.path(),
+        )
+        .unwrap();
         store.save(&std::sync::Arc::new(engine), 0).unwrap();
         assert_eq!(budget.snapshot().total, 0);
         let (cold, _) = store.load_latest().unwrap().unwrap();
@@ -1157,7 +1160,10 @@ mod tests {
             value
         };
         let root = tempfile::tempdir().unwrap();
-        let store = crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap();
+        let store = crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(
+            root.path(),
+        )
+        .unwrap();
         let engine = std::sync::Arc::new(engine);
         store.save(&engine, 0).unwrap();
         assert_eq!(
@@ -1226,7 +1232,10 @@ mod tests {
             "candidate remains charged; replaced live state has dropped"
         );
         let root = tempfile::tempdir().unwrap();
-        let store = crate::segment_rdb::SegmentRdbStore::new(root.path()).unwrap();
+        let store = crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore::new(
+            root.path(),
+        )
+        .unwrap();
         store.save(&active, 0).unwrap();
         assert_eq!(
             budget.snapshot().total,

@@ -5,18 +5,18 @@
 use std::sync::{Arc, Condvar, Mutex};
 
 #[derive(Default)]
-pub(super) struct SaveGate {
+pub(crate) struct SaveGate {
     held: Mutex<bool>,
     released: Condvar,
 }
 
 #[must_use = "dropping the permit releases checkpoint serialization"]
-pub(super) struct SavePermit {
+pub(crate) struct SavePermit {
     gate: Arc<SaveGate>,
 }
 
 impl SaveGate {
-    pub(super) fn lock_owned(self: &Arc<Self>) -> SavePermit {
+    pub(crate) fn lock_owned(self: &Arc<Self>) -> SavePermit {
         let mut held = self.held.lock().unwrap_or_else(|p| p.into_inner());
         while *held {
             held = self.released.wait(held).unwrap_or_else(|p| p.into_inner());

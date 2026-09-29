@@ -132,7 +132,7 @@ pub struct WriteCoordinator {
     /// This is telemetry-only and does not take part in admission or retry.
     diagnostic_refusal_revision: AtomicU64,
     #[cfg(test)]
-    diagnostic_capture: Mutex<Option<crate::segment_rdb::DiagnosticCaptureToken>>,
+    diagnostic_capture: Mutex<Option<crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCaptureToken>>,
     layer_capacity_owner: Mutex<Option<crate::segment_capacity::Fallback>>,
     applied: AtomicU64,
     completions: Mutex<CompletionState>,
