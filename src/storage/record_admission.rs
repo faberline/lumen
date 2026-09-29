@@ -1345,7 +1345,7 @@ mod tests {
         // Derive the intended Text inputs independently from the shared stream.
         // Do not duplicate tokenizer windows or cost multipliers in this test.
         let mut unique = std::collections::BTreeSet::new();
-        crate::ngram_stream::stream_default_ngrams(&input, |token| {
+        crate::index::domain::analysis::ngram_stream::stream_default_ngrams(&input, |token| {
             unique.insert(token.as_bytes().to_vec());
             Ok::<_, ()>(())
         })

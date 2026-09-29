@@ -1,6 +1,7 @@
 //! The fixed-size table that counts a default-ngram field's distinct terms
 //! without allocating.
 
+use crate::index::domain::analysis::{ngram_stream, tokenize};
 use crate::ingest::domain::change_record_cost::text_upper_bound::{
     add, text_upper_bound, AnalyzerKind, NormalizeError, TextUpperBound,
 };
@@ -89,10 +90,10 @@ impl NgramDistinctTable {
         let conservative = text_upper_bound(
             input,
             AnalyzerKind::Ngram,
-            crate::tokenize::DEFAULT_NGRAM_MIN,
-            crate::tokenize::DEFAULT_NGRAM_MAX,
+            tokenize::DEFAULT_NGRAM_MIN,
+            tokenize::DEFAULT_NGRAM_MAX,
         )?;
-        let streamed = crate::ngram_stream::stream_default_ngrams(input, |token| {
+        let streamed = ngram_stream::stream_default_ngrams(input, |token| {
             self.add(token);
             if self.full {
                 Err(())
@@ -102,8 +103,8 @@ impl NgramDistinctTable {
         });
         match streamed {
             Ok(_) => (),
-            Err(crate::ngram_stream::NgramStreamError::Callback(())) => return Ok(conservative),
-            Err(crate::ngram_stream::NgramStreamError::TokenCountOverflow) => {
+            Err(ngram_stream::NgramStreamError::Callback(())) => return Ok(conservative),
+            Err(ngram_stream::NgramStreamError::TokenCountOverflow) => {
                 return Err(NormalizeError::Overflow);
             }
         }

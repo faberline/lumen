@@ -26,8 +26,6 @@ mod committed_replace_plan;
 mod committed_replace_view;
 mod committed_scalar_files;
 mod committed_text_apply;
-#[cfg(feature = "jieba")]
-mod jieba_disk_route;
 mod large_text_row;
 mod record_admission;
 mod record_apply;
@@ -38,7 +36,6 @@ mod staged_text_row;
 mod staged_vector_row;
 mod text_preparation;
 mod text_projection;
-mod unicode_lower_stream;
 pub(crate) use record_admission::{
     RecordAdmissionError, RecordApplyGuard, RecordReservation, RecordTransientReservation,
     RepriceRecord,
@@ -61,6 +58,7 @@ use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use thiserror::Error;
 
+use crate::index::domain::analysis::{ngram_stream, tokenize};
 use crate::metrics::{CommittedApplyTelemetry, Metrics};
 use crate::persistence::infrastructure::composed_segment::{
     ComposedSegmentReader, PreparedScalarPublication, PreparedScalarReplacement,
@@ -89,7 +87,6 @@ use crate::shared_kernel::types::{
     },
     stats::{CacheStats, FieldStats, StatsResponse, StorageStats},
 };
-use crate::tokenize;
 use crate::vector_index::{open_backend, FlatCpuIndex, HnswCpuIndex, ScalarCodebook, VectorIndex};
 use roaring::RoaringBitmap;
 
@@ -8464,7 +8461,7 @@ fn apply_value(
                 Analyzer::WhitespaceLower => tokenize::for_whitespace_lower_cow(&s, |tok| {
                     apply_token(idx, tok.as_ref());
                 }),
-                Analyzer::Ngram => crate::ngram_stream::stream_default_ngrams(
+                Analyzer::Ngram => ngram_stream::stream_default_ngrams(
                     &s,
                     |token| -> Result<(), std::convert::Infallible> {
                         apply_token(idx, token);
@@ -20886,8 +20883,7 @@ mod segment_text_diff_tests {
 
         let text = "İstanbul ABcd";
         index_doc(&engine, "unicode", text, Some(1.0));
-        let expected_len =
-            u32::try_from(crate::tokenize::tokenize(text, Analyzer::Ngram).len()).unwrap();
+        let expected_len = u32::try_from(tokenize::tokenize(text, Analyzer::Ngram).len()).unwrap();
         let doc_len = |subject: &Engine| {
             let state = subject.state.read().unwrap();
             let collection = state.collections.get("c").unwrap();
@@ -22850,12 +22846,12 @@ mod tests {
     #[test]
     fn record_cost_ngram_bound_covers_public_tokenizer_for_ascii_and_unicode() {
         for input in ["abcd", "İstanbul 42"] {
-            let actual = crate::tokenize::tokenize(input, Analyzer::Ngram);
+            let actual = tokenize::tokenize(input, Analyzer::Ngram);
             let bound = crate::ingest::domain::change_record_cost::text_upper_bound::text_upper_bound(
                 input,
                 crate::ingest::domain::change_record_cost::text_upper_bound::AnalyzerKind::Ngram,
-                crate::tokenize::DEFAULT_NGRAM_MIN,
-                crate::tokenize::DEFAULT_NGRAM_MAX,
+                tokenize::DEFAULT_NGRAM_MIN,
+                tokenize::DEFAULT_NGRAM_MAX,
             )
             .unwrap();
             assert!(bound.terms >= actual.len());

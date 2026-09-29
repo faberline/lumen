@@ -1,4 +1,3 @@
-// CODEGEN-BEGIN
 //! Tokenizers for `text` fields.
 //!
 //! Each [`Analyzer`] variant maps to one tokenizer impl. Schemas pick
@@ -88,7 +87,6 @@ mod tests {
         assert!(tokenize("a", Analyzer::Ngram).is_empty());
     }
 
-    // <HANDWRITE gap="missing-generator:unit-test" tracker="#1975" reason="unit-test section in tokenize.rs is hand-written pending codegen support">
     #[test]
     fn jieba_fallback_when_no_feature() {
         let tokens = tokenize("北京大學", Analyzer::Jieba);
@@ -136,6 +134,4 @@ mod tests {
         let tokens = tokenize("   ", Analyzer::Jieba);
         assert_eq!(tokens, Vec::<String>::new());
     }
-    // </HANDWRITE>
 }
-// CODEGEN-END

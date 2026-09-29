@@ -16,7 +16,9 @@ use std::cell::Cell;
 use anyhow::{anyhow, bail, Context, Result};
 use memmap2::{Mmap, MmapOptions};
 
-use super::unicode_lower_stream::{lowercase_stream_workspace_bytes, write_streaming_lowercase};
+use crate::index::infrastructure::analysis::unicode_lower_stream::{
+    lowercase_stream_workspace_bytes, write_streaming_lowercase,
+};
 use crate::persistence::infrastructure::segment::stream::text_projection::{
     write_text_projection, TextStreamView,
 };
@@ -445,7 +447,7 @@ mod tests {
 
     fn oracle(input: &str) -> BTreeMap<String, u32> {
         let mut terms = BTreeMap::new();
-        crate::tokenize::for_whitespace_lower_cow(input, |term| {
+        crate::index::domain::analysis::tokenize::for_whitespace_lower_cow(input, |term| {
             *terms.entry(term.into_owned()).or_insert(0) += 1;
         });
         terms

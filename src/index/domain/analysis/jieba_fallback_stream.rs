@@ -84,7 +84,7 @@ fn emit_non_cjk<E>(
     emit: &mut impl FnMut(&str) -> Result<(), E>,
 ) -> Result<(), JiebaFallbackStreamError<E>> {
     let mut failure = None;
-    crate::tokenize::for_whitespace_lower_cow(run, |token| {
+    crate::index::domain::analysis::tokenize::for_whitespace_lower_cow(run, |token| {
         if failure.is_some() {
             return;
         }
@@ -192,7 +192,8 @@ mod tests {
             "中中中",
         ];
         for input in corpus {
-            let expected = crate::tokenize::tokenize(input, Analyzer::Jieba);
+            let expected =
+                crate::index::domain::analysis::tokenize::tokenize(input, Analyzer::Jieba);
             let got = streamed(input);
             assert_eq!(got, expected, "input: {input:?}");
         }
@@ -210,7 +211,7 @@ mod tests {
         let run: String = edges.into_iter().collect();
         assert_eq!(
             streamed(&run),
-            crate::tokenize::tokenize(&run, Analyzer::Jieba)
+            crate::index::domain::analysis::tokenize::tokenize(&run, Analyzer::Jieba)
         );
     }
 
@@ -225,14 +226,14 @@ mod tests {
             let input = format!("中{scalar}文");
             assert_eq!(
                 streamed(&input),
-                crate::tokenize::tokenize(&input, Analyzer::Jieba)
+                crate::index::domain::analysis::tokenize::tokenize(&input, Analyzer::Jieba)
             );
         }
     }
 
     #[test]
     fn long_non_cjk_runs_match_shared_contextual_lowercase_without_output_collection() {
-        let expected = crate::tokenize::tokenize("ΣΟΣ", Analyzer::Jieba);
+        let expected = crate::index::domain::analysis::tokenize::tokenize("ΣΟΣ", Analyzer::Jieba);
         let repeats = 50_000usize;
         let input = " ΣΟΣ ".repeat(repeats);
         let mut seen = 0usize;

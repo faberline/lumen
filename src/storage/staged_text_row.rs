@@ -14,6 +14,11 @@ use anyhow::{anyhow, bail, Context, Result};
 #[cfg(test)]
 use std::cell::RefCell;
 
+#[cfg(not(feature = "jieba"))]
+use crate::index::domain::analysis::jieba_fallback_stream;
+use crate::index::domain::analysis::{ngram_stream, tokenize};
+#[cfg(feature = "jieba")]
+use crate::index::infrastructure::analysis::jieba_disk_route;
 use crate::persistence::infrastructure::segment::text_row_stage::{
     stage_text_row, TextRowStageOptions, TextTokenStream,
 };
@@ -101,9 +106,7 @@ impl StagedTextRow {
         } else {
             #[cfg(feature = "jieba")]
             let mut route = if analyzer == Analyzer::Jieba {
-                Some(super::jieba_disk_route::DiskRoute::create(
-                    stage_dir.path(),
-                )?)
+                Some(jieba_disk_route::DiskRoute::create(stage_dir.path())?)
             } else {
                 None
             };
@@ -226,19 +229,19 @@ impl Drop for StageDirectory {
 fn document_len(
     input: &str,
     analyzer: Analyzer,
-    #[cfg(feature = "jieba")] route: Option<&mut super::jieba_disk_route::DiskRoute>,
+    #[cfg(feature = "jieba")] route: Option<&mut jieba_disk_route::DiskRoute>,
 ) -> Result<u32> {
     match analyzer {
         Analyzer::Ngram => {
-            crate::ngram_stream::stream_default_ngrams(input, |_| Ok::<_, anyhow::Error>(()))
+            ngram_stream::stream_default_ngrams(input, |_| Ok::<_, anyhow::Error>(()))
                 .map_err(|error| anyhow!("stream staged Ngram Text length: {error}"))
         }
-        Analyzer::WhitespaceLower => Ok(crate::tokenize::for_whitespace_lower_cow(input, |_| {})),
+        Analyzer::WhitespaceLower => Ok(tokenize::for_whitespace_lower_cow(input, |_| {})),
         #[cfg(not(feature = "jieba"))]
-        Analyzer::Jieba => crate::jieba_fallback_stream::stream_fallback_jieba(input, |_| {
-            Ok::<_, anyhow::Error>(())
-        })
-        .map_err(|error| anyhow!("stream staged fallback Jieba Text length: {error}")),
+        Analyzer::Jieba => {
+            jieba_fallback_stream::stream_fallback_jieba(input, |_| Ok::<_, anyhow::Error>(()))
+                .map_err(|error| anyhow!("stream staged fallback Jieba Text length: {error}"))
+        }
         #[cfg(feature = "jieba")]
         Analyzer::Jieba => Ok(index_text::for_jieba_no_hmm(
             input,
@@ -251,22 +254,21 @@ fn document_len(
 fn token_stream<'a>(
     input: &'a str,
     analyzer: Analyzer,
-    #[cfg(feature = "jieba")] route: Option<super::jieba_disk_route::DiskRoute>,
+    #[cfg(feature = "jieba")] route: Option<jieba_disk_route::DiskRoute>,
 ) -> Result<Box<TextTokenStream<'a>>> {
     match analyzer {
         Analyzer::Ngram => Ok(Box::new(
-            move |emit| match crate::ngram_stream::stream_default_ngrams(input, |token| emit(token))
-            {
+            move |emit| match ngram_stream::stream_default_ngrams(input, |token| emit(token)) {
                 Ok(_) => Ok(()),
-                Err(crate::ngram_stream::NgramStreamError::Callback(error)) => Err(error),
-                Err(crate::ngram_stream::NgramStreamError::TokenCountOverflow) => {
+                Err(ngram_stream::NgramStreamError::Callback(error)) => Err(error),
+                Err(ngram_stream::NgramStreamError::TokenCountOverflow) => {
                     bail!("staged Ngram Text document length exceeds u32")
                 }
             },
         )),
         Analyzer::WhitespaceLower => Ok(Box::new(move |emit| {
             let mut failure = None;
-            crate::tokenize::for_whitespace_lower_cow(input, |token| {
+            tokenize::for_whitespace_lower_cow(input, |token| {
                 if failure.is_none() {
                     if let Err(error) = emit(token.as_ref()) {
                         failure = Some(error);
@@ -281,17 +283,14 @@ fn token_stream<'a>(
         #[cfg(not(feature = "jieba"))]
         Analyzer::Jieba => {
             Ok(Box::new(
-                move |emit| match crate::jieba_fallback_stream::stream_fallback_jieba(
-                    input,
-                    |token| emit(token),
-                ) {
+                move |emit| match jieba_fallback_stream::stream_fallback_jieba(input, |token| {
+                    emit(token)
+                }) {
                     Ok(_) => Ok(()),
-                    Err(crate::jieba_fallback_stream::JiebaFallbackStreamError::Callback(
-                        error,
-                    )) => Err(error),
-                    Err(
-                        crate::jieba_fallback_stream::JiebaFallbackStreamError::TokenCountOverflow,
-                    ) => {
+                    Err(jieba_fallback_stream::JiebaFallbackStreamError::Callback(error)) => {
+                        Err(error)
+                    }
+                    Err(jieba_fallback_stream::JiebaFallbackStreamError::TokenCountOverflow) => {
                         bail!("staged fallback Jieba Text document length exceeds u32")
                     }
                 },
@@ -360,7 +359,7 @@ mod tests {
     fn fallback_jieba_receipt_matches_shipped_tokens_and_empty_presence() {
         let input = "  lumen 搜尋引擎 ΣΟΣ  ";
         let row = staged(Analyzer::Jieba, input);
-        let expected = crate::tokenize::tokenize(input, Analyzer::Jieba);
+        let expected = tokenize::tokenize(input, Analyzer::Jieba);
         let mut frequencies = BTreeMap::<String, u32>::new();
         for token in expected {
             *frequencies.entry(token).or_default() += 1;
@@ -385,7 +384,7 @@ mod tests {
             "南京市长江大桥".repeat(1000)
         );
         let row = staged(Analyzer::Jieba, &input);
-        let expected = crate::tokenize::tokenize(&input, Analyzer::Jieba);
+        let expected = tokenize::tokenize(&input, Analyzer::Jieba);
         assert_eq!(row.doc_len(), expected.len() as u32);
         let mut frequencies = BTreeMap::<String, u32>::new();
         for token in expected {
@@ -409,7 +408,7 @@ mod tests {
     fn whitespace_lower_receipt_matches_shared_unicode_tokenizer() {
         let input = "  İSTANBUL\tStraße  İSTANBUL ";
         let row = staged(Analyzer::WhitespaceLower, input);
-        let expected = crate::tokenize::tokenize(input, Analyzer::WhitespaceLower);
+        let expected = tokenize::tokenize(input, Analyzer::WhitespaceLower);
         let mut frequencies = BTreeMap::<String, u32>::new();
         for token in expected {
             *frequencies.entry(token).or_default() += 1;
@@ -482,7 +481,7 @@ mod tests {
     #[test]
     fn dictionary_stream_preserves_retryable_workspace_error_and_cleans_route() {
         let directory = StageDirectory::create().unwrap();
-        let route = super::super::jieba_disk_route::DiskRoute::create(directory.path()).unwrap();
+        let route = jieba_disk_route::DiskRoute::create(directory.path()).unwrap();
         let stream = token_stream("南京市长江大桥", Analyzer::Jieba, Some(route)).unwrap();
         let error = stream(&mut |_| {
             Err(anyhow::Error::new(

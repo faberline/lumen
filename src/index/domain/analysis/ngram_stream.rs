@@ -6,7 +6,7 @@
 
 use std::fmt;
 
-use crate::tokenize::{DEFAULT_NGRAM_MAX, DEFAULT_NGRAM_MIN};
+use crate::index::domain::analysis::tokenize::{DEFAULT_NGRAM_MAX, DEFAULT_NGRAM_MIN};
 
 /// A callback failure is returned unchanged. `TokenCountOverflow` prevents the
 /// future Text apply path from truncating the `u32` document length it stores.
@@ -115,7 +115,8 @@ mod tests {
                 Ok::<_, ()>(())
             })
             .unwrap();
-            let expected = crate::tokenize::tokenize(input, Analyzer::Ngram);
+            let expected =
+                crate::index::domain::analysis::tokenize::tokenize(input, Analyzer::Ngram);
             assert_eq!(streamed, expected, "input: {input:?}");
             assert_eq!(usize::try_from(count).unwrap(), expected.len());
         }

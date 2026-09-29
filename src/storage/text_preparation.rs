@@ -2,6 +2,8 @@
 //! the original item ordinal, so duplicate cells retain arrival-order meaning.
 
 use super::*;
+#[cfg(feature = "jieba")]
+use crate::index::infrastructure::analysis::jieba_disk_route;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{IndexItem, IndexRequest, MAX_INDEX_BATCH_SIZE};
@@ -179,7 +181,7 @@ fn fallback_jieba_token_workspace_bound(input: &str) -> Result<usize> {
     let mut non_cjk_start = 0usize;
     let mut in_cjk = false;
     for (offset, character) in text.char_indices() {
-        if crate::jieba_fallback_stream::is_cjk_char(character) {
+        if crate::index::domain::analysis::jieba_fallback_stream::is_cjk_char(character) {
             if !in_cjk {
                 largest = largest.max(lowercase_token_workspace_bound(
                     &text[non_cjk_start..offset],
@@ -255,7 +257,7 @@ fn borrowed_text_pre_stage_workspace_bound(
     {
         if dictionary_route {
             lowercase = lowercase
-                .checked_add(super::jieba_disk_route::ROUTE_CACHE_BYTES)
+                .checked_add(jieba_disk_route::ROUTE_CACHE_BYTES)
                 .ok_or_else(|| anyhow!("borrowed Text pre-stage workspace overflow"))?;
         }
     }
@@ -543,7 +545,7 @@ impl Engine {
             {
                 #[cfg(feature = "jieba")]
                 if *analyzer == Analyzer::Jieba {
-                    dictionary_route_bytes = super::jieba_disk_route::ROUTE_CACHE_BYTES;
+                    dictionary_route_bytes = jieba_disk_route::ROUTE_CACHE_BYTES;
                 }
                 metadata = metadata.and_then(|n| {
                     field

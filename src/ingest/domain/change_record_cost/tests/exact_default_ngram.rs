@@ -17,7 +17,7 @@ use crate::shared_kernel::types::schema::Analyzer;
 
 fn exact_oracle(input: &str) -> TextUpperBound {
     let mut terms = BTreeSet::new();
-    crate::ngram_stream::stream_default_ngrams(input, |token| {
+    crate::index::domain::analysis::ngram_stream::stream_default_ngrams(input, |token| {
         terms.insert(token.to_owned());
         Ok::<_, ()>(())
     })

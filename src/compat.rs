@@ -24,5 +24,6 @@ pub mod routing_remote;
 pub mod segment_checkpoint;
 pub mod segment_rdb;
 pub mod segment_restore;
+pub mod tokenize;
 pub mod types;
 pub mod wal;

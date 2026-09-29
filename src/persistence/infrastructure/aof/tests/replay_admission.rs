@@ -267,7 +267,7 @@ fn replay_reprice_error_keeps_failed_frame_and_watermark() {
             .collect::<String>()
     );
     let mut distinct = std::collections::BTreeSet::new();
-    crate::ngram_stream::stream_default_ngrams(&value, |token| {
+    crate::index::domain::analysis::ngram_stream::stream_default_ngrams(&value, |token| {
         distinct.insert(token.to_owned());
         Ok::<_, ()>(())
     })

@@ -172,6 +172,13 @@ domain = "src/persistence/domain"
 application = "src/persistence/application"
 infrastructure = "src/persistence/infrastructure"
 
+[[contexts]]
+name = "index"
+depends_on = []
+[contexts.layers]
+domain = "src/index/domain"
+infrastructure = "src/index/infrastructure"
+
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
 # port the owning layer defines.
 
@@ -644,3 +651,23 @@ rule = "B3"
 paths = ["src/persistence/domain/rdb_store.rs"]
 subject = "domain->infrastructure"
 reason = "Only RdbStore's signature references RdbSnapshot, which stays in infrastructure beside LocalFsRdbStore because it wraps the storage SnapshotV1 and owns the on-disk encode and decode. P2: RdbStore, SegmentRdbStore and the AOF become one EngineSnapshotRepository in the domain, with a snapshot type the domain owns (E8)."
+
+# The analyzers moved to index/domain/analysis as-is. tokenize is still the thin
+# adapter over index_text, and ingest's change-record cost still prices a text
+# value with index's n-gram bounds and stream (E16: index and ingest depend on
+# each other).
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/analysis/tokenize.rs"]
+subject = "index_text"
+reason = "tokenize maps the schema Analyzer onto index_text's and delegates to it: index_text is the core crate that owns the whitespace, Jieba and n-gram tokenizers and the default n-gram bounds. P2: a tokenizer port in the index domain that an index_text adapter in index/infrastructure implements."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/ingest/domain/change_record_cost/ngram_distinct_table.rs",
+  "src/ingest/domain/change_record_cost/text_representation.rs",
+]
+subject = "index.domain"
+reason = "The change-record cost prices a text value by the terms its analyzer will emit: it bounds with tokenize's DEFAULT_NGRAM_MIN and DEFAULT_NGRAM_MAX, and counts a default-ngram value's distinct terms by streaming it through ngram_stream. P2: the default n-gram bounds and stream move to the shared kernel, which both ingest's pricing and index's analysis read."

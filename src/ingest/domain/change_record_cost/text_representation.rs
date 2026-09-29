@@ -317,8 +317,8 @@ fn field_cost(
                 _ => text_upper_bound(
                     value,
                     analyzer,
-                    crate::tokenize::DEFAULT_NGRAM_MIN,
-                    crate::tokenize::DEFAULT_NGRAM_MAX,
+                    crate::index::domain::analysis::tokenize::DEFAULT_NGRAM_MIN,
+                    crate::index::domain::analysis::tokenize::DEFAULT_NGRAM_MAX,
                 ),
             }
             .map_err(|_| FieldCostError::Overflow)?;
