@@ -2,6 +2,8 @@
 //! the original item ordinal, so duplicate cells retain arrival-order meaning.
 
 use super::*;
+use crate::index::application::engine::cost::EngineCostContext;
+use crate::index::application::engine::Engine;
 use crate::index::domain::field_index::FieldIndex;
 #[cfg(feature = "jieba")]
 use crate::index::infrastructure::analysis::jieba_disk_route;
@@ -13,7 +15,7 @@ use anyhow::bail;
 pub(super) const TEXT_SCRATCH_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Default)]
-pub(super) struct PreparedTextRows {
+pub(crate) struct PreparedTextRows {
     epoch: u64,
     collection: Option<(String, u64, u32)>,
     rows: BTreeMap<usize, BTreeMap<String, Arc<staged_text_row::StagedTextRow>>>,
@@ -27,7 +29,7 @@ pub(super) struct PreparedTextRows {
     scratch_growth_bytes: usize,
 }
 impl PreparedTextRows {
-    pub(super) fn get(
+    pub(crate) fn get(
         &self,
         ordinal: usize,
         field: &str,

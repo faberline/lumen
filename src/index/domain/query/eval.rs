@@ -9,6 +9,7 @@ use anyhow::{bail, Result};
 use roaring::RoaringBitmap;
 
 use crate::index::domain::collection::Collection;
+use crate::index::domain::engine_state::EngineState;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::query::clause::apply_conjuncts;
 use crate::index::domain::query::knn::{eval_hamming, eval_knn, eval_knn_filtered, eval_rrf};
@@ -24,7 +25,6 @@ use crate::index::domain::query::text_match::eval_match;
 use crate::index::domain::query::{constant_score, query_needs_universe, ScoredHits};
 use crate::index::domain::storage_error::StorageError;
 use crate::shared_kernel::types::query::{HasChildQuery, KnnQuery, QueryNode};
-use crate::storage::EngineState;
 
 pub(crate) fn eval_query(
     coll: &Collection,

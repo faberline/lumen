@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::change_budget::ChangeBudget;
 use crate::persistence::application::segment_checkpoint_sink::driver::SegmentCheckpointDriver;
 use crate::persistence::application::segment_checkpoint_sink::{
@@ -15,7 +16,6 @@ use crate::persistence::application::segment_checkpoint_sink::{
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::persistence::infrastructure::spill_directory::SpillDirectory;
-use crate::storage::Engine;
 
 /// Owns a private spill root plus an early budget driver. It never becomes the
 /// public checkpoint sink and is never read on a later process start.

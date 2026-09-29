@@ -1,3 +1,4 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, LocalRowsReference, SegmentFormat, SegmentGenerationManifest, SegmentKind,
     SegmentReference, SegmentRole,
@@ -15,7 +16,6 @@ use crate::persistence::infrastructure::segment_rdb_store::tests::{
 use crate::persistence::infrastructure::segment_rdb_store::{
     SegmentRdbStore, GENERATION_MANIFEST_FILE,
 };
-use crate::storage::Engine;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 

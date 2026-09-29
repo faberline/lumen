@@ -2,6 +2,7 @@
 //! generation, compact it into scratch outside the checkpoint lock, then rebase
 //! the verified output onto the latest catalog and publish it.
 
+use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::link::{
     background_merge_supports_manifest, link_collection, link_collections_with_paths,
     MergeStepCosts,
@@ -19,7 +20,6 @@ use crate::persistence::infrastructure::segment_rdb_store::merge_selection::sele
 use crate::persistence::infrastructure::segment_rdb_store::{
     telemetry, GenerationRecord, GenerationStaging, MergePhase, SegmentRdbStore, StagingSelection,
 };
-use crate::storage::Engine;
 use anyhow::{anyhow, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;

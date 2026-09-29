@@ -4,6 +4,7 @@
 //! captured collection version, reserves before allocation, and later rechecks
 //! that version before it publishes all of the files in one apply interval.
 
+use crate::index::application::engine::index::MAX_INDEX_ITEMS;
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{
     FastIndexItem, FastIndexScanner, FastIndexValue,
@@ -45,7 +46,7 @@ pub(super) fn prepare(
     reserve_total: impl FnMut(usize) -> Result<()>,
 ) -> Result<PreparedScalarFile> {
     ensure!(
-        scanner.cost().item_count <= super::MAX_INDEX_ITEMS,
+        scanner.cost().item_count <= MAX_INDEX_ITEMS,
         "committed scalar preparation exceeds existing Index item limit"
     );
     prepare_validated_fields(
@@ -657,7 +658,7 @@ mod tests {
     #[test]
     fn existing_full_index_item_limit_can_prepare_small_values_within_the_budget() {
         let root = tempfile::tempdir().unwrap();
-        let items = (0..super::super::MAX_INDEX_ITEMS)
+        let items = (0..MAX_INDEX_ITEMS)
             .map(|ordinal| IndexItem {
                 external_id: format!("doc-{ordinal}"),
                 field: "value".into(),
@@ -674,7 +675,7 @@ mod tests {
         })
         .encode()
         .unwrap();
-        let rows: Vec<_> = (0..super::super::MAX_INDEX_ITEMS).collect();
+        let rows: Vec<_> = (0..MAX_INDEX_ITEMS).collect();
         let output = prepare(
             &FastIndexScanner::parse(&bytes).unwrap(),
             "value",
@@ -691,20 +692,17 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(
-            output.reader.n_docs() as usize,
-            super::super::MAX_INDEX_ITEMS
-        );
+        assert_eq!(output.reader.n_docs() as usize, MAX_INDEX_ITEMS);
         assert_eq!(
             output.reader.keyword_postings("shared").unwrap().len() as usize,
-            super::super::MAX_INDEX_ITEMS
+            MAX_INDEX_ITEMS
         );
     }
 
     #[test]
     fn validated_replace_fields_can_exceed_index_limit_while_index_prepare_refuses() {
         const REPLACE_DOCUMENTS: usize = 32;
-        const FIELDS_PER_DOCUMENT: usize = super::super::MAX_INDEX_ITEMS / REPLACE_DOCUMENTS + 1;
+        const FIELDS_PER_DOCUMENT: usize = MAX_INDEX_ITEMS / REPLACE_DOCUMENTS + 1;
         let root = tempfile::tempdir().unwrap();
         let count = REPLACE_DOCUMENTS * FIELDS_PER_DOCUMENT;
         let bytes = WalRecord::new(RaftLogEntry::Index {

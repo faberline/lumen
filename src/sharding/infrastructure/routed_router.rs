@@ -71,8 +71,8 @@ use axum::http::HeaderMap;
 use crate::api::{
     BlockingSearchExecutor, ShardForwardMisrouted, ShardMapVersionMismatch, WriteBackend,
 };
+use crate::index::application::engine::{collections::DropOutcome, Engine};
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
-use crate::storage::{DropOutcome, Engine};
 
 /// Internal one-hop guard header: present on every forwarded request. No
 /// longer trusted blindly on receipt (#1442 R1) — an external caller can set

@@ -22,7 +22,7 @@ use crate::ingest::infrastructure::committed_stage::StageFailureInjector;
 use crate::ingest::infrastructure::committed_stage::{
     DurableStage, SourceIdentity, SourceKind, StageStore,
 };
-use crate::storage::{Engine, RecordAdmissionError};
+use crate::{index::application::engine::Engine, storage::RecordAdmissionError};
 
 /// The bounded read buffer is charged by the caller together with the decoded
 /// record before it asks this bridge to deserialize the record.

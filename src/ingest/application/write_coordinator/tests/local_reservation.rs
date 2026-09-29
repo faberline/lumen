@@ -4,6 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures::StreamExt;
 
+use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
 use crate::ingest::application::write_coordinator::tests::{
     admitted_index_entry, keyword_schema, wait_for_reserved, ControlledWal,
 };
@@ -15,7 +16,6 @@ use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
-use crate::storage::{ApplyOutcome, Engine};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn future_local_reservation_cannot_starve_earlier_external_record() {

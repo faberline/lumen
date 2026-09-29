@@ -2,12 +2,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::change_budget::ChangeBudget;
 use crate::persistence::application::capacity::tests::{engine, sink, FailSync};
 use crate::persistence::application::capacity::worker::Owner;
 use crate::persistence::application::capacity::{Fallback, Work};
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 
 #[test]
 fn capacity_worker_retries_prepublication_failure_without_failing_waiter() {

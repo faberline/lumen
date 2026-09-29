@@ -1,6 +1,6 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::infrastructure::segment_rdb_store::tests::{index_kw, kw_schema};
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use std::sync::Arc;
 
 /// #1389 AC1: a `reshard:apply` batch applied to a target shard, and a

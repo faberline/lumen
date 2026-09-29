@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 
+use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::domain::collection::Collection;
 use crate::index::domain::field_index::FieldIndex;
-use crate::storage::CheckpointValue;
 
 impl Collection {
     pub(crate) fn mark_field_dirty(&mut self, field: &str, external_id: &str) -> Result<()> {

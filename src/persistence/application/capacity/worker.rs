@@ -8,12 +8,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 
+use crate::index::application::engine::Engine;
 use crate::persistence::application::capacity::relay_trace::{
     relay_diagnostic_enabled, RelayTrace,
 };
 use crate::persistence::application::capacity::{Endpoint, PublicationFence, Requests, Work};
 use crate::persistence::application::segment_checkpoint_sink::SegmentCheckpointSink;
-use crate::storage::Engine;
 
 /// Held by the caller, never by Engine. The worker holds its endpoint and sink
 /// only until stop and any already started operation finish.

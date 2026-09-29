@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use axum::http::HeaderMap;
 
 use crate::api::WriteBackend;
+use crate::index::application::engine::{collections::DropOutcome, Engine};
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 use crate::sharding::infrastructure::routed_router::{
     drop_outcome_from_status, merge_drop_outcomes, percent_encode_component, RoutedRouter,
@@ -17,7 +18,6 @@ use crate::shared_kernel::types::{
     },
     schema::{CreateCollectionRequest, CreateCollectionResponse},
 };
-use crate::storage::{DropOutcome, Engine};
 
 #[cfg(test)]
 use crate::sharding::infrastructure::routed_router::cursor_offset;

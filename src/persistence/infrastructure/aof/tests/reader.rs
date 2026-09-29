@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use storage_durable::{FramedLogCursor, FramedLogWriter, FsyncPolicy};
 
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::persistence::infrastructure::aof::aof_writer::AofWriter;
 use crate::persistence::infrastructure::aof::frame::{decode_payload, HEADER_LEN};
@@ -16,7 +17,6 @@ use crate::persistence::infrastructure::aof::tests::{
     create_entry, index_entry, rec, replay_seqs, term_query,
 };
 use crate::shared_kernel::log_entry::RaftLogEntry;
-use crate::storage::Engine;
 
 /// Write a valid frame whose payload is not a Lumen WAL record between two
 /// ordinary AOF records. `FramedLogCursor` can read all three frames only

@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use futures::StreamExt;
 
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::change_budget::ChangeBudget;
 use crate::ingest::domain::wal_log::WalLog;
 use crate::ingest::domain::wal_record::{WalRecord, WAL_FORMAT_VERSION};
@@ -11,7 +12,6 @@ use crate::ingest::infrastructure::wal::tests::{create_entry, index_entry, sourc
 use crate::ingest::infrastructure::wal_source_stage::WalSourceStager;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::FieldValue;
-use crate::storage::Engine;
 
 // Append inside `src/wal.rs`'s existing `#[cfg(test)] mod tests`.
 // The injected-fault test needs this test-only helper in `wal_source_stage.rs`:

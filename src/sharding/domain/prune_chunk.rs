@@ -13,7 +13,7 @@ use crate::storage::SnapshotV1;
 /// shard must enforce for a `bucket`+collection, derived from one or more
 /// [`ReshardPruneChunk`]s sharing the same `(to_map_version, bucket,
 /// collection_id, total_chunks)` key once every chunk has been received
-/// (see [`crate::storage::Engine::apply_reshard_prune_chunk`]'s receiver-side
+/// (see [`crate::index::application::engine::Engine::apply_reshard_prune_chunk`]'s receiver-side
 /// accumulator). Applying this scope after a batch's additive merge closes
 /// the delete-resurrection gap #1443 found: a document deleted on the source
 /// during the split is absent from the final pass's authoritative id set and
@@ -33,7 +33,7 @@ pub struct ReshardBatchReplaceScope {
 /// coupling), every chunk of one `(bucket, collection_id)`'s keep set shares
 /// the same `to_map_version`/`bucket`/`collection_id`/`total_chunks` and
 /// carries only its own slice of `keep_ids` — the receiver
-/// ([`crate::storage::Engine::apply_reshard_prune_chunk`]) accumulates
+/// ([`crate::index::application::engine::Engine::apply_reshard_prune_chunk`]) accumulates
 /// chunks by that key and prunes only once every `chunk_index` in
 /// `0..total_chunks` has arrived, so re-sending any subset (413 retry) or
 /// all chunks (whole-pass retry after a driver restart) converges to the
@@ -54,7 +54,7 @@ pub struct ReshardBatchReplaceScope {
 /// unambiguously marks the start of a fresh pass and resets any stale
 /// partial left by an earlier, never-completed pass for the same key
 /// instead of unioning into it (see
-/// [`crate::storage::Engine::apply_reshard_prune_chunk`]'s R2 doc comment).
+/// [`crate::index::application::engine::Engine::apply_reshard_prune_chunk`]'s R2 doc comment).
 /// If a future sender ever needs to send chunks for one key out of order or
 /// interleaved across concurrent passes, this ordering contract — and the
 /// receiver's chunk-0 reset — must change together (e.g. to a per-pass

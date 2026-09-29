@@ -180,12 +180,12 @@ impl<'a> Cursor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::index::application::engine::Engine;
     use crate::ingest::domain::wal_record::WalRecord;
     use crate::shared_kernel::types::document::{
         BatchUnindexDocsRequest, FieldValue, IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
     };
     use crate::shared_kernel::types::schema::{CreateCollectionRequest, FieldSpec};
-    use crate::storage::Engine;
     use std::collections::BTreeMap;
 
     fn verify(record: &WalRecord, bytes: &[u8]) {

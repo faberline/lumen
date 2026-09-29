@@ -6,13 +6,13 @@ pub(crate) mod link;
 pub(crate) mod publish;
 pub(crate) mod root_work;
 
+use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::{
     SegmentGenerationManifest, SegmentKind, SegmentRole,
 };
 use crate::persistence::infrastructure::merge_worker::queue_sender;
 use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -80,14 +80,14 @@ pub(in crate::persistence) struct Job {
 
 fn identities(
     manifest: &SegmentGenerationManifest,
-) -> BTreeMap<String, crate::storage::CheckpointCollectionIdentity> {
+) -> BTreeMap<String, crate::index::application::checkpoint_capture::CheckpointCollectionIdentity> {
     manifest
         .collections
         .iter()
         .map(|collection| {
             (
                 collection.collection_id.clone(),
-                crate::storage::CheckpointCollectionIdentity {
+                crate::index::application::checkpoint_capture::CheckpointCollectionIdentity {
                     generation: collection.collection_generation,
                     data_version: collection.data_version,
                     schema_version: collection.schema_version,

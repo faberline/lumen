@@ -10,8 +10,9 @@ use crate::ingest::application::write_coordinator::{LocalRecordReservation, Writ
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::change_budget::AdmissionError;
 use crate::shared_kernel::log_entry::RaftLogEntry;
-use crate::storage::{
-    Engine, RecordAdmissionError, RecordApplyGuard, RecordReservation, RepriceRecord,
+use crate::{
+    index::application::engine::Engine,
+    storage::{RecordAdmissionError, RecordApplyGuard, RecordReservation, RepriceRecord},
 };
 
 pub(super) enum PreparedLocalRecord<'a> {

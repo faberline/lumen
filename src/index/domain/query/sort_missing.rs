@@ -9,6 +9,7 @@ use anyhow::Result;
 use roaring::RoaringBitmap;
 
 use crate::index::domain::collection::Collection;
+use crate::index::domain::engine_state::EngineState;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::interner::Interner;
 use crate::index::domain::keyword_index::KeywordBucketWalk;
@@ -20,7 +21,6 @@ use crate::index::domain::query::sort::{compare_sort_value, SortValue};
 use crate::index::domain::query::terms::field_presence_bitmap;
 use crate::shared_kernel::types::query::{QueryNode, SortMissing, SortOrder, SortSpec};
 use crate::shared_kernel::types::search::{SearchHit, SearchRequest};
-use crate::storage::EngineState;
 #[cfg(test)]
 use crate::storage::MATERIALIZED_SORT_COMPARISONS;
 

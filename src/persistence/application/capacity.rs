@@ -5,12 +5,12 @@
 pub(crate) mod relay_trace;
 pub(crate) mod worker;
 
+use crate::index::application::engine::Engine;
 use crate::persistence::application::capacity::worker::{BudgetRelay, Owner};
 use crate::persistence::application::segment_checkpoint_sink::{
     EngineWatermarkSink, SegmentCheckpointSink,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};

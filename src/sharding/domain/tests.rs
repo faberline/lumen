@@ -12,7 +12,7 @@ use crate::shared_kernel::types::{
     schema::{CreateCollectionRequest, FieldSpec, FieldType},
     search::SearchRequest,
 };
-use crate::storage::{Engine, SnapshotV1};
+use crate::{index::application::engine::Engine, storage::SnapshotV1};
 
 #[test]
 fn bucket_moves_reports_only_reassigned_buckets() {

@@ -5,7 +5,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use crate::storage::Engine;
+use crate::index::application::engine::Engine;
 
 pub(super) fn relay_diagnostic_enabled() -> bool {
     std::env::var("LUMEN_PERF_DIAGNOSTIC").as_deref() == Ok("1")

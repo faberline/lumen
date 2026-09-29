@@ -1,3 +1,4 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::link::{
     background_merge_supports_manifest, uses_flat_generation_layout,
 };
@@ -12,7 +13,6 @@ use crate::persistence::infrastructure::segment_rdb_store::{
 use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::query::{QueryNode, TermQuery};
 use crate::shared_kernel::types::search::SearchRequest;
-use crate::storage::Engine;
 use std::sync::Arc;
 use std::time::Duration;
 use storage_durable::CurrentTarget;

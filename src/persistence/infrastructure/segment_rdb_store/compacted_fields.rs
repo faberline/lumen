@@ -26,7 +26,7 @@ pub(in crate::persistence) fn compact_staged_delta_windows(
     root: &Path,
     sequence: u64,
     collections: &mut [CollectionCatalog],
-    capture: &mut crate::storage::CheckpointCapture,
+    capture: &mut crate::index::application::checkpoint_capture::CheckpointCapture,
     scratch_delta_readers: &mut BTreeMap<String, Vec<Arc<SegmentReader>>>,
     observer: &dyn MergeObserver,
     candidates: Vec<StagedMergeCandidate>,
@@ -96,7 +96,7 @@ fn finish_compacted_field(
     inputs: Vec<SegmentReference>,
     base: SegmentReference,
     includes_base: bool,
-    capture: &mut crate::storage::CheckpointCapture,
+    capture: &mut crate::index::application::checkpoint_capture::CheckpointCapture,
     scratch_delta_readers: &mut BTreeMap<String, Vec<Arc<SegmentReader>>>,
     output: CompactedField,
 ) -> Result<CompactedField> {
@@ -208,14 +208,16 @@ fn finish_compacted_field(
             .prepared_compactions
             .entry(collection.collection_id.clone())
             .or_default()
-            .push(crate::storage::PreparedCheckpointCompaction {
-                field: field.clone(),
-                base: live_base,
-                inputs: live_inputs,
-                reader,
-                external_ids,
-                scalar: None,
-            });
+            .push(
+                crate::index::application::checkpoint_capture::PreparedCheckpointCompaction {
+                    field: field.clone(),
+                    base: live_base,
+                    inputs: live_inputs,
+                    reader,
+                    external_ids,
+                    scalar: None,
+                },
+            );
     }
     replace_compacted_delta_references(collection, &output)?;
     if let Some(sidecar) = &output.vector_eids {

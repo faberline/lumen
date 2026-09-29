@@ -6,12 +6,12 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
 
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::mem_wal::MemWalSlot;
 use crate::ingest::infrastructure::wal_source_stage::{
     MappedFastIndexPayload, MappedGenericCborPayload,
 };
-use crate::storage::Engine;
 
 #[doc(hidden)]
 pub enum WalDelivery {

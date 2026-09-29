@@ -3,6 +3,7 @@
 //! decoded one term at a time, with the same live-version selection as queries.
 
 use super::*;
+use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::domain::postings::TokPostings;
 use crate::index::domain::text_index::TextIndex;
 use crate::persistence::infrastructure::segment::stream::text_projection::{

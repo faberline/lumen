@@ -3,11 +3,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::api::CheckpointSink;
+use crate::index::application::engine::Engine;
 use crate::persistence::application::segment_checkpoint_sink::SegmentCheckpointSink;
 use crate::persistence::infrastructure::aof::aof_writer::AofWriter;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::log_entry::RaftLogEntry;
-use crate::storage::Engine;
 
 #[tokio::test]
 async fn shutdown_graph_cache_preserves_current_and_durable_aof_tail() {

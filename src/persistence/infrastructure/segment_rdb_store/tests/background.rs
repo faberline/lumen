@@ -1,10 +1,10 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::SegmentKind;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::read_generation_manifest;
 use crate::persistence::infrastructure::segment_rdb_store::tests::{
     current_generation, has_keyword, index_kw, index_kw_in, kw_schema,
 };
 use crate::persistence::infrastructure::segment_rdb_store::{SegmentRdbStore, StagingSelection};
-use crate::storage::Engine;
 use std::sync::Arc;
 
 #[test]

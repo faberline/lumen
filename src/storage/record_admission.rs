@@ -16,7 +16,7 @@
 //! budget at that minimal floor is refused here, before publication, exactly
 //! like a Full at the fully-priced bound.
 
-use super::Engine;
+use crate::index::application::engine::Engine;
 use crate::index::domain::record_ram::{estimate_record_decode_peak, estimate_record_ram};
 use crate::ingest::domain::change_budget::{
     AdmissionError, BudgetWake, ChangeBudget, Owner, OwnerCapacityState, Reservation,
@@ -32,9 +32,9 @@ use super::record_charges::RecordChargeJournal;
 
 static NEXT_ENGINE: AtomicU64 = AtomicU64::new(1);
 
-pub(super) struct EngineChanges {
-    pub(super) records: RecordChargeJournal,
-    pub(super) owner: Owner,
+pub(crate) struct EngineChanges {
+    pub(crate) records: RecordChargeJournal,
+    pub(crate) owner: Owner,
     pub(super) budget: ChangeBudget,
     id: u64,
 }
@@ -830,7 +830,7 @@ impl Engine {
     pub(crate) fn apply_prepared_raft_entry(
         &self,
         prepared: &mut RecordApplyGuard<'_>,
-    ) -> anyhow::Result<super::ApplyOutcome> {
+    ) -> anyhow::Result<crate::index::application::engine::raft_dispatch::ApplyOutcome> {
         anyhow::ensure!(
             prepared.runtime == self.changes.id,
             "prepared record belongs to another Engine"
@@ -860,7 +860,7 @@ pub(crate) struct RecordCut {
 }
 
 impl Engine {
-    pub(super) fn freeze_record_charges(&self) -> anyhow::Result<std::sync::Arc<RecordCut>> {
+    pub(crate) fn freeze_record_charges(&self) -> anyhow::Result<std::sync::Arc<RecordCut>> {
         let budget = self
             .changes
             .owner
@@ -876,7 +876,7 @@ impl Engine {
     /// checkpoint and escaped row handles still retain their payload charges.
     pub(crate) fn acknowledge_record_charges(
         &self,
-        capture: &super::CheckpointCapture,
+        capture: &crate::index::application::checkpoint_capture::CheckpointCapture,
     ) -> anyhow::Result<()> {
         if let Some(cut) = &capture.record_cut {
             self.changes

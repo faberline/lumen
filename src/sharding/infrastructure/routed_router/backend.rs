@@ -10,6 +10,7 @@ use axum::http::HeaderMap;
 use futures::future::{join_all, try_join_all};
 
 use crate::api::{RoutedBackend, ShardForwardMisrouted, ShardForwardRemoteError};
+use crate::index::application::engine::collections::DropOutcome;
 use crate::sharding::domain::shard_route::SearchShardTarget;
 use crate::sharding::infrastructure::routed_router::{
     drop_outcome_from_status, merge_drop_outcomes, percent_encode_component, RoutedRouter,
@@ -22,7 +23,6 @@ use crate::shared_kernel::types::{
     schema::{CreateCollectionRequest, CreateCollectionResponse},
     search::{SearchRequest, SearchResponse},
 };
-use crate::storage::DropOutcome;
 
 #[async_trait]
 impl RoutedBackend for RoutedRouter {

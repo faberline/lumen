@@ -2,6 +2,7 @@
 //! it as the exact generation `CURRENT` selects, and restore a legacy Raft
 //! snapshot through an ordinary save.
 
+use crate::index::application::engine::Engine;
 use crate::persistence::infrastructure::segment_rdb_store::generation_validation::validate_generation_layout;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::{
     read_generation_manifest, write_generation_manifest,
@@ -10,7 +11,6 @@ use crate::persistence::infrastructure::segment_rdb_store::raft_archive::{
     read_header, stage_archive, StageCleanup,
 };
 use crate::persistence::infrastructure::segment_rdb_store::{SaveIntent, SegmentRdbStore};
-use crate::storage::Engine;
 use anyhow::{bail, Context, Result};
 use std::io::Read;
 use std::sync::Arc;

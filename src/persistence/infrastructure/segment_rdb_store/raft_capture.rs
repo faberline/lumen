@@ -1,12 +1,12 @@
 //! Exact segment checkpoint cuts for the Raft snapshot adapter.
 
+use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::SegmentGenerationManifest;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::read_generation_manifest;
 use crate::persistence::infrastructure::segment_rdb_store::{
     save_gate, GenerationRecord, PendingFrozenCheckpoint, PendingFrozenLease, PendingPredecessor,
     SaveIntent, SegmentArchivePin, SegmentRdbStore,
 };
-use crate::storage::Engine;
 use anyhow::{anyhow, bail, Result};
 use std::sync::Arc;
 

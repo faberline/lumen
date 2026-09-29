@@ -1,3 +1,4 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::{
     SegmentGenerationManifest, SegmentKind, SegmentRole,
 };
@@ -9,7 +10,6 @@ use crate::persistence::infrastructure::segment_rdb_store::manifest_io::{
 };
 use crate::persistence::infrastructure::segment_rdb_store::tests::{index_kw, kw_schema};
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use std::sync::Arc;
 
 #[test]

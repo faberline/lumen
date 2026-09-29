@@ -6,6 +6,7 @@
 //! are borrowed through a small `BTreeMap<&str, Vec<u32>>`.
 
 use super::*;
+use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::persistence::infrastructure::segment::stream::{
     keyword::write_keyword_projection,

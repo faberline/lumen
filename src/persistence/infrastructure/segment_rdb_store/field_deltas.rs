@@ -23,7 +23,7 @@ use std::path::Path;
 pub(super) fn prepare_live_delta_readers(
     root: &Path,
     collections: &[CollectionCatalog],
-    capture: &mut crate::storage::CheckpointCapture,
+    capture: &mut crate::index::application::checkpoint_capture::CheckpointCapture,
 ) -> Result<()> {
     for collection in collections {
         let Some(fields) = capture.field_deltas.get(&collection.collection_id) else {
@@ -76,11 +76,13 @@ pub(super) fn prepare_live_delta_readers(
                 .prepared_deltas
                 .entry(collection.collection_id.clone())
                 .or_default()
-                .push(crate::storage::PreparedCheckpointDelta {
-                    field: field.clone(),
-                    reader,
-                    external_ids,
-                });
+                .push(
+                    crate::index::application::checkpoint_capture::PreparedCheckpointDelta {
+                        field: field.clone(),
+                        reader,
+                        external_ids,
+                    },
+                );
         }
     }
     Ok(())
@@ -89,9 +91,9 @@ pub(super) fn prepare_live_delta_readers(
 pub(super) fn read_delta_values(
     reader: &SegmentReader,
     spec: &crate::shared_kernel::types::schema::FieldSpec,
-) -> Result<Vec<Option<crate::storage::CheckpointValue>>> {
+) -> Result<Vec<Option<crate::index::application::checkpoint_capture::CheckpointValue>>> {
+    use crate::index::application::checkpoint_capture::CheckpointValue;
     use crate::shared_kernel::types::schema::FieldType;
-    use crate::storage::CheckpointValue;
     if spec.field_type == FieldType::Text {
         let mut values: Vec<_> = (0..reader.n_docs())
             .map(|row| {
@@ -176,7 +178,7 @@ pub(super) fn write_field_deltas(
     root: &Path,
     sequence: u64,
     collection: &mut CollectionCatalog,
-    fields: &crate::storage::CheckpointDeltas,
+    fields: &crate::index::application::checkpoint_capture::CheckpointDeltas,
 ) -> Result<()> {
     for (field, rows) in fields {
         if rows.is_empty() {
@@ -200,7 +202,7 @@ pub(super) fn write_field_deltas(
         let rows_path = format!("{prefix}.rows.cbor");
         std::fs::create_dir_all(root.join(&segment_path).parent().unwrap())?;
         let ids: Vec<_> = rows.iter().map(|(id, _)| id.clone()).collect();
-        use crate::storage::CheckpointValue;
+        use crate::index::application::checkpoint_capture::CheckpointValue;
         let specs: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
             serde_json::from_value(collection.schema.clone())?;
         let spec = specs

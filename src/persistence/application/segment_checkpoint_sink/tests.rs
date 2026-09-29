@@ -3,9 +3,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::index::application::engine::Engine;
 use crate::persistence::application::segment_checkpoint_sink::SegmentCheckpointSink;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 
 use crate::api::CheckpointSink;
 use crate::ingest::application::write_coordinator::WriteSink;
@@ -38,7 +38,7 @@ impl WriteSink for Watermark {
     async fn submit(
         &self,
         _: crate::shared_kernel::log_entry::RaftLogEntry,
-    ) -> Result<crate::storage::ApplyOutcome> {
+    ) -> Result<crate::index::application::engine::raft_dispatch::ApplyOutcome> {
         anyhow::bail!("checkpoint test has no publisher")
     }
     fn applied_seq(&self) -> u64 {

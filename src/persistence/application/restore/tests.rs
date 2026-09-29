@@ -15,7 +15,7 @@ use crate::persistence::infrastructure::aof::replay::AofReader;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::schema::CreateCollectionRequest;
-use crate::storage::{Engine, SnapshotV1};
+use crate::{index::application::engine::Engine, storage::SnapshotV1};
 
 const WATERMARK: u64 = 7;
 

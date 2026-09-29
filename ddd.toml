@@ -143,7 +143,7 @@ infrastructure = "src/operator/infrastructure"
 
 [[contexts]]
 name = "sharding"
-depends_on = ["ingest"]
+depends_on = ["index", "ingest"]
 [contexts.layers]
 domain = "src/sharding/domain"
 application = "src/sharding/application"
@@ -151,7 +151,7 @@ infrastructure = "src/sharding/infrastructure"
 
 [[contexts]]
 name = "replication"
-depends_on = ["ingest", "persistence"]
+depends_on = ["index", "ingest", "persistence"]
 [contexts.layers]
 domain = "src/replication/domain"
 application = "src/replication/application"
@@ -166,7 +166,7 @@ infrastructure = "src/ingest/infrastructure"
 
 [[contexts]]
 name = "persistence"
-depends_on = ["ingest"]
+depends_on = ["index", "ingest"]
 [contexts.layers]
 domain = "src/persistence/domain"
 application = "src/persistence/application"
@@ -177,6 +177,7 @@ name = "index"
 depends_on = []
 [contexts.layers]
 domain = "src/index/domain"
+application = "src/index/application"
 infrastructure = "src/index/infrastructure"
 
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
@@ -901,7 +902,7 @@ paths = [
   "src/index/domain/schema_validation.rs",
 ]
 subject = "anyhow"
-reason = "Collection::new, check_live (a StorageError::Gone converted with into), the dirty tracking and checkpoint_value, the snapshot conversion, and the seal and reopen return anyhow::Result, passing up FieldIndex's, the segment writers' and SegmentReader::open's anyhow errors; validate_schema bails on a bad field spec, and validate_value on a value its field cannot hold. The Engine in storage.rs propagates them with ?. P2: an index domain error type (with FieldIndex's, see the anyhow exceptions above) that the segment ports return and the Engine maps at the application boundary."
+reason = "Collection::new, check_live (a StorageError::Gone converted with into), the dirty tracking and checkpoint_value, the snapshot conversion, and the seal and reopen return anyhow::Result, passing up FieldIndex's, the segment writers' and SegmentReader::open's anyhow errors; validate_schema bails on a bad field spec, and validate_value on a value its field cannot hold. The Engine propagates them with ?. P2: an index domain error type (with FieldIndex's, see the anyhow exceptions above) that the segment ports return and the Engine maps at the application boundary."
 
 [[exceptions]]
 rule = "B2"
@@ -991,3 +992,88 @@ rule = "B2"
 paths = ["src/index/domain/query/page_cursor.rs"]
 subject = "base64"
 reason = "The page cursor is a JSON position (an offset, a sort keyset or a score keyset) encoded as an opaque base64 STANDARD_NO_PAD token, which parse_page_cursor decodes. P2: either base64 joins the domain's crates as a pure encoding crate, or the domain keeps the PageCursor position and the token codec moves to the search interface."
+
+# The Engine moved to index/application as-is, split by use case, with the
+# checkpoint capture, the frozen checkpoint, the live deltas and the recovery
+# profile, and EngineState moved to index/domain. The Engine still takes
+# ingest's change budget and journal, runs the checkpoint protocol on
+# persistence's segment files and applies sharding's reshard formats, and
+# ingest's write path still calls it directly.
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/engine_state.rs"]
+subject = "anyhow"
+reason = "EngineState::allocate_collection_generation reports an exhausted generation counter with anyhow!, which the Engine's create, truncate, checkpoint, reopen, restore and reshard paths propagate with ?. P2: a variant of the index domain error type (with Collection's, see the anyhow exceptions above)."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/domain/collection.rs",
+  "src/index/domain/collection/checkpoint.rs",
+]
+subject = "domain->application"
+reason = "Collection journals its dirty rows as a ChangeJournal<CheckpointValue>, and checkpoint_value reads a row back as one. CheckpointValue moved with the checkpoint capture, which freezes the journal, and a file-backed scalar row holds persistence's SegmentReader. P2: CheckpointValue moves to the index domain beside the Collection, its file-backed row read through the sealed-segment reader port (see the persistence.infrastructure exceptions above)."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/index/domain/collection/segments.rs"]
+subject = "domain->application"
+reason = "open_from_segments_with_vectors records each vector field's open and each field's coverage rebuild in the RecoveryProfile the Engine's reopen passes down. P2: the reopen reports those timings to a recovery observer the index domain defines and RecoveryProfile implements."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/checkpoint_capture.rs",
+  "src/index/application/engine/checkpoint_flush.rs",
+  "src/index/application/engine/cost.rs",
+  "src/index/application/engine/delete.rs",
+  "src/index/application/engine/index.rs",
+  "src/index/application/engine/raft_dispatch.rs",
+  "src/index/application/engine/replace.rs",
+  "src/index/application/engine/replace/one_doc.rs",
+]
+subject = "ingest.domain"
+reason = "The index, replace and delete paths and the Raft dispatch take the change budget's RetainedCharge for the record they apply, the checkpoint capture holds each collection's frozen journal as FrozenChanges and the flush shares captured values as SharedValue, and the cost context implements change_record_cost's CostContext and prices an entry with estimate_record_or_retain and estimate_record_exact_default_ngram. P2: with the Collection's journal (see the ingest.domain exception above), the budget, journal and pricing sit behind ingest application ports the Engine is given."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/index/application/engine.rs"]
+subject = "persistence.application"
+reason = "The Engine holds persistence's capacity Registry as layer_maintenance: the committed apply reads its append limit and maintenance owner before it adds an incremental scalar layer, and the capacity worker reads the owner back through the Engine. P2: a layer-maintenance port in the index application layer that the capacity registry implements and the composition root passes in."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/checkpoint_capture.rs",
+  "src/index/application/engine.rs",
+  "src/index/application/engine/checkpoint_delta.rs",
+  "src/index/application/engine/checkpoint_freeze.rs",
+  "src/index/application/frozen_checkpoint.rs",
+  "src/index/application/live_base.rs",
+  "src/index/application/live_delta.rs",
+]
+subject = "persistence.infrastructure"
+reason = "The checkpoint protocol runs on persistence's segment files: the capture pins delta and base SegmentReaders and the composed segment's scalar cut, publication and replacement, recovery attaches a delta SegmentReader, the frozen checkpoint writes the external-id and vector sidecars with eid_writer and vector_writer and reopens them with SegmentReader::open, the live base and deltas install ComposedSegmentReaders, and the Engine keeps the segment store's CheckpointRootGuards until its readers drop. P2: the sealed-segment reader and segment writer ports in the index domain (see the persistence.infrastructure exceptions above), and a checkpoint-root lease the segment store hands the Engine as an opaque guard."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/engine/reshard_apply.rs",
+  "src/index/application/engine/reshard_prune.rs",
+]
+subject = "sharding.domain"
+reason = "The reshard verbs apply sharding's wire formats: apply_reshard_batch merges a batch with merge_snapshot_delta under its ReshardBatchReplaceScope and checks the scope against a balanced VirtualBucketShardMap, evict_not_owned drops the documents a newer VirtualBucketShardMap assigns elsewhere, and the prune accumulates ReshardPruneChunks. P2: the reshard batch, replace scope, prune chunk and bucket map move to the shared kernel, which sharding and index both read."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/ingest/application/write_coordinator.rs",
+  "src/ingest/application/write_coordinator/apply_loop.rs",
+  "src/ingest/application/write_coordinator/local_record.rs",
+  "src/ingest/application/write_coordinator/submit.rs",
+  "src/ingest/infrastructure/wal/delivery.rs",
+  "src/ingest/infrastructure/wal_source_stage.rs",
+]
+subject = "index.application"
+reason = "The write coordinator holds the shard's Arc<Engine>: its apply loop reserves, admits and applies each committed record on it and hands each waiter the ApplyOutcome, and a local submit sizes its record with Engine::record_owned_bytes; WAL delivery sizes records the same way, and the source stage bounds a decode with Engine::record_decode_peak. The Engine uses ingest's change budget and journal (see the ingest.domain exceptions above), so ingest does not list index in depends_on. P2: ingest's application layer defines an apply port (size, admit and apply a committed record) that the Engine implements and the composition root passes in, which removes the cycle."

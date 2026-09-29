@@ -1,8 +1,8 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::infrastructure::segment_rdb_store::tests::{
     index_kw, index_kw_in, kw_schema,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use std::sync::{Arc, Mutex};
 use storage_durable::FailureInjector;
 

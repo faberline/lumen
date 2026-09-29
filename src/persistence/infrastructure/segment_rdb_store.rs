@@ -40,10 +40,12 @@ mod save_gate;
 pub(crate) mod startup;
 pub(crate) mod telemetry;
 
+use crate::index::application::{
+    engine::Engine, frozen_checkpoint::FrozenCheckpoint, recovery_profile::RecoveryProfile,
+};
 use crate::persistence::application::background_merge::RootWork;
 use crate::persistence::infrastructure::segment_rdb_store::startup::StartupBootstrap;
 use crate::shared_kernel::capture_barrier::CaptureStamp;
-use crate::storage::{Engine, FrozenCheckpoint, RecoveryProfile};
 use anyhow::Result;
 use save_gate::SaveGate;
 use std::fmt;

@@ -18,12 +18,12 @@ use tokio::{
 };
 
 use crate::{
+    index::application::engine::Engine,
     shared_kernel::types::{
         document::FieldValue,
         query::{QueryNode, RangeBound, RangeQuery, TermQuery},
         search::{SearchHit, SearchRequest, SearchResponse},
     },
-    storage::Engine,
 };
 
 const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;

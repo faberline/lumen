@@ -3,11 +3,11 @@ use std::sync::{mpsc, Arc, Mutex, OnceLock};
 
 use storage_durable::{CommitStep, FailureInjector, FailurePoint};
 
+use crate::index::application::engine::Engine;
 use crate::persistence::application::segment_checkpoint_sink::{
     EngineWatermarkSink, SegmentCheckpointSink,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 
 struct DiagnosticEnvironment {
     _lock: std::sync::MutexGuard<'static, ()>,

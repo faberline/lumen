@@ -1,6 +1,7 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
+use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
 use crate::ingest::application::write_coordinator::capacity::claim_diagnostic_refusal_revision;
 use crate::ingest::application::write_coordinator::tests::{
     admitted_index_entry, hnsw_schema, keyword_schema,
@@ -12,7 +13,6 @@ use crate::ingest::domain::wal_log::WalLog;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
-use crate::storage::{ApplyOutcome, Engine};
 
 #[tokio::test]
 async fn full_local_admission_refuses_before_wal_publication() {

@@ -18,7 +18,7 @@ use crate::shared_kernel::types::{
 /// One committed mutation against the lumen storage engine.
 ///
 /// Every variant maps 1:1 to the matching `Engine::*` method; see
-/// [`crate::storage::Engine::apply_raft_entry`].
+/// [`crate::index::application::engine::Engine::apply_raft_entry`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RaftLogEntry {
     CreateCollection {
@@ -32,7 +32,7 @@ pub enum RaftLogEntry {
     /// Full-replacement batch upsert: each item's `fields` becomes the
     /// doc's entire indexed state, implicitly deleting any declared schema
     /// field absent from `fields`. See
-    /// [`crate::storage::Engine::replace_docs`].
+    /// [`crate::index::application::engine::Engine::replace_docs`].
     ReplaceDocs {
         collection_id: String,
         req: ReplaceDocsRequest,

@@ -11,6 +11,12 @@ use super::committed_index_plan::{
 use super::committed_replace_apply::{ReplacementInput, ReplacementLedger};
 use super::committed_replace_plan as replace_plan;
 use super::*;
+use crate::index::application::apply::apply_prepared_value;
+use crate::index::application::checkpoint_capture::CheckpointValue;
+use crate::index::application::engine::index::MAX_INDEX_ITEMS;
+use crate::index::application::engine::raft_dispatch::ApplyOutcome;
+use crate::index::application::engine::Engine;
+use crate::index::application::live_delta::retire_live_delta_overlay;
 use crate::index::domain::collection::{Collection, IDEMPOTENCY_TTL};
 use crate::index::domain::field_coverage::FieldCoverage;
 use crate::index::domain::field_index::FieldIndex;

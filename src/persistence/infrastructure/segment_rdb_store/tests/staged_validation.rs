@@ -1,3 +1,4 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::SegmentGenerationManifest;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::{
     read_generation_manifest, write_generation_manifest,
@@ -9,7 +10,6 @@ use crate::persistence::infrastructure::segment_rdb_store::tests::{
 use crate::persistence::infrastructure::segment_rdb_store::{
     GenerationRecord, SegmentRdbStore, GENERATION_MANIFEST_FILE, GENERATION_MANIFEST_SCHEMA_VERSION,
 };
-use crate::storage::Engine;
 use std::sync::Arc;
 use storage_durable::CurrentTarget;
 

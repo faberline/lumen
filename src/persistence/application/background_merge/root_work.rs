@@ -2,10 +2,10 @@
 //! alive while a reader or a merge still owns them, retired-generation reclaim,
 //! the capacity-wait handshake with a blocked checkpoint, and job completion.
 
+use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::{
     CapacityWait, MergeOutcome, RootWork, TraceState, WorkState,
 };
-use crate::storage::Engine;
 use anyhow::{anyhow, bail, Result};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -99,7 +99,7 @@ impl RootWork {
             .map(|(name, (generation, schema_version, _))| {
                 (
                     name,
-                    crate::storage::CheckpointCollectionIdentity {
+                    crate::index::application::checkpoint_capture::CheckpointCollectionIdentity {
                         generation,
                         schema_version,
                         data_version: 0,
@@ -161,7 +161,7 @@ impl RootWork {
     pub(super) fn pin_readers(
         &self,
         generation: String,
-        capture: &crate::storage::CheckpointCapture,
+        capture: &crate::index::application::checkpoint_capture::CheckpointCapture,
     ) {
         let readers = capture
             .prepared_compactions

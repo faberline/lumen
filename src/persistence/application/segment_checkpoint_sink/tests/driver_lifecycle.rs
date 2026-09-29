@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
 
+use crate::index::application::engine::Engine;
 use crate::ingest::application::write_coordinator::WriteSink;
 use crate::ingest::domain::change_budget::ChangeBudget;
 use crate::persistence::application::segment_checkpoint_sink::driver::spawn_budget_waiter;
@@ -14,7 +15,6 @@ use crate::persistence::application::segment_checkpoint_sink::{
     EngineWatermarkSink, SegmentCheckpointSink,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn graceful_shutdown_waits_for_the_started_checkpoint_write() {

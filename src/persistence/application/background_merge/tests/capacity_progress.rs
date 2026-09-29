@@ -1,10 +1,10 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::tests::{
     capacity_schema, current_manifest, field_delta_count, has_capacity_value, index_fields,
 };
 use crate::persistence::infrastructure::segment_rdb_store::{
     MergeObserver, MergePhase, SegmentRdbStore,
 };
-use crate::storage::Engine;
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 

@@ -1,10 +1,10 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::infrastructure::segment_rdb_store::startup::SegmentStartupDecision;
 use crate::persistence::infrastructure::segment_rdb_store::tests::{index_kw, kw_schema};
 use crate::persistence::infrastructure::segment_rdb_store::{
     SegmentRdbStore, AOF_COMPACT_TEMP_FILE, AOF_FILE, CONTAINER_VOLUME_SEED_FILE, CURRENT_FILE,
     EXT_FILESYSTEM_METADATA_DIR, HNSW_GRAPH_CACHE_DIR,
 };
-use crate::storage::Engine;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -50,7 +50,7 @@ fn graph_cache_cleanup_does_not_remove_unrelated_root_entries() {
     std::fs::write(retained.join("sentinel"), b"keep").unwrap();
     assert_eq!(
         store
-            .save_hnsw_graph_caches(&crate::storage::Engine::new())
+            .save_hnsw_graph_caches(&crate::index::application::engine::Engine::new())
             .unwrap(),
         0
     );

@@ -1,13 +1,13 @@
 //! Generation records: parsing generation, revision, legacy and staging names,
 //! resolving a name to its record, and validating a record before a reopen.
 
+use crate::index::application::{engine::Engine, recovery_profile::RecoveryPhase};
 use crate::persistence::infrastructure::segment_rdb_store::generation_validation::validate_generation_layout;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::read_generation_manifest;
 use crate::persistence::infrastructure::segment_rdb_store::{
     GenerationRecord, SegmentRdbStore, GENERATION_MANIFEST_FILE, GENERATION_MANIFEST_V2,
     GENERATION_MANIFEST_V3,
 };
-use crate::storage::{Engine, RecoveryPhase};
 use anyhow::{anyhow, bail, Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;

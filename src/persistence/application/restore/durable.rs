@@ -8,9 +8,9 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use storage_durable::{CommitError, CommitFailureClass};
 
+use crate::index::application::engine::Engine;
 use crate::ingest::application::write_coordinator::errors::StorageFullError;
 use crate::persistence::application::restore::SegmentRestoreSink;
-use crate::storage::Engine;
 
 impl SegmentRestoreSink {
     pub(super) async fn restore_durable(&self, candidate: Arc<Engine>) -> Result<()> {

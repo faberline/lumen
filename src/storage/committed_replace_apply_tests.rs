@@ -4,6 +4,7 @@ mod committed_replace_apply_tests {
     use std::{collections::BTreeMap, sync::Arc};
 
     use crate::{
+        index::application::engine::{raft_dispatch::ApplyOutcome, Engine},
         ingest::domain::{change_budget::ChangeBudget, wal_record::WalRecord},
         shared_kernel::{
             log_entry::RaftLogEntry,
@@ -12,7 +13,6 @@ mod committed_replace_apply_tests {
                 schema::CreateCollectionRequest,
             },
         },
-        storage::{ApplyOutcome, Engine},
     };
     use anyhow::Result;
 

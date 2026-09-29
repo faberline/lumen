@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 
+use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
 use crate::ingest::application::write_coordinator::errors::{RestartRequired, SubmitStalled};
 use crate::ingest::application::write_coordinator::tests::keyword_schema;
 use crate::ingest::application::write_coordinator::WriteCoordinator;
@@ -12,7 +13,6 @@ use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
-use crate::storage::{ApplyOutcome, Engine};
 
 /// #1486 AC1/AC2: an engine "restored" to a non-zero watermark (mirrors
 /// `serve()`'s `MemWal::starting_at(start_seq)` + `start_from(engine,

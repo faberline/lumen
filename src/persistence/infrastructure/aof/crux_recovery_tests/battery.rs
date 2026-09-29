@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::index::application::engine::Engine;
 use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::query::{
     KnnQuery, MatchOp, MatchQuery, QueryNode, RangeBound, RangeQuery, TermQuery, TermsQuery,
 };
 use crate::shared_kernel::types::search::SearchRequest;
-use crate::storage::Engine;
 
 fn req(query: QueryNode, limit: u32) -> SearchRequest {
     SearchRequest {

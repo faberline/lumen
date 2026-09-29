@@ -1,10 +1,10 @@
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal_source_stage::tests::stager;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{
     FieldValue, IndexItem, IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
 };
-use crate::storage::Engine;
 
 // Append to wal_source_stage.rs tests. These cases intentionally use tightly
 // sized source vectors so any decoder growth is visible in the final estimate.

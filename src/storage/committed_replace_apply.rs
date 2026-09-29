@@ -6,6 +6,9 @@
 
 use super::committed_replace_plan::{ParsedValue, ParsedValues, ReplaceDocDescriptor};
 use super::*;
+use crate::index::application::engine::raft_dispatch::ApplyOutcome;
+use crate::index::application::engine::replace::checksum_bytes;
+use crate::index::application::engine::Engine;
 use crate::index::domain::hash_index::parse_hash_number;
 use crate::ingest::infrastructure::wal::borrowed_replace_scanner::BorrowedReplaceScanner;
 use crate::ingest::infrastructure::wal::borrowed_replace_spool::BorrowedReplaceSpool;

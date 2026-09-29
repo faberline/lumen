@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use storage_durable::{FsyncPolicy, SnapshotFileStore};
 
 use crate::persistence::domain::rdb_store::RdbStore;
-use crate::storage::{Engine, SnapshotV1};
+use crate::{index::application::engine::Engine, storage::SnapshotV1};
 
 /// A snapshot plus the log sequence it is current as of.
 #[derive(Debug, Serialize, Deserialize)]

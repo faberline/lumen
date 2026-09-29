@@ -1,10 +1,10 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::tests::{
     capacity_schema, current_manifest, field_delta_count,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
 use crate::shared_kernel::types::schema::{CreateCollectionRequest, FieldSpec, FieldType};
-use crate::storage::Engine;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;

@@ -2,7 +2,7 @@
 //! stalled submit, a full disk, and a process that must restart first.
 
 /// A `submit()` waiter was released without a genuine
-/// [`ApplyOutcome`](crate::storage::ApplyOutcome) (#1486 R2): either the apply
+/// [`ApplyOutcome`](crate::index::application::engine::raft_dispatch::ApplyOutcome) (#1486 R2): either the apply
 /// loop's redelivery-dedup guard skipped the waiter's sequence (already
 /// at/below `applied`), or the wait exceeded
 /// [`SUBMIT_TIMEOUT`](super::SUBMIT_TIMEOUT). Both are transient/retryable,

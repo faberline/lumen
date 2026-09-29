@@ -1,6 +1,7 @@
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::change_budget::ChangeBudget;
 use crate::persistence::infrastructure::aof::aof_writer::AofWriter;
 use crate::persistence::infrastructure::aof::frame::encode_payload;
@@ -10,7 +11,6 @@ use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
 use crate::shared_kernel::types::schema::{CreateCollectionRequest, FieldSpec, FieldType};
-use crate::storage::Engine;
 
 #[test]
 fn replay_full_waits_for_real_checkpoint_then_replays_and_cold_recovers() {

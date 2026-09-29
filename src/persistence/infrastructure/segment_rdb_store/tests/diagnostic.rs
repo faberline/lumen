@@ -1,3 +1,4 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::infrastructure::segment_rdb_store::diagnostic::CheckpointDiagnosticContext;
 #[cfg(test)]
 use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
@@ -7,7 +8,6 @@ use crate::persistence::infrastructure::segment_rdb_store::tests::{
     index_kw, kw_schema, DiagnosticEnvironment, DiagnosticTraceWriter,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use anyhow::Result;
 use std::sync::Arc;
 

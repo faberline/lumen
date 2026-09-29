@@ -1,9 +1,9 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::tests::{
     count_tree, keyword_schema, published_merge_jobs, put_row,
 };
 use crate::persistence::infrastructure::segment_rdb_store::flat_layout::collection_checkpoint_dir_name;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use std::sync::Arc;
 use std::time::Duration;
 use storage_durable::CurrentTarget;

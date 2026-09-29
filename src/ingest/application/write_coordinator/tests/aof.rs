@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use crate::index::application::engine::Engine;
 use crate::ingest::application::write_coordinator::errors::{RestartRequired, StorageFullError};
 use crate::ingest::application::write_coordinator::tests::keyword_schema;
 use crate::ingest::application::write_coordinator::WriteCoordinator;
@@ -8,7 +9,6 @@ use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
-use crate::storage::Engine;
 
 /// The embedded segment path may be replaced immediately after its write
 /// endpoint returns. Its AOF must therefore be readable *at acknowledgement

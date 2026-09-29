@@ -151,7 +151,7 @@ pub(super) async fn apply_reshard_batch(
 /// [`DriveOutcome::Blocked`] the same as any other step; the next tick's
 /// retry recomputes and re-sends the same deterministic chunk set (the final
 /// pass runs under the write fence, so bucket population cannot change
-/// between ticks), converging via [`crate::storage::Engine::
+/// between ticks), converging via [`crate::index::application::engine::Engine::
 /// apply_reshard_prune_chunk`]'s idempotent accumulator.
 ///
 /// [`DriveOutcome::Blocked`]: crate::operator::application::reshard_driver::DriveOutcome::Blocked

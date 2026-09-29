@@ -1,4 +1,7 @@
 use super::*;
+use crate::index::application::checkpoint_capture::CheckpointValue;
+use crate::index::application::engine::raft_dispatch::ApplyOutcome;
+use crate::index::application::engine::Engine;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::ingest::domain::wal_record::WalRecord;

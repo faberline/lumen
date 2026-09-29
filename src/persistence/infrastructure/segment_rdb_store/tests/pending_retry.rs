@@ -1,3 +1,4 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::infrastructure::segment_rdb_store::diagnostic::CheckpointDiagnosticContext;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::read_generation_manifest;
 use crate::persistence::infrastructure::segment_rdb_store::records::parse_revision_name;
@@ -6,7 +7,6 @@ use crate::persistence::infrastructure::segment_rdb_store::tests::{
     DiagnosticTraceWriter,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use storage_durable::FailureInjector;

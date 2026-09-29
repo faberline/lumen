@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Mutex, OnceLock, Weak};
 
+use crate::index::application::engine::Engine;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 
 pub(in crate::persistence) static NEXT_CHECKPOINT_ATTEMPT_ID: AtomicU64 = AtomicU64::new(1);
 

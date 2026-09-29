@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use storage_durable::LogFrame;
 
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::change_budget::ChangeBudget;
 use crate::persistence::infrastructure::aof::aof_writer::AofWriter;
 use crate::persistence::infrastructure::aof::frame::encode_payload;
@@ -18,12 +19,11 @@ use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
 use crate::shared_kernel::types::schema::{CreateCollectionRequest, FieldSpec, FieldType};
-use crate::storage::Engine;
 
 #[test]
 fn replay_reserves_capacity_before_decoding_a_complete_frame() {
+    use crate::index::application::engine::Engine;
     use crate::ingest::domain::change_budget::ChangeBudget;
-    use crate::storage::Engine;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,

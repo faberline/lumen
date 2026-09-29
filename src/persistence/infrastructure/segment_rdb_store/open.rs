@@ -2,6 +2,7 @@
 //! every handle on one root, the constructors, and the handle accessors the
 //! engine and the background merge use.
 
+use crate::index::application::{engine::Engine, recovery_profile::RecoveryProfile};
 use crate::persistence::infrastructure::merge_worker::shared;
 use crate::persistence::infrastructure::segment_rdb_store::save_gate::SaveGate;
 use crate::persistence::infrastructure::segment_rdb_store::startup::StartupBootstrap;
@@ -9,7 +10,6 @@ use crate::persistence::infrastructure::segment_rdb_store::{
     CheckpointRootGuard, MergeObserver, NoMergeObserver, PendingFrozenCheckpoint, RecoveryTimings,
     SegmentArchivePin, SegmentRdbStore,
 };
-use crate::storage::{Engine, RecoveryProfile};
 use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

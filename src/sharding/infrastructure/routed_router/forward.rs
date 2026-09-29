@@ -137,7 +137,7 @@ impl RoutedRouter {
     /// status code (202/204/404), so this is the one forward primitive that
     /// must return the raw status instead of collapsing it to success/error.
     ///
-    /// [`DropOutcome::NotFound`]: crate::storage::DropOutcome::NotFound
+    /// [`DropOutcome::NotFound`]: crate::index::application::engine::collections::DropOutcome::NotFound
     pub(super) async fn forward_drop_status(
         &self,
         shard: u32,

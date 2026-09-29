@@ -1,7 +1,7 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::infrastructure::segment_rdb_store::flat_layout::collection_checkpoint_dir_name;
 use crate::persistence::infrastructure::segment_rdb_store::raft_archive::write_archive;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use std::sync::Arc;
 
 fn fixture() -> (tempfile::TempDir, Vec<u8>) {

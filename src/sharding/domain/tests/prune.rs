@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::index::application::engine::Engine;
 use crate::sharding::domain::prune_chunk::{snapshot_reshard_prune_chunks, ReshardPruneChunk};
 use crate::sharding::domain::reshard_batch::{ADMIN_ROUTE_BODY_LIMIT_BYTES, MAX_BATCH_BYTES};
 use crate::sharding::domain::snapshot_subset::snapshot_bucket_subset;
@@ -9,7 +10,6 @@ use crate::shared_kernel::types::{
     document::{FieldValue, IndexRequest},
     schema::{CreateCollectionRequest, FieldType},
 };
-use crate::storage::Engine;
 
 #[test]
 fn snapshot_bucket_subset_matches_route_document_membership() {

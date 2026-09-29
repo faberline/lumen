@@ -55,11 +55,11 @@ pub(super) fn replay_frames(
 }
 
 /// Recovery helper: replay every AOF frame with `seq > from_seq` into `engine`
-/// via [`crate::storage::Engine::apply_raft_entry`], returning the max seq
+/// via [`crate::index::application::engine::Engine::apply_raft_entry`], returning the max seq
 /// replayed. This is step 2 of cold start (RDB → **AOF** → broker); the engine is
 /// already seeded to `from_seq` by the segment checkpoint.
 pub fn replay_aof_into(
-    engine: &std::sync::Arc<crate::storage::Engine>,
+    engine: &std::sync::Arc<crate::index::application::engine::Engine>,
     path: impl AsRef<Path>,
     from_seq: u64,
 ) -> Result<u64> {
@@ -74,7 +74,7 @@ pub fn replay_aof_into(
 }
 
 pub(super) fn replay_aof_into_observed(
-    engine: &std::sync::Arc<crate::storage::Engine>,
+    engine: &std::sync::Arc<crate::index::application::engine::Engine>,
     path: impl AsRef<Path>,
     from_seq: u64,
     before_decode: impl FnMut(),
@@ -84,7 +84,7 @@ pub(super) fn replay_aof_into_observed(
 }
 
 fn replay_aof_into_with_capacity_owner(
-    engine: &std::sync::Arc<crate::storage::Engine>,
+    engine: &std::sync::Arc<crate::index::application::engine::Engine>,
     path: impl AsRef<Path>,
     from_seq: u64,
     mut before_decode: impl FnMut(),

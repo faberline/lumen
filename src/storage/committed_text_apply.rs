@@ -5,6 +5,8 @@
 //! the original scanner bytes through the same-lease completion callback.
 
 use super::*;
+use crate::index::application::engine::raft_dispatch::ApplyOutcome;
+use crate::index::application::engine::Engine;
 use crate::index::domain::field_index::FieldIndex;
 use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
 use crate::shared_kernel::capture_barrier::ApplyLease;

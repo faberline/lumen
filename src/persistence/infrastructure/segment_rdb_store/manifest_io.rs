@@ -141,7 +141,7 @@ pub(super) fn register_checkpoint_inherited_files(
     staged: &mut CurrentGenerationStaging,
     collections: &[CollectionCatalog],
     prior: Option<&SegmentGenerationManifest>,
-    capture: &crate::storage::CheckpointCapture,
+    capture: &crate::index::application::checkpoint_capture::CheckpointCapture,
 ) -> Result<()> {
     for collection in collections {
         let same_collection = prior.is_some_and(|prior| {

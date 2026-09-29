@@ -2,6 +2,7 @@
 //! taking the root's save permit, and matching a retry to the frozen checkpoint
 //! it left pending.
 
+use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::CapacityWait;
 use crate::persistence::domain::generation_manifest::SegmentGenerationManifest;
 use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
@@ -18,7 +19,6 @@ use crate::persistence::infrastructure::segment_rdb_store::{
     GenerationRecord, PendingFrozenLease, PendingPredecessor, SaveAttempt, SaveIntent,
     SegmentArchivePin, SegmentRdbStore, StagingSelection,
 };
-use crate::storage::Engine;
 use anyhow::{anyhow, bail, Context, Result};
 use std::sync::Arc;
 use std::time::{Duration, Instant};

@@ -84,7 +84,10 @@ use crate::shared_kernel::types::{
     },
     stats::{CacheStats, FieldStats, StatsResponse, StorageStats},
 };
-use crate::storage::{ApplyOutcome, DropOutcome, Engine, SnapshotV1};
+use crate::{
+    index::application::engine::{collections::DropOutcome, raft_dispatch::ApplyOutcome, Engine},
+    storage::SnapshotV1,
+};
 
 /// The `/metrics` body: the engine's domain counters plus the delegated-auth
 /// counters.
@@ -1345,7 +1348,7 @@ fn enforce_read_consistency(state: &AppState, consistency: ReadConsistency) -> R
 /// DELETE exempt on the theory that `apply_reshard_batch`'s
 /// authoritative-subset `replace_ids` scoping (see
 /// [`crate::sharding::domain::reshard_batch::snapshot_reshard_batches`]'s `replace_mode` and
-/// [`crate::storage::Engine::apply_reshard_batch`]'s `replace` parameter)
+/// [`crate::index::application::engine::Engine::apply_reshard_batch`]'s `replace` parameter)
 /// already closes the resurrection gap for a delete acked *before* the
 /// final pass's scoped-backup read. That leaves a delete racing strictly
 /// inside the sub-window between that read and the same pass's eviction

@@ -1,6 +1,7 @@
 //! One save attempt: capture the engine, write the changed collections into a
 //! staged generation, validate it and publish it through `CURRENT`.
 
+use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::needs_merge;
 use crate::persistence::domain::generation_manifest::{SegmentGenerationManifest, SegmentKind};
 use crate::persistence::infrastructure::segment_rdb_store::catalog::catalog_collections;
@@ -25,7 +26,6 @@ use crate::persistence::infrastructure::segment_rdb_store::{
     PendingPredecessor, SaveAttempt, SaveIntent, SegmentArchivePin, SegmentRdbStore,
     StagingSelection, GENERATION_MANIFEST_SCHEMA_VERSION, GENERATION_MANIFEST_V3,
 };
-use crate::storage::Engine;
 use anyhow::{anyhow, bail, Context, Result};
 use std::sync::Arc;
 use std::time::Instant;

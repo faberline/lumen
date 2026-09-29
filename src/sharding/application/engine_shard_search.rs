@@ -6,13 +6,13 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 
 use crate::api::SearchBackend;
+use crate::index::application::engine::Engine;
 use crate::sharding::application::search_fanout::search_shards_parallel;
 use crate::sharding::domain::shard_route::SearchShardTarget;
 use crate::sharding::domain::virtual_bucket_shard_map::{
     VirtualBucketShardMap, DEFAULT_VIRTUAL_BUCKET_COUNT,
 };
 use crate::shared_kernel::types::search::{SearchRequest, SearchResponse};
-use crate::storage::Engine;
 
 #[derive(Clone)]
 pub struct EngineShardSearch {

@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
+use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::domain::fast_hash::FastHashMap;
 use crate::index::domain::field_coverage::FieldCoverage;
 use crate::index::domain::field_index::FieldIndex;
@@ -21,7 +22,6 @@ use crate::index::domain::interner::Interner;
 use crate::index::domain::storage_error::StorageError;
 use crate::shared_kernel::types::schema::FieldSpec;
 use crate::shared_kernel::types::search::SearchResponse;
-use crate::storage::CheckpointValue;
 
 pub(crate) const IDEMPOTENCY_TTL: Duration = Duration::from_secs(300);
 

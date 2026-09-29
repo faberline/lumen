@@ -16,7 +16,7 @@ use crate::ingest::application::write_coordinator::{
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::capture_barrier::RestoreInhibition;
-use crate::storage::{Engine, SnapshotV1};
+use crate::{index::application::engine::Engine, storage::SnapshotV1};
 
 #[derive(Debug)]
 /// A durable restore failed before it could move `CURRENT` or live state.

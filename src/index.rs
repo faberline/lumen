@@ -2,5 +2,6 @@
 //! and vector field indexes, the analyzers that turn a text value into terms,
 //! query evaluation, and the Engine that applies records to them.
 
+pub(crate) mod application;
 pub(crate) mod domain;
 pub(crate) mod infrastructure;

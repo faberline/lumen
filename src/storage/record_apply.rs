@@ -2,6 +2,9 @@
 //! Requests move into this boundary; no field payload is cloned for routing.
 
 use super::*;
+use crate::index::application::engine::collections::DropOutcome;
+use crate::index::application::engine::raft_dispatch::ApplyOutcome;
+use crate::index::application::engine::Engine;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 
 impl Engine {

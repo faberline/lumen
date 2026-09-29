@@ -17,7 +17,7 @@ use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
 #[cfg(test)]
 use crate::storage::CHECKPOINT_COLLECTION_OPENS;
-use crate::storage::{CheckpointLayout, RecoveryProfile};
+use crate::{index::application::recovery_profile::RecoveryProfile, storage::CheckpointLayout};
 
 // ---------------------------------------------------------------------------
 // Production seal + reopen (Stage 2 Phase 2f-1): the RAM=hot / disk=all keystone

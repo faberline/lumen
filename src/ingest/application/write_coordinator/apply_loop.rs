@@ -24,7 +24,10 @@ use crate::ingest::application::write_coordinator::{
 use crate::ingest::domain::change_budget::AdmissionError;
 use crate::ingest::domain::wal_log::SharedWal;
 use crate::ingest::domain::wal_record::WalRecord;
-use crate::storage::{Engine, RecordAdmissionError, RecordReservation, RecordTransientReservation};
+use crate::{
+    index::application::engine::Engine,
+    storage::{RecordAdmissionError, RecordReservation, RecordTransientReservation},
+};
 
 impl WriteCoordinator {
     /// The apply-loop spawner. Identical structure regardless of the AOF; the

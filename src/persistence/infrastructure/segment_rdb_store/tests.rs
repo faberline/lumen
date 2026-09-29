@@ -1,3 +1,4 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::SegmentGenerationManifest;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::{
     sync_directory, write_generation_manifest,
@@ -5,7 +6,6 @@ use crate::persistence::infrastructure::segment_rdb_store::manifest_io::{
 use crate::persistence::infrastructure::segment_rdb_store::{
     SegmentRdbStore, GENERATION_MANIFEST_SCHEMA_VERSION,
 };
-use crate::storage::Engine;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use storage_durable::{CurrentTarget, GenerationName};

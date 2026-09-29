@@ -5,7 +5,7 @@ pub(crate) mod driver;
 pub(crate) mod hnsw_cache;
 pub(crate) mod pending_spill;
 
-use crate::storage::Engine;
+use crate::index::application::engine::Engine;
 use anyhow::{Context, Result};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -257,7 +257,7 @@ impl crate::ingest::application::write_coordinator::WriteSink for EngineWatermar
     async fn submit(
         &self,
         _: crate::shared_kernel::log_entry::RaftLogEntry,
-    ) -> Result<crate::storage::ApplyOutcome> {
+    ) -> Result<crate::index::application::engine::raft_dispatch::ApplyOutcome> {
         anyhow::bail!("bootstrap checkpoint watermark is not a write sink")
     }
 

@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use storage_durable::FsyncPolicy;
 
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::persistence::infrastructure::aof::aof_writer::AofWriter;
 use crate::persistence::infrastructure::aof::crux_recovery_tests::battery::{battery, knn};
@@ -32,7 +33,6 @@ use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest}
 use crate::shared_kernel::types::schema::{
     Analyzer, CreateCollectionRequest, FieldSpec, FieldType, VectorBackend, VectorMetric,
 };
-use crate::storage::Engine;
 
 const DIM: usize = 4;
 

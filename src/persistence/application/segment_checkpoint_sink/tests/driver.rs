@@ -5,6 +5,7 @@ use std::time::Duration;
 use tokio::time::Instant;
 
 use crate::api::CheckpointSink;
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::change_budget::ChangeBudget;
 use crate::persistence::application::segment_checkpoint_sink::tests::{
     admitted_keyword, contains_keyword, spill_keyword_schema, wait_for_checkpoint_count, FailOnce,
@@ -14,7 +15,6 @@ use crate::persistence::application::segment_checkpoint_sink::{
 };
 use crate::persistence::domain::checkpoint_schedule::CheckpointSchedule;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 
 #[test]
 fn periodic_success_bookkeeping_does_not_consume_capacity_request() {

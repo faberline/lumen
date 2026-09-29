@@ -6,6 +6,7 @@
 
 pub(crate) mod analysis;
 pub(crate) mod collection;
+pub(crate) mod engine_state;
 pub(crate) mod fast_hash;
 pub(crate) mod field_coverage;
 pub(crate) mod field_index;

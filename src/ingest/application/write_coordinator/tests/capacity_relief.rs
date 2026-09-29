@@ -4,6 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures::StreamExt;
 
+use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
 use crate::ingest::application::write_coordinator::tests::keyword_schema;
 use crate::ingest::application::write_coordinator::WriteCoordinator;
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
@@ -13,7 +14,6 @@ use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
-use crate::storage::{ApplyOutcome, Engine};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn capacity_relief_stages_applied_sources_pinned_by_a_slow_subscriber() {

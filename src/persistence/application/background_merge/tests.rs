@@ -1,3 +1,4 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::{
     SegmentGenerationManifest, SegmentKind, SegmentRole,
 };
@@ -9,7 +10,6 @@ use crate::shared_kernel::types::{
     schema::{CreateCollectionRequest, FieldSpec, FieldType},
     search::SearchRequest,
 };
-use crate::storage::Engine;
 use std::collections::BTreeMap;
 use std::path::Path;
 use storage_durable::CurrentTarget;

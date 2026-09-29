@@ -7,6 +7,7 @@ use raft_runtime::{
 };
 use tower::ServiceExt;
 
+use crate::index::application::engine::Engine;
 use crate::ingest::application::write_coordinator::WriteSink;
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::change_budget::{ChangeBudget, HARD_LIMIT};
@@ -18,7 +19,6 @@ use crate::shared_kernel::types::{
     document::{FieldValue, IndexItem, IndexRequest},
     schema::{CreateCollectionRequest, FieldSpec, FieldType},
 };
-use crate::storage::Engine;
 
 // Draft bytes for src/raft_sm.rs's existing `#[cfg(test)] mod tests`.
 // The host status is observed through its public router after apply cleanup.

@@ -8,13 +8,13 @@ use anyhow::{bail, Result};
 use roaring::RoaringBitmap;
 
 use crate::index::domain::collection::Collection;
+use crate::index::domain::engine_state::EngineState;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::hash_index::parse_hash;
 use crate::index::domain::query::eval::eval_query;
 use crate::index::domain::query::ScoredHits;
 use crate::index::domain::storage_error::StorageError;
 use crate::shared_kernel::types::query::{HammingQuery, KnnQuery, RrfQuery};
-use crate::storage::EngineState;
 
 pub(super) fn eval_knn(coll: &Collection, q: &KnnQuery) -> Result<ScoredHits> {
     eval_knn_inner(coll, q, None)

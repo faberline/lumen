@@ -1,6 +1,7 @@
 //! Loading the generation `CURRENT` names into an engine, and the HNSW graph
 //! caches saved beside it.
 
+use crate::index::application::{engine::Engine, recovery_profile::RecoveryPhase};
 use crate::persistence::infrastructure::segment_rdb_store::startup::{
     SegmentStartupDecision, SegmentStartupOutcome, StartupBootstrap,
 };
@@ -8,7 +9,6 @@ use crate::persistence::infrastructure::segment_rdb_store::telemetry::generation
 use crate::persistence::infrastructure::segment_rdb_store::{
     LoadedSegmentGeneration, SegmentRdbStore, HNSW_GRAPH_CACHE_DIR,
 };
-use crate::storage::{Engine, RecoveryPhase};
 use anyhow::{bail, Context, Result};
 use std::sync::Arc;
 use std::time::Instant;

@@ -4,12 +4,12 @@ use std::sync::Arc;
 use axum::http::HeaderMap;
 
 use crate::api::{RoutedBackend, ShardForwardMisrouted, ShardMapVersionMismatch};
+use crate::index::application::engine::Engine;
 use crate::sharding::infrastructure::routed_router::tests::{shard_map, DummyWrite};
 use crate::sharding::infrastructure::routed_router::{
     RoutedRouter, FORWARDED_HEADER, MAP_VERSION_HEADER,
 };
 use crate::shared_kernel::types::{schema::CreateCollectionRequest, search::SearchRequest};
-use crate::storage::Engine;
 
 fn test_router(local_shard: u32) -> RoutedRouter {
     RoutedRouter::new(

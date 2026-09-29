@@ -23,8 +23,9 @@ use crate::ingest::domain::change_budget::AdmissionError;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::log_entry::RaftLogEntry;
-use crate::storage::{
-    ApplyOutcome, Engine, RecordAdmissionError, RecordReservation, RepriceRecord,
+use crate::{
+    index::application::engine::{raft_dispatch::ApplyOutcome, Engine},
+    storage::{RecordAdmissionError, RecordReservation, RepriceRecord},
 };
 
 /// How many recent apply outcomes to retain for the write handler to claim,

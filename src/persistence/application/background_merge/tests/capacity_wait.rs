@@ -1,8 +1,8 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::{
     CapacityWait, MergeOutcome, RootWork, WorkState,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::Engine;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

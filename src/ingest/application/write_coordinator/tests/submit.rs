@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
 use crate::ingest::application::write_coordinator::errors::RestartRequired;
 use crate::ingest::application::write_coordinator::tests::keyword_schema;
 use crate::ingest::application::write_coordinator::WriteCoordinator;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
-use crate::storage::{ApplyOutcome, Engine};
 
 #[tokio::test]
 async fn submit_creates_then_indexes_and_outcome_is_routed_back() {

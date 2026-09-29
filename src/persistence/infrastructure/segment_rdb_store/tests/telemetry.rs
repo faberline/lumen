@@ -1,3 +1,4 @@
+use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::{SegmentKind, SegmentRole};
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::read_generation_manifest;
 use crate::persistence::infrastructure::segment_rdb_store::tests::{
@@ -6,7 +7,6 @@ use crate::persistence::infrastructure::segment_rdb_store::tests::{
 use crate::persistence::infrastructure::segment_rdb_store::{
     SegmentRdbStore, StagingSelection, GENERATION_MANIFEST_FILE,
 };
-use crate::storage::Engine;
 use std::sync::Arc;
 use storage_durable::FailureInjector;
 
