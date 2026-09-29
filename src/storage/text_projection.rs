@@ -213,7 +213,7 @@ impl TextStreamView for LiveProjection<'_> {
     }
 }
 
-pub(super) fn write_live(
+pub(crate) fn write_live(
     path: &std::path::Path,
     seq: u64,
     index: &TextIndex,

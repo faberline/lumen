@@ -1,4 +1,5 @@
 use super::*;
+use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::shared_kernel::log_entry::RaftLogEntry;

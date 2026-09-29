@@ -11,6 +11,9 @@ use super::committed_index_plan::{
 use super::committed_replace_apply::{ReplacementInput, ReplacementLedger};
 use super::committed_replace_plan as replace_plan;
 use super::*;
+use crate::index::domain::field_coverage::FieldCoverage;
+use crate::index::domain::field_index::FieldIndex;
+use crate::index::domain::hash_index::parse_hash_number;
 use crate::index::domain::storage_error::StorageError;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;

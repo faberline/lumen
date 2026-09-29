@@ -2,6 +2,7 @@
 //! the original item ordinal, so duplicate cells retain arrival-order meaning.
 
 use super::*;
+use crate::index::domain::field_index::FieldIndex;
 #[cfg(feature = "jieba")]
 use crate::index::infrastructure::analysis::jieba_disk_route;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};

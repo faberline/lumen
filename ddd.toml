@@ -837,3 +837,49 @@ paths = [
 ]
 subject = "persistence.infrastructure"
 reason = "Each field index holds its sealed base as an Arc<ComposedSegmentReader>, the composed reader over the field's segment chain, and reads terms, values, members and postings through it; text_index/query also decodes a token's posting with TextPostingAt and walks it with SortedIdCursor. P2: a sealed-segment reader port in the index domain (term, value and posting reads) that the persistence composed segment implements, as the vector-segment port above."
+
+# The per-field index enum moved to index/domain as-is, with the hash field
+# index, the per-doc field coverage and the text row's token set. FieldIndex's
+# snapshot, seal and reopen build and hide docs with roaring bitmaps, return
+# anyhow, and write and reopen the field's segment through persistence's
+# segment writers, SegmentReader and composed reader (E16: persistence and
+# index depend on each other).
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/field_index/open.rs",
+  "src/index/domain/field_index/seal.rs",
+  "src/index/domain/field_index/snapshot.rs",
+  "src/index/domain/hash_index.rs",
+]
+subject = "roaring"
+reason = "HashIndex tracks the sealed base docs it has hidden in a tombstone RoaringBitmap, like the other field indexes; FieldIndex's snapshot restore, seal and reopen gather the keyword terms and set elements into RoaringBitmaps and reset each index's tombstones. P2: decided with the value indexes' postings and tombstones (see the roaring exceptions above), either roaring joins the domain's crates or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/field_index.rs",
+  "src/index/domain/field_index/open.rs",
+  "src/index/domain/field_index/seal.rs",
+  "src/index/domain/field_index/snapshot.rs",
+  "src/index/domain/hash_index.rs",
+]
+subject = "anyhow"
+reason = "FieldIndex::from_spec and open_from_segment reject a vector field with no sub-spec with anyhow!, the snapshot conversion reports a torn text segment or staged dictionary the same way, the seal and reopen pass up the segment writers' and SegmentReader::open's anyhow errors, and parse_hash rejects a value that is not a 64-bit hex string. P2: an index domain error type (with VectorIndex's, SortableF64's and the sorted walks', see the anyhow exceptions above) that the segment ports return."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/token_set.rs"]
+subject = "smallvec"
+reason = "TokenSet keeps a text row's first eight distinct tokens inline in a SmallVec<[String; 8]> before it promotes them to a hash set, so a short row allocates no set. P2: either smallvec joins the domain's crates as a pure container crate, or TokenSet keeps the inline tokens in a fixed array of its own."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/domain/field_index/open.rs",
+  "src/index/domain/field_index/seal.rs",
+  "src/index/domain/hash_index.rs",
+]
+subject = "persistence.infrastructure"
+reason = "HashIndex holds its sealed base as an Arc<ComposedSegmentReader>, like the other field indexes. FieldIndex's seal writes each scalar field through the persistence segment's number, hash, keyword and set writers, and the seal and reopen open the written file with SegmentReader::open and wrap it in ComposedSegmentReader::from_base. P2: the sealed-segment reader port above, plus a scalar-segment writer port in the index domain that the persistence segment implements, as the vector-segment port."

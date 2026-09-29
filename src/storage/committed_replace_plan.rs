@@ -8,6 +8,7 @@
 use super::committed_index_plan::{
     PlanStamp, PlanView, PlannedCell, RequestOutcome, ScalarAction, ScalarPlan,
 };
+use crate::index::domain::hash_index::parse_hash;
 use crate::index::domain::{sortable_f64::SortableF64, storage_error::StorageError};
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::types::{document::MAX_BATCH_REPLACE_SIZE, schema::FieldType};
@@ -120,7 +121,7 @@ impl ReplaceItemError {
                 let FastIndexValue::String(value) = item.value else {
                     unreachable!("validated replacement Hash source")
                 };
-                super::parse_hash(value).expect_err("same immutable replacement Hash source")
+                parse_hash(value).expect_err("same immutable replacement Hash source")
             }
         };
         let code = if matches!(

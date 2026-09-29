@@ -248,8 +248,8 @@ mod committed_replace_apply_tests {
     }
 
     fn state_fingerprint(engine: &Engine) -> serde_json::Value {
+        use crate::index::domain::field_index::FieldIndex;
         use crate::index::domain::sortable_f64::SortableF64;
-        use crate::storage::FieldIndex;
         let state = engine.state.read().unwrap();
         let coll = &state.collections["docs"];
         let rows: Vec<_> = coll

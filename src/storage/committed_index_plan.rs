@@ -8,6 +8,9 @@
 //! A plan owns identifiers and small metadata only.  Every `ordinal` points
 //! back into `FastIndexScanner`, so no field value is decoded or copied.
 
+use crate::index::domain::hash_index::parse_hash;
+#[cfg(test)]
+use crate::index::domain::hash_index::parse_hash_number;
 use crate::index::domain::{sortable_f64::SortableF64, storage_error::StorageError};
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::types::schema::FieldType;
@@ -137,7 +140,7 @@ impl BusinessError {
                 let FastIndexValue::String(value) = item.value else {
                     unreachable!("invalid Hash parse has a String source")
                 };
-                return super::parse_hash(value).expect_err("same immutable Hash source");
+                return parse_hash(value).expect_err("same immutable Hash source");
             }
         })
         .into()
@@ -343,7 +346,7 @@ pub(super) fn plan<V: PlanView>(
             let FastIndexValue::String(value) = item.value else {
                 return None;
             };
-            Some((ordinal, super::parse_hash_number(value).ok()))
+            Some((ordinal, parse_hash_number(value).ok()))
         })
         .collect();
     plan_with_hashes(scanner, view, &hashes, now, reserve_total)

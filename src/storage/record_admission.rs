@@ -892,6 +892,7 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::index::domain::field_index::FieldIndex;
     use crate::shared_kernel::types::{
         document::{FieldValue, IndexItem, IndexRequest},
         schema::{CreateCollectionRequest, FieldSpec},
@@ -1105,8 +1106,7 @@ mod tests {
         drop(guard);
         {
             let state = engine.state.read().unwrap();
-            let super::super::FieldIndex::Text { idx, .. } = &state.collections["c"].fields["body"]
-            else {
+            let FieldIndex::Text { idx, .. } = &state.collections["c"].fields["body"] else {
                 unreachable!()
             };
             assert!(
@@ -1136,8 +1136,7 @@ mod tests {
             )
             .unwrap();
         let state = engine.state.read().unwrap();
-        let super::super::FieldIndex::Text { idx, .. } = &state.collections["c"].fields["body"]
-        else {
+        let FieldIndex::Text { idx, .. } = &state.collections["c"].fields["body"] else {
             unreachable!()
         };
         assert!(idx.staged_rows.is_empty());

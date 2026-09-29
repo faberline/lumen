@@ -6,6 +6,9 @@
 
 pub(crate) mod analysis;
 pub(crate) mod fast_hash;
+pub(crate) mod field_coverage;
+pub(crate) mod field_index;
+pub(crate) mod hash_index;
 pub(crate) mod interner;
 pub(crate) mod keyword_index;
 pub(crate) mod number_index;
@@ -15,4 +18,5 @@ pub(crate) mod sortable_f64;
 pub(crate) mod storage_error;
 pub(crate) mod text_index;
 pub(crate) mod tok_probe;
+pub(crate) mod token_set;
 pub(crate) mod vector;
