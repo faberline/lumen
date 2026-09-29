@@ -412,13 +412,13 @@ impl RestoreSink for SegmentRestoreSink {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::aof::AofReader;
     use crate::ingest::application::write_coordinator::{
         errors::RestartRequired, WriteCoordinator,
     };
     use crate::ingest::domain::wal_log::WalLog;
     use crate::ingest::domain::wal_record::WalRecord;
     use crate::ingest::infrastructure::wal::mem_wal::MemWal;
+    use crate::persistence::infrastructure::aof::replay::AofReader;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::schema::CreateCollectionRequest;
     use std::path::Path;
@@ -535,7 +535,10 @@ mod tests {
             .expect("seed old CURRENT");
         let old_current = current_bytes(dir.path());
         let aof = Arc::new(Mutex::new(
-            crate::aof::AofWriter::open(dir.path().join("aof.log")).unwrap(),
+            crate::persistence::infrastructure::aof::aof_writer::AofWriter::open(
+                dir.path().join("aof.log"),
+            )
+            .unwrap(),
         ));
         let wal = Arc::new(MemWal::starting_at(WATERMARK));
         let writer = WriteCoordinator::start_from_with_aof(

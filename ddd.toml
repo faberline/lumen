@@ -499,8 +499,8 @@ subject = "infrastructure->application"
 reason = "SegmentRdbStore holds its root's RootWork scheduler, a save waits on it for capacity (CapacityWait) and asks needs_merge before it requests a merge, and the merge worker runs merge_one on each Job it dequeues. The statics stay in infrastructure (E17). P2: the scheduler state becomes the port's implementation detail and the worker calls the application through that port."
 
 # ingest and persistence depend on each other (E16). depends_on declares
-# persistence -> ingest; the coordinator's use of the checkpoint diagnostic is
-# the other direction.
+# persistence -> ingest; the coordinator's use of the checkpoint diagnostic and
+# of the AOF writer is the other direction.
 
 [[exceptions]]
 rule = "B4"
@@ -510,9 +510,31 @@ reason = "The coordinator's capacity refusal records a numeric event in the chec
 
 [[exceptions]]
 rule = "B4"
+paths = ["src/ingest/application/write_coordinator.rs"]
+subject = "persistence.infrastructure"
+reason = "SharedAof is the coordinator's handle on the AofWriter: the apply loop appends each applied record to it, the AOF sync task fsyncs it, and the checkpoint snapshotter truncates the prefix a checkpoint covers. P2: ingest defines a durable-log port (append, sync, truncate_through) the AOF writer implements, which breaks the cycle."
+
+[[exceptions]]
+rule = "B4"
 paths = ["src/persistence/infrastructure/segment_rdb_store/diagnostic.rs"]
 subject = "ingest.domain"
 reason = "The checkpoint diagnostic trace records the change budget's Snapshot when the scheduler selects a checkpoint. P2: ingest's application layer exposes the budget snapshot, or the trace takes the few counters it prints."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/persistence/infrastructure/aof/aof_writer.rs",
+  "src/persistence/infrastructure/aof/frame.rs",
+  "src/persistence/infrastructure/aof/replay.rs",
+]
+subject = "ingest.domain"
+reason = "An AOF frame's payload is an encoded WalRecord, and replay admits each frame against the change budget (it compares against HARD_LIMIT and matches AdmissionError::Full) before it decodes the record. P2: ingest's application layer exposes the record codec and the admission API the AOF, like EngineSm, calls."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/infrastructure/aof/replay.rs"]
+subject = "ingest.infrastructure"
+reason = "Replay bounds a frame's decode workspace with wire_cost::scan_workspace_bound and decoded_peak_bound and applies a large fast-Index frame through FastIndexScanner, the same bounds and scanner the WAL path uses. P2: ingest's application layer exposes both."
 
 [[exceptions]]
 rule = "B4"

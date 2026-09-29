@@ -4,6 +4,7 @@
 //! callers outside the crate keep compiling. They go once those callers use the
 //! new paths.
 
+pub mod aof;
 pub mod auth;
 pub mod config;
 pub mod coordinator;

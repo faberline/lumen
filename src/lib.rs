@@ -36,7 +36,7 @@ mod access;
 /// so broker retention can be TRIMMED instead of kept from seq 0. Compiled by
 /// default; only the runtime segment-persistence path (`--persistence=segment`)
 /// drives the apply loop + cold-start through it.
-pub mod aof;
+pub use crate::compat::aof;
 pub mod api;
 mod app;
 pub use crate::compat::auth;

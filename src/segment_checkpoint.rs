@@ -1070,10 +1070,10 @@ impl PendingChangeSpill {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::aof::AofWriter;
     use crate::api::CheckpointSink;
     use crate::ingest::application::write_coordinator::WriteSink;
     use crate::ingest::domain::wal_record::WalRecord;
+    use crate::persistence::infrastructure::aof::aof_writer::AofWriter;
     use crate::shared_kernel::log_entry::RaftLogEntry;
     use crate::shared_kernel::types::{
         document::{FieldValue, IndexItem, IndexRequest},

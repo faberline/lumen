@@ -114,7 +114,7 @@ struct CompletionState {
 /// replacement process can recover every acknowledged write.
 /// `None` on the default / non-AOF path, so `start_from` is byte-identical to
 /// today.
-pub type SharedAof = Arc<Mutex<crate::aof::AofWriter>>;
+pub type SharedAof = Arc<Mutex<crate::persistence::infrastructure::aof::aof_writer::AofWriter>>;
 
 pub struct WriteCoordinator {
     wal: SharedWal,

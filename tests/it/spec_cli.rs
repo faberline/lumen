@@ -626,7 +626,7 @@ fn llm_storage_documents_embedded_mode_persistence_wiring() {
         "LUMEN_PERSISTENCE=segment",
         "/var/lib/lumen/raft",
         "everysec",
-        "src/aof.rs",
+        "src/persistence/infrastructure/aof.rs",
         "src/persistence/infrastructure/segment_rdb_store.rs",
         "~1s",
         "LUMEN_SNAPSHOT_SECS",

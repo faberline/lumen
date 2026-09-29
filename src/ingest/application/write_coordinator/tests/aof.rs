@@ -20,8 +20,11 @@ async fn embedded_aof_is_replayable_when_submit_acknowledges_a_write() {
     let dir = tempfile::tempdir().unwrap();
     let aof_path = dir.path().join("aof.log");
     let aof = Arc::new(Mutex::new(
-        crate::aof::AofWriter::open_with_policy(&aof_path, crate::aof::FsyncPolicy::EverySec)
-            .unwrap(),
+        crate::persistence::infrastructure::aof::aof_writer::AofWriter::open_with_policy(
+            &aof_path,
+            crate::persistence::infrastructure::aof::FsyncPolicy::EverySec,
+        )
+        .unwrap(),
     ));
     let engine = Arc::new(Engine::new());
     let wal = Arc::new(MemWal::new());
@@ -54,12 +57,16 @@ async fn embedded_aof_is_replayable_when_submit_acknowledges_a_write() {
     // the contract boundary. Before the fix this reader saw an empty AOF
     // because both frames remained in the process-local BufWriter.
     let mut seqs = Vec::new();
-    crate::aof::AofReader::replay(&aof_path, 0, |seq, _| seqs.push(seq)).unwrap();
+    crate::persistence::infrastructure::aof::replay::AofReader::replay(&aof_path, 0, |seq, _| {
+        seqs.push(seq)
+    })
+    .unwrap();
     assert_eq!(seqs, vec![1, 2]);
 
     let restarted = Arc::new(Engine::new());
     assert_eq!(
-        crate::aof::replay_aof_into(&restarted, &aof_path, 0).unwrap(),
+        crate::persistence::infrastructure::aof::replay::replay_aof_into(&restarted, &aof_path, 0)
+            .unwrap(),
         2
     );
     assert_eq!(restarted.stats("u").unwrap().documents_indexed, 1);
@@ -69,7 +76,9 @@ async fn embedded_aof_is_replayable_when_submit_acknowledges_a_write() {
 async fn partial_error_record_is_persisted_and_replays_its_earlier_mutation() {
     let dir = tempfile::tempdir().unwrap();
     let aof_path = dir.path().join("aof.log");
-    let aof = Arc::new(Mutex::new(crate::aof::AofWriter::open(&aof_path).unwrap()));
+    let aof = Arc::new(Mutex::new(
+        crate::persistence::infrastructure::aof::aof_writer::AofWriter::open(&aof_path).unwrap(),
+    ));
     let engine = Arc::new(Engine::new());
     let coord =
         WriteCoordinator::start_from_with_aof(Arc::new(MemWal::new()), engine.clone(), 0, aof);
@@ -108,11 +117,15 @@ async fn partial_error_record_is_persisted_and_replays_its_earlier_mutation() {
         .is_some());
     assert_eq!(engine.stats("u").unwrap().documents_indexed, 1);
     let mut seqs = Vec::new();
-    crate::aof::AofReader::replay(&aof_path, 0, |seq, _| seqs.push(seq)).unwrap();
+    crate::persistence::infrastructure::aof::replay::AofReader::replay(&aof_path, 0, |seq, _| {
+        seqs.push(seq)
+    })
+    .unwrap();
     assert_eq!(seqs, vec![1, 2]);
     let restarted = Arc::new(Engine::new());
     assert_eq!(
-        crate::aof::replay_aof_into(&restarted, &aof_path, 0).unwrap(),
+        crate::persistence::infrastructure::aof::replay::replay_aof_into(&restarted, &aof_path, 0)
+            .unwrap(),
         2
     );
     assert_eq!(restarted.stats("u").unwrap().documents_indexed, 1);
@@ -122,7 +135,9 @@ async fn partial_error_record_is_persisted_and_replays_its_earlier_mutation() {
 async fn partial_error_aof_gap_is_uncertain_and_blocks_later_append() {
     let dir = tempfile::tempdir().unwrap();
     let aof_path = dir.path().join("aof.log");
-    let aof = Arc::new(Mutex::new(crate::aof::AofWriter::open(&aof_path).unwrap()));
+    let aof = Arc::new(Mutex::new(
+        crate::persistence::infrastructure::aof::aof_writer::AofWriter::open(&aof_path).unwrap(),
+    ));
     let engine = Arc::new(Engine::new());
     let coord = WriteCoordinator::start_from_with_aof(
         Arc::new(MemWal::new()),
@@ -187,7 +202,10 @@ async fn partial_error_aof_gap_is_uncertain_and_blocks_later_append() {
         .unwrap_err();
     assert!(later.downcast_ref::<RestartRequired>().is_some(), "{later}");
     let mut persisted = Vec::new();
-    crate::aof::AofReader::replay(&aof_path, 0, |seq, _| persisted.push(seq)).unwrap();
+    crate::persistence::infrastructure::aof::replay::AofReader::replay(&aof_path, 0, |seq, _| {
+        persisted.push(seq)
+    })
+    .unwrap();
     assert_eq!(persisted, vec![1]);
 }
 
@@ -202,7 +220,9 @@ async fn partial_error_aof_gap_is_uncertain_and_blocks_later_append() {
 async fn aof_enospc_marks_degraded_and_requires_restart() {
     let dir = tempfile::tempdir().unwrap();
     let aof_path = dir.path().join("aof.log");
-    let aof = Arc::new(Mutex::new(crate::aof::AofWriter::open(&aof_path).unwrap()));
+    let aof = Arc::new(Mutex::new(
+        crate::persistence::infrastructure::aof::aof_writer::AofWriter::open(&aof_path).unwrap(),
+    ));
     let engine = Arc::new(Engine::new());
     let wal = Arc::new(MemWal::new());
     let coord = WriteCoordinator::start_from_with_aof(wal, engine.clone(), 0, aof.clone());
@@ -280,7 +300,8 @@ async fn aof_enospc_marks_degraded_and_requires_restart() {
 async fn aof_gap_rejects_every_later_applied_record() {
     let dir = tempfile::tempdir().unwrap();
     let aof_path = dir.path().join("aof.log");
-    let mut writer = crate::aof::AofWriter::open(&aof_path).unwrap();
+    let mut writer =
+        crate::persistence::infrastructure::aof::aof_writer::AofWriter::open(&aof_path).unwrap();
     writer.inject_failure_once(std::io::ErrorKind::Other);
     let aof = Arc::new(Mutex::new(writer));
 
@@ -309,7 +330,10 @@ async fn aof_gap_rejects_every_later_applied_record() {
     // The unresolved AOF head is rejected before apply.
     assert!(engine.list_collections().unwrap().is_empty());
     let mut persisted = Vec::new();
-    crate::aof::AofReader::replay(&aof_path, 0, |seq, _| persisted.push(seq)).unwrap();
+    crate::persistence::infrastructure::aof::replay::AofReader::replay(&aof_path, 0, |seq, _| {
+        persisted.push(seq)
+    })
+    .unwrap();
     assert!(
         persisted.is_empty(),
         "the unresolved head and every later record must stay outside the AOF"

@@ -193,7 +193,9 @@ async fn full_raw_delivery_replays_the_same_head_before_later_records() {
     assert_eq!(wal.publish(record("first")).await.unwrap(), 1);
     let dir = tempfile::tempdir().unwrap();
     let aof_path = dir.path().join("aof.log");
-    let aof = Arc::new(Mutex::new(crate::aof::AofWriter::open(&aof_path).unwrap()));
+    let aof = Arc::new(Mutex::new(
+        crate::persistence::infrastructure::aof::aof_writer::AofWriter::open(&aof_path).unwrap(),
+    ));
     let coord = WriteCoordinator::start_from_with_aof(wal.clone(), engine.clone(), 0, aof);
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         while wal.subscriptions.load(Ordering::Acquire) < 2 {
@@ -227,7 +229,7 @@ async fn full_raw_delivery_replays_the_same_head_before_later_records() {
     assert!(!coord.is_restart_required());
     assert_eq!(engine.stats("u").unwrap().documents_indexed, 2);
     let mut persisted = Vec::new();
-    crate::aof::AofReader::replay(&aof_path, 0, |seq, rec| {
+    crate::persistence::infrastructure::aof::replay::AofReader::replay(&aof_path, 0, |seq, rec| {
         let RaftLogEntry::Index { req, .. } = rec.entry else {
             panic!("unexpected AOF operation")
         };

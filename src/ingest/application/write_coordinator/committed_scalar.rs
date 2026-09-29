@@ -103,10 +103,10 @@ impl WriteCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::aof::{AofReader, AofWriter};
     use crate::ingest::domain::wal_log::WalLog;
     use crate::ingest::domain::wal_record::WalRecord;
     use crate::ingest::infrastructure::wal::mem_wal::MemWal;
+    use crate::persistence::infrastructure::aof::{aof_writer::AofWriter, replay::AofReader};
     use crate::shared_kernel::types::{
         document::{FieldValue, IndexItem, IndexRequest},
         schema::{CreateCollectionRequest, FieldSpec, FieldType},

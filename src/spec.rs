@@ -1029,11 +1029,12 @@ LUMEN_PERSISTENCE=segment
 `/var/lib/lumen/raft` subtree (`LUMEN_RAFT_DATA_DIR`'s default) on the same
 `raft` PVC mount, so both can coexist safely across a `replicasPerShard`
 change without colliding. `LUMEN_PERSISTENCE=segment` (rather than the CBOR
-default) activates the local AOF (`src/aof.rs`) alongside the periodic
-segment checkpoint (`src/persistence/infrastructure/segment_rdb_store.rs`):
-every applied write is appended to the AOF and fsynced under the `everysec`
-policy (at most ~1s of un-fsynced tail on a crash — a torn tail that replay
-discards cleanly, not corruption),
+default) activates the local AOF (`src/persistence/infrastructure/aof.rs`)
+alongside the periodic segment checkpoint
+(`src/persistence/infrastructure/segment_rdb_store.rs`): every applied write
+is appended to the AOF and fsynced under the `everysec` policy (at most ~1s
+of un-fsynced tail on a crash — a torn tail that replay discards cleanly, not
+corruption),
 so crash durability (kill -9 / OOM, not just a clean SIGTERM drain) is bounded
 by roughly a 1-second recovery point, not by `LUMEN_SNAPSHOT_SECS` (default
 300s, the periodic checkpoint interval used only to bound cold-start replay
