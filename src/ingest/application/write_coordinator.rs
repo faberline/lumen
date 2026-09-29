@@ -133,7 +133,7 @@ pub struct WriteCoordinator {
     diagnostic_refusal_revision: AtomicU64,
     #[cfg(test)]
     diagnostic_capture: Mutex<Option<crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCaptureToken>>,
-    layer_capacity_owner: Mutex<Option<crate::segment_capacity::Fallback>>,
+    layer_capacity_owner: Mutex<Option<crate::persistence::application::capacity::Fallback>>,
     applied: AtomicU64,
     completions: Mutex<CompletionState>,
     /// A failed committed head can still retain its WAL source. Keep any

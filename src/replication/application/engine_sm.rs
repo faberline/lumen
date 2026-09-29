@@ -38,7 +38,7 @@ pub struct EngineSm {
     outcomes: Mutex<OutcomeWindow<Result<ApplyOutcome>>>,
     failed: AtomicBool,
     segment_store: Option<Arc<SegmentRdbStore>>,
-    layer_capacity_owner: Mutex<Option<crate::segment_capacity::Fallback>>,
+    layer_capacity_owner: Mutex<Option<crate::persistence::application::capacity::Fallback>>,
 }
 
 impl EngineSm {
@@ -110,7 +110,7 @@ impl EngineSm {
             .layer_capacity_owner
             .lock()
             .map_err(|_| anyhow::anyhow!("capacity owner poisoned"))?;
-        crate::segment_capacity::Fallback::ensure(
+        crate::persistence::application::capacity::Fallback::ensure(
             &mut owner,
             &self.engine,
             self.segment_store.clone(),

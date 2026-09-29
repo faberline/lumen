@@ -289,13 +289,19 @@ fn capacity_owner_merge_completes_after_capacity_progress_while_follow_up_merge_
     }
 
     let mut fallback = None;
-    crate::segment_capacity::Fallback::ensure(&mut fallback, &engine, Some(store.clone())).unwrap();
+    crate::persistence::application::capacity::Fallback::ensure(
+        &mut fallback,
+        &engine,
+        Some(store.clone()),
+    )
+    .unwrap();
     let endpoint = engine.layer_maintenance.owner().unwrap();
     let baseline_wait_entries = store.background.test_wait_entries();
     let (merge_tx, merge_rx) = mpsc::channel();
     let merge_endpoint = endpoint.clone();
     let merge = std::thread::spawn(move || {
-        let _ = merge_tx.send(merge_endpoint.wait_for(crate::segment_capacity::Work::Merge));
+        let _ = merge_tx
+            .send(merge_endpoint.wait_for(crate::persistence::application::capacity::Work::Merge));
     });
     store
         .background

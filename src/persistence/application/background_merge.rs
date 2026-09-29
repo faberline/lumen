@@ -34,7 +34,7 @@ pub(in crate::persistence) struct WorkState {
     wait_entries: u64,
     pub(in crate::persistence) next_owner: Option<(
         Weak<Engine>,
-        Option<crate::segment_capacity::PublicationFence>,
+        Option<crate::persistence::application::capacity::PublicationFence>,
     )>,
     pub(in crate::persistence) error: Option<String>,
     protected: BTreeMap<String, usize>,

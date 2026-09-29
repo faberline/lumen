@@ -47,7 +47,7 @@ impl WriteCoordinator {
             let mut completed = false;
             let mut ensure_owner = || {
                 let mut owner = coord.layer_capacity_owner.lock().map_err(|_| anyhow::anyhow!("capacity owner poisoned"))?;
-                crate::segment_capacity::Fallback::ensure(&mut owner, &coord.engine, None)
+                crate::persistence::application::capacity::Fallback::ensure(&mut owner, &coord.engine, None)
             };
             let complete = |apply: &crate::shared_kernel::capture_barrier::ApplyLease<'_>, mut outcome: Result<ApplyOutcome>| {
                 if coord.mutation_gate.is_restart_required() {

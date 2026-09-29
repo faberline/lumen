@@ -439,9 +439,9 @@ impl Engine {
                     (view.incremental_layer_count() >= self.layer_maintenance.append_limit()).then(
                         || {
                             if view.has_private_layers() {
-                                crate::segment_capacity::Work::Checkpoint
+                                crate::persistence::application::capacity::Work::Checkpoint
                             } else {
-                                crate::segment_capacity::Work::Merge
+                                crate::persistence::application::capacity::Work::Merge
                             }
                         },
                     )

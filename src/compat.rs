@@ -22,5 +22,6 @@ pub mod routing;
 #[cfg(feature = "operator")]
 pub mod routing_remote;
 pub mod segment_rdb;
+pub mod segment_restore;
 pub mod types;
 pub mod wal;

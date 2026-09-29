@@ -110,7 +110,7 @@ pub struct SegmentCheckpointDriver {
     waiter: Option<std::thread::JoinHandle<()>>,
     checkpoint_task: Option<tokio::task::JoinHandle<()>>,
     shutdown: Option<oneshot::Sender<()>>,
-    capacity_owner: Option<crate::segment_capacity::Owner>,
+    capacity_owner: Option<crate::persistence::application::capacity::worker::Owner>,
 }
 
 impl Drop for SegmentCheckpointDriver {
@@ -570,7 +570,7 @@ impl SegmentCheckpointSink {
 
     async fn checkpoint_with_fence(
         &self,
-        fence: Option<crate::segment_capacity::PublicationFence>,
+        fence: Option<crate::persistence::application::capacity::PublicationFence>,
         origin: CheckpointTraceOrigin,
         diagnostic_context: Option<CheckpointDiagnosticContext>,
     ) -> Result<bool> {
@@ -605,7 +605,10 @@ impl SegmentCheckpointSink {
                 // retaining another full capture in a temporary spill store. Keep
                 // the owner in the blocking task even if the async caller cancels.
                 let _manual_owner = if fence.is_none() {
-                    crate::segment_capacity::Owner::start(sink.clone(), false)?
+                    crate::persistence::application::capacity::worker::Owner::start(
+                        sink.clone(),
+                        false,
+                    )?
                 } else {
                     None
                 };
@@ -743,8 +746,11 @@ impl SegmentCheckpointSink {
         configured: bool,
         #[cfg(test)] diagnostic: Option<(DiagnosticCaptureToken, oneshot::Sender<()>)>,
     ) -> SegmentCheckpointDriver {
-        let capacity_owner = crate::segment_capacity::Owner::start(self.clone(), configured)
-            .expect("start native layer capacity owner");
+        let capacity_owner = crate::persistence::application::capacity::worker::Owner::start(
+            self.clone(),
+            configured,
+        )
+        .expect("start native layer capacity owner");
         let periodic_fence = capacity_owner.as_ref().map(|owner| owner.fence());
         if capacity_owner.is_none() && !configured {
             return SegmentCheckpointDriver {

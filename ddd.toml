@@ -464,13 +464,16 @@ subject = "ingest.infrastructure"
 reason = "EngineSm bounds a raft command's decode workspace with wire_cost::scan_workspace_bytes and applies a retained oversized fast-Index command through FastIndexScanner, the same bound and scanner the WAL path uses. P2: ingest's application layer exposes both."
 
 # The save gate is compiled twice: once as the checkpoint store's child and
-# once under segment_capacity, which must take the same gate type.
+# once under the capacity worker, which must take the same gate type.
 
 [[exceptions]]
 rule = "B1"
-paths = ["src/persistence/infrastructure/segment_rdb_store.rs"]
+paths = [
+  "src/persistence/application/capacity.rs",
+  "src/persistence/infrastructure/segment_rdb_store.rs",
+]
 subject = "#[path]"
-reason = "mod save_gate reads src/persistence/infrastructure/segment_save_gate.rs, which segment_capacity.rs also includes with #[path], so SaveGate and SavePermit are defined in both places (D7). P2: the capacity worker moves into persistence and names the store's save gate instead of compiling its own copy."
+reason = "segment_rdb_store.rs's mod save_gate and capacity.rs's mod publication_gate both read src/persistence/infrastructure/segment_save_gate.rs with #[path], so SaveGate and SavePermit are defined in both places (D7, E14). P2: the two become one module both sides share, and both #[path] lines go."
 
 # The background merge moved to persistence/application as-is. It still
 # extends SegmentRdbStore and drives the store's staging helpers, and the
@@ -498,9 +501,38 @@ paths = [
 subject = "infrastructure->application"
 reason = "SegmentRdbStore holds its root's RootWork scheduler, a save waits on it for capacity (CapacityWait) and asks needs_merge before it requests a merge, and the merge worker runs merge_one on each Job it dequeues. The statics stay in infrastructure (E17). P2: the scheduler state becomes the port's implementation detail and the worker calls the application through that port."
 
+# The capacity worker and the durable restore moved to persistence/application
+# as-is. Both hold a SegmentRdbStore, and the store and the AOF replay, in
+# turn, hold the worker's publication fence, frozen window and fallback.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/application/capacity.rs",
+  "src/persistence/application/restore.rs",
+]
+subject = "application->infrastructure"
+reason = "A capacity Fallback keeps the SegmentRdbStore its checkpoint sink writes to (the configured store, or a temporary spill store) alive for the owner's lifetime, and append_limit reserves against composed_segment's MAX_INCREMENTAL_LAYERS. SegmentRestoreSink saves the restored engine into its SegmentRdbStore, reloads the current generation and prunes old ones. P2: the application layer defines a generation-store port the store implements (see the background merge exception above)."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/infrastructure/aof/replay.rs",
+  "src/persistence/infrastructure/segment_rdb_store.rs",
+  "src/persistence/infrastructure/segment_rdb_store/open.rs",
+]
+subject = "infrastructure->application"
+reason = "The store publishes CURRENT only through the capacity worker's PublicationFence, which with_publication_fence installs, and a pending frozen checkpoint holds a FrozenWindow so capacity keeps a catalog slot for its delta. AOF replay ensures a capacity Fallback before any admission can wait, so a replay blocked on change-budget capacity has a worker to checkpoint and merge. P2: the fence and window move to persistence's domain, and replay takes a capacity-owner port the application layer implements."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/application/capacity/worker.rs"]
+subject = "ingest.domain"
+reason = "The budget relay sleeps on the change budget's BudgetWake and turns each capacity wait it observes into checkpoint or merge work on the owner's endpoint. P2: ingest's application layer exposes the budget wake, as it will the budget snapshot the checkpoint diagnostic reads."
+
 # ingest and persistence depend on each other (E16). depends_on declares
-# persistence -> ingest; the coordinator's use of the checkpoint diagnostic and
-# of the AOF writer is the other direction.
+# persistence -> ingest; the coordinator's use of the checkpoint diagnostic, of
+# the AOF writer and of the capacity fallback is the other direction.
 
 [[exceptions]]
 rule = "B4"
@@ -513,6 +545,16 @@ rule = "B4"
 paths = ["src/ingest/application/write_coordinator.rs"]
 subject = "persistence.infrastructure"
 reason = "SharedAof is the coordinator's handle on the AofWriter: the apply loop appends each applied record to it, the AOF sync task fsyncs it, and the checkpoint snapshotter truncates the prefix a checkpoint covers. P2: ingest defines a durable-log port (append, sync, truncate_through) the AOF writer implements, which breaks the cycle."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/ingest/application/write_coordinator.rs",
+  "src/ingest/application/write_coordinator/capacity.rs",
+  "src/ingest/application/write_coordinator/committed_scalar.rs",
+]
+subject = "persistence.application"
+reason = "The coordinator keeps a capacity Fallback in layer_capacity_owner and ensures it before the apply loop or the committed scalar path waits on layer capacity, so a coordinator without a configured checkpoint owner still has a worker to checkpoint and merge. P2: ingest defines a capacity-owner port the persistence capacity worker implements, which breaks the cycle."
 
 [[exceptions]]
 rule = "B4"

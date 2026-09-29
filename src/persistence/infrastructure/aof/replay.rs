@@ -69,7 +69,7 @@ pub fn replay_aof_into(
     // The public replay owns its fallback before any admission can wait. The
     // observed helper below deliberately stays a lower-level manual seam.
     let mut capacity_owner = None;
-    crate::segment_capacity::Fallback::ensure(&mut capacity_owner, engine, None)?;
+    crate::persistence::application::capacity::Fallback::ensure(&mut capacity_owner, engine, None)?;
     replay_aof_into_with_capacity_owner(engine, path, from_seq, || {}, &mut capacity_owner)
 }
 
@@ -88,7 +88,7 @@ fn replay_aof_into_with_capacity_owner(
     path: impl AsRef<Path>,
     from_seq: u64,
     mut before_decode: impl FnMut(),
-    capacity_owner: &mut Option<crate::segment_capacity::Fallback>,
+    capacity_owner: &mut Option<crate::persistence::application::capacity::Fallback>,
 ) -> Result<u64> {
     engine.capture_barrier.apply().initialize_sequence(from_seq);
     let mut cursor = FramedLogCursor::open(path)?;
@@ -116,7 +116,7 @@ fn replay_aof_into_with_capacity_owner(
                 )
             {
                 if engine.try_apply_committed_index_with_capacity_owner(&scanner, seq, || {
-                    crate::segment_capacity::Fallback::ensure(capacity_owner, engine, None)
+                    crate::persistence::application::capacity::Fallback::ensure(capacity_owner, engine, None)
                 }, |apply, outcome| {
                     if let Err(error) = outcome {
                         tracing::warn!(seq, error = %error, "AOF replay apply error (entry no-ops)");
@@ -129,7 +129,7 @@ fn replay_aof_into_with_capacity_owner(
             }
             if engine.try_apply_committed_replace_with_capacity_owner(
                 frame.payload(), seq,
-                &mut || crate::segment_capacity::Fallback::ensure(capacity_owner, engine, None),
+                &mut || crate::persistence::application::capacity::Fallback::ensure(capacity_owner, engine, None),
                 |apply, outcome| {
                     if let Err(error) = outcome {
                         tracing::warn!(seq, error = %error, "AOF replay replacement business error");

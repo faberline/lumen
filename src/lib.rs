@@ -92,7 +92,6 @@ pub use crate::compat::routing;
 #[cfg(feature = "operator")]
 pub use crate::compat::routing_remote;
 mod replication;
-mod segment_capacity;
 pub mod segment_checkpoint;
 /// Segment-checkpoint persistence store (Stage 2 Phase 2f-2): the disk engine
 /// as the running binary's "RDB" — a generation-versioned directory of per-
@@ -101,7 +100,7 @@ pub mod segment_checkpoint;
 /// Compiled by default; selected at runtime via `--persistence=segment` (the
 /// default binary keeps the CBOR RDB).
 pub use crate::compat::segment_rdb;
-pub mod segment_restore;
+pub use crate::compat::segment_restore;
 mod sharding;
 mod shared_kernel;
 /// Offline machine-readable self-description (`lumen spec`): OpenAPI / JSON

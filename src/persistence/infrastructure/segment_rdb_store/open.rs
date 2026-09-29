@@ -43,7 +43,7 @@ impl SegmentRdbStore {
 
     pub(crate) fn with_publication_fence(
         mut self,
-        fence: crate::segment_capacity::PublicationFence,
+        fence: crate::persistence::application::capacity::PublicationFence,
     ) -> Self {
         self.publication_fence = Some(fence);
         self

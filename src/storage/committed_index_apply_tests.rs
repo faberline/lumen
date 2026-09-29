@@ -489,7 +489,11 @@ fn frozen_checkpoint_slot_forces_real_maintenance_before_sixteenth_private_appen
                 // Complete the simulated older cut. The actual capacity worker still
                 // needs to checkpoint the 15 private readers before the append resumes.
                 drop(window.take());
-                crate::segment_capacity::Fallback::ensure(&mut fallback, &engine, None)
+                crate::persistence::application::capacity::Fallback::ensure(
+                    &mut fallback,
+                    &engine,
+                    None,
+                )
             },
             |apply, outcome| {
                 outcome.unwrap();

@@ -4426,7 +4426,7 @@ pub struct Engine {
     prune_accum_tick: AtomicU64,
     // Release metadata charges only after the live state has dropped.
     changes: record_admission::EngineChanges,
-    pub(crate) layer_maintenance: Arc<crate::segment_capacity::Registry>,
+    pub(crate) layer_maintenance: Arc<crate::persistence::application::capacity::Registry>,
     // Last: files remain available until live readers and pending payloads drop.
     checkpoint_root_guards:
         Mutex<Vec<crate::persistence::infrastructure::segment_rdb_store::CheckpointRootGuard>>,

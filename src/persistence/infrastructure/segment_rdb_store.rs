@@ -145,7 +145,8 @@ pub struct SegmentRdbStore {
     pub(in crate::persistence) merge_observer: Arc<dyn MergeObserver>,
     pub(in crate::persistence) background: Arc<RootWork>,
     root_guard: Option<CheckpointRootGuard>,
-    pub(in crate::persistence) publication_fence: Option<crate::segment_capacity::PublicationFence>,
+    pub(in crate::persistence) publication_fence:
+        Option<crate::persistence::application::capacity::PublicationFence>,
     recovery_profile: RecoveryProfile,
     recovery_timings: Arc<Mutex<RecoveryTimings>>,
 }
@@ -274,7 +275,7 @@ pub(in crate::persistence) struct PendingFrozenCheckpoint {
     predecessor: PendingPredecessor,
     frozen: FrozenCheckpoint,
     detached_capture_ns: u64,
-    _layer_window: crate::segment_capacity::FrozenWindow,
+    _layer_window: crate::persistence::application::capacity::FrozenWindow,
 }
 
 /// Restores detached payload ownership to the shared slot if any fallible
