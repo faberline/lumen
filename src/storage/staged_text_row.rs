@@ -42,7 +42,7 @@ pub(super) fn last_stage_directory_for_test() -> Option<PathBuf> {
 /// One prepared Text value. The reader's private stage guard keeps the exact
 /// locally-created directory alive until its final `Arc` is dropped.
 #[derive(Debug)]
-pub(super) struct StagedTextRow {
+pub(crate) struct StagedTextRow {
     reader: Arc<SegmentReader>,
     input_bytes: usize,
     doc_len: u32,
@@ -60,7 +60,7 @@ pub(super) enum StageAllocation {
 
 impl StagedTextRow {
     #[cfg(test)]
-    pub(super) fn stage(
+    pub(crate) fn stage(
         input: &str,
         analyzer: Analyzer,
         scratch_bytes: usize,
@@ -149,11 +149,11 @@ impl StagedTextRow {
         })
     }
 
-    pub(super) fn reader(&self) -> &Arc<SegmentReader> {
+    pub(crate) fn reader(&self) -> &Arc<SegmentReader> {
         &self.reader
     }
 
-    pub(super) fn doc_len(&self) -> u32 {
+    pub(crate) fn doc_len(&self) -> u32 {
         self.doc_len
     }
 
@@ -163,7 +163,7 @@ impl StagedTextRow {
 
     /// Match the live Text index accounting: each distinct token stores its
     /// bytes plus this document's external ID once.
-    pub(super) fn indexed_bytes(&self, external_id: &str) -> u64 {
+    pub(crate) fn indexed_bytes(&self, external_id: &str) -> u64 {
         // Match the existing live `TextIndex::bytes` arithmetic exactly. A
         // staged row has at most its checked `u32` document-token count, so
         // these sums are bounded by the admitted record payload in practice.

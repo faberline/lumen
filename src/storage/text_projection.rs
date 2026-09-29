@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::index::domain::postings::TokPostings;
+use crate::index::domain::text_index::TextIndex;
 use crate::persistence::infrastructure::segment::stream::text_projection::{
     write_text_projection, TextStreamView,
 };
@@ -142,7 +143,7 @@ fn live_terms(index: &TextIndex) -> Result<Terms<'_>> {
     Ok(Box::new(UnionTerms::new(sources)?))
 }
 
-pub(super) fn live_term_count(index: &TextIndex) -> Result<u64> {
+pub(crate) fn live_term_count(index: &TextIndex) -> Result<u64> {
     let mut count = 0;
     for term in live_terms(index)? {
         if index.tok_postings(term?.as_ref()).is_some() {

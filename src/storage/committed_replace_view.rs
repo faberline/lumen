@@ -7,6 +7,8 @@
 use super::committed_index_plan::PlanView;
 use super::committed_replace_plan::{OldFieldsBound, ParsedValues, ReplacePlanView};
 use super::*;
+use crate::index::domain::keyword_index::KeywordIndex;
+use crate::index::domain::set_index::SetIndex;
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{
     FastIndexScanner, FastIndexValue, FastStringList,

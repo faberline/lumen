@@ -1,6 +1,8 @@
 //! Colocated unit fixtures for `committed_replace_view.rs` integration.
 
 use super::*;
+use crate::index::domain::keyword_index::KeywordIndex;
+use crate::index::domain::set_index::SetIndex;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::log_entry::RaftLogEntry;

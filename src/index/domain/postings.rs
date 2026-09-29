@@ -115,10 +115,12 @@ impl Postings {
 /// so the BM25 score expression is fed bit-identical inputs on both paths.
 /// A token's active posting resolved for a SMALL candidate set only (#4246):
 /// the exact composed `df` plus the `(docid, tf)` pairs of those candidates the
-/// token covers, ascending. Built by `TextIndex::tok_postings_at` without
+/// token covers, ascending. Built by [`TextIndex::tok_postings_at`] without
 /// decoding, caching or merging the token's full posting, so a 1-candidate
 /// `and[filter, match]` over a 500k-doc stop token costs one streamed pass per
 /// distinct token instead of a 4 MiB materialization per token occurrence.
+///
+/// [`TextIndex::tok_postings_at`]: crate::index::domain::text_index::TextIndex::tok_postings_at
 pub(crate) struct SparsePosting {
     pub(crate) df: usize,
     pub(crate) docids: Vec<u32>,

@@ -794,3 +794,46 @@ paths = [
 ]
 subject = "index.domain"
 reason = "The fan-out rejects a bad offset or cursor with StorageError::InvalidPagination, the error the local search returns for the same request, and the scatter treats a shard's StorageError::CollectionNotFound as a missing collection rather than a shard failure. P2: the pagination and not-found errors move to a shared kernel error that index's StorageError and sharding's fan-out both use."
+
+# The value field indexes moved to index/domain as-is: TextIndex, KeywordIndex,
+# NumberIndex and SetIndex, with their query, term, range and sorted-walk
+# splits. They still keep their postings and tombstones in roaring bitmaps,
+# return anyhow from the sorted-walk callbacks, and hold persistence's composed
+# segment reader as their sealed base (E16: persistence and index depend on
+# each other).
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/keyword_index.rs",
+  "src/index/domain/number_index.rs",
+  "src/index/domain/number_index/range.rs",
+  "src/index/domain/number_index/sorted.rs",
+  "src/index/domain/set_index.rs",
+  "src/index/domain/text_index.rs",
+]
+subject = "roaring"
+reason = "The keyword, number and set indexes keep each term's, value's and element's docids in a RoaringBitmap, the number index caches its keyword-range bitmaps, and every field index tracks the sealed base docs it has hidden in a tombstone RoaringBitmap, which TokProbe borrows. P2: decided with TokProbe's tombstones and the flat backend's tomb (see the roaring exceptions above), either roaring joins the domain's crates or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/keyword_index.rs",
+  "src/index/domain/number_index/sorted.rs",
+]
+subject = "anyhow"
+reason = "KeywordIndex::visit_sorted_posting_buckets and NumberIndex::sorted_walk_segment take a visitor that returns anyhow::Result and pass its error up with ?, and sorted_walk_segment and range_page_segment also pass up the errors of the composed reader's number-key cursor, which are anyhow too. P2: an index domain error type (with VectorIndex's and SortableF64's, see the anyhow exceptions above) that the visitors and the segment reader port return."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/domain/keyword_index.rs",
+  "src/index/domain/number_index.rs",
+  "src/index/domain/number_index/sorted.rs",
+  "src/index/domain/set_index.rs",
+  "src/index/domain/text_index.rs",
+  "src/index/domain/text_index/query.rs",
+  "src/index/domain/text_index/terms.rs",
+]
+subject = "persistence.infrastructure"
+reason = "Each field index holds its sealed base as an Arc<ComposedSegmentReader>, the composed reader over the field's segment chain, and reads terms, values, members and postings through it; text_index/query also decodes a token's posting with TextPostingAt and walks it with SortedIdCursor. P2: a sealed-segment reader port in the index domain (term, value and posting reads) that the persistence composed segment implements, as the vector-segment port above."
