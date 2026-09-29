@@ -10,6 +10,7 @@ use std::time::Instant;
 
 use anyhow::{anyhow, Result};
 
+use crate::index::application::admission::RecordAdmissionError;
 use crate::index::application::apply::committed_index_apply::{
     cell_bytes, composed, require, scalar_bytes, FieldPlan, Prepared, VectorRows, View,
 };
@@ -42,8 +43,10 @@ use crate::shared_kernel::types::document::{
     FieldValue, IndexResponse, ReplaceDocResult, ReplaceDocsResponse, MAX_BATCH_REPLACE_SIZE,
 };
 use crate::shared_kernel::types::schema::FieldType;
-use crate::storage::record_admission::RecordAdmissionError;
-use crate::storage::{committed_scalar_files, staged_vector_row, text_preparation};
+use crate::{
+    index::application::text_preparation,
+    storage::{committed_scalar_files, staged_vector_row},
+};
 
 impl Engine {
     pub(in crate::index::application::apply) fn try_apply_committed_fields_with_capacity_owner(

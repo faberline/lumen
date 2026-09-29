@@ -39,14 +39,14 @@ use raft_runtime::OutcomeWindow;
 use rustc_hash::FxHashMap;
 use tokio::sync::{oneshot, Mutex as AsyncMutex, OwnedRwLockReadGuard};
 
+use crate::index::application::admission::record_reservation::{
+    RecordReservation, RecordTransientReservation,
+};
+use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
 use crate::ingest::application::write_coordinator::mutation_gate::MutationGate;
 use crate::ingest::domain::wal_log::SharedWal;
 use crate::ingest::infrastructure::wal::delivery::WalDelivery;
 use crate::shared_kernel::log_entry::RaftLogEntry;
-use crate::{
-    index::application::engine::{raft_dispatch::ApplyOutcome, Engine},
-    storage::{RecordReservation, RecordTransientReservation},
-};
 
 /// How many recent outcomes to retain, via [`OutcomeWindow`]. A publisher
 /// reads its outcome within microseconds of the apply loop reaching its

@@ -9,7 +9,7 @@ mod checkpoint_origins;
 mod checkpoint_publish;
 mod checkpoint_vectors;
 pub(crate) mod collections;
-pub(crate) mod cost;
+pub(super) mod cost;
 mod delete;
 mod duplicates;
 pub(crate) mod index;
@@ -49,7 +49,7 @@ pub struct Engine {
     /// immune to system clock adjustments.
     prune_accum_tick: AtomicU64,
     // Release metadata charges only after the live state has dropped.
-    pub(crate) changes: crate::storage::record_admission::EngineChanges,
+    pub(crate) changes: crate::index::application::admission::record_reservation::EngineChanges,
     pub(crate) layer_maintenance: Arc<crate::persistence::application::capacity::Registry>,
     // Last: files remain available until live readers and pending payloads drop.
     checkpoint_root_guards:

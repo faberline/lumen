@@ -35,7 +35,7 @@ thread_local! {
 /// Test-only observation of actual stage-directory creation. It has no effect
 /// on stage ownership or cleanup.
 #[cfg(test)]
-pub(super) fn last_stage_directory_for_test() -> Option<PathBuf> {
+pub(crate) fn last_stage_directory_for_test() -> Option<PathBuf> {
     LAST_STAGE_DIRECTORY.with(|last| last.borrow().clone())
 }
 
@@ -53,7 +53,7 @@ pub(crate) struct StagedTextRow {
 /// Temporary workspace is released when staging returns; reader bytes follow
 /// the final mmap owner through apply and checkpoint.
 #[derive(Clone, Copy)]
-pub(super) enum StageAllocation {
+pub(crate) enum StageAllocation {
     Workspace(usize),
     Reader(usize),
 }
@@ -79,7 +79,7 @@ impl StagedTextRow {
 
     /// Stage before apply. The caller has priced the row writer and the
     /// bounded short-token normalizer before entering this method.
-    pub(super) fn stage_charged(
+    pub(crate) fn stage_charged(
         input: &str,
         analyzer: Analyzer,
         scratch_bytes: usize,
@@ -157,7 +157,7 @@ impl StagedTextRow {
         self.doc_len
     }
 
-    pub(super) fn input_bytes(&self) -> usize {
+    pub(crate) fn input_bytes(&self) -> usize {
         self.input_bytes
     }
 

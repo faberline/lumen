@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::index::application::admission::RecordAdmissionError;
+use crate::index::application::engine::Engine;
 use crate::ingest::application::write_coordinator::local_record::{
     prepare_local_record, PreparedLocalRecord,
 };
@@ -7,7 +9,6 @@ use crate::ingest::application::write_coordinator::tests::{admitted_index_entry,
 use crate::ingest::application::write_coordinator::WriteCoordinator;
 use crate::ingest::domain::change_budget::{AdmissionError, ChangeBudget};
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
-use crate::{index::application::engine::Engine, storage::RecordAdmissionError};
 
 #[tokio::test]
 async fn no_guard_reprice_retains_charge_without_mutating_state_or_watermark() {

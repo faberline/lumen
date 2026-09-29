@@ -10,9 +10,10 @@ use raft_runtime::{
     SnapshotPreparation,
 };
 
+use crate::index::application::admission::RecordAdmissionError;
+use crate::index::application::engine::Engine;
 use crate::persistence::infrastructure::rdb::RdbSnapshot;
 use crate::replication::application::engine_sm::{AdmittedRaftRecord, EngineSm};
-use crate::{index::application::engine::Engine, storage::RecordAdmissionError};
 
 impl RaftStateMachine for EngineSm {
     fn admit_proposal(&self, command: &[u8]) -> Result<Option<AdmissionPermit>> {

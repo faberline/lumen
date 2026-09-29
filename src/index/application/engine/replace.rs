@@ -31,12 +31,12 @@ impl Engine {
     /// malformed or over [`MAX_BATCH_REPLACE_SIZE`] — a single bad item
     /// (unknown field, type mismatch, stale version) is reported per-item
     /// in [`ReplaceDocResult`] and never fails its siblings.
-    pub(crate) fn replace_docs_inner(
+    pub(in crate::index::application) fn replace_docs_inner(
         &self,
         collection_id: &str,
         req: ReplaceDocsRequest,
         charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
-        prepared_text: Option<&crate::storage::text_preparation::PreparedTextRows>,
+        prepared_text: Option<&crate::index::application::text_preparation::PreparedTextRows>,
     ) -> Result<ReplaceDocsResponse> {
         let _apply = self.capture_barrier.apply();
         let mut telemetry = self.metrics.apply_telemetry();
@@ -76,7 +76,7 @@ impl Engine {
         coll: &mut Collection,
         req: ReplaceDocsRequest,
         charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
-        prepared_text: Option<&crate::storage::text_preparation::PreparedTextRows>,
+        prepared_text: Option<&crate::index::application::text_preparation::PreparedTextRows>,
         telemetry: &mut CommittedApplyTelemetry<'_>,
     ) -> Result<ReplaceDocsResponse> {
         if req.docs.len() > MAX_BATCH_REPLACE_SIZE {
@@ -209,7 +209,7 @@ impl Engine {
 /// `docs:replace`'s no-op suppression (`Engine::replace_value_unchanged` /
 /// `Engine::record_replace_checksum`) — see those for why `text` compares a
 /// checksum instead of the raw value.
-pub(crate) fn checksum_bytes(bytes: &[u8]) -> u64 {
+pub(in crate::index::application) fn checksum_bytes(bytes: &[u8]) -> u64 {
     let mut hasher = FxHasher::default();
     hasher.write(bytes);
     hasher.finish()

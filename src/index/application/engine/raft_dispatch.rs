@@ -19,11 +19,11 @@ impl Engine {
     /// Errors from the underlying methods are surfaced unchanged so the
     /// caller (the Raft state-machine impl) can log/translate them. The
     /// engine's RwLock is taken per call, identical to a direct API call.
-    pub(crate) fn dispatch_raft_entry(
+    pub(in crate::index::application) fn dispatch_raft_entry(
         &self,
         entry: crate::shared_kernel::log_entry::RaftLogEntry,
         charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
-        prepared_text: Option<&crate::storage::text_preparation::PreparedTextRows>,
+        prepared_text: Option<&crate::index::application::text_preparation::PreparedTextRows>,
     ) -> Result<ApplyOutcome> {
         let _apply = self.capture_barrier.apply();
         use crate::shared_kernel::log_entry::RaftLogEntry;

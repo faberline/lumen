@@ -19,14 +19,13 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use raft_runtime::{Index, OutcomeWindow};
 
+use crate::index::application::admission::record_reservation::RecordReservation;
+use crate::index::application::admission::{RecordAdmissionError, RepriceRecord};
+use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
 use crate::ingest::domain::change_budget::AdmissionError;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::log_entry::RaftLogEntry;
-use crate::{
-    index::application::engine::{raft_dispatch::ApplyOutcome, Engine},
-    storage::{RecordAdmissionError, RecordReservation, RepriceRecord},
-};
 
 /// How many recent apply outcomes to retain for the write handler to claim,
 /// via [`OutcomeWindow`].

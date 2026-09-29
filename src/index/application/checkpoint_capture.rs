@@ -111,7 +111,8 @@ pub(crate) struct CheckpointCapture {
     /// this immutable payload instead of cloning every row and value.
     pub field_deltas: std::sync::Arc<BTreeMap<String, CheckpointDeltas>>,
     // Last: keep metadata charges until every capture-owned allocation drops.
-    pub(crate) record_cut: Option<std::sync::Arc<crate::storage::record_admission::RecordCut>>,
+    pub(crate) record_cut:
+        Option<std::sync::Arc<crate::index::application::admission::capacity::RecordCut>>,
 }
 
 impl CheckpointCapture {

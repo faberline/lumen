@@ -257,7 +257,7 @@ impl Engine {
     /// Append a new field to an existing collection. Online — existing
     /// documents simply have no postings on the new field until they are
     /// re-indexed. Returns the new collection version.
-    pub(crate) fn add_field_inner(
+    pub(in crate::index::application) fn add_field_inner(
         &self,
         collection_id: &str,
         field_name: &str,

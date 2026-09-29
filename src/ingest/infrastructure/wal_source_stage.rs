@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use crate::index::application::admission::RecordAdmissionError;
+use crate::index::application::engine::Engine;
 use crate::ingest::domain::change_admission::StagePayload;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::committed_record_codec::{
@@ -22,7 +24,6 @@ use crate::ingest::infrastructure::committed_stage::StageFailureInjector;
 use crate::ingest::infrastructure::committed_stage::{
     DurableStage, SourceIdentity, SourceKind, StageStore,
 };
-use crate::{index::application::engine::Engine, storage::RecordAdmissionError};
 
 /// The bounded read buffer is charged by the caller together with the decoded
 /// record before it asks this bridge to deserialize the record.

@@ -6,14 +6,13 @@ use std::sync::atomic::Ordering;
 
 use anyhow::Result;
 
+use crate::index::application::admission::record_reservation::RecordReservation;
+use crate::index::application::admission::{RecordAdmissionError, RecordApplyGuard, RepriceRecord};
+use crate::index::application::engine::Engine;
 use crate::ingest::application::write_coordinator::{LocalRecordReservation, WriteCoordinator};
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::change_budget::AdmissionError;
 use crate::shared_kernel::log_entry::RaftLogEntry;
-use crate::{
-    index::application::engine::Engine,
-    storage::{RecordAdmissionError, RecordApplyGuard, RecordReservation, RepriceRecord},
-};
 
 pub(super) enum PreparedLocalRecord<'a> {
     Prepared(RecordApplyGuard<'a>),

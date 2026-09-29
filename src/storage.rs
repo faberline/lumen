@@ -20,18 +20,11 @@
 //! before appending the new ones.
 
 pub(crate) mod committed_scalar_files;
-mod large_text_row;
-pub(crate) mod record_admission;
-mod record_charges;
+pub(crate) mod large_text_row;
 mod scalar_projection;
 pub(crate) mod staged_text_row;
 pub(crate) mod staged_vector_row;
-pub(crate) mod text_preparation;
 pub(crate) mod text_projection;
-pub(crate) use record_admission::{
-    RecordAdmissionError, RecordApplyGuard, RecordReservation, RecordTransientReservation,
-    RepriceRecord,
-};
 pub(crate) use scalar_projection::write_checkpoint_rows as write_scalar_checkpoint_rows;
 pub(crate) use text_projection::write_checkpoint_rows as write_text_checkpoint_rows;
 // Moved to the index domain and application; re-exported until storage.rs
@@ -127,17 +120,14 @@ use crate::shared_kernel::types::query::{
     HammingQuery, HasChildQuery, KnnQuery, MatchOp, MatchQuery, PrefixQuery, QueryNode, RangeBound,
     RangeQuery, SortMissing, SortOrder, SortSpec, TermQuery, TermsQuery,
 };
+use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, VectorSpec};
 #[cfg(test)]
 use crate::shared_kernel::types::search::{
     DuplicatesRequest, SearchHit, SearchRequest, SearchResponse,
 };
-use crate::shared_kernel::types::{
-    document::FieldValue,
-    schema::{Analyzer, FieldSpec, VectorSpec},
-};
 #[cfg(test)]
 use crate::shared_kernel::types::{
-    document::{IndexRequest, ReplaceDocsRequest},
+    document::{FieldValue, IndexRequest, ReplaceDocsRequest},
     schema::{CreateCollectionRequest, FieldType},
 };
 

@@ -6,13 +6,13 @@
 
 use anyhow::{anyhow, bail, Result};
 
+use crate::index::application::admission::RecordAdmissionError;
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::index::application::engine::Engine;
+use crate::index::application::text_preparation;
 use crate::index::domain::field_index::FieldIndex;
 use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
 use crate::shared_kernel::capture_barrier::ApplyLease;
-use crate::storage::record_admission::RecordAdmissionError;
-use crate::storage::text_preparation;
 
 impl Engine {
     pub(crate) fn try_apply_committed_index(

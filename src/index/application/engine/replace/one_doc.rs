@@ -42,7 +42,7 @@ impl Engine {
         item: ReplaceDocItem,
         ordinal: usize,
         charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
-        prepared_text: Option<&crate::storage::text_preparation::PreparedTextRows>,
+        prepared_text: Option<&crate::index::application::text_preparation::PreparedTextRows>,
         telemetry: &mut CommittedApplyTelemetry<'_>,
     ) -> (ReplaceDocResult, u64) {
         let (id, new_doc_in_request) = coll

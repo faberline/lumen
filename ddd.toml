@@ -1127,3 +1127,55 @@ rule = "B4"
 paths = ["src/index/application/apply/committed_index_apply/fields.rs"]
 subject = "persistence.application"
 reason = "Before it adds an incremental scalar layer, the field apply compares the composed segment's layer count with layer_maintenance's append limit and names the capacity Work, Checkpoint or Merge, that the maintenance owner must finish first. P2: the layer-maintenance port the Engine is given (see the persistence.application exception above) takes the work kind as its own type."
+
+# Record admission and Text preparation moved to index/application as-is:
+# the Engine's record reservation, pricing, capacity and admitted-record
+# steps, the record charge journal, and the owned and borrowed Text staging
+# before the apply lease. They reserve, price and retain against ingest's
+# change budget, read a borrowed record with ingest's FastIndexScanner, and
+# ingest's pending-capacity error reads their RecordAdmissionError back.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/application/text_preparation.rs",
+  "src/index/application/text_preparation/staging.rs",
+]
+subject = "application->infrastructure"
+reason = "With the jieba feature, a Jieba Text value's preparation bound adds jieba_disk_route's ROUTE_CACHE_BYTES, the dictionary route cache the disk-backed segmenter keeps while it stages the value. P2: the tokenizer port in the index domain (see the index_text exception above) reports its route cache bytes, and jieba_disk_route implements it."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/admission.rs",
+  "src/index/application/admission/admitted_record.rs",
+  "src/index/application/admission/capacity.rs",
+  "src/index/application/admission/engine_admission.rs",
+  "src/index/application/admission/pricing.rs",
+  "src/index/application/admission/record_charges.rs",
+  "src/index/application/admission/record_reservation.rs",
+  "src/index/application/text_preparation/staging.rs",
+]
+subject = "ingest.domain"
+reason = "Admission reserves each record against the change budget: EngineChanges holds the ChangeBudget and its Owner, a RecordReservation wraps a budget Reservation and reports AdmissionError, SourceRetention and HARD_LIMIT, the record charge journal keeps each applied record's RetainedCharge until a checkpoint freezes it with the budget's FrozenBatch, the capacity helpers expose the owner's capacity state and BudgetWake, pricing uses RecordEstimate and the default n-gram cost workspace, a context-dependent price reports NormalizeError, and Text staging prices with estimate_record_prepared_text. P2: with the Engine's (see the ingest.domain exceptions above), the budget, journal and pricing sit behind ingest application ports the Engine is given."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/text_preparation.rs",
+  "src/index/application/text_preparation/borrowed.rs",
+]
+subject = "ingest.infrastructure"
+reason = "Borrowed Text preparation walks a retained record in place with FastIndexScanner and stages each FastIndexValue's Text before the apply lease, and the metadata bounds the committed apply reserves are read from the same scanner. P2: ingest's application layer exposes the borrowed scanner, as it does for the committed apply (see the ingest.infrastructure exception above)."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/index/application/text_preparation/staging.rs"]
+subject = "persistence.infrastructure"
+reason = "Staging a Text row retries with a larger workspace when text_row_stage refuses with RequiredTextRowWorkspace, whose required_bytes the reservation grows to. P2: the segment writer port in the index domain (see the persistence.infrastructure exceptions above) reports the workspace a row needs as an error type the index domain defines."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/ingest/domain/change_admission.rs"]
+subject = "index.application"
+reason = "PendingChangeCapacity::from_record_prepublication maps the Engine's RecordAdmissionError, a Capacity or Overflow refusal before publication, to the pending-capacity error the write coordinator and EngineSm return. The Engine uses ingest's change budget (see the ingest.domain exceptions above), so ingest does not list index in depends_on. P2: the apply port ingest defines (see the index.application exception above) reports admission refusals with its own error type, which the Engine's adapter maps RecordAdmissionError onto."

@@ -12,8 +12,8 @@ use crate::shared_kernel::types::schema::FieldSpec;
 /// Borrowed state view for pending-change cost normalization.  It only exposes
 /// metadata already held by the engine; it never expands postings or clones a
 /// request before admission.
-pub(crate) struct EngineCostContext<'a> {
-    pub(crate) state: &'a EngineState,
+pub(in crate::index::application) struct EngineCostContext<'a> {
+    pub(in crate::index::application) state: &'a EngineState,
 }
 
 impl crate::ingest::domain::change_record_cost::CostContext for EngineCostContext<'_> {

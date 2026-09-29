@@ -150,7 +150,7 @@ fn replay_aof_into_with_capacity_owner(
         let request = engine.record_ram_request_from_bound(workspace, 0);
         let mut reservation = match engine.try_reserve_record_ram(&request) {
             Ok(reservation) => reservation,
-            Err(crate::storage::RecordAdmissionError::Capacity(
+            Err(crate::index::application::admission::RecordAdmissionError::Capacity(
                 crate::ingest::domain::change_budget::AdmissionError::Full { .. },
             )) => {
                 // A replay admission can hit the hard limit before the
@@ -175,14 +175,14 @@ fn replay_aof_into_with_capacity_owner(
                 engine.request_pending_checkpoint();
                 reservation
                     .wait_grow_to(decoded_peak)
-                    .map_err(crate::storage::RecordAdmissionError::Capacity)
+                    .map_err(crate::index::application::admission::RecordAdmissionError::Capacity)
                     .context("wait for AOF replay decode admission")?;
             }
             Err(error) => {
-                return Err(
-                    anyhow::Error::new(crate::storage::RecordAdmissionError::Capacity(error))
-                        .context("reserve AOF replay decode"),
+                return Err(anyhow::Error::new(
+                    crate::index::application::admission::RecordAdmissionError::Capacity(error),
                 )
+                .context("reserve AOF replay decode"))
             }
         }
         // The same cursor pins the original inode and open-time length across
@@ -209,7 +209,7 @@ fn replay_aof_into_with_capacity_owner(
         // normalized changes are prepared; retain the actual decoded owner.
         reservation
             .release_transport_bytes()
-            .map_err(crate::storage::RecordAdmissionError::Capacity)
+            .map_err(crate::index::application::admission::RecordAdmissionError::Capacity)
             .context("release completed AOF decoder workspace")?;
         let mut entry = record.entry;
         loop {
@@ -245,7 +245,9 @@ fn replay_aof_into_with_capacity_owner(
                         result => result,
                     };
                     grown
-                        .map_err(crate::storage::RecordAdmissionError::Capacity)
+                        .map_err(
+                            crate::index::application::admission::RecordAdmissionError::Capacity,
+                        )
                         .context("wait for AOF replay repricing")?;
                     entry = reprice.entry;
                     reservation = reprice.reservation;

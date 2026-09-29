@@ -15,6 +15,9 @@ use std::time::Instant;
 
 use anyhow::{bail, Result};
 
+use crate::index::application::admission::{
+    record_reservation::RecordReservation, RecordAdmissionError,
+};
 use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::index::application::engine::Engine;
@@ -26,8 +29,10 @@ use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::capture_barrier::ApplyLease;
 use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::schema::FieldType;
-use crate::storage::record_admission::{RecordAdmissionError, RecordReservation};
-use crate::storage::{staged_text_row, staged_vector_row, text_preparation};
+use crate::{
+    index::application::text_preparation,
+    storage::{staged_text_row, staged_vector_row},
+};
 
 #[cfg(test)]
 thread_local! {

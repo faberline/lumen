@@ -10,6 +10,11 @@ use raft_runtime::OutcomeWindow;
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex as AsyncMutex;
 
+use crate::index::application::admission::record_reservation::{
+    RecordReservation, RecordTransientReservation,
+};
+use crate::index::application::admission::RecordAdmissionError;
+use crate::index::application::engine::Engine;
 use crate::ingest::application::write_coordinator::committed_scalar::MappedApply;
 use crate::ingest::application::write_coordinator::errors::{
     is_storage_full, RestartRequired, StorageFullError,
@@ -24,10 +29,6 @@ use crate::ingest::application::write_coordinator::{
 use crate::ingest::domain::change_budget::AdmissionError;
 use crate::ingest::domain::wal_log::SharedWal;
 use crate::ingest::domain::wal_record::WalRecord;
-use crate::{
-    index::application::engine::Engine,
-    storage::{RecordAdmissionError, RecordReservation, RecordTransientReservation},
-};
 
 impl WriteCoordinator {
     /// The apply-loop spawner. Identical structure regardless of the AOF; the

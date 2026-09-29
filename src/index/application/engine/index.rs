@@ -49,7 +49,7 @@ impl Engine {
         collection_id: &str,
         req: IndexRequest,
         charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
-        prepared_text: Option<&crate::storage::text_preparation::PreparedTextRows>,
+        prepared_text: Option<&crate::index::application::text_preparation::PreparedTextRows>,
     ) -> Result<IndexResponse> {
         let _apply = self.capture_barrier.apply();
         let mut telemetry = self.metrics.apply_telemetry();
@@ -89,7 +89,7 @@ impl Engine {
         coll: &mut Collection,
         req: IndexRequest,
         charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
-        prepared_text: Option<&crate::storage::text_preparation::PreparedTextRows>,
+        prepared_text: Option<&crate::index::application::text_preparation::PreparedTextRows>,
         telemetry: &mut CommittedApplyTelemetry<'_>,
     ) -> Result<IndexResponse> {
         if req.items.len() > MAX_INDEX_ITEMS {

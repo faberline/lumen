@@ -7,6 +7,10 @@ use std::sync::atomic::Ordering;
 use anyhow::{bail, Result};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard};
 
+use crate::index::application::admission::record_reservation::{
+    RecordReservation, RecordTransientReservation,
+};
+use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::ingest::application::write_coordinator::errors::SubmitStalled;
 use crate::ingest::application::write_coordinator::{
     WriteCoordinator, LOCAL_CAPACITY_APPLY_RESERVE, SUBMIT_TIMEOUT, SUBMIT_TIMEOUT_SECS,
@@ -14,10 +18,6 @@ use crate::ingest::application::write_coordinator::{
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::shared_kernel::log_entry::RaftLogEntry;
-use crate::{
-    index::application::engine::raft_dispatch::ApplyOutcome,
-    storage::{RecordReservation, RecordTransientReservation},
-};
 
 impl WriteCoordinator {
     /// Defense-in-depth (#1486): release any waiter stranded on a sequence

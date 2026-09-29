@@ -57,13 +57,15 @@ impl PendingChangeCapacity {
     }
 
     pub(crate) fn from_record_prepublication(
-        error: &crate::storage::RecordAdmissionError,
+        error: &crate::index::application::admission::RecordAdmissionError,
     ) -> Option<Self> {
         match error {
-            crate::storage::RecordAdmissionError::Capacity(error) => {
+            crate::index::application::admission::RecordAdmissionError::Capacity(error) => {
                 Self::from_prepublication(*error).ok()
             }
-            crate::storage::RecordAdmissionError::Overflow => Some(Self::Overflow),
+            crate::index::application::admission::RecordAdmissionError::Overflow => {
+                Some(Self::Overflow)
+            }
             _ => None,
         }
     }
@@ -121,16 +123,18 @@ mod prepublication_tests {
         ));
         assert!(matches!(
             PendingChangeCapacity::from_record_prepublication(
-                &crate::storage::RecordAdmissionError::Overflow
+                &crate::index::application::admission::RecordAdmissionError::Overflow
             ),
             Some(PendingChangeCapacity::Overflow)
         ));
         assert!(PendingChangeCapacity::from_record_prepublication(
-            &crate::storage::RecordAdmissionError::Capacity(AdmissionError::Retired)
+            &crate::index::application::admission::RecordAdmissionError::Capacity(
+                AdmissionError::Retired
+            )
         )
         .is_none());
         assert!(PendingChangeCapacity::from_record_prepublication(
-            &crate::storage::RecordAdmissionError::WrongEngine
+            &crate::index::application::admission::RecordAdmissionError::WrongEngine
         )
         .is_none());
     }

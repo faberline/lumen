@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 
+use crate::index::application::admission::RecordAdmissionError;
 use crate::index::application::engine::collections::DropOutcome;
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::index::application::engine::Engine;
@@ -13,7 +14,6 @@ use crate::shared_kernel::types::document::{
 use crate::shared_kernel::types::schema::{
     CreateCollectionRequest, CreateCollectionResponse, FieldSpec,
 };
-use crate::storage::record_admission::RecordAdmissionError;
 
 impl Engine {
     /// Create-or-merge a collection schema.
