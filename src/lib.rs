@@ -81,6 +81,7 @@ pub use crate::compat::raft;
 /// lumen's to own — they live in the shared lib.
 #[cfg(feature = "raft-wal")]
 pub use crate::compat::raft_sm;
+mod persistence;
 pub mod rdb;
 pub use crate::compat::reshard;
 pub use crate::compat::routing;
@@ -92,11 +93,6 @@ pub use crate::compat::routing;
 #[cfg(feature = "operator")]
 pub use crate::compat::routing_remote;
 mod replication;
-/// Columnar mmap disk segment (Stage 2 disk-tier): a single Number column
-/// for `n_docs` rows at one `applied_seq`, written page-aligned for zero-copy
-/// reads. Compiled by default; the disk tier is selected at runtime
-/// (`--persistence=segment`), with the in-RAM CBOR RDB remaining the default.
-mod segment;
 mod segment_capacity;
 pub mod segment_checkpoint;
 /// Segment-checkpoint persistence store (Stage 2 Phase 2f-2): the disk engine

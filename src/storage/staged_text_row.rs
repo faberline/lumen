@@ -14,8 +14,10 @@ use anyhow::{anyhow, bail, Context, Result};
 #[cfg(test)]
 use std::cell::RefCell;
 
-use crate::segment::text_row_stage::{stage_text_row, TextRowStageOptions, TextTokenStream};
-use crate::segment::SegmentReader;
+use crate::persistence::infrastructure::segment::text_row_stage::{
+    stage_text_row, TextRowStageOptions, TextTokenStream,
+};
+use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::shared_kernel::types::schema::Analyzer;
 
 static STAGED_TEXT_ROW_NONCE: AtomicU64 = AtomicU64::new(0);
@@ -462,7 +464,7 @@ mod tests {
         .unwrap();
         let error = stream(&mut |_| {
             Err(anyhow::Error::new(
-                crate::segment::text_row_stage::RequiredTextRowWorkspace {
+                crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace {
                     required_bytes: TextRowStageOptions::minimum_scratch_bytes() + 1,
                 },
             ))
@@ -470,7 +472,7 @@ mod tests {
         .unwrap_err();
         assert!(
             error
-                .downcast_ref::<crate::segment::text_row_stage::RequiredTextRowWorkspace>()
+                .downcast_ref::<crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace>()
                 .is_some(),
             "the caller must be able to retry a bounded Ngram workspace request"
         );
@@ -484,14 +486,14 @@ mod tests {
         let stream = token_stream("南京市长江大桥", Analyzer::Jieba, Some(route)).unwrap();
         let error = stream(&mut |_| {
             Err(anyhow::Error::new(
-                crate::segment::text_row_stage::RequiredTextRowWorkspace {
+                crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace {
                     required_bytes: TextRowStageOptions::minimum_scratch_bytes() + 1,
                 },
             ))
         })
         .unwrap_err();
         assert!(error
-            .downcast_ref::<crate::segment::text_row_stage::RequiredTextRowWorkspace>()
+            .downcast_ref::<crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace>()
             .is_some());
         assert!(!directory.path().join("jieba-route.tmp").exists());
     }

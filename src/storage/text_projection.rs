@@ -3,8 +3,10 @@
 //! decoded one term at a time, with the same live-version selection as queries.
 
 use super::*;
-use crate::segment::stream::{write_text_projection, TextStreamView};
-use crate::segment::SegmentReader;
+use crate::persistence::infrastructure::segment::stream::text_projection::{
+    write_text_projection, TextStreamView,
+};
+use crate::persistence::infrastructure::segment::SegmentReader;
 use std::borrow::Cow;
 #[cfg(test)]
 use std::cell::Cell;
@@ -526,7 +528,7 @@ impl TextStreamView for RowsProjection<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::segment::text_row_stage::TextRowStageOptions;
+    use crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions;
     use crate::shared_kernel::types::schema::Analyzer;
     use std::collections::BTreeMap;
 

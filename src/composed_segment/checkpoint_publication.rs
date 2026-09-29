@@ -257,7 +257,10 @@ mod tests {
                     .insert(row as u32);
             }
         }
-        crate::segment::write_keyword_segment(path, 7, values, &postings).unwrap();
+        crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
+            path, 7, values, &postings,
+        )
+        .unwrap();
         Arc::new(SegmentReader::open(path).unwrap())
     }
 

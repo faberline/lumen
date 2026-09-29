@@ -5,9 +5,10 @@
 //! and postings stay in their original mmaps. Dictionary walks keep one head
 //! per segment and never materialize the complete dictionary.
 
-use crate::segment::{
-    cached_text_posting_weight, posting_cache_bytes, CachedTextPosting, SegmentReader,
-    SortedIdCursor,
+use crate::persistence::infrastructure::segment::{
+    codecs::SortedIdCursor,
+    reader_cache::{cached_text_posting_weight, posting_cache_bytes, CachedTextPosting},
+    SegmentReader,
 };
 use anyhow::{anyhow, bail, Result};
 use roaring::RoaringBitmap;
@@ -1679,9 +1680,10 @@ impl<'a> NumberKeyCursor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::segment::{
-        write_hash_segment, write_keyword_segment, write_number_segment, write_set_segment,
-        write_text_segment,
+    use crate::persistence::infrastructure::segment::{
+        hash_writer::write_hash_segment, keyword_writer::write_keyword_segment,
+        number_writer::write_number_segment, set_writer::write_set_segment,
+        text_writer::write_text_segment,
     };
     use crate::storage::Postings;
     use std::path::Path;
@@ -1756,7 +1758,10 @@ mod tests {
         );
         assert!(view.keyword_postings("z-old").is_none());
         let out = dir.path().join("merged");
-        crate::segment::stream::write_keyword_stream(&out, 9, &view).unwrap();
+        crate::persistence::infrastructure::segment::stream::keyword::write_keyword_stream(
+            &out, 9, &view,
+        )
+        .unwrap();
         let reader = SegmentReader::open(&out).unwrap();
         assert_eq!(reader.n_docs(), 3);
         assert_eq!(reader.keyword_at(0).as_deref(), Some("a-value"));
@@ -1888,12 +1893,12 @@ mod tests {
             5
         );
         assert!(view.base_reader().is_none());
-        crate::segment::DICTIONARY_SEARCHES.with(|count| count.set(0));
+        crate::persistence::infrastructure::segment::DICTIONARY_SEARCHES.with(|count| count.set(0));
         assert_eq!(
             view.keyword_terms_all().unwrap(),
             vec![("last".to_owned(), [1_000_000].into_iter().collect())]
         );
-        crate::segment::DICTIONARY_SEARCHES.with(|count| {
+        crate::persistence::infrastructure::segment::DICTIONARY_SEARCHES.with(|count| {
             assert_eq!(count.get(), 0,
             "enumeration must reuse known dictionary ordinals instead of repeating term searches")
         });

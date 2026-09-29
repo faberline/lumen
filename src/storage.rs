@@ -63,7 +63,7 @@ use thiserror::Error;
 
 use crate::composed_segment::TextPostingAt;
 use crate::metrics::{CommittedApplyTelemetry, Metrics};
-use crate::segment::SortedIdCursor;
+use crate::persistence::infrastructure::segment::codecs::SortedIdCursor;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 use crate::shared_kernel::types::{
     document::{
@@ -435,7 +435,8 @@ impl SortableF64 {
 
     /// The raw order-preserving `u64` bit key. UNSIGNED `u64` order == numeric
     /// order (the whole point of the transform), so this is exactly the key the
-    /// on-disk sorted-value range index ([`crate::segment`] `ROLE_NUMBER_SORTED`)
+    /// on-disk sorted-value range index
+    /// ([`segment`](crate::persistence::infrastructure::segment) `ROLE_NUMBER_SORTED`)
     /// stores and binary-searches. Phase 2h-3.
     #[inline]
     pub(crate) fn bits(self) -> u64 {
@@ -475,7 +476,7 @@ fn range_is_empty(low: std::ops::Bound<SortableF64>, high: std::ops::Bound<Sorta
 }
 
 /// Lower a range `Bound<SortableF64>` into the `(bits, inclusive)` shape the
-/// on-disk sorted-value range index ([`crate::segment::SegmentReader::number_range`])
+/// on-disk sorted-value range index ([`crate::persistence::infrastructure::segment::SegmentReader::number_range`])
 /// consumes: `Included(b) -> Some((b.bits(), true))`, `Excluded(b) -> Some((b.bits(),
 /// false))`, `Unbounded -> None`. The disk reader's `number_range_window` applies
 /// exactly the same inclusive/exclusive semantics `BTreeMap::range` does, so a
@@ -4595,7 +4596,7 @@ pub(crate) enum CheckpointValue {
     /// File-backed value kept by the immutable dirty journal. The reader owns
     /// its private directory until every live reader and checkpoint releases it.
     StagedScalar {
-        reader: Arc<crate::segment::SegmentReader>,
+        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         row: u32,
     },
     Keyword(String),
@@ -4612,22 +4613,25 @@ pub(crate) enum CheckpointValue {
 pub(crate) struct PreparedCheckpointField {
     name: String,
     index: FieldIndex,
-    vector_base: Option<(std::sync::Arc<crate::segment::SegmentReader>, Vec<String>)>,
+    vector_base: Option<(
+        std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        Vec<String>,
+    )>,
 }
 
 /// A validated sparse field payload opened outside the capture barrier.  It is
 /// installed only after the generation is durable and published.
 pub(crate) struct PreparedCheckpointDelta {
     pub field: String,
-    pub reader: std::sync::Arc<crate::segment::SegmentReader>,
+    pub reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
     pub external_ids: Vec<String>,
 }
 
 pub(crate) struct PreparedCheckpointCompaction {
     pub field: String,
-    pub base: Option<std::sync::Arc<crate::segment::SegmentReader>>,
-    pub inputs: Vec<std::sync::Arc<crate::segment::SegmentReader>>,
-    pub reader: std::sync::Arc<crate::segment::SegmentReader>,
+    pub base: Option<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
+    pub inputs: Vec<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
+    pub reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
     pub external_ids: Vec<String>,
     pub scalar: Option<crate::composed_segment::PreparedScalarReplacement>,
 }
@@ -4652,10 +4656,20 @@ pub(crate) struct CheckpointCapture {
         BTreeMap<String, BTreeMap<String, crate::composed_segment::PreparedScalarPublication>>,
     /// Stable runtime IDs and dirty-match bits computed outside the apply lease.
     pub scalar_retire: BTreeMap<String, BTreeMap<String, Vec<(u32, String, u64)>>>,
-    pub live_delta_inputs:
-        BTreeMap<String, BTreeMap<String, Vec<std::sync::Arc<crate::segment::SegmentReader>>>>,
-    pub live_base_inputs:
-        BTreeMap<String, BTreeMap<String, std::sync::Arc<crate::segment::SegmentReader>>>,
+    pub live_delta_inputs: BTreeMap<
+        String,
+        BTreeMap<
+            String,
+            Vec<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
+        >,
+    >,
+    pub live_base_inputs: BTreeMap<
+        String,
+        BTreeMap<
+            String,
+            std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        >,
+    >,
     pub collections: BTreeMap<String, CheckpointCollectionIdentity>,
     pub next_generation: u64,
     pub field_dirty: BTreeMap<String, FieldDirtySnapshot>,
@@ -4874,7 +4888,11 @@ impl FrozenCheckpoint {
                         serde_json::to_vec_pretty(&sidecar)?,
                     )?;
                     let ids: Vec<&str> = eids.iter().map(String::as_str).collect();
-                    crate::segment::write_eid_segment(&dir.join(EID_META_FILE), sequence, &ids)?;
+                    crate::persistence::infrastructure::segment::eid_writer::write_eid_segment(
+                        &dir.join(EID_META_FILE),
+                        sequence,
+                        &ids,
+                    )?;
                     let count = u32::try_from(eids.len())
                         .map_err(|_| anyhow!("base row count exceeds u32"))?;
                     let collection_name = name.clone();
@@ -4913,7 +4931,7 @@ impl FrozenCheckpoint {
                                     .iter()
                                     .map(|(_, value)| Some(value.as_slice()))
                                     .collect();
-                                crate::segment::write_vector_segment(
+                                crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
                                     &dir.join(format!("{stem}.lseg")),
                                     sequence,
                                     spec.dim as usize,
@@ -4921,7 +4939,7 @@ impl FrozenCheckpoint {
                                 )?;
                                 let ids: Vec<_> =
                                     rows.iter().map(|(eid, _)| eid.as_str()).collect();
-                                crate::segment::write_eid_segment(
+                                crate::persistence::infrastructure::segment::eid_writer::write_eid_segment(
                                     &dir.join(format!("{stem}.eids.lseg")),
                                     sequence,
                                     &ids,
@@ -4930,7 +4948,7 @@ impl FrozenCheckpoint {
                                     == crate::shared_kernel::types::schema::VectorBackend::FlatCpu
                                 {
                                     let reader =
-                                        std::sync::Arc::new(crate::segment::SegmentReader::open(
+                                        std::sync::Arc::new(crate::persistence::infrastructure::segment::SegmentReader::open(
                                             &dir.join(format!("{stem}.lseg")),
                                         )?);
                                     let row_eids: Vec<String> =
@@ -5010,7 +5028,7 @@ fn hard_link_checkpoint_tree(origin: &std::path::Path, target: &std::path::Path)
 
 fn attach_delta_reader(
     index: &mut FieldIndex,
-    reader: std::sync::Arc<crate::segment::SegmentReader>,
+    reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
     ids: Vec<u32>,
 ) -> Result<()> {
     let attach =
@@ -5064,7 +5082,9 @@ fn checkpoint_scalar_retire_matches(current: Option<&u64>, captured_revision: u6
     current == Some(&captured_revision)
 }
 
-fn live_delta_readers(index: &FieldIndex) -> Vec<std::sync::Arc<crate::segment::SegmentReader>> {
+fn live_delta_readers(
+    index: &FieldIndex,
+) -> Vec<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
     let segment = match index {
         FieldIndex::Keyword(index) => &index.segment,
         FieldIndex::Number(index) => &index.segment,
@@ -5079,7 +5099,9 @@ fn live_delta_readers(index: &FieldIndex) -> Vec<std::sync::Arc<crate::segment::
         .unwrap_or_default()
 }
 
-fn live_base_reader(index: &FieldIndex) -> Option<std::sync::Arc<crate::segment::SegmentReader>> {
+fn live_base_reader(
+    index: &FieldIndex,
+) -> Option<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
     let segment = match index {
         FieldIndex::Keyword(index) => &index.segment,
         FieldIndex::Number(index) => &index.segment,
@@ -5681,7 +5703,7 @@ impl Engine {
         &self,
         collection_id: &str,
         field: &str,
-        reader: std::sync::Arc<crate::segment::SegmentReader>,
+        reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         external_ids: Vec<String>,
     ) -> Result<()> {
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
@@ -14757,13 +14779,21 @@ impl FieldIndex {
                             .flatten()
                     })
                     .collect();
-                crate::segment::write_number_segment(&path, applied_seq, &values)
+                crate::persistence::infrastructure::segment::number_writer::write_number_segment(
+                    &path,
+                    applied_seq,
+                    &values,
+                )
             }
             FieldIndex::Hash(h) => {
                 let values: Vec<Option<u64>> = (0..n_docs)
                     .map(|id| if live(id) { h.hash_at(id) } else { None })
                     .collect();
-                crate::segment::write_hash_segment(&path, applied_seq, &values)
+                crate::persistence::infrastructure::segment::hash_writer::write_hash_segment(
+                    &path,
+                    applied_seq,
+                    &values,
+                )
             }
             FieldIndex::Keyword(k) => {
                 let owned: Vec<Option<String>> = (0..n_docs)
@@ -14780,7 +14810,12 @@ impl FieldIndex {
                             .insert(id as u32);
                     }
                 }
-                crate::segment::write_keyword_segment(&path, applied_seq, &values, &terms)
+                crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
+                    &path,
+                    applied_seq,
+                    &values,
+                    &terms,
+                )
             }
             FieldIndex::Set(s) => {
                 let owned: Vec<Option<Vec<String>>> = (0..n_docs)
@@ -14806,7 +14841,12 @@ impl FieldIndex {
                         }
                     }
                 }
-                crate::segment::write_set_segment(&path, applied_seq, &values, &elements)
+                crate::persistence::infrastructure::segment::set_writer::write_set_segment(
+                    &path,
+                    applied_seq,
+                    &values,
+                    &elements,
+                )
             }
             FieldIndex::Text { idx, .. } => {
                 text_projection::write_live(&path, applied_seq, idx, n_docs, live)
@@ -14860,8 +14900,13 @@ impl FieldIndex {
                         n.number_at(id).map(|s| s.to_f64())
                     })
                     .collect();
-                crate::segment::write_number_segment(&path, applied_seq, &values)?;
-                let reader = crate::segment::SegmentReader::open(&path)?;
+                crate::persistence::infrastructure::segment::number_writer::write_number_segment(
+                    &path,
+                    applied_seq,
+                    &values,
+                )?;
+                let reader =
+                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
                 // Attach the NEW reader (dropping any prior segment Arc) and free
                 // BOTH the forward tail AND the inverted/range `values` driver —
                 // the whole [0..n_docs) index (sorted-value column + per-value
@@ -14892,8 +14937,13 @@ impl FieldIndex {
                 let values: Vec<Option<u64>> = (0..n_docs)
                     .map(|id| if live(id) { h.hash_at(id) } else { None })
                     .collect();
-                crate::segment::write_hash_segment(&path, applied_seq, &values)?;
-                let reader = crate::segment::SegmentReader::open(&path)?;
+                crate::persistence::infrastructure::segment::hash_writer::write_hash_segment(
+                    &path,
+                    applied_seq,
+                    &values,
+                )?;
+                let reader =
+                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
                 h.segment = Some(std::sync::Arc::new(
                     crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(
                         reader,
@@ -14926,8 +14976,14 @@ impl FieldIndex {
                         terms.entry((*s).to_string()).or_default().insert(id as u32);
                     }
                 }
-                crate::segment::write_keyword_segment(&path, applied_seq, &values, &terms)?;
-                let reader = crate::segment::SegmentReader::open(&path)?;
+                crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
+                    &path,
+                    applied_seq,
+                    &values,
+                    &terms,
+                )?;
+                let reader =
+                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
                 // Attach the NEW reader (dropping any prior segment Arc) and free
                 // BOTH the forward tail AND the inverted `terms` driver — the
                 // whole [0..n_docs) index is now on disk; reopen/queries drive
@@ -14979,8 +15035,14 @@ impl FieldIndex {
                         }
                     }
                 }
-                crate::segment::write_set_segment(&path, applied_seq, &values, &elements)?;
-                let reader = crate::segment::SegmentReader::open(&path)?;
+                crate::persistence::infrastructure::segment::set_writer::write_set_segment(
+                    &path,
+                    applied_seq,
+                    &values,
+                    &elements,
+                )?;
+                let reader =
+                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
                 // Attach the NEW reader (dropping any prior segment Arc) and free
                 // BOTH the forward tail AND the inverted `elements` driver — the
                 // whole [0..n_docs) index is now on disk. The RAM win 2h-2 targets.
@@ -15000,7 +15062,8 @@ impl FieldIndex {
             }
             FieldIndex::Text { idx, .. } => {
                 text_projection::write_live(&path, applied_seq, idx, n_docs, live)?;
-                let reader = crate::segment::SegmentReader::open(&path)?;
+                let reader =
+                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
                 // Phase 2h-4: DROP the bulky `tokens` postings AND `distinct` to
                 // disk — neither is rebuilt. `drop_eid` no longer consumes
                 // `distinct` for a sealed base id (it records the id in
@@ -15064,7 +15127,9 @@ impl FieldIndex {
         defer_hnsw: bool,
     ) -> Result<FieldIndex> {
         let path = dir.join(format!("{field_name}.lseg"));
-        let reader = std::sync::Arc::new(crate::segment::SegmentReader::open(&path)?);
+        let reader = std::sync::Arc::new(
+            crate::persistence::infrastructure::segment::SegmentReader::open(&path)?,
+        );
         // The per-arm reopen reads coverage straight off the reader (e.g. the Text
         // arm via `text_doc_count`/`text_total_doc_len`); no whole-`n_docs` rebuild.
         let _n_docs = reader.n_docs();
@@ -15280,7 +15345,11 @@ impl Collection {
         // 1) The collection EID column: external_id of docid i at position i.
         let eids: Vec<&str> = self.interner.to_eid.iter().map(|s| s.as_str()).collect();
         let meta_path = dir.join(EID_META_FILE);
-        crate::segment::write_eid_segment(&meta_path, applied_seq, &eids)?;
+        crate::persistence::infrastructure::segment::eid_writer::write_eid_segment(
+            &meta_path,
+            applied_seq,
+            &eids,
+        )?;
 
         // 2) Seal every field; persist any Vector row→eid sidecar. Borrow
         //    `eid_fields` immutably for the liveness predicate while `fields` is
@@ -15294,7 +15363,11 @@ impl Collection {
             if let Some(row_eids) = row_eids {
                 let sidecar = dir.join(format!("{stem}.eids.lseg"));
                 let refs: Vec<&str> = row_eids.iter().map(|s| s.as_str()).collect();
-                crate::segment::write_eid_segment(&sidecar, applied_seq, &refs)?;
+                crate::persistence::infrastructure::segment::eid_writer::write_eid_segment(
+                    &sidecar,
+                    applied_seq,
+                    &refs,
+                )?;
             }
         }
         Ok(())
@@ -15337,7 +15410,7 @@ impl Collection {
         CHECKPOINT_COLLECTION_OPENS.with(|count| count.set(count.get() + 1));
         // 1) Rebuild the interner from the EID column.
         let meta_path = dir.join(EID_META_FILE);
-        let meta = crate::segment::SegmentReader::open(&meta_path)
+        let meta = crate::persistence::infrastructure::segment::SegmentReader::open(&meta_path)
             .map_err(|e| anyhow!("open eid meta {}: {e}", meta_path.display()))?;
         let to_eid = meta
             .eids_all()
@@ -15365,7 +15438,7 @@ impl Collection {
             // Vector fields carry a row→eid sidecar.
             let vec_row_eids = if spec.field_type == FieldType::Vector {
                 let sidecar = dir.join(format!("{stem}.eids.lseg"));
-                let r = crate::segment::SegmentReader::open(&sidecar)
+                let r = crate::persistence::infrastructure::segment::SegmentReader::open(&sidecar)
                     .map_err(|e| anyhow!("open vector eid sidecar {}: {e}", sidecar.display()))?;
                 Some(
                     r.eids_all()
@@ -16581,8 +16654,8 @@ impl Engine {
     /// field into a columnar mmap segment under `dir`, then attach it so per-doc
     /// PREDICATE point lookups read the segment for the sealed id range. Mirrors
     /// what a real flush would do: dumps `forward` in dense docid order
-    /// `[0..n_docs)` (absent docs → `None`) via [`crate::segment::write_number_segment`],
-    /// opens a [`crate::segment::SegmentReader`], and sets `NumberIndex::segment`.
+    /// `[0..n_docs)` (absent docs → `None`) via [`crate::persistence::infrastructure::segment::number_writer::write_number_segment`],
+    /// opens a [`crate::persistence::infrastructure::segment::SegmentReader`], and sets `NumberIndex::segment`.
     ///
     /// `n_docs` is the interner's dense id count, so any doc indexed AFTER
     /// sealing (id >= n_docs) is NOT covered by the segment and stays served
@@ -16614,8 +16687,12 @@ impl Engine {
             .collect();
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::segment::write_number_segment(&path, n_docs as u64, &values)?;
-        let reader = crate::segment::SegmentReader::open(&path)?;
+        crate::persistence::infrastructure::segment::number_writer::write_number_segment(
+            &path,
+            n_docs as u64,
+            &values,
+        )?;
+        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
         n.segment = Some(std::sync::Arc::new(
             crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(reader)),
@@ -16643,7 +16720,7 @@ impl Engine {
     /// Term/Terms/boolean driver (`term_postings`/`term_df`) serve the sealed id
     /// range from the segment. Dumps `forward` in dense docid order
     /// `[0..n_docs)` (absent docs → `None`) plus the INVERTED postings (folded
-    /// from `forward`) via [`crate::segment::write_keyword_segment`] — a sorted
+    /// from `forward`) via [`crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment`] — a sorted
     /// prefix-compressed string DICT + a fixed `u32[n_docs]` dict-id forward
     /// column + a parallel per-term [`ROLE_KEYWORD_POSTINGS`] posting column.
     ///
@@ -16685,8 +16762,13 @@ impl Engine {
         }
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::segment::write_keyword_segment(&path, n_docs as u64, &values, &terms)?;
-        let reader = crate::segment::SegmentReader::open(&path)?;
+        crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
+            &path,
+            n_docs as u64,
+            &values,
+            &terms,
+        )?;
+        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
         k.segment = Some(std::sync::Arc::new(
             crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(reader)),
@@ -16710,7 +16792,7 @@ impl Engine {
     /// / `element_df`) serve the sealed id range from the segment. Dumps
     /// `forward` in dense docid order `[0..n_docs)` (absent docs → `None`,
     /// present-empty → `Some(&[])`) plus the INVERTED postings (folded from
-    /// `forward`) via [`crate::segment::write_set_segment`] — a shared sorted
+    /// `forward`) via [`crate::persistence::infrastructure::segment::set_writer::write_set_segment`] — a shared sorted
     /// string DICT + a fixed `u32[n_docs + 1]` CSR offsets column + a fixed
     /// packed dict-id column + a parallel per-element [`ROLE_SET_POSTINGS`]
     /// posting column.
@@ -16759,8 +16841,13 @@ impl Engine {
         }
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::segment::write_set_segment(&path, n_docs as u64, &values, &elements)?;
-        let reader = crate::segment::SegmentReader::open(&path)?;
+        crate::persistence::infrastructure::segment::set_writer::write_set_segment(
+            &path,
+            n_docs as u64,
+            &values,
+            &elements,
+        )?;
+        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
         s.segment = Some(std::sync::Arc::new(
             crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(reader)),
@@ -16784,7 +16871,7 @@ impl Engine {
     /// so unlike the Keyword/Set seams the inverted postings ARE stored: a sorted
     /// token DICT + a parallel per-token STORED posting block + a fixed
     /// `u32[n_docs]` DocLen column + the BM25 corpus scalars in the header (see
-    /// [`crate::segment::write_text_segment`]).
+    /// [`crate::persistence::infrastructure::segment::text_writer::write_text_segment`]).
     ///
     /// This slice seals the whole field for ids `[0..n_docs)`. Phase 2h-4: after
     /// attaching, the bulky sealed-base `tokens` postings AND `distinct` AND
@@ -16818,7 +16905,7 @@ impl Engine {
         let tokens = idx.tokens_for_seal(&|_| true);
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::segment::write_text_segment(
+        crate::persistence::infrastructure::segment::text_writer::write_text_segment(
             &path,
             n_docs as u64,
             &tokens,
@@ -16827,7 +16914,7 @@ impl Engine {
             idx.doc_count,
             idx.total_doc_len,
         )?;
-        let reader = crate::segment::SegmentReader::open(&path)?;
+        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
 
         idx.segment = Some(std::sync::Arc::new(
@@ -16851,7 +16938,7 @@ impl Engine {
     /// columnar mmap segment under `dir`, then attach it so the per-doc Hamming
     /// hash read (`hash_at`) serves the sealed id range from the segment. Dumps
     /// `forward` in dense docid order `[0..n_docs)` (absent docs → `None`) via
-    /// [`crate::segment::write_hash_segment`]. Mirrors the Number seam. Returns
+    /// [`crate::persistence::infrastructure::segment::hash_writer::write_hash_segment`]. Mirrors the Number seam. Returns
     /// the sealed doc count.
     pub(crate) fn __seal_hash_field_to_segment(
         &self,
@@ -16877,8 +16964,12 @@ impl Engine {
             .collect();
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::segment::write_hash_segment(&path, n_docs as u64, &values)?;
-        let reader = crate::segment::SegmentReader::open(&path)?;
+        crate::persistence::infrastructure::segment::hash_writer::write_hash_segment(
+            &path,
+            n_docs as u64,
+            &values,
+        )?;
+        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
         h.segment = Some(std::sync::Arc::new(
             crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(reader)),
@@ -21191,7 +21282,7 @@ mod tok_probe_tests {
                 staged_text_row::StagedTextRow::stage(
                     "tok",
                     Analyzer::WhitespaceLower,
-                    crate::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes()
+                    crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes()
                         + 4096,
                     |_| Ok(()),
                 )
@@ -21442,11 +21533,12 @@ mod tok_probe_tests {
         let doc_count = present.iter().filter(|p| **p).count() as u64;
         let total_len: u64 = lens.iter().map(|&l| u64::from(l)).sum();
         let path = dir.join(format!("f{seed}.lseg"));
-        crate::segment::write_text_segment(
+        crate::persistence::infrastructure::segment::text_writer::write_text_segment(
             &path, 7, &sealed, &lens, &present, doc_count, total_len,
         )
         .expect("seal fixture");
-        let reader = crate::segment::SegmentReader::open(&path).expect("open fixture");
+        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)
+            .expect("open fixture");
         if resident {
             for tok in &tokens {
                 let _ = reader.text_postings_arc(tok);
@@ -21495,7 +21587,7 @@ mod tok_probe_tests {
             let row = staged_text_row::StagedTextRow::stage(
                 text.trim_end(),
                 Analyzer::WhitespaceLower,
-                crate::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes() + 4096,
+                crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes() + 4096,
                 |_| Ok(()),
             )
             .expect("stage row");
@@ -22143,7 +22235,7 @@ mod exact_hamming_filter_tests {
             posting.upsert(0, posting.tf(0).unwrap_or(0) + 1);
         }
         let layer_path = dir.path().join("replacement.lseg");
-        crate::segment::write_text_segment(
+        crate::persistence::infrastructure::segment::text_writer::write_text_segment(
             &layer_path,
             1,
             &postings,
@@ -22153,7 +22245,9 @@ mod exact_hamming_filter_tests {
             tokens.len() as u64,
         )
         .unwrap();
-        let reader = Arc::new(crate::segment::SegmentReader::open(&layer_path).unwrap());
+        let reader = Arc::new(
+            crate::persistence::infrastructure::segment::SegmentReader::open(&layer_path).unwrap(),
+        );
         let segment = {
             let mut state = e.state.write().unwrap();
             let coll = state.collections.get_mut("c").unwrap();
@@ -28973,11 +29067,16 @@ mod sparse_scalar_overlay_tests {
     fn sealed_number_reads_replacement_overlay_and_then_delete() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("number.lseg");
-        crate::segment::write_number_segment(&path, 1, &[Some(1.0)]).unwrap();
+        crate::persistence::infrastructure::segment::number_writer::write_number_segment(
+            &path,
+            1,
+            &[Some(1.0)],
+        )
+        .unwrap();
         let mut number = NumberIndex::default();
         number.segment = Some(Arc::new(
             crate::composed_segment::ComposedSegmentReader::from_base(Arc::new(
-                crate::segment::SegmentReader::open(&path).unwrap(),
+                crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap(),
             )),
         ));
         number.tombstones.insert(0);
@@ -28993,14 +29092,27 @@ mod sparse_scalar_overlay_tests {
         let base = dir.path().join("base.lseg");
         let delta = dir.path().join("delta.lseg");
 
-        crate::segment::write_keyword_segment(&base, 1, &[Some("base")], &BTreeMap::new()).unwrap();
-        crate::segment::write_keyword_segment(&delta, 1, &[Some("delta")], &BTreeMap::new())
-            .unwrap();
+        crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
+            &base,
+            1,
+            &[Some("base")],
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
+            &delta,
+            1,
+            &[Some("delta")],
+            &BTreeMap::new(),
+        )
+        .unwrap();
         let keyword_view = crate::composed_segment::ComposedSegmentReader::from_base(Arc::new(
-            crate::segment::SegmentReader::open(&base).unwrap(),
+            crate::persistence::infrastructure::segment::SegmentReader::open(&base).unwrap(),
         ))
         .with_delta(
-            Arc::new(crate::segment::SegmentReader::open(&delta).unwrap()),
+            Arc::new(
+                crate::persistence::infrastructure::segment::SegmentReader::open(&delta).unwrap(),
+            ),
             vec![100],
         )
         .unwrap();
@@ -29010,10 +29122,15 @@ mod sparse_scalar_overlay_tests {
         assert_eq!(keyword.keyword_at(2).as_deref(), Some("middle"));
 
         let base_set = ["base".to_string()];
-        crate::segment::write_set_segment(&base, 1, &[Some(base_set.as_slice())], &BTreeMap::new())
-            .unwrap();
+        crate::persistence::infrastructure::segment::set_writer::write_set_segment(
+            &base,
+            1,
+            &[Some(base_set.as_slice())],
+            &BTreeMap::new(),
+        )
+        .unwrap();
         let delta_set = ["delta".to_string()];
-        crate::segment::write_set_segment(
+        crate::persistence::infrastructure::segment::set_writer::write_set_segment(
             &delta,
             1,
             &[Some(delta_set.as_slice())],
@@ -29021,10 +29138,12 @@ mod sparse_scalar_overlay_tests {
         )
         .unwrap();
         let set_view = crate::composed_segment::ComposedSegmentReader::from_base(Arc::new(
-            crate::segment::SegmentReader::open(&base).unwrap(),
+            crate::persistence::infrastructure::segment::SegmentReader::open(&base).unwrap(),
         ))
         .with_delta(
-            Arc::new(crate::segment::SegmentReader::open(&delta).unwrap()),
+            Arc::new(
+                crate::persistence::infrastructure::segment::SegmentReader::open(&delta).unwrap(),
+            ),
             vec![100],
         )
         .unwrap();
@@ -29038,13 +29157,25 @@ mod sparse_scalar_overlay_tests {
             Some(["middle".to_string()].into_iter().collect())
         );
 
-        crate::segment::write_hash_segment(&base, 1, &[Some(1)]).unwrap();
-        crate::segment::write_hash_segment(&delta, 1, &[Some(3)]).unwrap();
+        crate::persistence::infrastructure::segment::hash_writer::write_hash_segment(
+            &base,
+            1,
+            &[Some(1)],
+        )
+        .unwrap();
+        crate::persistence::infrastructure::segment::hash_writer::write_hash_segment(
+            &delta,
+            1,
+            &[Some(3)],
+        )
+        .unwrap();
         let hash_view = crate::composed_segment::ComposedSegmentReader::from_base(Arc::new(
-            crate::segment::SegmentReader::open(&base).unwrap(),
+            crate::persistence::infrastructure::segment::SegmentReader::open(&base).unwrap(),
         ))
         .with_delta(
-            Arc::new(crate::segment::SegmentReader::open(&delta).unwrap()),
+            Arc::new(
+                crate::persistence::infrastructure::segment::SegmentReader::open(&delta).unwrap(),
+            ),
             vec![100],
         )
         .unwrap();
@@ -29416,7 +29547,7 @@ mod batch_unindex_docs_tests {
 #[cfg(test)]
 mod staged_text_stats_tests {
     use super::*;
-    use crate::segment::text_row_stage::TextRowStageOptions;
+    use crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions;
 
     fn staged_row(input: &str) -> Arc<staged_text_row::StagedTextRow> {
         Arc::new(

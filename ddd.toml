@@ -164,6 +164,12 @@ domain = "src/ingest/domain"
 application = "src/ingest/application"
 infrastructure = "src/ingest/infrastructure"
 
+[[contexts]]
+name = "persistence"
+depends_on = []
+[contexts.layers]
+infrastructure = "src/persistence/infrastructure"
+
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
 # port the owning layer defines.
 

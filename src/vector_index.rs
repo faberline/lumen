@@ -214,7 +214,7 @@ pub trait VectorIndex: Send + Sync {
 
     fn attach_checkpoint_delta(
         &self,
-        _reader: Arc<crate::segment::SegmentReader>,
+        _reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         _external_ids: &[String],
         _acknowledged: &[bool],
     ) -> Result<()> {
@@ -222,19 +222,23 @@ pub trait VectorIndex: Send + Sync {
     }
 
     /// Immutable inputs used to verify a staged compaction at publication.
-    fn checkpoint_delta_readers(&self) -> Vec<Arc<crate::segment::SegmentReader>> {
+    fn checkpoint_delta_readers(
+        &self,
+    ) -> Vec<Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
         Vec::new()
     }
 
-    fn checkpoint_base_reader(&self) -> Option<Arc<crate::segment::SegmentReader>> {
+    fn checkpoint_base_reader(
+        &self,
+    ) -> Option<Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
         None
     }
 
     fn replace_checkpoint_base(
         &self,
-        _base: &Arc<crate::segment::SegmentReader>,
-        _inputs: &[Arc<crate::segment::SegmentReader>],
-        _reader: Arc<crate::segment::SegmentReader>,
+        _base: &Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        _inputs: &[Arc<crate::persistence::infrastructure::segment::SegmentReader>],
+        _reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         _external_ids: &[String],
     ) -> Result<()> {
         bail!("vector backend does not support mapped base replacement")
@@ -242,8 +246,8 @@ pub trait VectorIndex: Send + Sync {
 
     fn replace_checkpoint_deltas(
         &self,
-        _inputs: &[Arc<crate::segment::SegmentReader>],
-        _reader: Arc<crate::segment::SegmentReader>,
+        _inputs: &[Arc<crate::persistence::infrastructure::segment::SegmentReader>],
+        _reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         _external_ids: &[String],
     ) -> Result<()> {
         bail!("vector backend does not support checkpoint delta replacement")
@@ -267,7 +271,7 @@ pub trait VectorIndex: Send + Sync {
     /// above the new mmap base.
     fn install_checkpoint_base(
         &self,
-        _reader: Arc<crate::segment::SegmentReader>,
+        _reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         _external_ids: &[String],
         _acknowledged: &HashMap<String, bool>,
     ) -> Result<()> {
@@ -792,7 +796,7 @@ impl HnswCpuIndex {
     /// Log both edges so an operator can distinguish recovery from a hung node.
     pub fn open_from_segment(
         spec: VectorSpec,
-        seg: std::sync::Arc<crate::segment::SegmentReader>,
+        seg: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         row_eids: Vec<String>,
     ) -> Result<Self> {
         let dim = spec.dim as usize;
@@ -1147,7 +1151,7 @@ enum FlatLocation {
 }
 
 struct FlatLayer {
-    reader: Arc<crate::segment::SegmentReader>,
+    reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
 }
 
 /// A stable EID slot has one current source.  Mmap sources are immutable;
@@ -1156,7 +1160,7 @@ struct FlatVecs {
     data: HashMap<u32, Vec<f32>>,
     eids: Vec<String>,
     dim: usize,
-    seg: Option<Arc<crate::segment::SegmentReader>>,
+    seg: Option<Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
     n_base: usize,
     tomb: roaring::RoaringBitmap,
     eid_to_row: HashMap<String, u32>,
@@ -1276,13 +1280,14 @@ impl FlatCpuIndex {
             .iter()
             .map(|(_, value)| Some(value.as_slice()))
             .collect();
-        crate::segment::write_vector_segment(
+        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
             path,
             sequence.unwrap_or(rows.len() as u64),
             flat.dim,
             &refs,
         )?;
-        let reader = Arc::new(crate::segment::SegmentReader::open(path)?);
+        let reader =
+            Arc::new(crate::persistence::infrastructure::segment::SegmentReader::open(path)?);
         let eids: Vec<String> = rows.into_iter().map(|(eid, _)| eid).collect();
         flat.data.clear();
         flat.eid_to_row = eids
@@ -1310,7 +1315,7 @@ impl FlatCpuIndex {
 
     pub fn open_from_segment(
         spec: VectorSpec,
-        seg: Arc<crate::segment::SegmentReader>,
+        seg: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         row_eids: Vec<String>,
     ) -> Result<Self> {
         let dim = spec.dim as usize;
@@ -1615,7 +1620,7 @@ impl VectorIndex for FlatCpuIndex {
 
     fn install_checkpoint_base(
         &self,
-        reader: Arc<crate::segment::SegmentReader>,
+        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         external_ids: &[String],
         acknowledged: &HashMap<String, bool>,
     ) -> Result<()> {
@@ -1683,7 +1688,9 @@ impl VectorIndex for FlatCpuIndex {
         Ok(())
     }
 
-    fn checkpoint_delta_readers(&self) -> Vec<Arc<crate::segment::SegmentReader>> {
+    fn checkpoint_delta_readers(
+        &self,
+    ) -> Vec<Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
         self.inner
             .lock()
             .expect("flat lock poisoned")
@@ -1698,7 +1705,9 @@ impl VectorIndex for FlatCpuIndex {
             .unwrap_or_default()
     }
 
-    fn checkpoint_base_reader(&self) -> Option<Arc<crate::segment::SegmentReader>> {
+    fn checkpoint_base_reader(
+        &self,
+    ) -> Option<Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
         self.inner
             .lock()
             .expect("flat lock poisoned")
@@ -1709,9 +1718,9 @@ impl VectorIndex for FlatCpuIndex {
 
     fn replace_checkpoint_base(
         &self,
-        base: &Arc<crate::segment::SegmentReader>,
-        inputs: &[Arc<crate::segment::SegmentReader>],
-        reader: Arc<crate::segment::SegmentReader>,
+        base: &Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        inputs: &[Arc<crate::persistence::infrastructure::segment::SegmentReader>],
+        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         external_ids: &[String],
     ) -> Result<()> {
         if reader.n_docs() as usize != external_ids.len() {
@@ -1773,8 +1782,8 @@ impl VectorIndex for FlatCpuIndex {
 
     fn replace_checkpoint_deltas(
         &self,
-        inputs: &[Arc<crate::segment::SegmentReader>],
-        reader: Arc<crate::segment::SegmentReader>,
+        inputs: &[Arc<crate::persistence::infrastructure::segment::SegmentReader>],
+        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         external_ids: &[String],
     ) -> Result<()> {
         if inputs.is_empty() || reader.n_docs() as usize != external_ids.len() {
@@ -1840,7 +1849,7 @@ impl VectorIndex for FlatCpuIndex {
 
     fn attach_checkpoint_delta(
         &self,
-        reader: Arc<crate::segment::SegmentReader>,
+        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
         external_ids: &[String],
         acknowledged: &[bool],
     ) -> Result<()> {
@@ -2458,7 +2467,9 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             let segment = dir.path().join("vectors.lseg");
             let row_eids = idx.seal_to_segment_prod(&segment).unwrap().unwrap();
-            let reader = std::sync::Arc::new(crate::segment::SegmentReader::open(&segment).unwrap());
+            let reader = std::sync::Arc::new(
+                crate::persistence::infrastructure::segment::SegmentReader::open(&segment).unwrap(),
+            );
             let reopened = HnswCpuIndex::open_from_segment(spec, reader, row_eids).unwrap();
             assert_eq!(reopened.search_knn(&vector, 1).unwrap()[0].0, "one");
         }
@@ -2555,8 +2566,10 @@ mod tests {
                 .seal_to_segment_prod(&seg_path)
                 .unwrap()
                 .expect("flat-cpu seal returns row eids");
-            let reader =
-                std::sync::Arc::new(crate::segment::SegmentReader::open(&seg_path).unwrap());
+            let reader = std::sync::Arc::new(
+                crate::persistence::infrastructure::segment::SegmentReader::open(&seg_path)
+                    .unwrap(),
+            );
             let reopened = FlatCpuIndex::open_from_segment(s, reader, row_eids).unwrap();
 
             // The store must NOT hold the base vectors (they live on the mmap) —
@@ -2674,7 +2687,7 @@ mod tests {
         };
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("base.lseg");
-        crate::segment::write_vector_segment(
+        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
             &path,
             1,
             2,
@@ -2690,7 +2703,10 @@ mod tests {
         index.add("new", &[4.0, 4.0]).unwrap();
         index
             .install_checkpoint_base(
-                Arc::new(crate::segment::SegmentReader::open(&path).unwrap()),
+                Arc::new(
+                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)
+                        .unwrap(),
+                ),
                 &["ack".into(), "updated".into(), "deleted".into()],
                 &HashMap::from([
                     ("ack".into(), true),
@@ -2745,8 +2761,16 @@ mod tests {
         };
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("mapped-base.lseg");
-        crate::segment::write_vector_segment(&path, 7, 2, &[None, Some(&[2., 2.]), None]).unwrap();
-        let reader = Arc::new(crate::segment::SegmentReader::open(&path).unwrap());
+        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+            &path,
+            7,
+            2,
+            &[None, Some(&[2., 2.]), None],
+        )
+        .unwrap();
+        let reader = Arc::new(
+            crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap(),
+        );
         let ids = vec!["a".to_owned(), "b".to_owned(), "c".to_owned()];
         let cold = FlatCpuIndex::open_from_segment(spec, reader.clone(), ids.clone()).unwrap();
         assert_eq!(
@@ -2786,8 +2810,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let write = |name: &str, rows: &[Option<&[f32]>]| {
             let path = dir.path().join(name);
-            crate::segment::write_vector_segment(&path, 1, 2, rows).unwrap();
-            Arc::new(crate::segment::SegmentReader::open(&path).unwrap())
+            crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+                &path, 1, 2, rows,
+            )
+            .unwrap();
+            Arc::new(
+                crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap(),
+            )
         };
         let base = write("base.lseg", &[Some(&[0., 0.]), Some(&[9., 9.])]);
         let first = write("first.lseg", &[Some(&[1., 1.]), Some(&[2., 2.])]);
@@ -2862,8 +2891,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let write = |name: &str, values: &[Option<&[f32]>]| {
             let path = dir.path().join(name);
-            crate::segment::write_vector_segment(&path, 1, 2, values).unwrap();
-            Arc::new(crate::segment::SegmentReader::open(&path).unwrap())
+            crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+                &path, 1, 2, values,
+            )
+            .unwrap();
+            Arc::new(
+                crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap(),
+            )
         };
         let index = FlatCpuIndex::open_from_segment(
             spec,
@@ -2937,11 +2971,18 @@ mod tests {
         };
         let dir = tempfile::tempdir().unwrap();
         let base = dir.path().join("base.lseg");
-        crate::segment::write_vector_segment(&base, 1, 2, &[Some(&[0.0, 0.0]), Some(&[4.0, 4.0])])
-            .unwrap();
+        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+            &base,
+            1,
+            2,
+            &[Some(&[0.0, 0.0]), Some(&[4.0, 4.0])],
+        )
+        .unwrap();
         let index = FlatCpuIndex::open_from_segment(
             spec,
-            Arc::new(crate::segment::SegmentReader::open(&base).unwrap()),
+            Arc::new(
+                crate::persistence::infrastructure::segment::SegmentReader::open(&base).unwrap(),
+            ),
             vec!["a".into(), "b".into()],
         )
         .unwrap();
@@ -2949,11 +2990,19 @@ mod tests {
         oracle.add("a", &[0.0, 0.0]).unwrap();
         oracle.add("b", &[4.0, 4.0]).unwrap();
         let first = dir.path().join("one.lseg");
-        crate::segment::write_vector_segment(&first, 2, 2, &[Some(&[1.0, 1.0]), Some(&[9.0, 9.0])])
-            .unwrap();
+        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+            &first,
+            2,
+            2,
+            &[Some(&[1.0, 1.0]), Some(&[9.0, 9.0])],
+        )
+        .unwrap();
         index
             .attach_checkpoint_delta(
-                Arc::new(crate::segment::SegmentReader::open(&first).unwrap()),
+                Arc::new(
+                    crate::persistence::infrastructure::segment::SegmentReader::open(&first)
+                        .unwrap(),
+                ),
                 &["a".into(), "c".into()],
                 &[true, true],
             )
@@ -2963,10 +3012,19 @@ mod tests {
         assert_eq!(index.resident_vector_payload_rows(), 0);
         assert_eq!(index.checkpoint_resident_bytes(), Some(0));
         let second = dir.path().join("two.lseg");
-        crate::segment::write_vector_segment(&second, 3, 2, &[Some(&[2.0, 2.0]), None]).unwrap();
+        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+            &second,
+            3,
+            2,
+            &[Some(&[2.0, 2.0]), None],
+        )
+        .unwrap();
         index
             .attach_checkpoint_delta(
-                Arc::new(crate::segment::SegmentReader::open(&second).unwrap()),
+                Arc::new(
+                    crate::persistence::infrastructure::segment::SegmentReader::open(&second)
+                        .unwrap(),
+                ),
                 &["a".into(), "b".into()],
                 &[true, true],
             )
@@ -3018,7 +3076,12 @@ impl HnswCpuIndex {
             row_vecs.push(v);
         }
         let vectors: Vec<Option<&[f32]>> = row_vecs.iter().map(|v| Some(v.as_slice())).collect();
-        crate::segment::write_vector_segment(path, sequence.unwrap_or(n as u64), dim, &vectors)?;
+        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+            path,
+            sequence.unwrap_or(n as u64),
+            dim,
+            &vectors,
+        )?;
         // Reopen what was just written, in every build. Once the caller commits
         // this checkpoint it drops the in-RAM store, so these bytes become the
         // only copy of the vectors; a segment that cannot be read back has to
@@ -3026,12 +3089,13 @@ impl HnswCpuIndex {
         // than at the next restart with nothing left to recover. The reopen is
         // one header read against a file the page cache still holds — it is not
         // the cost that would justify compiling it out.
-        let reader = crate::segment::SegmentReader::open(path).map_err(|e| {
-            anyhow!(
-                "vector segment written to {} could not be read back: {e}",
-                path.display()
-            )
-        })?;
+        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(path)
+            .map_err(|e| {
+                anyhow!(
+                    "vector segment written to {} could not be read back: {e}",
+                    path.display()
+                )
+            })?;
         if reader.n_docs() as usize != n {
             bail!(
                 "vector segment written to {} reopened with {} rows, expected {n}",

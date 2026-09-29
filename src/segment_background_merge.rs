@@ -27,7 +27,10 @@ struct WorkState {
     // A proved predecessor deferred only because a reader still owned it.
     // Later pruning may have shortened the visible chain in the meantime.
     retired: BTreeSet<String>,
-    readers: Vec<(String, Vec<Weak<crate::segment::SegmentReader>>)>,
+    readers: Vec<(
+        String,
+        Vec<Weak<crate::persistence::infrastructure::segment::SegmentReader>>,
+    )>,
 }
 
 impl WorkState {

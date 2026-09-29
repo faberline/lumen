@@ -6,11 +6,16 @@
 //! are borrowed through a small `BTreeMap<&str, Vec<u32>>`.
 
 use super::*;
-use crate::segment::stream::{
-    write_keyword_projection, write_number_projection, write_set_projection,
-    KeywordStreamProjection, NumberStreamProjection, ScalarProjectionScratch, SetStreamProjection,
+use crate::persistence::infrastructure::segment::stream::{
+    keyword::write_keyword_projection,
+    number::write_number_projection,
+    scalar_projection::{
+        KeywordStreamProjection, NumberStreamProjection, ScalarProjectionScratch,
+        SetStreamProjection,
+    },
+    set::write_set_projection,
 };
-use crate::segment::{ScalarPayloadKind, SegmentReader};
+use crate::persistence::infrastructure::segment::{ScalarPayloadKind, SegmentReader};
 use crate::shared_kernel::types::schema::FieldType;
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -491,7 +496,10 @@ impl NumberStreamProjection for RowsProjection<'_> {
 mod tests {
     use super::*;
     use crate::ingest::domain::change_journal::SharedValue;
-    use crate::segment::{write_keyword_segment, write_number_segment, write_set_segment};
+    use crate::persistence::infrastructure::segment::{
+        keyword_writer::write_keyword_segment, number_writer::write_number_segment,
+        set_writer::write_set_segment,
+    };
 
     fn owned(value: CheckpointValue) -> SharedValue<CheckpointValue> {
         SharedValue::new(Arc::new(value), None)

@@ -7,7 +7,11 @@
 
 use super::*;
 use crate::composed_segment::compose_checkpoint_layers;
-use crate::segment::{self, stream, SegmentReader};
+use crate::persistence::infrastructure::segment::eid_writer::write_eid_segment;
+use crate::persistence::infrastructure::segment::sparse_rows::{
+    decode_sparse_local_rows, encode_sparse_local_rows,
+};
+use crate::persistence::infrastructure::segment::{stream, SegmentReader};
 use crate::shared_kernel::types::schema::FieldType;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -113,19 +117,27 @@ pub(super) fn write_compacted_field(
     };
     let segment_path = confined(root, &segment_rel)?;
     match spec.field_type {
-        FieldType::Text => stream::write_text_stream(&segment_path, sequence, &view)?,
-        FieldType::Keyword => stream::write_keyword_stream(&segment_path, sequence, &view)?,
-        FieldType::Set => stream::write_set_stream(&segment_path, sequence, &view)?,
-        FieldType::Number => stream::write_number_stream(&segment_path, sequence, &view)?,
-        FieldType::Hash => stream::write_hash_stream(&segment_path, sequence, &view)?,
+        FieldType::Text => {
+            stream::text_projection::write_text_stream(&segment_path, sequence, &view)?
+        }
+        FieldType::Keyword => {
+            stream::keyword::write_keyword_stream(&segment_path, sequence, &view)?
+        }
+        FieldType::Set => stream::set::write_set_stream(&segment_path, sequence, &view)?,
+        FieldType::Number => stream::number::write_number_stream(&segment_path, sequence, &view)?,
+        FieldType::Hash => stream::hash::write_hash_stream(&segment_path, sequence, &view)?,
         FieldType::Vector => {
             let dim = spec
                 .dim
                 .ok_or_else(|| anyhow!("vector compaction dimension missing"))?
                 as usize;
-            stream::write_vector_stream(&segment_path, sequence, view.n_docs(), dim, |row| {
-                Ok(view.vector_at(row, dim).map(ToOwned::to_owned))
-            })?;
+            stream::vector::write_vector_stream(
+                &segment_path,
+                sequence,
+                view.n_docs(),
+                dim,
+                |row| Ok(view.vector_at(row, dim).map(ToOwned::to_owned)),
+            )?;
         }
         _ => unreachable!("checked above"),
     }
@@ -255,7 +267,7 @@ fn input_external_ids(
     if let Some(local) = &input.local_rows {
         let path = confined(root, &local.path)?;
         *bytes = checked_bytes(*bytes, file_len(&path)?)?;
-        let rows = segment::decode_sparse_local_rows(&path, local.count)?;
+        let rows = decode_sparse_local_rows(&path, local.count)?;
         return (0..local.count)
             .map(|row| {
                 rows.external_id(row)
@@ -364,8 +376,7 @@ fn unique_aux_temp(path: &Path) -> Result<PathBuf> {
 
 fn write_sparse_rows_atomic(path: &Path, ids: &[String]) -> Result<()> {
     let temp = unique_aux_temp(path)?;
-    let result =
-        segment::encode_sparse_local_rows(&temp, ids).and_then(|_| sync_and_rename(&temp, path));
+    let result = encode_sparse_local_rows(&temp, ids).and_then(|_| sync_and_rename(&temp, path));
     if result.is_err() {
         let _ = std::fs::remove_file(&temp);
     }
@@ -375,8 +386,8 @@ fn write_sparse_rows_atomic(path: &Path, ids: &[String]) -> Result<()> {
 fn write_eids_atomic(path: &Path, sequence: u64, ids: &[String]) -> Result<()> {
     let temp = unique_aux_temp(path)?;
     let refs: Vec<_> = ids.iter().map(String::as_str).collect();
-    let result = segment::write_eid_segment(&temp, sequence, &refs)
-        .and_then(|_| sync_and_rename(&temp, path));
+    let result =
+        write_eid_segment(&temp, sequence, &refs).and_then(|_| sync_and_rename(&temp, path));
     if result.is_err() {
         let _ = std::fs::remove_file(&temp);
     }
@@ -397,6 +408,11 @@ fn sync_and_rename(temp: &Path, path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::persistence::infrastructure::segment::{
+        hash_writer::write_hash_segment, keyword_writer::write_keyword_segment,
+        number_writer::write_number_segment, set_writer::write_set_segment,
+        text_writer::write_text_segment, vector_writer::write_vector_segment,
+    };
     use crate::storage::Postings;
 
     fn reference(
@@ -441,36 +457,34 @@ mod tests {
             serde_json::to_vec(&serde_json::json!({"version":1,"fields":fields})).unwrap(),
         )
         .unwrap();
-        segment::write_eid_segment(&dir.join("_collection.lmeta.lseg"), 1, &["b"]).unwrap();
-        segment::write_eid_segment(&dir.join("v.eids.lseg"), 1, &["b"]).unwrap();
+        write_eid_segment(&dir.join("_collection.lmeta.lseg"), 1, &["b"]).unwrap();
+        write_eid_segment(&dir.join("v.eids.lseg"), 1, &["b"]).unwrap();
         let mut postings = BTreeMap::new();
         postings.insert("old".to_owned(), roaring::RoaringBitmap::from_iter([0]));
-        segment::write_keyword_segment(&dir.join("k.lseg"), 1, &[Some("old")], &postings).unwrap();
-        segment::write_keyword_segment(
+        write_keyword_segment(&dir.join("k.lseg"), 1, &[Some("old")], &postings).unwrap();
+        write_keyword_segment(
             &dir.join("__delta/k/1.lseg"),
             1,
             &[Some("new")],
             &BTreeMap::from([("new".to_owned(), roaring::RoaringBitmap::from_iter([0]))]),
         )
         .unwrap();
-        segment::write_number_segment(&dir.join("n.lseg"), 1, &[Some(1.0)]).unwrap();
-        segment::write_number_segment(&dir.join("__delta/n/1.lseg"), 1, &[Some(2.0)]).unwrap();
-        segment::write_vector_segment(&dir.join("v.lseg"), 1, 2, &[Some(&[1.0, 1.0])]).unwrap();
-        segment::write_vector_segment(&dir.join("__delta/v/1.lseg"), 1, 2, &[Some(&[2.0, 2.0])])
-            .unwrap();
+        write_number_segment(&dir.join("n.lseg"), 1, &[Some(1.0)]).unwrap();
+        write_number_segment(&dir.join("__delta/n/1.lseg"), 1, &[Some(2.0)]).unwrap();
+        write_vector_segment(&dir.join("v.lseg"), 1, 2, &[Some(&[1.0, 1.0])]).unwrap();
+        write_vector_segment(&dir.join("__delta/v/1.lseg"), 1, 2, &[Some(&[2.0, 2.0])]).unwrap();
         let mut base_tokens = BTreeMap::new();
         base_tokens
             .entry("old".to_owned())
             .or_insert_with(Postings::default)
             .upsert(0, 1);
-        segment::write_text_segment(&dir.join("t.lseg"), 1, &base_tokens, &[1], &[true], 1, 1)
-            .unwrap();
+        write_text_segment(&dir.join("t.lseg"), 1, &base_tokens, &[1], &[true], 1, 1).unwrap();
         let mut delta_tokens = BTreeMap::new();
         delta_tokens
             .entry("new".to_owned())
             .or_insert_with(Postings::default)
             .upsert(0, 1);
-        segment::write_text_segment(
+        write_text_segment(
             &dir.join("__delta/t/1.lseg"),
             1,
             &delta_tokens,
@@ -481,7 +495,7 @@ mod tests {
         )
         .unwrap();
         for field in ["k", "n", "v", "t"] {
-            segment::encode_sparse_local_rows(
+            encode_sparse_local_rows(
                 &dir.join(format!("__delta/{field}/1.rows.cbor")),
                 &["a".to_owned()],
             )
@@ -599,8 +613,7 @@ mod tests {
                 serde_json::to_vec(&serde_json::json!({"version":1,"fields":schema})).unwrap(),
             )
             .unwrap();
-            segment::write_eid_segment(&dir.join("_collection.lmeta.lseg"), 1, &["m", "z"])
-                .unwrap();
+            write_eid_segment(&dir.join("_collection.lmeta.lseg"), 1, &["m", "z"]).unwrap();
             let mut collection = CollectionCatalog {
                 collection_id: "u".into(),
                 collection_generation: 1,
@@ -649,8 +662,8 @@ mod tests {
                     let target = root.path().join(&path);
                     std::fs::create_dir_all(target.parent().unwrap()).unwrap();
                     match field {
-                        "n" => segment::write_number_segment(&target, 1, &numbers).unwrap(),
-                        "h" => segment::write_hash_segment(&target, 1, &hashes).unwrap(),
+                        "n" => write_number_segment(&target, 1, &numbers).unwrap(),
+                        "h" => write_hash_segment(&target, 1, &hashes).unwrap(),
                         "s" => {
                             let values: Vec<Option<Vec<String>>> = members
                                 .iter()
@@ -675,7 +688,7 @@ mod tests {
                             }
                             let borrowed: Vec<_> =
                                 values.iter().map(|value| value.as_deref()).collect();
-                            segment::write_set_segment(&target, 1, &borrowed, &postings).unwrap();
+                            write_set_segment(&target, 1, &borrowed, &postings).unwrap();
                         }
                         "t" => {
                             let mut postings = BTreeMap::<String, Postings>::new();
@@ -692,7 +705,7 @@ mod tests {
                                     }
                                 }
                             }
-                            segment::write_text_segment(
+                            write_text_segment(
                                 &target,
                                 1,
                                 &postings,
@@ -707,7 +720,7 @@ mod tests {
                     }
                     let rows_path = format!("75/__delta/{field}/{ordinal}.rows.cbor");
                     if ordinal != 0 {
-                        segment::encode_sparse_local_rows(
+                        encode_sparse_local_rows(
                             &root.path().join(&rows_path),
                             &ids.map(str::to_owned),
                         )
@@ -743,8 +756,7 @@ mod tests {
                 .unwrap();
                 let local = output.output.local_rows.as_ref().unwrap();
                 let rows =
-                    segment::decode_sparse_local_rows(&root.path().join(&local.path), local.count)
-                        .unwrap();
+                    decode_sparse_local_rows(&root.path().join(&local.path), local.count).unwrap();
                 assert_eq!(
                     (0..rows.len())
                         .map(|row| rows.external_id(row).unwrap())

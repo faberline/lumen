@@ -31,6 +31,7 @@ use storage_durable::{
     GenerationStore, NoFailures, StagedGeneration,
 };
 
+use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::shared_kernel::capture_barrier::CaptureStamp;
 use crate::storage::{Engine, FrozenCheckpoint, RecoveryPhase, RecoveryProfile};
 
@@ -2496,7 +2497,7 @@ impl SegmentRdbStore {
                             continue;
                         }
                         if let Some(local) = &segment.local_rows {
-                            let rows = crate::segment::decode_sparse_local_rows(
+                            let rows = crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows(
                                 &record.path.join(&local.path),
                                 local.count,
                             )?;
@@ -2605,12 +2606,12 @@ impl SegmentRdbStore {
                                     .local_rows
                                     .as_ref()
                                     .ok_or_else(|| anyhow!("delta has no row map"))?;
-                                let ids = crate::segment::decode_sparse_local_rows(
+                                let ids = crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows(
                                     &record.path.join(&local.path),
                                     local.count,
                                 )?;
                                 let reader =
-                                    std::sync::Arc::new(crate::segment::SegmentReader::open(
+                                    std::sync::Arc::new(SegmentReader::open(
                                         &record.path.join(&segment.path),
                                     )?);
                                 let field = segment
@@ -3177,7 +3178,7 @@ fn validate_catalog_references_with_prior(
                 if metadata.file_type().is_symlink() || !metadata.is_file() {
                     bail!("mapped base rows must be a regular file");
                 }
-                let reader = crate::segment::SegmentReader::open(&target)?;
+                let reader = SegmentReader::open(&target)?;
                 if reader.n_docs() != local.count
                     || reader.applied_seq()
                         != segment
@@ -3188,7 +3189,7 @@ fn validate_catalog_references_with_prior(
                     bail!("mapped base row count or sequence differs from catalog");
                 }
                 if !is_inherited_delta(root, collection, segment, prior)? {
-                    let rows = crate::segment::decode_sparse_local_rows(&rows_path, local.count)?;
+                    let rows = crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows(&rows_path, local.count)?;
                     if delta_payload_sha256(&target, &rows_path)? != expected_checksum {
                         bail!("mapped base checksum differs from catalog");
                     }
@@ -3197,11 +3198,9 @@ fn validate_catalog_references_with_prior(
                         == crate::shared_kernel::types::schema::FieldType::Vector
                     {
                         let stem = layout.field_stem(field);
-                        let ids = crate::segment::SegmentReader::open(
-                            &disk_dir.join(format!("{stem}.eids.lseg")),
-                        )?
-                        .eids_all()
-                        .ok_or_else(|| anyhow!("mapped vector EID sidecar is torn"))?;
+                        let ids = SegmentReader::open(&disk_dir.join(format!("{stem}.eids.lseg")))?
+                            .eids_all()
+                            .ok_or_else(|| anyhow!("mapped vector EID sidecar is torn"))?;
                         if ids.len() != local.count as usize
                             || ids.iter().enumerate().any(|(row, eid)| {
                                 rows.external_id(row as u32) != Some(eid.as_str())
@@ -3347,7 +3346,10 @@ fn prepare_live_delta_readers(
                 .as_ref()
                 .ok_or_else(|| anyhow!("delta has no row map"))?;
             let rows =
-                crate::segment::decode_sparse_local_rows(&root.join(&local.path), local.count)?;
+                crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows(
+                    &root.join(&local.path),
+                    local.count,
+                )?;
             let external_ids = (0..local.count)
                 .map(|row| {
                     rows.external_id(row)
@@ -3355,9 +3357,7 @@ fn prepare_live_delta_readers(
                         .ok_or_else(|| anyhow!("delta row map is incomplete"))
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let reader = std::sync::Arc::new(crate::segment::SegmentReader::open(
-                &root.join(&segment.path),
-            )?);
+            let reader = std::sync::Arc::new(SegmentReader::open(&root.join(&segment.path))?);
             capture
                 .live_delta_inputs
                 .entry(collection.collection_id.clone())
@@ -3380,7 +3380,7 @@ fn prepare_live_delta_readers(
 }
 
 fn read_delta_values(
-    reader: &crate::segment::SegmentReader,
+    reader: &SegmentReader,
     spec: &crate::shared_kernel::types::schema::FieldSpec,
 ) -> Result<Vec<Option<crate::storage::CheckpointValue>>> {
     use crate::shared_kernel::types::schema::FieldType;
@@ -3536,7 +3536,7 @@ fn write_field_deltas(
                                 .insert(u32::try_from(row)?);
                         }
                     }
-                    crate::segment::write_keyword_segment(
+                    crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
                         &root.join(&segment_path),
                         sequence,
                         &values,
@@ -3552,7 +3552,7 @@ fn write_field_deltas(
                             _ => bail!("number delta value mismatch"),
                         })
                         .collect::<Result<_>>()?;
-                    crate::segment::write_number_segment(
+                    crate::persistence::infrastructure::segment::number_writer::write_number_segment(
                         &root.join(&segment_path),
                         sequence,
                         &values,
@@ -3567,7 +3567,7 @@ fn write_field_deltas(
                             _ => bail!("hash delta value mismatch"),
                         })
                         .collect::<Result<_>>()?;
-                    crate::segment::write_hash_segment(
+                    crate::persistence::infrastructure::segment::hash_writer::write_hash_segment(
                         &root.join(&segment_path),
                         sequence,
                         &values,
@@ -3593,7 +3593,7 @@ fn write_field_deltas(
                             }
                         }
                     }
-                    crate::segment::write_set_segment(
+                    crate::persistence::infrastructure::segment::set_writer::write_set_segment(
                         &root.join(&segment_path),
                         sequence,
                         &values,
@@ -3623,7 +3623,7 @@ fn write_field_deltas(
                         .dim
                         .ok_or_else(|| anyhow!("vector delta dimension missing"))?
                         as usize;
-                    crate::segment::write_vector_segment(
+                    crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
                         &root.join(&segment_path),
                         sequence,
                         dim,
@@ -3633,7 +3633,10 @@ fn write_field_deltas(
                 _ => bail!("unsupported delta field"),
             }
         }
-        crate::segment::encode_sparse_local_rows(&root.join(&rows_path), &ids)?;
+        crate::persistence::infrastructure::segment::sparse_rows::encode_sparse_local_rows(
+            &root.join(&rows_path),
+            &ids,
+        )?;
         let payload_sha256 =
             delta_payload_sha256(&root.join(&segment_path), &root.join(&rows_path))?;
         collection.segments.push(SegmentReference {
@@ -3925,7 +3928,7 @@ fn compact_staged_delta_windows(
     sequence: u64,
     collections: &mut [CollectionCatalog],
     capture: &mut crate::storage::CheckpointCapture,
-    scratch_delta_readers: &mut BTreeMap<String, Vec<Arc<crate::segment::SegmentReader>>>,
+    scratch_delta_readers: &mut BTreeMap<String, Vec<Arc<SegmentReader>>>,
     observer: &dyn MergeObserver,
     candidates: Vec<StagedMergeCandidate>,
 ) -> Result<Vec<compaction::CompactedField>> {
@@ -3995,7 +3998,7 @@ fn finish_compacted_field(
     base: SegmentReference,
     includes_base: bool,
     capture: &mut crate::storage::CheckpointCapture,
-    scratch_delta_readers: &mut BTreeMap<String, Vec<Arc<crate::segment::SegmentReader>>>,
+    scratch_delta_readers: &mut BTreeMap<String, Vec<Arc<SegmentReader>>>,
     output: compaction::CompactedField,
 ) -> Result<compaction::CompactedField> {
     let selected = if includes_base {
@@ -4066,7 +4069,11 @@ fn finish_compacted_field(
             .local_rows
             .as_ref()
             .ok_or_else(|| anyhow!("compacted delta has no row map"))?;
-        let rows = crate::segment::decode_sparse_local_rows(&root.join(&local.path), local.count)?;
+        let rows =
+            crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows(
+                &root.join(&local.path),
+                local.count,
+            )?;
         let external_ids = (0..local.count)
             .map(|row| {
                 rows.external_id(row)
@@ -4074,9 +4081,7 @@ fn finish_compacted_field(
                     .ok_or_else(|| anyhow!("compacted row map is incomplete"))
             })
             .collect::<Result<_>>()?;
-        let reader = std::sync::Arc::new(crate::segment::SegmentReader::open(
-            &root.join(&output.output.path),
-        )?);
+        let reader = std::sync::Arc::new(SegmentReader::open(&root.join(&output.output.path))?);
         let staged_inputs = scratch_delta_readers
             .get_mut(&field)
             .expect("staged live input identity validated");
@@ -4255,7 +4260,7 @@ fn validate_field_delta(
             bail!("delta reference must be a regular file");
         }
     }
-    let reader = crate::segment::SegmentReader::open(&root.join(&segment.path))?;
+    let reader = SegmentReader::open(&root.join(&segment.path))?;
     if reader.n_docs() != local.count
         || reader.applied_seq()
             != segment
@@ -4270,7 +4275,10 @@ fn validate_field_delta(
         .as_deref()
         .ok_or_else(|| anyhow!("v2 delta is missing payload_sha256"))?;
     if !is_inherited_delta(root, collection, segment, prior)? {
-        crate::segment::decode_sparse_local_rows(&root.join(&local.path), local.count)?;
+        crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows(
+            &root.join(&local.path),
+            local.count,
+        )?;
         if delta_payload_sha256(&root.join(&segment.path), &root.join(&local.path))? != expected {
             bail!("delta payload checksum does not match catalog");
         }
@@ -4900,7 +4908,7 @@ fn validate_generation_entry(
             }
         }
         for (file, vector) in bases {
-            let segment = crate::segment::SegmentReader::open(&file)
+            let segment = SegmentReader::open(&file)
                 .with_context(|| format!("catalogued segment is missing: {}", file.display()))?;
             // Only shipped raw-layout vectors used row count as watermark.
             let legacy_vector_header = layout == crate::storage::CheckpointLayout::Legacy
@@ -5543,8 +5551,7 @@ mod tests {
             .cloned()
             .expect("second save must retain a delta for the cap fixture");
         let template_rows = template.local_rows.clone().unwrap();
-        let template_reader =
-            crate::segment::SegmentReader::open(&generation_path.join(&template.path)).unwrap();
+        let template_reader = SegmentReader::open(&generation_path.join(&template.path)).unwrap();
         assert_eq!(template_reader.n_docs(), template_rows.count);
         assert_eq!(template_reader.applied_seq(), template.applied_seq.unwrap());
         let template_applied_seq = template.applied_seq.unwrap();
@@ -5921,7 +5928,7 @@ mod tests {
         assert_eq!(bytes[4104] & 1, 1);
         bytes[4104] ^= 1;
         std::fs::write(&path, bytes).unwrap();
-        let reader = crate::segment::SegmentReader::open(&path).unwrap();
+        let reader = SegmentReader::open(&path).unwrap();
         assert_eq!(reader.n_docs(), 1);
         assert_eq!(reader.keyword_at(0), None);
         assert!(
@@ -6033,7 +6040,7 @@ mod tests {
         assert_eq!(payload[4104] & 1, 1);
         payload[4104] ^= 1;
         std::fs::write(&payload_path, payload).unwrap();
-        let reader = crate::segment::SegmentReader::open(&payload_path)
+        let reader = SegmentReader::open(&payload_path)
             .expect("structural checks accept a changed present bit");
         assert_eq!(reader.n_docs(), 1);
         assert_eq!(reader.applied_seq(), 63);
@@ -7897,8 +7904,7 @@ mod tests {
             let engine = Engine::new();
             engine.create_collection("u", serde_json::from_value(serde_json::json!({"fields":{"v":{"type":"vector","dim":3,"metric":"cosine","backend":backend}}})).unwrap()).unwrap();
             engine.flush_to_segments(dir.path(), 17).unwrap();
-            let reader =
-                crate::segment::SegmentReader::open(&dir.path().join("75/v.lseg")).unwrap();
+            let reader = SegmentReader::open(&dir.path().join("75/v.lseg")).unwrap();
             assert_eq!(
                 reader.applied_seq(),
                 17,
@@ -8648,7 +8654,7 @@ mod tests {
             .collect();
         assert_eq!(deltas.len(), 1, "text update must write a delta");
         assert_eq!(deltas[0].local_rows.as_ref().unwrap().count, 1);
-        let reader = crate::segment::SegmentReader::open(&root.join(&deltas[0].path)).unwrap();
+        let reader = SegmentReader::open(&root.join(&deltas[0].path)).unwrap();
         assert_eq!(reader.text_doc_count(), 1);
         assert_eq!(reader.text_total_doc_len(), 3);
         assert_eq!(reader.text_doc_len(0), 3);

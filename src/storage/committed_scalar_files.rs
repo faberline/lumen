@@ -7,8 +7,8 @@
 use crate::ingest::infrastructure::wal::fast_index_scanner::{
     FastIndexItem, FastIndexScanner, FastIndexValue,
 };
-use crate::segment::{
-    stream::{self, ScalarProjectionScratch},
+use crate::persistence::infrastructure::segment::{
+    stream::{self, scalar_projection::ScalarProjectionScratch},
     SegmentReader,
 };
 use crate::shared_kernel::types::schema::FieldType;
@@ -168,7 +168,7 @@ pub(super) fn prepare_validated_fields(
     } else {
         max_entry
     };
-    let workspace = stream::scalar_projection_peak_bound(
+    let workspace = stream::scalar_projection::scalar_projection_peak_bound(
         codec_entry,
         if raw_dictionary { 0 } else { term_bytes },
         term_count,
@@ -200,9 +200,13 @@ pub(super) fn prepare_validated_fields(
         scratch
     };
     match expected {
-        FieldType::Keyword => stream::write_keyword_projection(&path, sequence, &view, scratch)?,
-        FieldType::Number => stream::write_number_projection(&path, sequence, &view, scratch)?,
-        FieldType::Set => stream::write_set_projection(&path, sequence, &view, scratch)?,
+        FieldType::Keyword => {
+            stream::keyword::write_keyword_projection(&path, sequence, &view, scratch)?
+        }
+        FieldType::Number => {
+            stream::number::write_number_projection(&path, sequence, &view, scratch)?
+        }
+        FieldType::Set => stream::set::write_set_projection(&path, sequence, &view, scratch)?,
         _ => unreachable!("validated scalar field type"),
     }
     let reader_bytes = SegmentReader::staged_metadata_bound(&path)?;
@@ -279,7 +283,7 @@ impl<'source> Selected<'_, 'source> {
         }
     }
 }
-impl stream::KeywordStreamProjection for Selected<'_, '_> {
+impl stream::scalar_projection::KeywordStreamProjection for Selected<'_, '_> {
     fn n_docs(&self) -> u32 {
         self.winning.len() as u32
     }
@@ -307,7 +311,7 @@ impl stream::KeywordStreamProjection for Selected<'_, '_> {
         Ok(found)
     }
 }
-impl stream::SetStreamProjection for Selected<'_, '_> {
+impl stream::scalar_projection::SetStreamProjection for Selected<'_, '_> {
     fn n_docs(&self) -> u32 {
         self.winning.len() as u32
     }
@@ -347,7 +351,7 @@ impl stream::SetStreamProjection for Selected<'_, '_> {
         Ok(found)
     }
 }
-impl stream::NumberStreamProjection for Selected<'_, '_> {
+impl stream::scalar_projection::NumberStreamProjection for Selected<'_, '_> {
     fn n_docs(&self) -> u32 {
         self.winning.len() as u32
     }

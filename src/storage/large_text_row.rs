@@ -17,9 +17,13 @@ use anyhow::{anyhow, bail, Context, Result};
 use memmap2::{Mmap, MmapOptions};
 
 use super::unicode_lower_stream::{lowercase_stream_workspace_bytes, write_streaming_lowercase};
-use crate::segment::stream::{write_text_projection, TextStreamView};
-use crate::segment::text_row_stage::{stage_text_row, TextRowStageOptions};
-use crate::segment::SegmentReader;
+use crate::persistence::infrastructure::segment::stream::text_projection::{
+    write_text_projection, TextStreamView,
+};
+use crate::persistence::infrastructure::segment::text_row_stage::{
+    stage_text_row, TextRowStageOptions,
+};
+use crate::persistence::infrastructure::segment::SegmentReader;
 
 pub(crate) const LARGE_TOKEN_SOURCE_BYTES: usize = 64 * 1024;
 const MAPPED_TOKEN_BYTES: usize = 256;

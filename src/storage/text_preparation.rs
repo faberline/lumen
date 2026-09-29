@@ -707,11 +707,11 @@ impl Engine {
             match result {
                 Err(error)
                     if error
-                        .downcast_ref::<crate::segment::text_row_stage::RequiredTextRowWorkspace>()
+                        .downcast_ref::<crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace>()
                         .is_some() =>
                 {
                     let required = error
-                        .downcast_ref::<crate::segment::text_row_stage::RequiredTextRowWorkspace>()
+                        .downcast_ref::<crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace>()
                         .expect("matched required Text workspace")
                         .required_bytes;
                     let delta = required.saturating_sub(scratch);
