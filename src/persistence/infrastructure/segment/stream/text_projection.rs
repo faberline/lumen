@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, bail, Context, Result};
 
-use crate::composed_segment::ComposedSegmentReader;
+use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::persistence::infrastructure::segment::codecs::encode_posting_block;
 use crate::persistence::infrastructure::segment::format::{header_block, present_column_ref};
 use crate::persistence::infrastructure::segment::stream::projection_columns::write_raw_dictionary;
@@ -28,7 +28,7 @@ pub(crate) trait TextStreamView {
 }
 
 struct ComposedTerms<'a> {
-    cursor: crate::composed_segment::StringTermCursor<'a>,
+    cursor: crate::persistence::infrastructure::composed_segment::term_cursor::StringTermCursor<'a>,
 }
 
 impl<'a> Iterator for ComposedTerms<'a> {

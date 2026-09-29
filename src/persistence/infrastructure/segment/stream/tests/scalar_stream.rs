@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::composed_segment::ComposedSegmentReader;
+use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::persistence::infrastructure::segment::format::sortable_bits;
 use crate::persistence::infrastructure::segment::hash_writer::write_hash_segment;
 use crate::persistence::infrastructure::segment::number_writer::write_number_segment;

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{bail, Result};
 
-use crate::composed_segment::ComposedSegmentReader;
+use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::persistence::infrastructure::segment::format::{
     header_block, present_column_ref, sortable_bits,
 };

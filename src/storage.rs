@@ -61,8 +61,11 @@ use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use crate::composed_segment::TextPostingAt;
 use crate::metrics::{CommittedApplyTelemetry, Metrics};
+use crate::persistence::infrastructure::composed_segment::{
+    ComposedSegmentReader, PreparedScalarPublication, PreparedScalarReplacement,
+    ScalarCheckpointCut, TextPostingAt,
+};
 use crate::persistence::infrastructure::segment::codecs::SortedIdCursor;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 use crate::shared_kernel::types::{
@@ -1102,7 +1105,7 @@ struct TextIndex {
     /// retains explicit live overlays and is otherwise dropped with the sealed
     /// base. DEFAULTS to `None`; while it is `None` (nothing sealed) every read
     /// path is byte-for-byte the in-RAM path. Purely additive.
-    segment: Option<std::sync::Arc<crate::composed_segment::ComposedSegmentReader>>,
+    segment: Option<std::sync::Arc<ComposedSegmentReader>>,
     /// Hot BM25 rankings for unique-doc match shapes (single token, multi-token
     /// AND), cleared on any text mutation/seal so cached scores never cross
     /// corpus states. Each entry is lazily sorted only as far as the largest
@@ -1141,7 +1144,7 @@ struct TextIndex {
 /// the deletes taken since the last seal, never by the corpus.
 #[derive(Debug)]
 struct LiveTermCache {
-    reader: std::sync::Weak<crate::composed_segment::ComposedSegmentReader>,
+    reader: std::sync::Weak<ComposedSegmentReader>,
     tombstones: RoaringBitmap,
     value: u64,
 }
@@ -1698,7 +1701,7 @@ impl TextIndex {
     ///   `|live composed terms| + |(staged tokens U tail tokens) \ live composed terms|`
     ///
     /// and NEITHER half walks the composed dictionary. The first half is
-    /// [`crate::composed_segment::ComposedSegmentReader::known_distinct_terms`],
+    /// [`crate::persistence::infrastructure::composed_segment::ComposedSegmentReader::known_distinct_terms`],
     /// an O(1) number maintained at publication (see its own doc block) and
     /// exact whenever there are no pending deletes; the second folds one
     /// dictionary binary search per staged/tail token, and both of those sets
@@ -1788,10 +1791,7 @@ impl TextIndex {
     /// The fallback: ONE streaming dictionary walk, memoized against the exact
     /// reader and tombstone set it was measured on. A poisoned cache lock is
     /// recovered rather than propagated — this is a read-only stats accessor.
-    fn walked_composed_live_term_count(
-        &self,
-        seg: &std::sync::Arc<crate::composed_segment::ComposedSegmentReader>,
-    ) -> u64 {
+    fn walked_composed_live_term_count(&self, seg: &std::sync::Arc<ComposedSegmentReader>) -> u64 {
         let mut cache = self
             .live_term_cache
             .lock()
@@ -1845,7 +1845,7 @@ struct KeywordIndex {
     /// state so OR/AND posting walks are untouched. DEFAULTS to `None`; while it
     /// is `None` (nothing sealed) every read path is byte-for-byte the
     /// in-RAM path. Purely additive.
-    segment: Option<std::sync::Arc<crate::composed_segment::ComposedSegmentReader>>,
+    segment: Option<std::sync::Arc<ComposedSegmentReader>>,
     /// QUERY-TIME TOMBSTONE (Phase 2h-1 FIX): base docids `[0..seg.n_docs)`
     /// deleted SINCE the last seal. The inverted `terms` index was DROPPED to
     /// disk at seal, so `drop_eid` can no longer remove a sealed base id from
@@ -2280,7 +2280,7 @@ struct NumberIndex {
     /// boolean queries drive from the mmap (`value_postings` / `range_postings`)
     /// and the in-RAM `values` BTreeMap is DROPPED at seal (RAM after reopen is
     /// O(live tail), not O(distinct numeric values)).
-    segment: Option<std::sync::Arc<crate::composed_segment::ComposedSegmentReader>>,
+    segment: Option<std::sync::Arc<ComposedSegmentReader>>,
     /// QUERY-TIME TOMBSTONE (Phase 2h-3): base docids `[0..seg.n_docs)` deleted
     /// SINCE the last seal. The inverted/range `values` index was DROPPED to disk
     /// at seal, so `drop_eid` can no longer remove a sealed base id from the
@@ -2525,9 +2525,7 @@ impl NumberIndex {
     /// (`try_plan`) uses to drive `sorted_walk_segment` (Phase 2m). `None` when no
     /// segment is attached (the in-RAM `values` BTreeMap is the sort driver).
     #[inline]
-    fn segment_ref(
-        &self,
-    ) -> Option<&std::sync::Arc<crate::composed_segment::ComposedSegmentReader>> {
+    fn segment_ref(&self) -> Option<&std::sync::Arc<ComposedSegmentReader>> {
         self.segment.as_ref()
     }
 
@@ -2769,7 +2767,7 @@ impl NumberIndex {
     /// both cursors on a key tie), matching the in-RAM single-entry-per-value map.
     fn sorted_walk_segment<F>(
         &self,
-        seg: &crate::composed_segment::ComposedSegmentReader,
+        seg: &ComposedSegmentReader,
         descending: bool,
         after: Option<u64>,
         mut visit: F,
@@ -2856,7 +2854,7 @@ impl NumberIndex {
     /// live count for a base posting.
     fn range_page_segment(
         &self,
-        seg: &crate::composed_segment::ComposedSegmentReader,
+        seg: &ComposedSegmentReader,
         low: std::ops::Bound<SortableF64>,
         high: std::ops::Bound<SortableF64>,
         want: usize,
@@ -2931,7 +2929,7 @@ struct SetIndex {
     /// O(live tail), not O(distinct set elements). DEFAULTS to `None`; while it
     /// is `None` (nothing sealed) every read path is byte-for-byte the
     /// in-RAM path. Purely additive.
-    segment: Option<std::sync::Arc<crate::composed_segment::ComposedSegmentReader>>,
+    segment: Option<std::sync::Arc<ComposedSegmentReader>>,
     /// QUERY-TIME TOMBSTONE (Phase 2h-2): base docids `[0..seg.n_docs)` deleted
     /// SINCE the last seal. The inverted `elements` index was DROPPED to disk at
     /// seal, so `drop_eid` can no longer remove a sealed base id from the
@@ -3188,7 +3186,7 @@ struct HashIndex {
     /// `forward` tail for ids `>= n_docs`. DEFAULTS to `None`; while it is
     /// `None` (nothing sealed) the read
     /// path is byte-for-byte the in-RAM path. Purely additive.
-    segment: Option<std::sync::Arc<crate::composed_segment::ComposedSegmentReader>>,
+    segment: Option<std::sync::Arc<ComposedSegmentReader>>,
 }
 
 impl HashIndex {
@@ -4633,7 +4631,7 @@ pub(crate) struct PreparedCheckpointCompaction {
     pub inputs: Vec<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
     pub reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
     pub external_ids: Vec<String>,
-    pub scalar: Option<crate::composed_segment::PreparedScalarReplacement>,
+    pub scalar: Option<PreparedScalarReplacement>,
 }
 
 pub(crate) type CheckpointDeltas = BTreeMap<
@@ -4650,10 +4648,8 @@ pub(crate) struct CheckpointCapture {
     pub prepared_compactions: BTreeMap<String, Vec<PreparedCheckpointCompaction>>,
     /// Immutable scalar views pinned at the capture barrier. Preparation turns
     /// these into catalog-only replacements before publication can advance.
-    pub scalar_cuts:
-        BTreeMap<String, BTreeMap<String, crate::composed_segment::ScalarCheckpointCut>>,
-    pub scalar_publications:
-        BTreeMap<String, BTreeMap<String, crate::composed_segment::PreparedScalarPublication>>,
+    pub scalar_cuts: BTreeMap<String, BTreeMap<String, ScalarCheckpointCut>>,
+    pub scalar_publications: BTreeMap<String, BTreeMap<String, PreparedScalarPublication>>,
     /// Stable runtime IDs and dirty-match bits computed outside the apply lease.
     pub scalar_retire: BTreeMap<String, BTreeMap<String, Vec<(u32, String, u64)>>>,
     pub live_delta_inputs: BTreeMap<
@@ -5031,14 +5027,13 @@ fn attach_delta_reader(
     reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
     ids: Vec<u32>,
 ) -> Result<()> {
-    let attach =
-        |segment: &mut Option<std::sync::Arc<crate::composed_segment::ComposedSegmentReader>>| {
-            let base = segment
-                .as_ref()
-                .ok_or_else(|| anyhow!("delta has no base segment"))?;
-            *segment = Some(std::sync::Arc::new(base.with_delta(reader, ids)?));
-            Ok(())
-        };
+    let attach = |segment: &mut Option<std::sync::Arc<ComposedSegmentReader>>| {
+        let base = segment
+            .as_ref()
+            .ok_or_else(|| anyhow!("delta has no base segment"))?;
+        *segment = Some(std::sync::Arc::new(base.with_delta(reader, ids)?));
+        Ok(())
+    };
     match index {
         FieldIndex::Keyword(index) => attach(&mut index.segment),
         FieldIndex::Number(index) => attach(&mut index.segment),
@@ -5049,9 +5044,7 @@ fn attach_delta_reader(
     }
 }
 
-fn scalar_prepared_segment(
-    index: &FieldIndex,
-) -> Option<std::sync::Arc<crate::composed_segment::ComposedSegmentReader>> {
+fn scalar_prepared_segment(index: &FieldIndex) -> Option<std::sync::Arc<ComposedSegmentReader>> {
     match index {
         FieldIndex::Keyword(index) => index.segment.clone(),
         FieldIndex::Number(index) => index.segment.clone(),
@@ -5062,7 +5055,7 @@ fn scalar_prepared_segment(
 
 fn install_scalar_checkpoint_publication(
     index: &mut FieldIndex,
-    publication: &crate::composed_segment::PreparedScalarPublication,
+    publication: &PreparedScalarPublication,
 ) -> Result<()> {
     let segment = match index {
         FieldIndex::Keyword(index) => &mut index.segment,
@@ -14913,11 +14906,9 @@ impl FieldIndex {
                 // postings) is now on disk; reopen/queries drive from the mmap.
                 // The RAM win Phase 2h-3 targets: RAM after reopen is O(live tail),
                 // not O(distinct numeric values).
-                n.segment = Some(std::sync::Arc::new(
-                    crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(
-                        reader,
-                    )),
-                ));
+                n.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                    std::sync::Arc::new(reader),
+                )));
                 n.forward = FastHashMap::default();
                 n.dense_forward = Vec::new();
                 n.values = BTreeMap::new();
@@ -14944,11 +14935,9 @@ impl FieldIndex {
                 )?;
                 let reader =
                     crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
-                h.segment = Some(std::sync::Arc::new(
-                    crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(
-                        reader,
-                    )),
-                ));
+                h.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                    std::sync::Arc::new(reader),
+                )));
                 h.tombstones.clear();
                 h.forward = FastHashMap::default();
                 Ok(None)
@@ -14988,11 +14977,9 @@ impl FieldIndex {
                 // BOTH the forward tail AND the inverted `terms` driver — the
                 // whole [0..n_docs) index is now on disk; reopen/queries drive
                 // from the mmap. The RAM win Phase 2h-1 targets.
-                k.segment = Some(std::sync::Arc::new(
-                    crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(
-                        reader,
-                    )),
-                ));
+                k.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                    std::sync::Arc::new(reader),
+                )));
                 k.forward = FastHashMap::default();
                 k.dense_forward = Vec::new();
                 k.terms = BTreeMap::new();
@@ -15046,11 +15033,9 @@ impl FieldIndex {
                 // Attach the NEW reader (dropping any prior segment Arc) and free
                 // BOTH the forward tail AND the inverted `elements` driver — the
                 // whole [0..n_docs) index is now on disk. The RAM win 2h-2 targets.
-                s.segment = Some(std::sync::Arc::new(
-                    crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(
-                        reader,
-                    )),
-                ));
+                s.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                    std::sync::Arc::new(reader),
+                )));
                 s.forward = FastHashMap::default();
                 s.elements = BTreeMap::new();
                 s.dup_values = BTreeSet::new();
@@ -15073,11 +15058,9 @@ impl FieldIndex {
                 // is dropped too — `doc_len()` reads an overlay first and then the
                 // segment DocLen column for a base id. A re-seal CLEARS
                 // `tombstones` after baking deletes via `tokens_for_seal`.
-                idx.segment = Some(std::sync::Arc::new(
-                    crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(
-                        reader,
-                    )),
-                ));
+                idx.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                    std::sync::Arc::new(reader),
+                )));
                 idx.tokens = BTreeMap::new(); // bulky postings now on disk
                 idx.delta_docs.clear();
                 idx.staged_rows.clear();
@@ -15153,9 +15136,9 @@ impl FieldIndex {
                     keyword_range_bitmap_cache: RwLock::new(FastHashMap::default()),
                     range_stats: RwLock::new(None),
                     bytes: 0,
-                    segment: Some(std::sync::Arc::new(
-                        crate::composed_segment::ComposedSegmentReader::from_base(reader),
-                    )),
+                    segment: Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                        reader,
+                    ))),
                     // Reopen starts with NO pending deletes — the on-disk segment
                     // already reflects every deletion baked in at its seal.
                     tombstones: RoaringBitmap::new(),
@@ -15165,9 +15148,9 @@ impl FieldIndex {
                 tombstones: RoaringBitmap::new(),
                 forward: FastHashMap::default(),
                 bytes: 0,
-                segment: Some(std::sync::Arc::new(
-                    crate::composed_segment::ComposedSegmentReader::from_base(reader),
-                )),
+                segment: Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                    reader,
+                ))),
             })),
             FieldType::Keyword => {
                 // Phase 2h-1: the inverted `terms` index is ON DISK (the
@@ -15183,9 +15166,9 @@ impl FieldIndex {
                     dense_forward: Vec::new(),
                     forward: FastHashMap::default(),
                     bytes: 0,
-                    segment: Some(std::sync::Arc::new(
-                        crate::composed_segment::ComposedSegmentReader::from_base(reader),
-                    )),
+                    segment: Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                        reader,
+                    ))),
                     // Reopen starts with NO pending deletes — the on-disk segment
                     // already reflects every deletion baked in at its seal.
                     tombstones: RoaringBitmap::new(),
@@ -15204,9 +15187,9 @@ impl FieldIndex {
                     dup_values: BTreeSet::new(),
                     forward: FastHashMap::default(),
                     bytes: 0,
-                    segment: Some(std::sync::Arc::new(
-                        crate::composed_segment::ComposedSegmentReader::from_base(reader),
-                    )),
+                    segment: Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                        reader,
+                    ))),
                     // Reopen starts with NO pending deletes — the on-disk segment
                     // already reflects every deletion baked in at its seal.
                     tombstones: RoaringBitmap::new(),
@@ -15245,9 +15228,9 @@ impl FieldIndex {
                         doc_count,
                         total_doc_len,
                         bytes: 0,
-                        segment: Some(std::sync::Arc::new(
-                            crate::composed_segment::ComposedSegmentReader::from_base(reader),
-                        )),
+                        segment: Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                            reader,
+                        ))),
                         match_rank_cache: RwLock::new(FastHashMap::default()),
                         tombstones: RoaringBitmap::new(),
                     },
@@ -15519,7 +15502,7 @@ fn map_loaded_base_rows(index: &mut FieldIndex, ids: Vec<u32>) -> Result<()> {
         .ok_or_else(|| anyhow!("mapped field has no base segment"))?
         .immutable_base_reader();
     *segment = Some(std::sync::Arc::new(
-        crate::composed_segment::ComposedSegmentReader::from_mapped_base(reader, ids)?,
+        ComposedSegmentReader::from_mapped_base(reader, ids)?,
     ));
     Ok(())
 }
@@ -15909,7 +15892,7 @@ impl Engine {
                     field.clone(),
                     match segment {
                         Some(segment) => segment.checkpoint_cut()?,
-                        None => crate::composed_segment::ScalarCheckpointCut::empty(),
+                        None => ScalarCheckpointCut::empty(),
                     },
                 );
             }
@@ -16694,9 +16677,9 @@ impl Engine {
         )?;
         let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
-        n.segment = Some(std::sync::Arc::new(
-            crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(reader)),
-        ));
+        n.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+            std::sync::Arc::new(reader),
+        )));
         // Phase 2h-3: mirror PRODUCTION `seal_to_segment` — drop BOTH the in-RAM
         // `forward` tail AND the inverted/range `values` driver (the sorted-value
         // column + per-value postings are on disk now). Queries drive from the
@@ -16770,9 +16753,9 @@ impl Engine {
         )?;
         let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
-        k.segment = Some(std::sync::Arc::new(
-            crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(reader)),
-        ));
+        k.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+            std::sync::Arc::new(reader),
+        )));
         // Drop the RAM index — the whole [0..n_docs) inverted+forward state is
         // on disk now (Phase 2h-1). Queries drive from the mmap segment.
         k.forward = FastHashMap::default();
@@ -16849,9 +16832,9 @@ impl Engine {
         )?;
         let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
-        s.segment = Some(std::sync::Arc::new(
-            crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(reader)),
-        ));
+        s.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+            std::sync::Arc::new(reader),
+        )));
         // Drop the RAM index — the whole [0..n_docs) inverted+forward state is on
         // disk now (Phase 2h-2). Queries drive from the mmap segment.
         s.forward = FastHashMap::default();
@@ -16917,9 +16900,9 @@ impl Engine {
         let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
 
-        idx.segment = Some(std::sync::Arc::new(
-            crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(reader)),
-        ));
+        idx.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+            std::sync::Arc::new(reader),
+        )));
         // Phase 2h-4: mirror PRODUCTION `seal_to_segment` — DROP the bulky `tokens`
         // postings AND `distinct` AND `lens` to disk (no rebuild). `drop_eid`
         // tombstones a sealed base id instead of consuming `distinct`; `doc_len()`
@@ -16971,9 +16954,9 @@ impl Engine {
         )?;
         let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
-        h.segment = Some(std::sync::Arc::new(
-            crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(reader)),
-        ));
+        h.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+            std::sync::Arc::new(reader),
+        )));
         h.tombstones.clear();
         Ok(n_docs as u32)
     }
@@ -21547,11 +21530,9 @@ mod tok_probe_tests {
         let mut idx = TextIndex {
             doc_count: u64::from(universe),
             total_doc_len: total_len + u64::from(universe),
-            segment: Some(std::sync::Arc::new(
-                crate::composed_segment::ComposedSegmentReader::from_base(std::sync::Arc::new(
-                    reader,
-                )),
-            )),
+            segment: Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
+                std::sync::Arc::new(reader),
+            ))),
             ..Default::default()
         };
         idx.lens = vec![3; universe as usize];
@@ -22191,7 +22172,7 @@ mod exact_hamming_filter_tests {
     }
 
     fn sparse_layered_match_does_not_materialize_for_planning(general: bool, analyzer: Analyzer) {
-        use crate::composed_segment::TextPostingAt;
+        use crate::persistence::infrastructure::composed_segment::TextPostingAt;
 
         let e = Arc::new(Engine::new());
         let mut schema = schema();
@@ -22272,9 +22253,9 @@ mod exact_hamming_filter_tests {
             Some(TextPostingAt::Sparse { .. })
         ));
 
-        crate::composed_segment::reset_text_term_probes();
+        crate::persistence::infrastructure::composed_segment::reset_text_term_probes();
         assert_eq!(run(&e, query), expected, "layered BM25 score bits");
-        let probes = crate::composed_segment::text_term_probes();
+        let probes = crate::persistence::infrastructure::composed_segment::text_term_probes();
         let distinct = tokens.iter().collect::<BTreeSet<_>>().len() as u64;
         assert!(probes > 0, "the query must read the layered index");
         assert!(
@@ -29074,11 +29055,9 @@ mod sparse_scalar_overlay_tests {
         )
         .unwrap();
         let mut number = NumberIndex::default();
-        number.segment = Some(Arc::new(
-            crate::composed_segment::ComposedSegmentReader::from_base(Arc::new(
-                crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap(),
-            )),
-        ));
+        number.segment = Some(Arc::new(ComposedSegmentReader::from_base(Arc::new(
+            crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap(),
+        ))));
         number.tombstones.insert(0);
         number.forward.insert(0, SortableF64::new(2.0).unwrap());
         assert_eq!(number.live_number_at(0).map(|v| v.to_f64()), Some(2.0));
@@ -29106,7 +29085,7 @@ mod sparse_scalar_overlay_tests {
             &BTreeMap::new(),
         )
         .unwrap();
-        let keyword_view = crate::composed_segment::ComposedSegmentReader::from_base(Arc::new(
+        let keyword_view = ComposedSegmentReader::from_base(Arc::new(
             crate::persistence::infrastructure::segment::SegmentReader::open(&base).unwrap(),
         ))
         .with_delta(
@@ -29137,7 +29116,7 @@ mod sparse_scalar_overlay_tests {
             &BTreeMap::new(),
         )
         .unwrap();
-        let set_view = crate::composed_segment::ComposedSegmentReader::from_base(Arc::new(
+        let set_view = ComposedSegmentReader::from_base(Arc::new(
             crate::persistence::infrastructure::segment::SegmentReader::open(&base).unwrap(),
         ))
         .with_delta(
@@ -29169,7 +29148,7 @@ mod sparse_scalar_overlay_tests {
             &[Some(3)],
         )
         .unwrap();
-        let hash_view = crate::composed_segment::ComposedSegmentReader::from_base(Arc::new(
+        let hash_view = ComposedSegmentReader::from_base(Arc::new(
             crate::persistence::infrastructure::segment::SegmentReader::open(&base).unwrap(),
         ))
         .with_delta(

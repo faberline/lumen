@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use crate::composed_segment::ComposedSegmentReader;
+use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::persistence::infrastructure::segment::stream::tests::{source, Projection};
 use crate::persistence::infrastructure::segment::stream::text_projection::{
     write_text_projection, write_text_stream, TextStreamView,

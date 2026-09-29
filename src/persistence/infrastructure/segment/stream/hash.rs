@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::composed_segment::ComposedSegmentReader;
+use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::persistence::infrastructure::segment::format::{header_block, present_column_ref};
 use crate::persistence::infrastructure::segment::stream::var_writer::write_counted;
 use crate::persistence::infrastructure::segment::stream::{

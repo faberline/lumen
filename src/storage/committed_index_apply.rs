@@ -11,8 +11,8 @@ use super::committed_index_plan::{
 use super::committed_replace_apply::{ReplacementInput, ReplacementLedger};
 use super::committed_replace_plan as replace_plan;
 use super::*;
-use crate::composed_segment::ComposedSegmentReader;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
+use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::capture_barrier::ApplyLease;
 
 #[cfg(test)]

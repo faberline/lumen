@@ -51,7 +51,6 @@ pub use crate::compat::auth;
 pub mod backup;
 pub mod backup_sink;
 mod compat;
-mod composed_segment;
 pub use crate::compat::config;
 pub use crate::compat::coordinator;
 pub use crate::sharding::application::consumer;

@@ -6,7 +6,7 @@
 //! rename; local-row and EID sidecars use the same discipline here.
 
 use super::*;
-use crate::composed_segment::compose_checkpoint_layers;
+use crate::persistence::infrastructure::composed_segment::replacement::compose_checkpoint_layers;
 use crate::persistence::infrastructure::segment::eid_writer::write_eid_segment;
 use crate::persistence::infrastructure::segment::sparse_rows::{
     decode_sparse_local_rows, encode_sparse_local_rows,

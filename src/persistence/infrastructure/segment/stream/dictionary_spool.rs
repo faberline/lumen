@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
-use crate::composed_segment::ComposedSegmentReader;
+use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::persistence::infrastructure::segment::format::header_block;
 use crate::persistence::infrastructure::segment::stream::var_writer::{
     new_stream_temp, pad_to_page, write_counted, StreamingVarWriter,

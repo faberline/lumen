@@ -8499,14 +8499,14 @@ mod tests {
         }
         store.save_required(&engine, 100_000).unwrap();
 
-        crate::composed_segment::reset_text_posting_clones();
+        crate::persistence::infrastructure::composed_segment::reset_text_posting_clones();
         let stats = engine.stats("u").unwrap();
         assert_eq!(
             stats.fields["email"].unique_terms, 121,
             "alpha plus one private term per document"
         );
         assert_eq!(
-            crate::composed_segment::text_posting_clones(),
+            crate::persistence::infrastructure::composed_segment::text_posting_clones(),
             0,
             "the distinct-term count must stream the dictionary, not copy postings"
         );
@@ -8539,14 +8539,14 @@ mod tests {
                     1_000_000 + n,
                 );
             }
-            crate::composed_segment::reset_text_term_probes();
+            crate::persistence::infrastructure::composed_segment::reset_text_term_probes();
             let stats = engine.stats("u").unwrap();
             assert_eq!(
                 stats.fields["email"].unique_terms,
                 sealed + 8 + 1,
                 "one private term per sealed doc, one per staged doc, plus alpha"
             );
-            crate::composed_segment::text_term_probes()
+            crate::persistence::infrastructure::composed_segment::text_term_probes()
         };
         let small = probes_for(200);
         let large = probes_for(2_000);
@@ -8619,14 +8619,14 @@ mod tests {
         store.save_required(&engine, 100_000).unwrap();
         assert_eq!(engine.staged_text_row_count("u", "email"), 0);
         engine.delete("u", "u7", Some("email")).unwrap();
-        crate::composed_segment::reset_text_posting_clones();
+        crate::persistence::infrastructure::composed_segment::reset_text_posting_clones();
         let stats = engine.stats("u").unwrap();
         assert_eq!(
             stats.fields["email"].unique_terms, 300,
             "alpha plus one private term per surviving document"
         );
         assert_eq!(
-            crate::composed_segment::text_posting_clones(),
+            crate::persistence::infrastructure::composed_segment::text_posting_clones(),
             0,
             "the tombstone walk must not copy a posting"
         );

@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 
-use crate::composed_segment::ComposedSegmentReader;
+use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::persistence::infrastructure::segment::stream::keyword::write_keyword_projection;
 use crate::persistence::infrastructure::segment::stream::scalar_projection::ScalarProjectionScratch;
 use crate::persistence::infrastructure::segment::stream::set::write_set_projection;
