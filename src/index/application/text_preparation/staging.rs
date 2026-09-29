@@ -15,9 +15,9 @@ use crate::index::application::text_preparation::{
     TEXT_SCRATCH_BYTES,
 };
 use crate::index::domain::field_index::FieldIndex;
+use crate::index::infrastructure::staging::staged_text_row;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::schema::Analyzer;
-use crate::storage::staged_text_row;
 
 #[cfg(feature = "jieba")]
 use crate::index::infrastructure::analysis::jieba_disk_route;

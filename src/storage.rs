@@ -19,14 +19,6 @@
 //! re-indexing the same `(eid, field)` cleanly evicts the old postings
 //! before appending the new ones.
 
-pub(crate) mod committed_scalar_files;
-pub(crate) mod large_text_row;
-mod scalar_projection;
-pub(crate) mod staged_text_row;
-pub(crate) mod staged_vector_row;
-pub(crate) mod text_projection;
-pub(crate) use scalar_projection::write_checkpoint_rows as write_scalar_checkpoint_rows;
-pub(crate) use text_projection::write_checkpoint_rows as write_text_checkpoint_rows;
 // Moved to the index domain and application; re-exported until storage.rs
 // becomes the compat facade, so lumen::storage keeps its public surface.
 pub use crate::index::application::engine::collections::DropOutcome;
@@ -13155,6 +13147,7 @@ mod batch_unindex_docs_tests {
 #[cfg(test)]
 mod staged_text_stats_tests {
     use super::*;
+    use crate::index::infrastructure::staging::staged_text_row;
     use crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions;
 
     fn staged_row(input: &str) -> Arc<staged_text_row::StagedTextRow> {

@@ -21,18 +21,16 @@ use crate::index::application::admission::{
 use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::index::application::engine::Engine;
+use crate::index::application::text_preparation;
 use crate::index::domain::collection::{Collection, IDEMPOTENCY_TTL};
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::vector::quantize::ScalarCodebook;
+use crate::index::infrastructure::staging::{staged_text_row, staged_vector_row};
 use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::capture_barrier::ApplyLease;
 use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::schema::FieldType;
-use crate::{
-    index::application::text_preparation,
-    storage::{staged_text_row, staged_vector_row},
-};
 
 #[cfg(test)]
 thread_local! {

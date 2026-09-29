@@ -23,7 +23,7 @@ fn tok_probe_wiring_through_text_index_staged_overrides_live() {
     idx.staged_rows.insert(
         1,
         std::sync::Arc::new(
-            crate::storage::staged_text_row::StagedTextRow::stage(
+            crate::index::infrastructure::staging::staged_text_row::StagedTextRow::stage(
                 "tok",
                 Analyzer::WhitespaceLower,
                 crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes()
@@ -137,7 +137,7 @@ pub(crate) fn sparse_fixture(dir: &std::path::Path, seed: u64, resident: bool) -
         if text.is_empty() {
             text.push_str("filler ");
         }
-        let row = crate::storage::staged_text_row::StagedTextRow::stage(
+        let row = crate::index::infrastructure::staging::staged_text_row::StagedTextRow::stage(
             text.trim_end(),
             Analyzer::WhitespaceLower,
             crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes() + 4096,

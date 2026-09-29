@@ -1,6 +1,7 @@
 //! Per-field delta segments: reading the live delta readers and their values,
 //! and writing the changed rows of each field as a new delta.
 
+use crate::index::infrastructure::checkpoint_projection::{scalar_projection, text_projection};
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, LocalRowsReference, SegmentFormat, SegmentKind, SegmentReference,
     SegmentRole,
@@ -219,7 +220,7 @@ pub(super) fn write_field_deltas(
                     | crate::shared_kernel::types::schema::FieldType::Set
             )
         {
-            crate::storage::write_scalar_checkpoint_rows(
+            scalar_projection::write_checkpoint_rows(
                 &root.join(&segment_path),
                 sequence,
                 spec.field_type,
@@ -292,7 +293,7 @@ pub(super) fn write_field_deltas(
                     write_set_segment(&root.join(&segment_path), sequence, &values, &postings)?;
                 }
                 crate::shared_kernel::types::schema::FieldType::Text => {
-                    crate::storage::write_text_checkpoint_rows(
+                    text_projection::write_checkpoint_rows(
                         &root.join(&segment_path),
                         sequence,
                         rows,

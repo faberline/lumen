@@ -9,8 +9,8 @@ use roaring::RoaringBitmap;
 
 use crate::index::domain::fast_hash::FastHashMap;
 use crate::index::domain::field_index::FieldIndex;
+use crate::index::infrastructure::checkpoint_projection::text_projection;
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
-use crate::storage::text_projection;
 
 #[cfg_attr(not(test), allow(dead_code))]
 impl FieldIndex {

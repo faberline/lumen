@@ -21,8 +21,8 @@ pub(crate) struct CheckpointCollectionIdentity {
 
 #[derive(Debug, Clone)]
 pub(crate) enum CheckpointValue {
-    StagedText(Arc<crate::storage::staged_text_row::StagedTextRow>),
-    StagedVector(Arc<crate::storage::staged_vector_row::StagedVectorRow>),
+    StagedText(Arc<crate::index::infrastructure::staging::staged_text_row::StagedTextRow>),
+    StagedVector(Arc<crate::index::infrastructure::staging::staged_vector_row::StagedVectorRow>),
     /// File-backed value kept by the immutable dirty journal. The reader owns
     /// its private directory until every live reader and checkpoint releases it.
     StagedScalar {

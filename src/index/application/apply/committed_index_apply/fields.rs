@@ -32,10 +32,13 @@ use crate::index::application::engine::index::MAX_INDEX_ITEMS;
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::index::application::engine::Engine;
 use crate::index::application::live_delta::retire_live_delta_overlay;
+use crate::index::application::text_preparation;
 use crate::index::domain::field_coverage::FieldCoverage;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::hash_index::parse_hash_number;
 use crate::index::domain::storage_error::StorageError;
+use crate::index::infrastructure::committed_scalar_files;
+use crate::index::infrastructure::staging::staged_vector_row;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::capture_barrier::ApplyLease;
@@ -43,10 +46,6 @@ use crate::shared_kernel::types::document::{
     FieldValue, IndexResponse, ReplaceDocResult, ReplaceDocsResponse, MAX_BATCH_REPLACE_SIZE,
 };
 use crate::shared_kernel::types::schema::FieldType;
-use crate::{
-    index::application::text_preparation,
-    storage::{committed_scalar_files, staged_vector_row},
-};
 
 impl Engine {
     pub(in crate::index::application::apply) fn try_apply_committed_fields_with_capacity_owner(

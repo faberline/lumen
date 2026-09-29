@@ -36,7 +36,7 @@ pub(super) fn apply_prepared_value(
     eid: &str,
     value: &FieldValue,
     field: &str,
-    prepared: Option<&Arc<crate::storage::staged_text_row::StagedTextRow>>,
+    prepared: Option<&Arc<crate::index::infrastructure::staging::staged_text_row::StagedTextRow>>,
     telemetry: Option<&mut CommittedApplyTelemetry<'_>>,
 ) -> Result<u64> {
     let Some(row) = prepared else {

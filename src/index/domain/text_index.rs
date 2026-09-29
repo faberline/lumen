@@ -34,7 +34,8 @@ pub(crate) struct TextIndex {
     /// always returns this map to empty. Every read that folds these rows must
     /// therefore cost at most O(staged tokens) per call and never
     /// O(corpus terms x staged rows).
-    pub(crate) staged_rows: BTreeMap<u32, Arc<crate::storage::staged_text_row::StagedTextRow>>,
+    pub(crate) staged_rows:
+        BTreeMap<u32, Arc<crate::index::infrastructure::staging::staged_text_row::StagedTextRow>>,
     /// token → flat docid-sorted postings (docid + tf).
     pub(crate) tokens: BTreeMap<String, Postings>,
     /// Dense doc-len indexed by doc-id (zero may be an explicit empty value).

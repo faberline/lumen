@@ -1142,7 +1142,7 @@ paths = [
   "src/index/application/text_preparation/staging.rs",
 ]
 subject = "application->infrastructure"
-reason = "With the jieba feature, a Jieba Text value's preparation bound adds jieba_disk_route's ROUTE_CACHE_BYTES, the dictionary route cache the disk-backed segmenter keeps while it stages the value. P2: the tokenizer port in the index domain (see the index_text exception above) reports its route cache bytes, and jieba_disk_route implements it."
+reason = "Text preparation stages each value with staged_text_row's StagedTextRow::stage_charged, growing its reservation by each StageAllocation (reader or workspace bytes) the stage asks for, keeps the StagedTextRows it prepared for the apply, and caps a long token's source bound at large_text_row's LARGE_TOKEN_SOURCE_BYTES. With the jieba feature, a Jieba Text value's preparation bound adds jieba_disk_route's ROUTE_CACHE_BYTES, the dictionary route cache the disk-backed segmenter keeps while it stages the value. P2: staging goes through the staged-row port (see the application->infrastructure exception below), and the tokenizer port in the index domain (see the index_text exception above) reports its route cache bytes, which jieba_disk_route implements."
 
 [[exceptions]]
 rule = "B4"
@@ -1179,3 +1179,84 @@ rule = "B4"
 paths = ["src/ingest/domain/change_admission.rs"]
 subject = "index.application"
 reason = "PendingChangeCapacity::from_record_prepublication maps the Engine's RecordAdmissionError, a Capacity or Overflow refusal before publication, to the pending-capacity error the write coordinator and EngineSm return. The Engine uses ingest's change budget (see the ingest.domain exceptions above), so ingest does not list index in depends_on. P2: the apply port ingest defines (see the index.application exception above) reports admission refusals with its own error type, which the Engine's adapter maps RecordAdmissionError onto."
+
+# The index's file-backed rows moved to index/infrastructure as-is: the Text
+# and Vector rows staged before apply, the scalar files prepared from a
+# committed record, and the checkpoint projections that write the journal's
+# rows as segments. The index domain and application hold the staged rows
+# and call the projections, the projections read the journal's
+# CheckpointValue, and every row is a persistence segment. field_deltas.rs
+# called the projections through storage.rs, which the checker did not see.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/application/apply.rs",
+  "src/index/application/apply/committed_index_apply.rs",
+  "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/checkpoint_capture.rs",
+]
+subject = "application->infrastructure"
+reason = "The committed apply works on rows it staged before the apply lease: apply_value takes a prepared StagedTextRow, the index plan keeps each planned Text cell's StagedTextRow and each vector's raw and canonical StagedVectorRow, and the field apply stages a vector with StagedVectorRow::stage, bounds its reader metadata, and prepares a scalar field's winning rows with committed_scalar_files::prepare_validated_fields. CheckpointValue's StagedText and StagedVector variants journal the staged rows until a checkpoint writes them. P2: a staged-row port in the index domain (a Text row's terms, postings and document length, a Vector row's aligned slice, and the scalar file's reader) that index/infrastructure implements, handed to the Engine at construction."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/domain/field_index/seal.rs",
+  "src/index/domain/text_index.rs",
+  "src/index/domain/text_index/terms.rs",
+]
+subject = "domain->infrastructure"
+reason = "TextIndex keeps each prepared row's StagedTextRow in staged_rows until the next checkpoint and folds their terms and postings into its reads, its term count falls back to text_projection::live_term_count when a staged row cannot list its terms, and the field seal writes a Text field's live postings with text_projection::write_live. P2: TextIndex holds its staged rows as the staged-row port (see the application->infrastructure exception above), and the seal and term count go through the text-segment writer port (see the index.domain exception on text_writer above)."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/infrastructure/checkpoint_projection/scalar_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection/rows.rs",
+  "src/index/infrastructure/committed_scalar_files.rs",
+]
+subject = "infrastructure->application"
+reason = "The checkpoint projections read each journal row as the checkpoint capture's CheckpointValue (an owned value, a StagedText or StagedVector row, or a file-backed scalar row), and committed_scalar_files refuses an unvalidated field with more items than the Engine's MAX_INDEX_ITEMS. P2: CheckpointValue moves to the index domain beside the Collection (see the domain->application exception above), and MAX_INDEX_ITEMS becomes an index domain limit the Engine and the scalar files share."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/infrastructure/checkpoint_projection/scalar_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/scalar_projection/merge.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection/rows.rs",
+  "src/index/infrastructure/committed_scalar_files.rs",
+  "src/index/infrastructure/committed_scalar_files/selected.rs",
+  "src/index/infrastructure/staging/large_text_row.rs",
+  "src/index/infrastructure/staging/large_text_row/one_row.rs",
+  "src/index/infrastructure/staging/staged_text_row.rs",
+]
+subject = "persistence.infrastructure"
+reason = "Every file-backed row is a persistence segment: the checkpoint projections and the committed scalar files lend their rows to the segment stream writers (the keyword, number, set and Text projections, with ScalarProjectionScratch) and read staged dictionaries and postings through SegmentReader, a staged Text row is a one-row segment text_row_stage writes (the long-token path through write_text_projection) and SegmentReader maps, and the scalar files open their private output with SegmentReader::open_owned_stage. P2: the segment writer and sealed-segment reader ports in the index domain (see the persistence.infrastructure exceptions above), which the persistence segment implements and index/infrastructure is handed."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/infrastructure/checkpoint_projection/scalar_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection/rows.rs",
+]
+subject = "ingest.domain"
+reason = "write_checkpoint_rows takes the checkpoint's rows as the change journal's SharedValue<CheckpointValue>, the values the capture froze and the flush shares. P2: with the Collection's journal (see the ingest.domain exceptions above), the journal's value handle sits behind an ingest application port or moves to shared_kernel."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/infrastructure/committed_scalar_files.rs",
+  "src/index/infrastructure/committed_scalar_files/selected.rs",
+]
+subject = "ingest.infrastructure"
+reason = "The committed scalar files read a field's winning items in place from the retained record with FastIndexScanner and lend its FastIndexItems and FastIndexValues to the segment writer, so no field is decoded. P2: ingest's application layer exposes the borrowed scanner, as it does for the committed apply (see the ingest.infrastructure exceptions above)."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/infrastructure/segment_rdb_store/field_deltas.rs"]
+subject = "index.infrastructure"
+reason = "A Keyword, Number or Set field delta is written from the checkpoint rows with scalar_projection::write_checkpoint_rows and a Text delta with text_projection::write_checkpoint_rows, so a staged row is copied from its reader rather than rehydrated. Both were storage.rs re-exports (write_scalar_checkpoint_rows, write_text_checkpoint_rows) until this move. P2: the checkpoint sink writes a delta through a checkpoint-projection port the index domain defines, which index/infrastructure implements and the Engine hands the sink."

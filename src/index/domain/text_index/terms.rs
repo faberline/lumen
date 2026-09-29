@@ -4,6 +4,7 @@
 
 use crate::index::domain::fast_hash::FastHashSet;
 use crate::index::domain::text_index::{LiveTermCache, TextIndex};
+use crate::index::infrastructure::checkpoint_projection::text_projection;
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::storage::note_staged_term_probes;
 
@@ -60,12 +61,12 @@ impl TextIndex {
         for row in self.staged_rows.values() {
             let reader = row.reader();
             let Some(count) = reader.keyword_ordinal_count() else {
-                return crate::storage::text_projection::live_term_count(self).unwrap_or(0);
+                return text_projection::live_term_count(self).unwrap_or(0);
             };
             note_staged_term_probes(u64::from(count));
             for ordinal in 0..count {
                 let Some(term) = reader.keyword_term_at_ordinal_cow(ordinal) else {
-                    return crate::storage::text_projection::live_term_count(self).unwrap_or(0);
+                    return text_projection::live_term_count(self).unwrap_or(0);
                 };
                 candidates.insert(term);
             }

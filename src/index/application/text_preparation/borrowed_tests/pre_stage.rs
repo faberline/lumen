@@ -6,10 +6,10 @@ use crate::index::application::text_preparation::borrowed_tests::{encode, spec};
 use crate::index::application::text_preparation::{
     borrowed_text_metadata_bound, lowercase_token_workspace_bound, TEXT_SCRATCH_BYTES,
 };
+use crate::index::infrastructure::staging::staged_text_row;
 use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem};
 use crate::shared_kernel::types::schema::{Analyzer, CreateCollectionRequest, FieldType};
-use crate::storage::staged_text_row;
 
 // Append inside `#[cfg(test)] mod borrowed_tests` in
 // src/storage/text_preparation.rs.

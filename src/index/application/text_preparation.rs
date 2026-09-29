@@ -12,12 +12,12 @@ use anyhow::{anyhow, Result};
 use crate::index::application::engine::Engine;
 #[cfg(feature = "jieba")]
 use crate::index::infrastructure::analysis::jieba_disk_route;
+use crate::index::infrastructure::staging::staged_text_row;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::document::{IndexItem, IndexRequest, MAX_INDEX_BATCH_SIZE};
 use crate::shared_kernel::types::schema::Analyzer;
-use crate::storage::staged_text_row;
 
 pub(super) const TEXT_SCRATCH_BYTES: usize = 8 * 1024 * 1024;
 
@@ -171,7 +171,7 @@ fn bounded_whitespace_workspace(input: &str) -> Result<usize> {
         }
         let source = token
             .len()
-            .min(crate::storage::large_text_row::LARGE_TOKEN_SOURCE_BYTES);
+            .min(crate::index::infrastructure::staging::large_text_row::LARGE_TOKEN_SOURCE_BYTES);
         let bound = source
             .checked_mul(3)
             .and_then(|n| n.checked_add(64))
