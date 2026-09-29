@@ -8,10 +8,10 @@ use crate::index::domain::keyword_index::KeywordIndex;
 use crate::index::domain::number_index::{
     NumberIndex, NumberRangeStats, RANGE_STATS_BUILD_THRESHOLD,
 };
+use crate::index::domain::query::range::sorted_bits_window;
 use crate::index::domain::sortable_f64::{
     bound_to_bits, range_cache_key, range_is_empty, SortableF64,
 };
-use crate::storage::sorted_bits_window;
 
 impl NumberIndex {
     #[inline]

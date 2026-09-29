@@ -934,3 +934,60 @@ rule = "B4"
 paths = ["src/index/domain/collection/segments.rs"]
 subject = "persistence.infrastructure"
 reason = "The seal writes the collection's external-id column and each vector field's row-id sidecar with eid_writer::write_eid_segment, and the reopen reads them back with SegmentReader::open and maps a field's loaded base rows with ComposedSegmentReader::from_mapped_base. P2: the sealed-segment reader port and the scalar-segment writer port above, with an external-id column in each."
+
+# Query evaluation moved to index/domain/query as-is: the general evaluator, the
+# leaf clauses, the BM25 match paths and their rank cache, the AND planner, the
+# sort planners and the page cursor. The clauses still evaluate to roaring
+# bitmaps and return anyhow, and the page cursor still encodes its token with
+# base64.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/query/clause.rs",
+  "src/index/domain/query/eval.rs",
+  "src/index/domain/query/filter_page.rs",
+  "src/index/domain/query/knn.rs",
+  "src/index/domain/query/plan.rs",
+  "src/index/domain/query/predicate.rs",
+  "src/index/domain/query/prepared_match.rs",
+  "src/index/domain/query/range.rs",
+  "src/index/domain/query/range_conjunction.rs",
+  "src/index/domain/query/selectivity.rs",
+  "src/index/domain/query/sort.rs",
+  "src/index/domain/query/sort_missing.rs",
+  "src/index/domain/query/sort_plan.rs",
+  "src/index/domain/query/terms.rs",
+  "src/index/domain/query/text_match.rs",
+  "src/index/domain/query/topk.rs",
+]
+subject = "anyhow"
+reason = "The clause evaluators, planners and sort checks return anyhow::Result: they bail on a clause whose field type cannot answer it (a term or range on the wrong field type, a match off a text field, exists on a text, vector or hash field) and on a node the planner cannot check per doc, convert StorageError's unknown field and unsupported sort with into, and pass up the field indexes', VectorIndex's and SortableF64's anyhow errors with ?. P2: an index domain error type (with FieldIndex's and Collection's, see the anyhow exceptions above) with a variant per rejected clause."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/query.rs",
+  "src/index/domain/query/clause.rs",
+  "src/index/domain/query/eval.rs",
+  "src/index/domain/query/filter_page.rs",
+  "src/index/domain/query/knn.rs",
+  "src/index/domain/query/plan.rs",
+  "src/index/domain/query/prepared_match.rs",
+  "src/index/domain/query/range.rs",
+  "src/index/domain/query/range_conjunction.rs",
+  "src/index/domain/query/selectivity.rs",
+  "src/index/domain/query/sort_missing.rs",
+  "src/index/domain/query/sort_plan.rs",
+  "src/index/domain/query/terms.rs",
+  "src/index/domain/query/topk.rs",
+  "src/index/domain/query/zip_cursor.rs",
+]
+subject = "roaring"
+reason = "Each leaf clause evaluates to the field index's RoaringBitmap of matching docids, the AND planner intersects filters into a candidate RoaringBitmap, kNN filters its search by an allowed-docs bitmap, and the match paths skip the text index's tombstone RoaringBitmap. P2: decided with the value indexes' postings and tombstones (see the roaring exceptions above), either roaring joins the domain's crates or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/query/page_cursor.rs"]
+subject = "base64"
+reason = "The page cursor is a JSON position (an offset, a sort keyset or a score keyset) encoded as an opaque base64 STANDARD_NO_PAD token, which parse_page_cursor decodes. P2: either base64 joins the domain's crates as a pure encoding crate, or the domain keeps the PageCursor position and the token codec moves to the search interface."

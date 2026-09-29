@@ -14,6 +14,7 @@ pub(crate) mod interner;
 pub(crate) mod keyword_index;
 pub(crate) mod number_index;
 pub(crate) mod postings;
+pub(crate) mod query;
 pub(crate) mod record_ram;
 pub(crate) mod schema_validation;
 pub(crate) mod set_index;
