@@ -5,7 +5,8 @@
 //! spans preserve full replacement and document versions through one apply.
 
 use super::committed_replace_plan::{ParsedValue, ParsedValues, ReplaceDocDescriptor};
-use super::*;
+use anyhow::Result;
+
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::index::application::engine::replace::checksum_bytes;
 use crate::index::application::engine::Engine;
@@ -14,6 +15,8 @@ use crate::ingest::infrastructure::wal::borrowed_replace_scanner::BorrowedReplac
 use crate::ingest::infrastructure::wal::borrowed_replace_spool::BorrowedReplaceSpool;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::capture_barrier::ApplyLease;
+use crate::shared_kernel::types::document::ReplaceDocResult;
+use crate::storage::record_admission::RecordAdmissionError;
 use std::hash::Hasher;
 
 pub(super) struct ReplacementInput<'a> {
@@ -149,5 +152,4 @@ impl Engine {
 }
 
 #[cfg(test)]
-#[path = "committed_replace_apply_tests.rs"]
 mod tests;

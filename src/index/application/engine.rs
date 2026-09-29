@@ -16,7 +16,7 @@ pub(crate) mod index;
 mod lookup;
 pub(crate) mod raft_dispatch;
 mod reopen;
-pub(crate) mod replace;
+pub(super) mod replace;
 pub(crate) mod reshard_apply;
 pub(crate) mod reshard_prune;
 mod restore;
@@ -113,7 +113,7 @@ impl Engine {
     /// makes reshard decisions from this gauge, so waiting for an unrelated
     /// `/stats` request after a write or local restore can leave capacity
     /// control looking at zero (or stale) bytes.
-    pub(crate) fn publish_storage_bytes(&self, state: &EngineState) {
+    pub(super) fn publish_storage_bytes(&self, state: &EngineState) {
         let total_bytes: u64 = state
             .collections
             .values()

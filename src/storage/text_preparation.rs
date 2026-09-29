@@ -12,7 +12,7 @@ use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{IndexItem, IndexRequest, MAX_INDEX_BATCH_SIZE};
 use anyhow::bail;
 
-pub(super) const TEXT_SCRATCH_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const TEXT_SCRATCH_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Default)]
 pub(crate) struct PreparedTextRows {
@@ -36,7 +36,7 @@ impl PreparedTextRows {
     ) -> Option<&Arc<staged_text_row::StagedTextRow>> {
         self.rows.get(&ordinal)?.get(field)
     }
-    pub(super) fn matches(&self, engine: &Engine) -> bool {
+    pub(crate) fn matches(&self, engine: &Engine) -> bool {
         if self.epoch != engine.capture_barrier.epoch() {
             return false;
         }
@@ -49,7 +49,7 @@ impl PreparedTextRows {
             })
         })
     }
-    pub(super) fn retained_reader_bytes(&self) -> usize {
+    pub(crate) fn retained_reader_bytes(&self) -> usize {
         self.retained_reader_bytes
     }
     pub(super) fn scratch_growth_bytes(&self) -> usize {
@@ -94,7 +94,7 @@ fn visit_text_values(entry: &RaftLogEntry, mut visit: impl FnMut(usize, &str, &s
 /// `prepare_borrowed_text_rows`.  The method repeats the assertion before it
 /// allocates, so a new caller cannot accidentally build metadata while it
 /// holds a state lock without first pricing it.
-pub(super) fn borrowed_text_metadata_bound(scanner: &FastIndexScanner<'_>) -> Result<usize> {
+pub(crate) fn borrowed_text_metadata_bound(scanner: &FastIndexScanner<'_>) -> Result<usize> {
     anyhow::ensure!(
         scanner.cost().item_count <= MAX_INDEX_BATCH_SIZE,
         "borrowed Text preparation exceeds Index item limit"
@@ -105,7 +105,7 @@ pub(super) fn borrowed_text_metadata_bound(scanner: &FastIndexScanner<'_>) -> Re
 /// Price borrowed Text metadata after a command-aware replacement planner has
 /// validated its document and flattened-field limits. It keeps the same
 /// per-item arithmetic and overflow checks as the Index entry point.
-pub(super) fn borrowed_field_metadata_bound(scanner: &FastIndexScanner<'_>) -> Result<usize> {
+pub(crate) fn borrowed_field_metadata_bound(scanner: &FastIndexScanner<'_>) -> Result<usize> {
     // BTreeMap has no reserve API.  Price three independent maps (analyzers,
     // outer rows, and inner rows) at a deliberately conservative node bound.
     const BTREE_NODE_BOUND: usize = 256;
@@ -268,8 +268,8 @@ fn borrowed_text_pre_stage_workspace_bound(
 }
 
 #[derive(Debug)]
-pub(super) struct RequiredBorrowedTextWorkspace {
-    pub(super) required_bytes: usize,
+pub(crate) struct RequiredBorrowedTextWorkspace {
+    pub(crate) required_bytes: usize,
 }
 
 impl std::fmt::Display for RequiredBorrowedTextWorkspace {
@@ -286,7 +286,7 @@ impl std::error::Error for RequiredBorrowedTextWorkspace {}
 /// The plan captured a Text field, then a restore or schema change replaced
 /// it before staging started. This is a retry signal, never a client error.
 #[derive(Debug)]
-pub(super) struct StaleBorrowedTextPreparation;
+pub(crate) struct StaleBorrowedTextPreparation;
 impl std::fmt::Display for StaleBorrowedTextPreparation {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("borrowed Text preparation became stale")
@@ -303,7 +303,7 @@ impl Engine {
     /// `None` is an internal fallback signal.  An existing non-Text field
     /// needs the owned path.  Unknown fields intentionally remain in the
     /// private entry so live Index validation retains its valid-prefix order.
-    pub(super) fn prepare_borrowed_text_rows(
+    pub(crate) fn prepare_borrowed_text_rows(
         &self,
         scanner: &FastIndexScanner<'_>,
         reservation: &mut record_admission::RecordReservation,
@@ -428,7 +428,7 @@ impl Engine {
     /// Stage only the Text actions accepted by the unified borrowed planner.
     /// The caller supplies original ordinals from that single ledger, so an
     /// invalid later item cannot cause staging beyond the live valid prefix.
-    pub(super) fn prepare_borrowed_text_rows_for_actions(
+    pub(crate) fn prepare_borrowed_text_rows_for_actions(
         &self,
         scanner: &FastIndexScanner<'_>,
         actions: &BTreeMap<usize, String>,

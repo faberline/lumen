@@ -231,5 +231,4 @@ fn next_source_member<'a>(values: FastStringList<'a>, prior: Option<&'a str>) ->
 }
 
 #[cfg(test)]
-#[path = "committed_replace_view_tests.rs"]
 mod tests;

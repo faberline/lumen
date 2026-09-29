@@ -1,11 +1,19 @@
 //! One mutation dispatch boundary shared by direct Engine calls and WAL apply.
 //! Requests move into this boundary; no field payload is cloned for routing.
 
-use super::*;
+use anyhow::Result;
+
 use crate::index::application::engine::collections::DropOutcome;
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::index::application::engine::Engine;
 use crate::shared_kernel::log_entry::RaftLogEntry;
+use crate::shared_kernel::types::document::{
+    BatchUnindexDocsRequest, IndexRequest, IndexResponse, ReplaceDocsRequest, ReplaceDocsResponse,
+};
+use crate::shared_kernel::types::schema::{
+    CreateCollectionRequest, CreateCollectionResponse, FieldSpec,
+};
+use crate::storage::record_admission::RecordAdmissionError;
 
 impl Engine {
     /// Create-or-merge a collection schema.
@@ -158,6 +166,9 @@ impl Engine {
     /// malformed or over [`MAX_BATCH_REPLACE_SIZE`] — a single bad item
     /// (unknown field, type mismatch, stale version) is reported per-item
     /// in [`ReplaceDocResult`] and never fails its siblings.
+    ///
+    /// [`MAX_BATCH_REPLACE_SIZE`]: crate::shared_kernel::types::document::MAX_BATCH_REPLACE_SIZE
+    /// [`ReplaceDocResult`]: crate::shared_kernel::types::document::ReplaceDocResult
     pub fn replace_docs(
         &self,
         collection_id: &str,

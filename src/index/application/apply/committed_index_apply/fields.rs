@@ -1,23 +1,36 @@
-//! Apply a retained fast-Index record for scalar and Text fields without
-//! owning its field values.
-//!
-//! Planning, admission, file IO and row-map construction precede apply. The
-//! apply interval only rechecks the cut, installs prepared readers and changes
-//! small metadata. The caller advances its durable watermark in that interval.
+//! The committed fast path both routes share: a retained Index record's fields,
+//! or a staged replacement's, planned under the state read lock, priced and
+//! prepared outside every lock, then applied in source order under one apply
+//! lease once the capture stamp still matches, with versions, coverage and
+//! checksums installed for the successful prefix.
 
-use super::committed_index_plan::{
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+use std::time::Instant;
+
+use anyhow::{anyhow, Result};
+
+use crate::index::application::apply::committed_index_apply::{
+    cell_bytes, composed, require, scalar_bytes, FieldPlan, Prepared, VectorRows, View,
+};
+#[cfg(test)]
+use crate::index::application::apply::committed_index_apply::{
+    BEFORE_ATTACH, TEXT_WORKSPACE_RETRIES,
+};
+use crate::index::application::apply::committed_index_plan::{
     self as plan, PlanView, PlannedCell, RequestOutcome, ScalarAction,
 };
-use super::committed_replace_apply::{ReplacementInput, ReplacementLedger};
-use super::committed_replace_plan as replace_plan;
-use super::*;
-use crate::index::application::apply::apply_prepared_value;
+use crate::index::application::apply::committed_replace_apply::{
+    ReplacementInput, ReplacementLedger,
+};
+use crate::index::application::apply::{
+    apply_prepared_value, committed_replace_plan as replace_plan,
+};
 use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::application::engine::index::MAX_INDEX_ITEMS;
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::index::application::engine::Engine;
 use crate::index::application::live_delta::retire_live_delta_overlay;
-use crate::index::domain::collection::{Collection, IDEMPOTENCY_TTL};
 use crate::index::domain::field_coverage::FieldCoverage;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::hash_index::parse_hash_number;
@@ -25,227 +38,15 @@ use crate::index::domain::storage_error::StorageError;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::capture_barrier::ApplyLease;
-
-#[cfg(test)]
-thread_local! {
-    static BEFORE_ATTACH: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = Default::default();
-    static TEXT_WORKSPACE_RETRIES: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
-}
-
-#[cfg(test)]
-pub(super) fn reset_text_workspace_retries_for_test() {
-    TEXT_WORKSPACE_RETRIES.with(|retries| retries.set(0));
-}
-
-#[cfg(test)]
-pub(super) fn text_workspace_retries_for_test() -> u32 {
-    TEXT_WORKSPACE_RETRIES.with(std::cell::Cell::get)
-}
-
-struct View<'a> {
-    engine: &'a Engine,
-    coll: &'a Collection,
-    now: Instant,
-}
-
-impl PlanView for View<'_> {
-    fn engine_epoch(&self) -> u64 {
-        self.engine.capture_barrier.epoch()
-    }
-    fn collection_generation(&self) -> u64 {
-        self.coll.collection_generation
-    }
-    fn schema_version(&self) -> u32 {
-        self.coll.version
-    }
-    fn data_version(&self) -> u64 {
-        self.coll.data_version
-    }
-    fn revision(&self) -> u64 {
-        self.engine.capture_barrier.apply_revision()
-    }
-    fn interner_len(&self) -> usize {
-        self.coll.interner.to_eid.len()
-    }
-    fn is_live(&self) -> bool {
-        self.coll.deleted_at.is_none()
-    }
-    fn field_type(&self, field: &str) -> Option<FieldType> {
-        self.coll.fields.get(field).map(FieldIndex::field_type)
-    }
-    fn vector_dimension(&self, field: &str) -> Option<u32> {
-        match self.coll.fields.get(field)? {
-            FieldIndex::Vector { spec, .. } => Some(spec.dim),
-            _ => None,
-        }
-    }
-    fn id(&self, external_id: &str) -> Option<u32> {
-        self.coll.interner.id(external_id)
-    }
-    fn has_cell(&self, id: u32, field: &str) -> bool {
-        self.coll
-            .eid_fields
-            .get(&id)
-            .is_some_and(|fields| fields.contains(field))
-    }
-    fn cell_version(&self, id: u32, field: &str) -> Option<u64> {
-        self.coll.cell_versions.get(&id)?.get(field).copied()
-    }
-    fn request_deadline(&self, request_id: &str) -> Option<Instant> {
-        self.coll.seen_requests.iter().find_map(|(key, at)| {
-            let deadline = *at + IDEMPOTENCY_TTL;
-            (key == request_id && self.now <= deadline).then_some(deadline)
-        })
-    }
-}
-
-struct FieldPlan {
-    kind: FieldType,
-    before: Option<Arc<ComposedSegmentReader>>,
-    after: Option<Arc<ComposedSegmentReader>>,
-    winners: Vec<(u32, usize)>,
-    final_bytes: u64,
-}
-
-struct Prepared {
-    plan: plan::ScalarPlan,
-    business_error: Option<anyhow::Error>,
-    replacement: Option<ReplacementLedger>,
-    fields: BTreeMap<String, FieldPlan>,
-    /// Hash has an eight-byte canonical value, regardless of wire string size.
-    hash_rows: BTreeMap<PlannedCell, Option<u64>>,
-    vector_codebooks: BTreeMap<String, Option<ScalarCodebook>>,
-    /// Every source action remains alive through the ordered backend updates.
-    vector_rows: BTreeMap<usize, VectorRows>,
-    /// Replaced journal payloads may own files. Release them outside apply.
-    old_vector_rows: Vec<crate::ingest::domain::change_journal::Row<CheckpointValue>>,
-    // The per-cell journal points into the same reader that queries use.
-    rows: BTreeMap<PlannedCell, Option<Arc<CheckpointValue>>>,
-    /// Final Text values use staged rows, not a scalar composed segment.
-    text_rows: BTreeMap<PlannedCell, Option<Arc<staged_text_row::StagedTextRow>>>,
-    text_actions: BTreeMap<usize, String>,
-    text_prepared: Option<text_preparation::PreparedTextRows>,
-    /// Old staged file owners must outlive the state write and apply lease.
-    old_text_rows: Vec<Arc<staged_text_row::StagedTextRow>>,
-    text_placeholder: FieldValue,
-    retained: usize,
-}
-
-struct VectorRows {
-    raw: Arc<staged_vector_row::StagedVectorRow>,
-    canonical: Arc<staged_vector_row::StagedVectorRow>,
-}
-
-fn composed(index: &FieldIndex) -> Option<&Arc<ComposedSegmentReader>> {
-    match index {
-        FieldIndex::Keyword(k) => k.segment.as_ref(),
-        FieldIndex::Number(n) => n.segment.as_ref(),
-        FieldIndex::Set(s) => s.segment.as_ref(),
-        _ => None,
-    }
-}
-
-fn scalar_bytes(index: &FieldIndex) -> u64 {
-    match index {
-        FieldIndex::Keyword(k) => k.bytes,
-        FieldIndex::Number(n) => n.bytes,
-        FieldIndex::Set(s) => s.bytes,
-        _ => unreachable!("scalar plan validated field kind"),
-    }
-}
-
-/// Current logical byte weight. Raw staged dictionaries lend values directly;
-/// no String or set of all members is constructed for an immutable row.
-fn cell_bytes(index: &FieldIndex, id: u32, eid_len: usize) -> u64 {
-    match index {
-        FieldIndex::Keyword(k) => {
-            if let Some(value) = k
-                .dense_forward
-                .get(id as usize)
-                .and_then(Option::as_ref)
-                .or_else(|| k.forward.get(&id))
-            {
-                return (value.len() + eid_len) as u64;
-            }
-            if k.tombstones.contains(id) {
-                return 0;
-            }
-            k.segment
-                .as_ref()
-                .and_then(|s| s.keyword_at_cow(id))
-                .map_or(0, |value| (value.len() + eid_len) as u64)
-        }
-        FieldIndex::Number(n) => n.number_at(id).map_or(0, |_| (8 + eid_len) as u64),
-        FieldIndex::Set(s) => {
-            if let Some(values) = s.forward.get(&id) {
-                return values
-                    .iter()
-                    .map(|value| (value.len() + eid_len) as u64)
-                    .sum();
-            }
-            if s.tombstones.contains(id) {
-                return 0;
-            }
-            let Some(view) = s.segment.as_ref() else {
-                return 0;
-            };
-            let Some((true, count)) = view.set_row_member_count(id) else {
-                return 0;
-            };
-            (0..count)
-                .map(|member| {
-                    view.set_member_at_cow(id, member)
-                        .map_or(0, |value| (value.len() + eid_len) as u64)
-                })
-                .sum()
-        }
-        _ => unreachable!("scalar plan validated field kind"),
-    }
-}
-
-fn require(reserved: &mut RecordReservation, bytes: usize) -> Result<()> {
-    if reserved.bytes() < bytes {
-        reserved
-            .wait_grow_to(bytes)
-            .map_err(RecordAdmissionError::Capacity)?;
-    }
-    Ok(())
-}
+use crate::shared_kernel::types::document::{
+    FieldValue, IndexResponse, ReplaceDocResult, ReplaceDocsResponse, MAX_BATCH_REPLACE_SIZE,
+};
+use crate::shared_kernel::types::schema::FieldType;
+use crate::storage::record_admission::RecordAdmissionError;
+use crate::storage::{committed_scalar_files, staged_vector_row, text_preparation};
 
 impl Engine {
-    /// `false` is an internal routing result for an unsupported command. A real
-    /// preparation failure returns an error and never invokes `complete`.
-    pub(crate) fn try_apply_committed_scalar(
-        &self,
-        scanner: &FastIndexScanner<'_>,
-        sequence: u64,
-        complete: impl FnOnce(&ApplyLease<'_>, Result<ApplyOutcome>),
-    ) -> Result<bool> {
-        self.try_apply_committed_scalar_with_capacity_owner(
-            scanner,
-            sequence,
-            &mut || bail!("committed layer capacity needs a caller-owned maintainer"),
-            complete,
-        )
-    }
-
-    pub(crate) fn try_apply_committed_scalar_with_capacity_owner(
-        &self,
-        scanner: &FastIndexScanner<'_>,
-        sequence: u64,
-        ensure_owner: &mut dyn FnMut() -> Result<()>,
-        complete: impl FnOnce(&ApplyLease<'_>, Result<ApplyOutcome>),
-    ) -> Result<bool> {
-        self.try_apply_committed_fields_with_capacity_owner(
-            scanner,
-            None,
-            sequence,
-            ensure_owner,
-            complete,
-        )
-    }
-
-    pub(super) fn try_apply_committed_fields_with_capacity_owner(
+    pub(in crate::index::application::apply) fn try_apply_committed_fields_with_capacity_owner(
         &self,
         scanner: &FastIndexScanner<'_>,
         replacement: Option<&ReplacementInput<'_>>,
@@ -288,7 +89,7 @@ impl Engine {
                     Some(coll) => replace_plan::metadata_bound(
                         scanner,
                         input.docs,
-                        &super::committed_replace_view::View {
+                        &crate::index::application::apply::committed_replace_view::View {
                             engine: self,
                             coll,
                             scanner,
@@ -391,13 +192,14 @@ impl Engine {
                 };
                 let mut replacement_ledger = None;
                 let plan = if let Some(input) = replacement {
-                    let replace_view = super::committed_replace_view::View {
-                        engine: self,
-                        coll,
-                        scanner,
-                        parsed: &input.parsed,
-                        now,
-                    };
+                    let replace_view =
+                        crate::index::application::apply::committed_replace_view::View {
+                            engine: self,
+                            coll,
+                            scanner,
+                            parsed: &input.parsed,
+                            now,
+                        };
                     let required =
                         replace_plan::metadata_bound(scanner, input.docs, &replace_view)?
                             .checked_mul(3)
@@ -409,7 +211,7 @@ impl Engine {
                         continue;
                     }
                     floor = floor.max(required);
-                    let replacement_plan = replace_plan::plan(
+                    let replacement_plan = replace_plan::pass::plan(
                         scanner,
                         input.docs,
                         &input.parsed,
@@ -433,7 +235,7 @@ impl Engine {
                     });
                     replacement_plan.scalar
                 } else {
-                    match plan::plan_with_hashes(scanner, &view, &hashes, now, |bytes| {
+                    match plan::pass::plan_with_hashes(scanner, &view, &hashes, now, |bytes| {
                         anyhow::ensure!(
                             bytes <= reservation.bytes(),
                             "borrowed planner metadata was not reserved"
@@ -1249,93 +1051,5 @@ impl Engine {
             drop(prepared);
             return Ok(true);
         }
-    }
-}
-
-#[cfg(test)]
-#[path = "committed_index_apply_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-mod timing_tests {
-    use super::*;
-    use crate::ingest::domain::wal_record::WalRecord;
-    use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
-    use crate::shared_kernel::log_entry::RaftLogEntry;
-    use crate::shared_kernel::types::document::IndexItem;
-
-    fn apply_committed_vector(engine: &Engine, vector: Vec<f32>, sequence: u64) {
-        let bytes = WalRecord::new(RaftLogEntry::Index {
-            collection_id: "docs".into(),
-            req: IndexRequest {
-                items: vec![IndexItem {
-                    external_id: "id".into(),
-                    field: "vec".into(),
-                    value: FieldValue::Vector(vector),
-                    version: Some(sequence),
-                }],
-                request_id: None,
-            },
-        })
-        .encode()
-        .unwrap();
-        let scanner = FastIndexScanner::parse(&bytes).unwrap();
-        let mut outcome = None;
-        assert!(
-            engine
-                .try_apply_committed_index(&scanner, sequence, |apply, result| {
-                    apply.advance_sequence(sequence);
-                    outcome = Some(result);
-                })
-                .unwrap()
-        );
-        assert!(matches!(outcome, Some(Ok(ApplyOutcome::Indexed(_)))));
-    }
-
-    #[test]
-    fn replacing_existing_hnsw_vector_records_remove_and_add_lock_observations() {
-        let engine = Engine::new();
-        engine
-            .create_collection_inner(
-                "docs",
-                CreateCollectionRequest {
-                    fields: serde_json::from_value(serde_json::json!({
-                        "vec": {
-                            "type": "vector",
-                            "dim": 3,
-                            "metric": "l2",
-                            "backend": "hnsw-cpu"
-                        }
-                    }))
-                    .unwrap(),
-                },
-            )
-            .unwrap();
-        apply_committed_vector(&engine, vec![0.0, 1.0, 2.0], 1);
-        let before = engine.metrics().hnsw_write_lock_wait_seconds_count.get();
-        let rebuilds_before = engine.metrics().hnsw_graph_rebuild_seconds_count.get();
-        assert_eq!(
-            before, 2,
-            "the initial committed HNSW write measures its no-op remove and add"
-        );
-        assert_eq!(rebuilds_before, 0, "the initial HNSW add does not rebuild");
-
-        apply_committed_vector(&engine, vec![2.0, 1.0, 0.0], 2);
-
-        for count in [
-            engine.metrics().hnsw_write_lock_wait_seconds_count.get(),
-            engine.metrics().hnsw_write_lock_held_seconds_count.get(),
-        ] {
-            assert_eq!(
-                count - before,
-                2,
-                "an existing-vector replace must record HNSW remove plus add"
-            );
-        }
-        assert_eq!(
-            engine.metrics().hnsw_graph_rebuild_seconds_count.get() - rebuilds_before,
-            1,
-            "the replacement add rebuilds the orphaned HNSW graph once"
-        );
     }
 }

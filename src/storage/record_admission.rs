@@ -35,7 +35,7 @@ static NEXT_ENGINE: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct EngineChanges {
     pub(crate) records: RecordChargeJournal,
     pub(crate) owner: Owner,
-    pub(super) budget: ChangeBudget,
+    pub(crate) budget: ChangeBudget,
     id: u64,
 }
 
@@ -172,7 +172,7 @@ impl RecordReservation {
 
     /// Retain only the prepared borrowed representation. The prepared rows
     /// are held by the caller, so no owned decoder or staging scratch remains.
-    pub(super) fn finish_borrowed_preparation(
+    pub(crate) fn finish_borrowed_preparation(
         &mut self,
         bytes: usize,
     ) -> Result<(), AdmissionError> {
@@ -183,7 +183,7 @@ impl RecordReservation {
         Ok(())
     }
 
-    pub(super) fn shrink_borrowed_to(&mut self, bytes: usize) -> Result<(), AdmissionError> {
+    pub(crate) fn shrink_borrowed_to(&mut self, bytes: usize) -> Result<(), AdmissionError> {
         debug_assert_eq!(self.preparation_bytes, 0);
         self.reservation.shrink_to(bytes)
     }
@@ -197,7 +197,7 @@ impl RecordReservation {
         self.reservation.wait_grow_to(required)
     }
 
-    pub(super) fn before_publication(&mut self) {
+    pub(crate) fn before_publication(&mut self) {
         self.wait_for_preparation = false;
     }
 
@@ -265,7 +265,7 @@ impl Engine {
     }
     /// The caller owns apply and has rechecked its borrowed plan. No source or
     /// codec workspace remains in this reservation, only attached metadata.
-    pub(super) fn retain_borrowed_reservation(
+    pub(crate) fn retain_borrowed_reservation(
         &self,
         reserved: RecordReservation,
     ) -> Result<RetainedCharge, RecordAdmissionError> {

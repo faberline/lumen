@@ -19,16 +19,9 @@
 //! re-indexing the same `(eid, field)` cleanly evicts the old postings
 //! before appending the new ones.
 
-mod committed_index_apply;
-mod committed_index_plan;
-mod committed_replace_apply;
-mod committed_replace_plan;
-mod committed_replace_view;
-mod committed_scalar_files;
-mod committed_text_apply;
+pub(crate) mod committed_scalar_files;
 mod large_text_row;
 pub(crate) mod record_admission;
-mod record_apply;
 mod record_charges;
 mod scalar_projection;
 pub(crate) mod staged_text_row;
@@ -64,7 +57,6 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
 #[cfg(test)]
 use std::time::Duration;
-use std::time::Instant;
 
 use anyhow::{anyhow, bail, Result};
 #[cfg(test)]
@@ -140,14 +132,13 @@ use crate::shared_kernel::types::search::{
     DuplicatesRequest, SearchHit, SearchRequest, SearchResponse,
 };
 use crate::shared_kernel::types::{
-    document::{
-        BatchUnindexDocsRequest, FieldValue, IndexRequest, IndexResponse, ReplaceDocResult,
-        ReplaceDocsRequest, ReplaceDocsResponse, MAX_BATCH_REPLACE_SIZE,
-    },
-    schema::{
-        Analyzer, CreateCollectionRequest, CreateCollectionResponse, FieldSpec, FieldType,
-        VectorSpec,
-    },
+    document::FieldValue,
+    schema::{Analyzer, FieldSpec, VectorSpec},
+};
+#[cfg(test)]
+use crate::shared_kernel::types::{
+    document::{IndexRequest, ReplaceDocsRequest},
+    schema::{CreateCollectionRequest, FieldType},
 };
 
 // #3992 deterministic test oracle.  This is thread-local so concurrent unit

@@ -110,7 +110,7 @@ pub(super) fn replace_live_checkpoint_deltas(
     Ok(())
 }
 
-pub(crate) fn retire_live_delta_overlay(index: &mut FieldIndex, id: u32) {
+pub(super) fn retire_live_delta_overlay(index: &mut FieldIndex, id: u32) {
     match index {
         FieldIndex::Keyword(index) => {
             if let Some(value) = index.remove_keyword(id) {

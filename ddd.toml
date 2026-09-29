@@ -1077,3 +1077,53 @@ paths = [
 ]
 subject = "index.application"
 reason = "The write coordinator holds the shard's Arc<Engine>: its apply loop reserves, admits and applies each committed record on it and hands each waiter the ApplyOutcome, and a local submit sizes its record with Engine::record_owned_bytes; WAL delivery sizes records the same way, and the source stage bounds a decode with Engine::record_decode_peak. The Engine uses ingest's change budget and journal (see the ingest.domain exceptions above), so ingest does not list index in depends_on. P2: ingest's application layer defines an apply port (size, admit and apply a committed record) that the Engine implements and the composition root passes in, which removes the cycle."
+
+# The committed apply path moved to index/application/apply as-is: the
+# fast-Index and replacement planners, their apply adapters, the borrowed Text
+# apply and the record dispatch boundary. It reads a retained record in place
+# with ingest's WAL scanners, reserves and prices against ingest's change
+# budget, and stages scalar rows on persistence's composed segments.
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/apply/committed_index_apply.rs",
+  "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/apply/committed_index_plan.rs",
+  "src/index/application/apply/committed_index_plan/pass.rs",
+  "src/index/application/apply/committed_replace_apply.rs",
+  "src/index/application/apply/committed_replace_plan.rs",
+  "src/index/application/apply/committed_replace_plan/pass.rs",
+  "src/index/application/apply/committed_replace_plan/source_value.rs",
+  "src/index/application/apply/committed_replace_view.rs",
+  "src/index/application/apply/committed_text_apply.rs",
+]
+subject = "ingest.infrastructure"
+reason = "The committed apply reads a retained record's wire image without decoding it: the fast-Index planners, the field and Text apply and the replace view walk it with FastIndexScanner and borrow its FastIndexValues and FastStringLists, and a replacement is scanned with BorrowedReplaceScanner and staged in a BorrowedReplaceSpool, whose BorrowedReplaceSpoolDoc is the planner's ReplaceDocDescriptor. P2: ingest's application layer exposes the borrowed scanners and spool, as it does for EngineSm and replay (see the ingest.infrastructure exceptions above)."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/apply/committed_index_apply.rs",
+  "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/apply/committed_replace_apply.rs",
+  "src/index/application/apply/committed_text_apply.rs",
+  "src/index/application/apply/record_apply.rs",
+]
+subject = "ingest.domain"
+reason = "The field and replacement apply wait for record RAM when the change budget refuses with AdmissionError::Full, the field apply replaces a vector cell's charged journal row and holds the old change_journal::Row until the apply lease ends, the Text apply prices its record with RecordEstimate, and a direct record apply maps a capacity refusal before publication to PendingChangeCapacity. P2: with the Engine's (see the ingest.domain exceptions above), the budget, journal and pricing sit behind ingest application ports the Engine is given."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/apply/committed_index_apply.rs",
+  "src/index/application/apply/committed_index_apply/fields.rs",
+]
+subject = "persistence.infrastructure"
+reason = "The field apply stages a scalar field's winning rows as a private delta over its ComposedSegmentReader (with_private_delta, or from_private_empty_base when the field has no segment yet) and keeps the before and after readers in its FieldPlan until publication. P2: the sealed-segment reader port in the index domain (see the persistence.infrastructure exceptions above)."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/index/application/apply/committed_index_apply/fields.rs"]
+subject = "persistence.application"
+reason = "Before it adds an incremental scalar layer, the field apply compares the composed segment's layer count with layer_maintenance's append limit and names the capacity Work, Checkpoint or Merge, that the maintenance owner must finish first. P2: the layer-maintenance port the Engine is given (see the persistence.application exception above) takes the work kind as its own type."

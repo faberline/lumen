@@ -2,6 +2,14 @@
 //! staged text row, and the plain path, which checks the value against the
 //! field's type and indexes it.
 
+mod committed_index_apply;
+mod committed_index_plan;
+mod committed_replace_apply;
+mod committed_replace_plan;
+mod committed_replace_view;
+mod committed_text_apply;
+mod record_apply;
+
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Instant;
@@ -22,7 +30,7 @@ use crate::metrics::CommittedApplyTelemetry;
 use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::schema::{Analyzer, FieldType};
 
-pub(crate) fn apply_prepared_value(
+pub(super) fn apply_prepared_value(
     fi: &mut FieldIndex,
     id: u32,
     eid: &str,
