@@ -1,3 +1,4 @@
+use crate::index::domain::postings::Postings;
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, LocalRowsReference, SegmentFormat, SegmentKind, SegmentReference,
     SegmentRole,
@@ -13,7 +14,6 @@ use crate::persistence::infrastructure::segment_rdb_store::compaction::{
     validate_compaction_inputs, write_compacted_field,
 };
 use crate::persistence::infrastructure::segment_rdb_store::field_deltas::delta_path_prefix;
-use crate::storage::Postings;
 use std::collections::BTreeMap;
 
 fn reference(

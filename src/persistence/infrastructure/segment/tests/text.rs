@@ -13,7 +13,7 @@ use crate::persistence::infrastructure::segment::{
 /// doc-len column, and header scalars all read back exactly.
 #[test]
 fn text_segment_round_trip() {
-    use crate::storage::Postings;
+    use crate::index::domain::postings::Postings;
     let path = tmp_path("text-rt");
     // Tokens (dict order is ascending — BTreeMap): "apple", "banana", "cherry".
     let mut tokens: std::collections::BTreeMap<String, Postings> =
@@ -91,7 +91,7 @@ fn corrupt_var_skip_index_stays_a_lookup_refusal() {
 
 #[test]
 fn reader_parses_var_skip_indexes_once_and_reuses_them_for_text_lookups() {
-    use crate::storage::Postings;
+    use crate::index::domain::postings::Postings;
     let path = tmp_path("text-skip-index-once");
     let mut tokens = std::collections::BTreeMap::new();
     tokens.insert("alpha".into(), Postings::from_sorted(vec![0], vec![2]));
@@ -119,7 +119,7 @@ fn reader_parses_var_skip_indexes_once_and_reuses_them_for_text_lookups() {
 /// accepted docid, through no cache and with no dictionary search.
 #[test]
 fn text_posting_scan_streams_the_stored_posting_without_filling_the_cache() {
-    use crate::storage::Postings;
+    use crate::index::domain::postings::Postings;
     let path = tmp_path("text-posting-scan");
     let mut tokens: std::collections::BTreeMap<String, Postings> =
         std::collections::BTreeMap::new();
@@ -172,7 +172,7 @@ fn text_posting_scan_streams_the_stored_posting_without_filling_the_cache() {
 
 #[test]
 fn text_posting_any_at_stops_at_the_first_accepted_docid() {
-    use crate::storage::Postings;
+    use crate::index::domain::postings::Postings;
     let path = tmp_path("text-any-at");
     let mut tokens: std::collections::BTreeMap<String, Postings> =
         std::collections::BTreeMap::new();
@@ -237,7 +237,7 @@ fn text_posting_any_at_stops_at_the_first_accepted_docid() {
 
 #[test]
 fn text_segment_presence_is_independent_from_doclen() {
-    use crate::storage::Postings;
+    use crate::index::domain::postings::Postings;
     let tokens: std::collections::BTreeMap<String, Postings> = std::collections::BTreeMap::new();
     let lens = vec![0, 0, 1];
     let present = vec![false, true, true];
@@ -267,7 +267,7 @@ fn text_segment_presence_is_independent_from_doclen() {
 /// posting block must still resolve through the skip-index binary-search.
 #[test]
 fn text_segment_multi_block() {
-    use crate::storage::Postings;
+    use crate::index::domain::postings::Postings;
     let path = tmp_path("text-multi-block");
     let n_tokens = 20_000usize;
     let n_docs = 200u32;

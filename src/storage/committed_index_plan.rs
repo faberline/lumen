@@ -8,9 +8,10 @@
 //! A plan owns identifiers and small metadata only.  Every `ordinal` points
 //! back into `FastIndexScanner`, so no field value is decoded or copied.
 
+use crate::index::domain::{sortable_f64::SortableF64, storage_error::StorageError};
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::types::schema::FieldType;
-use crate::storage::{SortableF64, StorageError, MAX_INDEX_ITEMS};
+use crate::storage::MAX_INDEX_ITEMS;
 use anyhow::{bail, ensure, Result};
 use std::collections::BTreeMap;
 use std::time::Instant;

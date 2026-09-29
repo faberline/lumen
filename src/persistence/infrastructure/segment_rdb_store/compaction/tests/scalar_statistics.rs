@@ -1,3 +1,4 @@
+use crate::index::domain::postings::Postings;
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, SegmentKind, SegmentRole,
 };
@@ -12,7 +13,6 @@ use crate::persistence::infrastructure::segment::text_writer::write_text_segment
 use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::compaction::tests::{inputs, reference};
 use crate::persistence::infrastructure::segment_rdb_store::compaction::write_compacted_field;
-use crate::storage::Postings;
 use std::collections::BTreeMap;
 
 #[test]

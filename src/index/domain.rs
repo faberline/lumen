@@ -1,5 +1,14 @@
 //! The index model: the analyzers that turn a text field's value into terms,
-//! and the HNSW and flat backends that answer a vector field's kNN searches.
+//! the HNSW and flat backends that answer a vector field's kNN searches, and
+//! the building blocks the field indexes share: the external-id interner,
+//! posting lists and the token probe over them, the order-preserving number
+//! key, the fast hash maps, and the storage error type.
 
 pub(crate) mod analysis;
+pub(crate) mod fast_hash;
+pub(crate) mod interner;
+pub(crate) mod postings;
+pub(crate) mod sortable_f64;
+pub(crate) mod storage_error;
+pub(crate) mod tok_probe;
 pub(crate) mod vector;

@@ -752,3 +752,45 @@ paths = [
 ]
 subject = "persistence.infrastructure"
 reason = "VectorIndex's checkpoint methods take and return Arc<SegmentReader>, the mmap reader of a sealed vector segment: the flat backend serves rows from its base and delta readers, both backends seal with write_vector_segment and reopen with SegmentReader::open, and HnswCpuIndex::open_from_segment rebuilds from one. P2: a vector-segment port in the index domain (row reads and a sealed writer) that the persistence segment implements."
+
+# The storage building blocks moved to index/domain as-is: the fast hash maps,
+# StorageError, SortableF64 and its range helpers, the Interner, the posting
+# lists and TokProbe. They still use rustc_hash, anyhow and roaring directly,
+# and persistence's text segment writer and sharding's fan-out still reach into
+# them (E16: persistence and index depend on each other).
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/fast_hash.rs",
+  "src/index/domain/interner.rs",
+]
+subject = "rustc_hash"
+reason = "FastHashMap and FastHashSet alias rustc_hash's FxHashMap and FxHashSet, the maps every field index keys by token or value, and the Interner buckets external ids by an FxHasher hash. P2 decides whether rustc_hash joins the domain's crates as a pure hashing crate, or the aliases wrap std's HashMap with a hasher type the domain defines."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/sortable_f64.rs"]
+subject = "anyhow"
+reason = "SortableF64::new rejects NaN with anyhow's bail!, and its callers in storage.rs and the committed scalar files propagate that with ? or map it to an InvalidNumber error. P2: a thiserror variant in the index domain error type (with VectorIndex's, see the vector exception above) that the callers convert."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/tok_probe.rs"]
+subject = "roaring"
+reason = "TokProbe borrows the text index's tombstone RoaringBitmap and skips the tombstoned docids while it streams a token's postings. P2: decided with the flat backend's tomb (see the vector roaring exception above), either roaring joins the domain's crates or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/infrastructure/segment/text_writer.rs"]
+subject = "index.domain"
+reason = "write_text_segment takes the text index's live BTreeMap<String, Postings> and delta-encodes each token's docids and tfs into the posting block. P2: a text-segment writer port in the index domain that takes the token postings as plain docid and tf slices, implemented by the persistence segment, as the vector-segment port above."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/sharding/application/search_fanout.rs",
+  "src/sharding/infrastructure/routed_router/scatter.rs",
+]
+subject = "index.domain"
+reason = "The fan-out rejects a bad offset or cursor with StorageError::InvalidPagination, the error the local search returns for the same request, and the scatter treats a shard's StorageError::CollectionNotFound as a missing collection rather than a shard failure. P2: the pagination and not-found errors move to a shared kernel error that index's StorageError and sharding's fan-out both use."

@@ -4,6 +4,7 @@
 //! captured collection version, reserves before allocation, and later rechecks
 //! that version before it publishes all of the files in one apply interval.
 
+use crate::index::domain::sortable_f64::SortableF64;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{
     FastIndexItem, FastIndexScanner, FastIndexValue,
 };
@@ -119,7 +120,7 @@ pub(super) fn prepare_validated_fields(
                     .context("scalar term count overflow")?
             }
             (FieldType::Number, FastIndexValue::Number(value)) => {
-                super::SortableF64::new(*value)?;
+                SortableF64::new(*value)?;
                 term_count = term_count
                     .checked_add(1)
                     .context("scalar key count overflow")?;
@@ -369,7 +370,7 @@ impl stream::scalar_projection::NumberStreamProjection for Selected<'_, '_> {
                 let FastIndexValue::Number(value) = self.items[ordinal].value else {
                     unreachable!()
                 };
-                let key = super::SortableF64::new(value)?.bits();
+                let key = SortableF64::new(value)?.bits();
                 if previous.is_none_or(|old| key > old) && next.is_none_or(|old| key < old) {
                     next = Some(key);
                 }
@@ -389,7 +390,7 @@ impl stream::scalar_projection::NumberStreamProjection for Selected<'_, '_> {
             let FastIndexValue::Number(value) = self.items[ordinal].value else {
                 unreachable!()
             };
-            if super::SortableF64::new(value)?.bits() == key {
+            if SortableF64::new(value)?.bits() == key {
                 emit(row as u32)?;
                 found = true;
             }

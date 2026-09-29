@@ -113,7 +113,7 @@ async fn partial_error_record_is_persisted_and_replays_its_earlier_mutation() {
         .await
         .unwrap_err();
     assert!(error
-        .downcast_ref::<crate::storage::StorageError>()
+        .downcast_ref::<crate::index::domain::storage_error::StorageError>()
         .is_some());
     assert_eq!(engine.stats("u").unwrap().documents_indexed, 1);
     let mut seqs = Vec::new();

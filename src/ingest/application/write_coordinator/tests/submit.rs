@@ -221,7 +221,7 @@ async fn restart_required_rejects_mutations_and_never_clears_itself() {
 
 #[tokio::test]
 async fn submit_propagates_apply_error_with_type() {
-    use crate::storage::StorageError;
+    use crate::index::domain::storage_error::StorageError;
     let engine = Arc::new(Engine::new());
     let wal = Arc::new(MemWal::new());
     let coord = WriteCoordinator::start(wal, engine.clone());

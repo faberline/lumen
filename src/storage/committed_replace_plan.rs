@@ -8,9 +8,9 @@
 use super::committed_index_plan::{
     PlanStamp, PlanView, PlannedCell, RequestOutcome, ScalarAction, ScalarPlan,
 };
+use crate::index::domain::{sortable_f64::SortableF64, storage_error::StorageError};
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
 use crate::shared_kernel::types::{document::MAX_BATCH_REPLACE_SIZE, schema::FieldType};
-use crate::storage::{SortableF64, StorageError};
 use anyhow::{bail, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;

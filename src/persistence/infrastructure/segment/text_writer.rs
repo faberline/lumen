@@ -40,7 +40,7 @@ use crate::persistence::infrastructure::segment::{
 pub fn write_text_segment(
     path: &Path,
     applied_seq: u64,
-    tokens: &std::collections::BTreeMap<String, crate::storage::Postings>,
+    tokens: &std::collections::BTreeMap<String, crate::index::domain::postings::Postings>,
     lens: &[u32],
     present: &[bool],
     doc_count: u64,

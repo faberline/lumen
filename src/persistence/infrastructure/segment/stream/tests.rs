@@ -1,10 +1,10 @@
+use crate::index::domain::postings::Postings;
 use crate::persistence::infrastructure::segment::stream::scalar_projection::KeywordStreamProjection;
 use crate::persistence::infrastructure::segment::stream::text_projection::TextStreamView;
 use crate::persistence::infrastructure::segment::{
     keyword_writer::write_keyword_segment, set_writer::write_set_segment,
     text_writer::write_text_segment, SegmentReader,
 };
-use crate::storage::Postings;
 use anyhow::Result;
 use std::borrow::Cow;
 use std::collections::BTreeMap;

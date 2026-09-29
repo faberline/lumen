@@ -48,6 +48,7 @@ use crate::access::{
     infrastructure::lumen_verifier::LumenVerifier,
     interfaces::http::auth_middleware,
 };
+use crate::index::domain::storage_error::StorageError;
 use crate::ingest::application::write_coordinator::{
     errors::{RestartRequired, StorageFullError, SubmitStalled},
     mutation_gate::MutationGate,
@@ -83,7 +84,7 @@ use crate::shared_kernel::types::{
     },
     stats::{CacheStats, FieldStats, StatsResponse, StorageStats},
 };
-use crate::storage::{ApplyOutcome, DropOutcome, Engine, SnapshotV1, StorageError};
+use crate::storage::{ApplyOutcome, DropOutcome, Engine, SnapshotV1};
 
 /// The `/metrics` body: the engine's domain counters plus the delegated-auth
 /// counters.

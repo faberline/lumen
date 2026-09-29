@@ -9,12 +9,12 @@ use axum::http::HeaderMap;
 use futures::future::join_all;
 
 use crate::api::ShardForwardRemoteError;
+use crate::index::domain::storage_error::StorageError;
 use crate::sharding::application::search_fanout::{
     merge_shard_search_responses, search_request_offset,
 };
 use crate::sharding::infrastructure::routed_router::{percent_encode_component, RoutedRouter};
 use crate::shared_kernel::types::search::{SearchRequest, SearchResponse};
-use crate::storage::StorageError;
 
 impl RoutedRouter {
     /// Routing-key-less search: local engine direct + one forward per remote

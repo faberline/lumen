@@ -1,7 +1,7 @@
+use crate::index::domain::postings::Postings;
 use crate::persistence::infrastructure::segment::{
     keyword_writer::write_keyword_segment, text_writer::write_text_segment, SegmentReader,
 };
-use crate::storage::Postings;
 use roaring::RoaringBitmap;
 use std::collections::BTreeMap;
 use std::path::Path;
