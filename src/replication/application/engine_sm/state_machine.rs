@@ -10,7 +10,7 @@ use raft_runtime::{
     SnapshotPreparation,
 };
 
-use crate::rdb::RdbSnapshot;
+use crate::persistence::infrastructure::rdb::RdbSnapshot;
 use crate::replication::application::engine_sm::{AdmittedRaftRecord, EngineSm};
 use crate::storage::{Engine, RecordAdmissionError};
 

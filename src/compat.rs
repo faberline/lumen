@@ -6,6 +6,9 @@
 
 pub mod aof;
 pub mod auth;
+#[cfg(feature = "backup")]
+pub mod backup;
+pub mod backup_sink;
 pub mod config;
 pub mod coordinator;
 #[cfg(feature = "operator")]
@@ -13,6 +16,7 @@ pub mod operator;
 pub mod raft;
 #[cfg(feature = "raft-wal")]
 pub mod raft_sm;
+pub mod rdb;
 pub mod reshard;
 pub mod routing;
 #[cfg(feature = "operator")]

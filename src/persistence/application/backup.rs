@@ -1,4 +1,3 @@
-// HANDWRITE-BEGIN gap="missing-generator:logic:ff759770" tracker="1646" reason="Lumen owns only its restore endpoint; service-backup owns the shared authenticated GET /admin/backup fetch and sink upload contract, re-exported under Lumen's compatible helper names."
 //! `lumen backup` (#808): fetch a consistent snapshot from a running serving
 //! fleet's already-existing `GET /admin/backup` endpoint and hand the bytes to
 //! a `libs/service-backup` destination sink. This module owns no new
@@ -196,4 +195,3 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
-// HANDWRITE-END

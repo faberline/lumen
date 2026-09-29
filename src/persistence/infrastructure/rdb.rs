@@ -1,4 +1,3 @@
-// CODEGEN-BEGIN
 //! RDB — point-in-time snapshots of the materialized index, tagged with
 //! the WAL sequence they correspond to.
 //!
@@ -21,6 +20,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use storage_durable::{FsyncPolicy, SnapshotFileStore};
 
+use crate::persistence::domain::rdb_store::RdbStore;
 use crate::storage::{Engine, SnapshotV1};
 
 /// A snapshot plus the log sequence it is current as of.
@@ -65,20 +65,6 @@ impl RdbSnapshot {
         let raw = lz4_flex::decompress_size_prepended(bytes).context("lz4 decompress RDB")?;
         ciborium::from_reader(&raw[..]).map_err(|e| anyhow::anyhow!("cbor decode RDB: {e}"))
     }
-}
-
-/// Where RDB snapshots are persisted. Object-store adapters (S3/GCS)
-/// implement this with the same byte layout as [`LocalFsRdbStore`].
-#[async_trait]
-pub trait RdbStore: Send + Sync {
-    /// Persist `rdb` and make it the new latest.
-    async fn save(&self, rdb: &RdbSnapshot) -> Result<()>;
-
-    /// Load the most recent snapshot, or `None` if the store is empty.
-    async fn load_latest(&self) -> Result<Option<RdbSnapshot>>;
-
-    /// Drop snapshots older than the newest `keep` (retention).
-    async fn prune(&self, keep: usize) -> Result<usize>;
 }
 
 /// Filesystem-backed RDB store: `<root>/rdb-<seq>.lrb`. The newest
@@ -258,4 +244,3 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 }
-// CODEGEN-END

@@ -543,4 +543,25 @@ paths = [
   "src/replication/application/engine_sm/state_machine.rs",
 ]
 subject = "persistence.infrastructure"
-reason = "EngineSm holds the SegmentRdbStore it checkpoints into, builds and restores Raft snapshots through the store's raft_capture and raft_archive (write_archive, the LSEGRAFT MAGIC sniff), and hands a SegmentRaftPreparation between the two phases. P2: persistence's application layer exposes snapshot capture and restore."
+reason = "EngineSm holds the SegmentRdbStore it checkpoints into, builds and restores Raft snapshots through the store's raft_capture and raft_archive (write_archive, the LSEGRAFT MAGIC sniff), and hands a SegmentRaftPreparation between the two phases. Without a segment store it writes the Raft snapshot as an encoded RdbSnapshot, and it decodes a legacy RdbSnapshot on restore. P2: persistence's application layer exposes snapshot capture and restore."
+
+# The RDB repository trait moved to persistence/domain (E8); the snapshot it
+# saves and loads stays in infrastructure beside LocalFsRdbStore.
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/persistence/domain/rdb_store.rs"]
+subject = "anyhow"
+reason = "RdbStore's methods return anyhow::Result, the error type LocalFsRdbStore and its callers in the lumen binary already use. P2: the error type is decided with EngineSnapshotRepository (see the domain->infrastructure exception below)."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/persistence/domain/rdb_store.rs"]
+subject = "async_trait"
+reason = "RdbStore's save, load_latest and prune are async and declared with #[async_trait], so an object-store adapter can sit behind the trait as a boxed object. P2: decided with EngineSnapshotRepository (see the domain->infrastructure exception below)."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/persistence/domain/rdb_store.rs"]
+subject = "domain->infrastructure"
+reason = "Only RdbStore's signature references RdbSnapshot, which stays in infrastructure beside LocalFsRdbStore because it wraps the storage SnapshotV1 and owns the on-disk encode and decode. P2: RdbStore, SegmentRdbStore and the AOF become one EngineSnapshotRepository in the domain, with a snapshot type the domain owns (E8)."

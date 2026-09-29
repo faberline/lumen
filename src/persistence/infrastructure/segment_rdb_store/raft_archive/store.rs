@@ -92,7 +92,7 @@ impl SegmentRdbStore {
     pub(crate) fn restore_legacy_raft_snapshot(
         &self,
         live: &Arc<Engine>,
-        rdb: crate::rdb::RdbSnapshot,
+        rdb: crate::persistence::infrastructure::rdb::RdbSnapshot,
         activated: impl FnOnce(u64),
     ) -> Result<u64> {
         let sequence = rdb.up_to_seq;

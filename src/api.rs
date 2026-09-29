@@ -48,7 +48,6 @@ use crate::access::{
     infrastructure::lumen_verifier::LumenVerifier,
     interfaces::http::auth_middleware,
 };
-use crate::backup_sink::{BackupSink, LocalFsSink};
 use crate::ingest::application::write_coordinator::{
     errors::{RestartRequired, StorageFullError, SubmitStalled},
     mutation_gate::MutationGate,
@@ -57,6 +56,7 @@ use crate::ingest::application::write_coordinator::{
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::wal_log::SharedWal;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
+use crate::persistence::infrastructure::backup_sink::{BackupSink, LocalFsSink};
 use crate::replication::domain::{
     cluster_state::ReadConsistency, cluster_state_view::ClusterStateView, raft_role::RaftRole,
 };

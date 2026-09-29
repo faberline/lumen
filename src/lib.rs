@@ -48,8 +48,8 @@ pub use crate::compat::auth;
 /// Behind the `backup` feature (pulled in by `operator`) since it needs an
 /// HTTP client; `raft-wal` already links one into every shipped binary.
 #[cfg(feature = "backup")]
-pub mod backup;
-pub mod backup_sink;
+pub use crate::compat::backup;
+pub use crate::compat::backup_sink;
 mod compat;
 pub use crate::compat::config;
 pub use crate::compat::coordinator;
@@ -81,7 +81,7 @@ pub use crate::compat::raft;
 #[cfg(feature = "raft-wal")]
 pub use crate::compat::raft_sm;
 mod persistence;
-pub mod rdb;
+pub use crate::compat::rdb;
 pub use crate::compat::reshard;
 pub use crate::compat::routing;
 /// Cross-pod shard routing for operator/k8s serving pods (#1398 R1-R3): local
