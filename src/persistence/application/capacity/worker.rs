@@ -12,7 +12,7 @@ use crate::persistence::application::capacity::relay_trace::{
     relay_diagnostic_enabled, RelayTrace,
 };
 use crate::persistence::application::capacity::{Endpoint, PublicationFence, Requests, Work};
-use crate::segment_checkpoint::SegmentCheckpointSink;
+use crate::persistence::application::segment_checkpoint_sink::SegmentCheckpointSink;
 use crate::storage::Engine;
 
 /// Held by the caller, never by Engine. The worker holds its endpoint and sink

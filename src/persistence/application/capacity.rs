@@ -6,8 +6,10 @@ pub(crate) mod relay_trace;
 pub(crate) mod worker;
 
 use crate::persistence::application::capacity::worker::{BudgetRelay, Owner};
+use crate::persistence::application::segment_checkpoint_sink::{
+    EngineWatermarkSink, SegmentCheckpointSink,
+};
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::segment_checkpoint::SegmentCheckpointSink;
 use crate::storage::Engine;
 use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -206,14 +208,12 @@ impl Fallback {
         let is_configured = configured.is_some();
         let store = match configured {
             Some(store) => store,
-            None => crate::segment_checkpoint::temporary_spill_store()?,
+            None => crate::persistence::infrastructure::spill_directory::temporary_spill_store()?,
         };
         let sink = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),
             store: store.clone(),
-            writer: Arc::new(crate::segment_checkpoint::EngineWatermarkSink::new(
-                engine.clone(),
-            )),
+            writer: Arc::new(EngineWatermarkSink::new(engine.clone())),
             aof: None,
         });
         let owner = Owner::start(sink, is_configured)?;

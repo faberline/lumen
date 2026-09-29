@@ -3,8 +3,10 @@ use std::sync::{mpsc, Arc, Mutex, OnceLock};
 
 use storage_durable::{CommitStep, FailureInjector, FailurePoint};
 
+use crate::persistence::application::segment_checkpoint_sink::{
+    EngineWatermarkSink, SegmentCheckpointSink,
+};
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::segment_checkpoint::SegmentCheckpointSink;
 use crate::storage::Engine;
 
 struct DiagnosticEnvironment {
@@ -140,9 +142,7 @@ fn engine() -> Arc<Engine> {
 
 fn sink(engine: Arc<Engine>, store: Arc<SegmentRdbStore>) -> Arc<SegmentCheckpointSink> {
     Arc::new(SegmentCheckpointSink {
-        writer: Arc::new(crate::segment_checkpoint::EngineWatermarkSink::new(
-            engine.clone(),
-        )),
+        writer: Arc::new(EngineWatermarkSink::new(engine.clone())),
         engine,
         store,
         aof: None,

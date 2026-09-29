@@ -92,7 +92,7 @@ pub use crate::compat::routing;
 #[cfg(feature = "operator")]
 pub use crate::compat::routing_remote;
 mod replication;
-pub mod segment_checkpoint;
+pub use crate::compat::segment_checkpoint;
 /// Segment-checkpoint persistence store (Stage 2 Phase 2f-2): the disk engine
 /// as the running binary's "RDB" — a generation-versioned directory of per-
 /// collection segment checkpoints, written atomically (stage + rename) so a torn

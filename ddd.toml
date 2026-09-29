@@ -530,6 +530,43 @@ paths = ["src/persistence/application/capacity/worker.rs"]
 subject = "ingest.domain"
 reason = "The budget relay sleeps on the change budget's BudgetWake and turns each capacity wait it observes into checkpoint or merge work on the owner's endpoint. P2: ingest's application layer exposes the budget wake, as it will the budget snapshot the checkpoint diagnostic reads."
 
+# The segment checkpoint sink moved to persistence/application as-is, and its
+# periodic schedule to persistence/domain. The sink and its driver still hold
+# the store, the checkpoint diagnostic and the process state infrastructure
+# keeps, and both the sink and the schedule read ingest's change budget.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/application/segment_checkpoint_sink.rs",
+  "src/persistence/application/segment_checkpoint_sink/driver.rs",
+  "src/persistence/application/segment_checkpoint_sink/hnsw_cache.rs",
+  "src/persistence/application/segment_checkpoint_sink/pending_spill.rs",
+]
+subject = "application->infrastructure"
+reason = "SegmentCheckpointSink checkpoints into, prunes and writes the HNSW graph caches of the SegmentRdbStore it holds, and a manual or periodic attempt numbers its CheckpointDiagnosticContext from NEXT_CHECKPOINT_ATTEMPT_ID (the driver's tests pass a DiagnosticCaptureToken). The HNSW cache seal records and checks its marker in HNSW_CACHE_SEALS, and PendingChangeSpill opens a SegmentRdbStore over a SpillDirectory it keeps alive. The statics stay in infrastructure (E17). P2: the generation-store port the background merge exception names, with the diagnostic context and the process state behind it."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/persistence/application/segment_checkpoint_sink/driver.rs",
+  "src/persistence/application/segment_checkpoint_sink/pending_spill.rs",
+]
+subject = "ingest.domain"
+reason = "The periodic driver's waiter sleeps on the change budget's BudgetWake, its task samples the budget's Snapshot and passes the owner's OwnerCapacityState to the schedule, and PendingChangeSpill starts its driver on ChangeBudget::process_shared(). P2: ingest's application layer exposes the budget, its wake and its snapshot, as the capacity worker exception above needs."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/persistence/domain/checkpoint_schedule.rs"]
+subject = "tokio"
+reason = "The schedule's clock is tokio::time::Instant, so the driver sleeps until next_deadline with tokio::time::sleep_until. P2: the schedule takes std::time::Instant and the driver converts at the sleep."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/domain/checkpoint_schedule.rs"]
+subject = "ingest.domain"
+reason = "The schedule selects and re-arms from the change budget's Snapshot and OwnerCapacityState and compares them against CHECKPOINT_TRIGGER. P2: the schedule takes its own value with the counters it reads and the trigger, which the driver fills from the budget."
+
 # ingest and persistence depend on each other (E16). depends_on declares
 # persistence -> ingest; the coordinator's use of the checkpoint diagnostic, of
 # the AOF writer and of the capacity fallback is the other direction.
