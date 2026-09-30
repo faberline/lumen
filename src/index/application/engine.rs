@@ -20,6 +20,8 @@ pub(super) mod replace;
 pub(crate) mod reshard_apply;
 pub(crate) mod reshard_prune;
 mod restore;
+#[cfg(test)]
+mod seal;
 mod search;
 pub(crate) mod stats;
 
