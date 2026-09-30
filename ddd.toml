@@ -179,6 +179,7 @@ depends_on = []
 domain = "src/index/domain"
 application = "src/index/application"
 infrastructure = "src/index/infrastructure"
+interfaces = "src/index/interfaces"
 
 # Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
 # port the owning layer defines.
