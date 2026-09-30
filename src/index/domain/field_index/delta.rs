@@ -2,9 +2,19 @@
 //! doc is masked by the field's tombstones until the next seal bakes the delete
 //! in.
 
-use crate::index::domain::field_index::FieldIndex;
 #[cfg(test)]
-use crate::storage::DROP_EID_CALLS;
+use std::cell::Cell;
+
+use crate::index::domain::field_index::FieldIndex;
+
+// #3992 deterministic test oracle.  This is thread-local so concurrent unit
+// tests and the asynchronous reclaimer cannot affect the caller-thread check.
+// The truncate test uses an unavailable worker and requires this to remain
+// zero, proving the apply thread did not reach the per-document primitive.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static DROP_EID_CALLS: Cell<u64> = const { Cell::new(0) };
+}
 
 impl FieldIndex {
     /// Remove every posting written by doc-id `id` (external_id `eid`, needed

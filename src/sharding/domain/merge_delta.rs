@@ -4,7 +4,9 @@ use std::collections::BTreeSet;
 
 use anyhow::{bail, Result};
 
-use crate::storage::{CollectionSnapshot, FieldIndexSnapshot, SnapshotV1};
+use crate::index::infrastructure::snapshot_v1::{
+    CollectionSnapshot, FieldIndexSnapshot, SnapshotV1,
+};
 
 /// Merge a reshard delta snapshot into an existing target snapshot. This is
 /// the wire-level primitive an operator can use between batches: fetch target

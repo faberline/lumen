@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::index::application::engine::Engine;
 use crate::index::domain::collection::Collection;
+use crate::index::infrastructure::snapshot_v1::{SnapshotV1, SNAPSHOT_VERSION};
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
-use crate::storage::{SnapshotV1, SNAPSHOT_VERSION};
 
 impl Engine {
     /// `POST /admin/reshard:apply`: additively merge one `ReshardBatch`'s

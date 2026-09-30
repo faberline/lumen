@@ -1260,3 +1260,92 @@ rule = "B4"
 paths = ["src/persistence/infrastructure/segment_rdb_store/field_deltas.rs"]
 subject = "index.infrastructure"
 reason = "A Keyword, Number or Set field delta is written from the checkpoint rows with scalar_projection::write_checkpoint_rows and a Text delta with text_projection::write_checkpoint_rows, so a staged row is copied from its reader rather than rehydrated. Both were storage.rs re-exports (write_scalar_checkpoint_rows, write_text_checkpoint_rows) until this move. P2: the checkpoint sink writes a delta through a checkpoint-projection port the index domain defines, which index/infrastructure implements and the Engine hands the sink."
+
+# storage.rs's last production code moved to index/infrastructure as-is: the
+# checkpoint directory helpers (checkpoint_fs), the snapshot document's wire
+# types (snapshot_v1), and the background reclaimer for collections a truncate
+# detached, with its process-wide registry (collection_retirement, E17). The
+# Engine and the Collection write and read the checkpoint directory and the
+# snapshot document themselves, persistence stores both, and sharding and the
+# operator carry the snapshot document between shards. They named these
+# through storage.rs, which the checker did not see.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/application/engine/checkpoint_flush.rs",
+  "src/index/application/engine/checkpoint_freeze.rs",
+  "src/index/application/engine/checkpoint_origins.rs",
+  "src/index/application/engine/reopen.rs",
+  "src/index/application/frozen_checkpoint.rs",
+]
+subject = "application->infrastructure"
+reason = "The checkpoint protocol lays out the checkpoint directory itself: the flush and the frozen checkpoint write each collection under its collection_dir_name, hard-link an unchanged collection's origin with hard_link_checkpoint_tree, and write the CheckpointSchema sidecar (CHECKPOINT_SCHEMA_FILE, with its CheckpointLayout) after checkpoint_write_boundary; the freeze and the origin binding record a collection's lineage and origin under the same directory name, and the reopen reads each sidecar back and decodes the collection's name with collection_name_from_dir. P2: a checkpoint-directory port in the index domain (the sidecar, the field layout and the collection directory names) that checkpoint_fs implements, handed to the Engine at construction."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/application/engine/reshard_apply.rs",
+  "src/index/application/engine/reshard_prune.rs",
+  "src/index/application/engine/restore.rs",
+]
+subject = "application->infrastructure"
+reason = "The Engine's snapshot, restore and reshard verbs speak the snapshot document: snapshot builds a SnapshotV1 stamped with SNAPSHOT_VERSION and restore refuses any version it does not know, apply_reshard_batch checks and merges a batch's SnapshotV1 delta, and the prune applies an empty one. P2: the snapshot document becomes a published language in shared_kernel (the versioned wire types index, persistence, sharding and the operator exchange), and snapshot_v1 keeps only its encoding."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/index/application/engine/delete.rs"]
+subject = "application->infrastructure"
+reason = "docs:truncate hands the detached Collection to the process-wide retirement worker (collection_retirement_worker, retire_collection_with), which reclaims it off the apply thread; truncate_docs_with_retirement takes the CollectionRetirementWorker so a test can pass an unavailable one. P2: a retirement port in the index application layer (retire a detached Collection) that collection_retirement implements and the composition root injects into the Engine."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/domain/collection/snapshot.rs",
+  "src/index/domain/field_index/snapshot.rs",
+]
+subject = "domain->infrastructure"
+reason = "Collection::to_snapshot and from_snapshot map a collection to and from the snapshot document's CollectionSnapshot, and each FieldIndex to and from its FieldIndexSnapshot, writing the LegacyInvertedIndex placeholder a v1 reader expects. P2: the snapshot document moves to shared_kernel (see the application->infrastructure exception on reshard_apply above), or the mapping moves to snapshot_v1 over the domain's accessors."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/index/domain/collection/segments.rs"]
+subject = "domain->infrastructure"
+reason = "seal_to_segments_with_layout writes each field's segments under the CheckpointLayout's field stem (Legacy or Encoded), and open_from_segments_with_vectors reads them back with the layout the sidecar names. P2: the layout is a value of the checkpoint-directory port in the index domain (see the application->infrastructure exception on checkpoint_flush above)."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/sharding/domain/merge_delta.rs",
+  "src/sharding/domain/prune_chunk.rs",
+  "src/sharding/domain/reshard_batch.rs",
+  "src/sharding/domain/snapshot_subset.rs",
+]
+subject = "index.infrastructure"
+reason = "The reshard formats are cut from and merged into the snapshot document: snapshot_subset takes a bucket's documents out of a SnapshotV1's CollectionSnapshots and FieldIndexSnapshots, a ReshardBatch carries the subset, merge_snapshot_delta merges a delta's collections and field indexes into the base, and a prune chunk is planned against a SnapshotV1. P2: the snapshot document becomes a published language in shared_kernel (see the index application->infrastructure exception on reshard_apply above), which sharding reads without depending on index."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/operator/application/reshard_driver/transfer.rs"]
+subject = "index.infrastructure"
+reason = "The reshard driver fetches a source shard's scoped backup from /admin/backup:scoped and decodes the response as a SnapshotV1 before it cuts the batches. P2: the snapshot document in shared_kernel (see the sharding.domain exception above)."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/persistence/application/restore.rs",
+  "src/persistence/infrastructure/rdb.rs",
+]
+subject = "index.infrastructure"
+reason = "The RDB file is an encoded RdbSnapshot, a SnapshotV1 with the WAL sequence it is current as of, and the restore sinks take the SnapshotV1 that /admin/restore decoded. P2: EngineSnapshotRepository (see the domain->infrastructure exception on rdb_store above), with the snapshot document in shared_kernel."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/persistence/infrastructure/segment_rdb_store/catalog.rs",
+  "src/persistence/infrastructure/segment_rdb_store/compaction.rs",
+  "src/persistence/infrastructure/segment_rdb_store/flat_layout.rs",
+  "src/persistence/infrastructure/segment_rdb_store/generation_validation.rs",
+]
+subject = "index.infrastructure"
+reason = "The segment store walks the checkpoint directory the Engine wrote: the catalog decodes each collection directory's name with collection_name_from_dir, and compaction, the flat layout and the generation validation read a collection's sidecar with CheckpointLayout::from_sidecar to find a field's segment stem. P2: the checkpoint-directory port in the index domain (see the index application->infrastructure exception on checkpoint_flush above) names the layout and the directories, and persistence reads them through index's application layer."

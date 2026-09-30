@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::index::application::engine::Engine;
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::sharding::domain::bucket_move::{bucket_moves, BucketMove};
 use crate::sharding::domain::merge_delta::merge_snapshot_delta;
 use crate::sharding::domain::reshard_batch::{
@@ -12,7 +14,6 @@ use crate::shared_kernel::types::{
     schema::{CreateCollectionRequest, FieldSpec, FieldType},
     search::SearchRequest,
 };
-use crate::{index::application::engine::Engine, storage::SnapshotV1};
 
 #[test]
 fn bucket_moves_reports_only_reassigned_buckets() {

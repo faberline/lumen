@@ -8,16 +8,20 @@ use std::time::Instant;
 
 use anyhow::{anyhow, Result};
 
+use crate::index::application::recovery_profile::RecoveryProfile;
 use crate::index::domain::collection::Collection;
 use crate::index::domain::fast_hash::FastHashMap;
 use crate::index::domain::field_coverage::FieldCoverage;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::interner::Interner;
+use crate::index::infrastructure::checkpoint_fs::CheckpointLayout;
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
+
 #[cfg(test)]
-use crate::storage::CHECKPOINT_COLLECTION_OPENS;
-use crate::{index::application::recovery_profile::RecoveryProfile, storage::CheckpointLayout};
+thread_local! {
+    pub(crate) static CHECKPOINT_COLLECTION_OPENS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
 
 // ---------------------------------------------------------------------------
 // Production seal + reopen (Stage 2 Phase 2f-1): the RAM=hot / disk=all keystone

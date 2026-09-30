@@ -2,6 +2,8 @@
 //! rows a field has not absorbed.
 
 use std::collections::BTreeMap;
+#[cfg(test)]
+use std::sync::Mutex;
 
 use anyhow::{anyhow, Result};
 
@@ -11,8 +13,24 @@ use crate::shared_kernel::types::stats::{CacheStats, FieldStats, StatsResponse, 
 
 #[cfg(test)]
 use crate::index::domain::field_index::FieldIndex;
+
+// #4246: the thread `Engine::stats` last ran on. The HTTP handler must hand
+// that read to the blocking executor, never the reactor worker, so this is
+// process-wide: the observing test thread is not the thread being recorded.
 #[cfg(test)]
-use crate::storage::STATS_THREAD;
+static STATS_THREAD: Mutex<Option<std::thread::ThreadId>> = Mutex::new(None);
+
+#[cfg(test)]
+pub(crate) fn reset_stats_thread() {
+    *STATS_THREAD.lock().expect("stats thread record") = None;
+}
+
+/// The thread the most recent `Engine::stats` call ran on, or `None` when no
+/// call has been recorded since the last reset.
+#[cfg(test)]
+pub(crate) fn last_stats_thread() -> Option<std::thread::ThreadId> {
+    *STATS_THREAD.lock().expect("stats thread record")
+}
 
 impl Engine {
     pub fn stats(&self, collection_id: &str) -> Result<StatsResponse> {

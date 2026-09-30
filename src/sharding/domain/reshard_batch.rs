@@ -11,12 +11,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::sharding::domain::bucket_move::{bucket_moves, BucketMove};
 use crate::sharding::domain::snapshot_subset::{
     collection_subset, ids_map_from_pairs, snapshot_subset,
 };
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
-use crate::storage::SnapshotV1;
 
 /// The hard body-size limit `POST /admin/reshard:apply` (and every other
 /// admin route) enforces at the HTTP layer — `api.rs`'s

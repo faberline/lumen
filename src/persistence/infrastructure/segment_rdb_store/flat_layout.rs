@@ -187,7 +187,8 @@ pub(super) fn materialize_flat_reopen_tree(
             serde_json::from_slice(&std::fs::read(&schema_alias).with_context(|| {
                 format!("read materialized schema {}", schema_alias.display())
             })?)?;
-        let layout = crate::storage::CheckpointLayout::from_sidecar(&sidecar)?;
+        let layout =
+            crate::index::infrastructure::checkpoint_fs::CheckpointLayout::from_sidecar(&sidecar)?;
         for segment in &collection.segments {
             let relative = if matches!(segment.kind, SegmentKind::Delta) {
                 let field = segment

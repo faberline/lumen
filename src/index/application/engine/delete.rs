@@ -7,11 +7,11 @@ use anyhow::{anyhow, Result};
 use crate::index::application::engine::Engine;
 use crate::index::domain::collection::Collection;
 use crate::index::domain::storage_error::StorageError;
+use crate::index::infrastructure::collection_retirement::{
+    collection_retirement_worker, retire_collection_with, CollectionRetirementWorker,
+};
 use crate::shared_kernel::types::document::{
     validate_batch_unindex_docs_request, BatchUnindexDocsRequest,
-};
-use crate::storage::{
-    collection_retirement_worker, retire_collection_with, CollectionRetirementWorker,
 };
 
 impl Engine {

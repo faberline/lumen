@@ -6,6 +6,8 @@ use async_trait::async_trait;
 use storage_durable::{CommitStep, FailureInjector, FailurePoint};
 
 use crate::api::RestoreSink;
+use crate::index::application::engine::Engine;
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::ingest::application::write_coordinator::{SharedAof, WriteCoordinator};
 use crate::ingest::domain::wal_log::WalLog;
 use crate::ingest::domain::wal_record::WalRecord;
@@ -15,7 +17,6 @@ use crate::persistence::infrastructure::aof::replay::AofReader;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::schema::CreateCollectionRequest;
-use crate::{index::application::engine::Engine, storage::SnapshotV1};
 
 const WATERMARK: u64 = 7;
 

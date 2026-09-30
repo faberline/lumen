@@ -135,7 +135,8 @@ fn validate_generation_entry(
         );
     }
     if v2 {
-        let layout = crate::storage::CheckpointLayout::from_sidecar(&schema)?;
+        let layout =
+            crate::index::infrastructure::checkpoint_fs::CheckpointLayout::from_sidecar(&schema)?;
         let fields: BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec> =
             serde_json::from_value(
                 schema
@@ -156,7 +157,8 @@ fn validate_generation_entry(
             let segment = SegmentReader::open(&file)
                 .with_context(|| format!("catalogued segment is missing: {}", file.display()))?;
             // Only shipped raw-layout vectors used row count as watermark.
-            let legacy_vector_header = layout == crate::storage::CheckpointLayout::Legacy
+            let legacy_vector_header = layout
+                == crate::index::infrastructure::checkpoint_fs::CheckpointLayout::Legacy
                 && vector
                 && segment.applied_seq() == segment.n_docs() as u64;
             let relative = file

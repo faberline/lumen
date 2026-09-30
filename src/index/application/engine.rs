@@ -21,7 +21,7 @@ pub(crate) mod reshard_apply;
 pub(crate) mod reshard_prune;
 mod restore;
 mod search;
-mod stats;
+pub(crate) mod stats;
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

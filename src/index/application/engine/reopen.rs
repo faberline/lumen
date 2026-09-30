@@ -11,7 +11,9 @@ use crate::index::application::engine::Engine;
 use crate::index::application::recovery_profile::RecoveryProfile;
 use crate::index::domain::collection::Collection;
 use crate::index::domain::field_index::FieldIndex;
-use crate::storage::{collection_name_from_dir, CheckpointSchema, CHECKPOINT_SCHEMA_FILE};
+use crate::index::infrastructure::checkpoint_fs::{
+    collection_name_from_dir, CheckpointSchema, CHECKPOINT_SCHEMA_FILE,
+};
 
 impl Engine {
     /// PRODUCTION cold-start (Phase 2f-2): reopen EVERY collection's checkpoint

@@ -11,7 +11,7 @@ use crate::index::application::checkpoint_capture::{
 };
 use crate::index::application::engine::Engine;
 use crate::index::domain::collection::{Collection, FieldDirtySnapshot};
-use crate::storage::{
+use crate::index::infrastructure::checkpoint_fs::{
     checkpoint_write_boundary, collection_dir_name, hard_link_checkpoint_tree, CheckpointLayout,
     CheckpointSchema, CHECKPOINT_SCHEMA_FILE,
 };

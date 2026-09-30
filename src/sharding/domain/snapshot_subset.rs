@@ -4,8 +4,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{bail, Result};
 
+use crate::index::infrastructure::snapshot_v1::{
+    CollectionSnapshot, FieldIndexSnapshot, SnapshotV1,
+};
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
-use crate::storage::{CollectionSnapshot, FieldIndexSnapshot, SnapshotV1};
 
 /// Restrict a snapshot to only the external_ids routed to one of `buckets`,
 /// computed with the exact same `route_document` hash
@@ -142,7 +144,7 @@ fn field_index_subset(index: &FieldIndexSnapshot, wanted: &BTreeSet<String>) -> 
             }
         }
         FieldIndexSnapshot::Keyword { forward, bytes, .. } => FieldIndexSnapshot::Keyword {
-            terms: crate::storage::LegacyInvertedIndex,
+            terms: crate::index::infrastructure::snapshot_v1::LegacyInvertedIndex,
             forward: forward
                 .iter()
                 .filter(|(external_id, _)| wanted.contains(*external_id))
@@ -159,7 +161,7 @@ fn field_index_subset(index: &FieldIndexSnapshot, wanted: &BTreeSet<String>) -> 
             bytes: *bytes,
         },
         FieldIndexSnapshot::Set { forward, bytes, .. } => FieldIndexSnapshot::Set {
-            elements: crate::storage::LegacyInvertedIndex,
+            elements: crate::index::infrastructure::snapshot_v1::LegacyInvertedIndex,
             forward: forward
                 .iter()
                 .filter(|(external_id, _)| wanted.contains(*external_id))

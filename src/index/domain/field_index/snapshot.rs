@@ -22,7 +22,7 @@ use crate::index::domain::token_set::TokenSet;
 use crate::index::domain::vector::flat_cpu_index::FlatCpuIndex;
 use crate::index::domain::vector::hnsw_cpu_index::HnswCpuIndex;
 use crate::index::domain::vector::VectorIndex;
-use crate::storage::{FieldIndexSnapshot, LegacyInvertedIndex};
+use crate::index::infrastructure::snapshot_v1::{FieldIndexSnapshot, LegacyInvertedIndex};
 
 impl FieldIndex {
     /// `field_ids` are the ids the collection's coverage map says carry THIS

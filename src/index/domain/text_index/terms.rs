@@ -3,10 +3,9 @@
 //! deletes are.
 
 use crate::index::domain::fast_hash::FastHashSet;
-use crate::index::domain::text_index::{LiveTermCache, TextIndex};
+use crate::index::domain::text_index::{note_staged_term_probes, LiveTermCache, TextIndex};
 use crate::index::infrastructure::checkpoint_projection::text_projection;
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
-use crate::storage::note_staged_term_probes;
 
 impl TextIndex {
     /// Count of distinct tokens with >=1 LIVE doc on the ACTIVE source — the

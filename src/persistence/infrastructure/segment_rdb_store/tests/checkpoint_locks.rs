@@ -20,7 +20,7 @@ fn checkpoint_file_writes_do_not_hold_the_live_state_lock() {
     let (release_tx, release_rx) = mpsc::channel();
     let writer_engine = engine.clone();
     let writer = std::thread::spawn(move || {
-        crate::storage::CHECKPOINT_WRITE_HOOK.with(|hook| {
+        crate::index::infrastructure::checkpoint_fs::CHECKPOINT_WRITE_HOOK.with(|hook| {
             *hook.borrow_mut() = Some(Box::new(move || {
                 entered_tx.send(()).unwrap();
                 release_rx.recv_timeout(Duration::from_secs(3)).unwrap();
@@ -63,7 +63,7 @@ fn concurrent_first_base_keeps_an_attachable_overlay_for_the_next_checkpoint() {
     let writer_store = store.clone();
     let writer_engine = engine.clone();
     let writer = std::thread::spawn(move || {
-        crate::storage::CHECKPOINT_WRITE_HOOK.with(|hook| {
+        crate::index::infrastructure::checkpoint_fs::CHECKPOINT_WRITE_HOOK.with(|hook| {
             *hook.borrow_mut() = Some(Box::new(move || {
                 entered_tx.send(()).unwrap();
                 release_rx.recv_timeout(Duration::from_secs(3)).unwrap();
@@ -106,7 +106,7 @@ fn first_base_publication_preserves_newer_field_update_and_deletion() {
     let writer_store = store.clone();
     let writer_engine = engine.clone();
     let writer = std::thread::spawn(move || {
-        crate::storage::CHECKPOINT_WRITE_HOOK.with(|hook| {
+        crate::index::infrastructure::checkpoint_fs::CHECKPOINT_WRITE_HOOK.with(|hook| {
             *hook.borrow_mut() = Some(Box::new(move || {
                 entered_tx.send(()).unwrap();
                 release_rx.recv_timeout(Duration::from_secs(3)).unwrap();
@@ -183,7 +183,7 @@ fn first_vector_base_publication_releases_only_acknowledged_payloads() {
     let writer_store = store.clone();
     let writer_engine = engine.clone();
     let writer = std::thread::spawn(move || {
-        crate::storage::CHECKPOINT_WRITE_HOOK.with(|hook| {
+        crate::index::infrastructure::checkpoint_fs::CHECKPOINT_WRITE_HOOK.with(|hook| {
             *hook.borrow_mut() = Some(Box::new(move || {
                 entered_tx.send(()).unwrap();
                 release_rx.recv_timeout(Duration::from_secs(3)).unwrap();
@@ -364,11 +364,13 @@ fn checkpoint_validation_does_not_rebuild_collections() {
     let engine = Arc::new(Engine::new());
     engine.create_collection("u", kw_schema()).unwrap();
     index_kw(&engine, "u1", "a@x.com");
-    crate::storage::CHECKPOINT_COLLECTION_OPENS.with(|count| count.set(0));
+    crate::index::domain::collection::segments::CHECKPOINT_COLLECTION_OPENS
+        .with(|count| count.set(0));
     store.save_required(&engine, 51).unwrap();
     store.save_required(&engine, 52).unwrap();
     assert_eq!(
-        crate::storage::CHECKPOINT_COLLECTION_OPENS.with(|count| count.get()),
+        crate::index::domain::collection::segments::CHECKPOINT_COLLECTION_OPENS
+            .with(|count| count.get()),
         0,
         "checkpoint validation must inspect files without rebuilding an Engine"
     );

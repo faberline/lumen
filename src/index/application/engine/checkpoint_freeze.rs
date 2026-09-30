@@ -17,8 +17,8 @@ use crate::index::application::live_delta::{
     live_base_reader, live_delta_readers, replace_live_checkpoint_deltas,
 };
 use crate::index::domain::field_index::FieldIndex;
+use crate::index::infrastructure::checkpoint_fs::collection_dir_name;
 use crate::persistence::infrastructure::composed_segment::ScalarCheckpointCut;
-use crate::storage::collection_dir_name;
 
 impl Engine {
     pub(crate) fn prepare_checkpoint_namespace(

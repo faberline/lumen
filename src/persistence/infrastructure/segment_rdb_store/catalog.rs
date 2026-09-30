@@ -46,8 +46,9 @@ pub(super) fn catalog_collections(
                 path.display()
             );
         }
-        let collection_id = crate::storage::collection_name_from_dir(&path)
-            .ok_or_else(|| anyhow!("undecodable checkpoint subdir {}", path.display()))?;
+        let collection_id =
+            crate::index::infrastructure::checkpoint_fs::collection_name_from_dir(&path)
+                .ok_or_else(|| anyhow!("undecodable checkpoint subdir {}", path.display()))?;
         let collection_dir = path
             .file_name()
             .and_then(|name| name.to_str())
@@ -70,7 +71,8 @@ pub(super) fn catalog_collections(
             })?
             .try_into()
             .context("checkpoint schema version exceeds u32")?;
-        let layout = crate::storage::CheckpointLayout::from_sidecar(&schema)?;
+        let layout =
+            crate::index::infrastructure::checkpoint_fs::CheckpointLayout::from_sidecar(&schema)?;
         let fields = schema
             .get("fields")
             .cloned()
@@ -160,7 +162,7 @@ pub(super) fn validate_catalog_references_with_prior(
         let path = entry?.path();
         if path.is_dir() {
             disk_ids.insert(
-                crate::storage::collection_name_from_dir(&path)
+                crate::index::infrastructure::checkpoint_fs::collection_name_from_dir(&path)
                     .ok_or_else(|| anyhow!("undecodable checkpoint subdir {}", path.display()))?,
             );
         }
@@ -179,7 +181,8 @@ pub(super) fn validate_catalog_references_with_prior(
         let disk_dir = root.join(&collection_dir);
         let sidecar: serde_json::Value =
             serde_json::from_slice(&std::fs::read(disk_dir.join(CHECKPOINT_SCHEMA_FILE))?)?;
-        let layout = crate::storage::CheckpointLayout::from_sidecar(&sidecar)?;
+        let layout =
+            crate::index::infrastructure::checkpoint_fs::CheckpointLayout::from_sidecar(&sidecar)?;
         if sidecar.get("fields") != Some(&collection.schema) {
             bail!("catalog schema does not match checkpoint schema");
         }

@@ -48,7 +48,11 @@ use crate::access::{
     infrastructure::lumen_verifier::LumenVerifier,
     interfaces::http::auth_middleware,
 };
+use crate::index::application::engine::{
+    collections::DropOutcome, raft_dispatch::ApplyOutcome, Engine,
+};
 use crate::index::domain::storage_error::StorageError;
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::ingest::application::write_coordinator::{
     errors::{RestartRequired, StorageFullError, SubmitStalled},
     mutation_gate::MutationGate,
@@ -83,10 +87,6 @@ use crate::shared_kernel::types::{
         SearchRequest, SearchResponse, MAX_BATCH_SEARCH_SIZE,
     },
     stats::{CacheStats, FieldStats, StatsResponse, StorageStats},
-};
-use crate::{
-    index::application::engine::{collections::DropOutcome, raft_dispatch::ApplyOutcome, Engine},
-    storage::SnapshotV1,
 };
 
 /// The `/metrics` body: the engine's domain counters plus the delegated-auth
@@ -3910,7 +3910,7 @@ mod stats_executor_tests {
             .create_collection("c", collection_request())
             .expect("create collection");
         let state = AppState::open(engine);
-        crate::storage::reset_stats_thread();
+        crate::index::application::engine::stats::reset_stats_thread();
         // `#[tokio::test]` is a current-thread runtime: this IS the reactor
         // worker, so an inline `Engine::stats` records exactly this thread.
         let reactor = std::thread::current().id();
@@ -3924,7 +3924,8 @@ mod stats_executor_tests {
         .unwrap_or_else(|_| panic!("stats responds"));
 
         assert_eq!(response.0.documents_indexed, 0);
-        let ran_on = crate::storage::last_stats_thread().expect("Engine::stats must have run");
+        let ran_on = crate::index::application::engine::stats::last_stats_thread()
+            .expect("Engine::stats must have run");
         assert_ne!(
             ran_on, reactor,
             "CPU-bound Engine::stats must run on the blocking executor, not the reactor"

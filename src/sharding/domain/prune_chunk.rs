@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
-use crate::storage::SnapshotV1;
 
 /// #1443 R2 / #1457 R1: the authoritative-subset-replace scope one applying
 /// shard must enforce for a `bucket`+collection, derived from one or more

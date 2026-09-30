@@ -19,8 +19,9 @@
 //! re-indexing the same `(eid, field)` cleanly evicts the old postings
 //! before appending the new ones.
 
-// Moved to the index domain and application; re-exported until storage.rs
-// becomes the compat facade, so lumen::storage keeps its public surface.
+// Moved to the index domain, application and infrastructure; re-exported
+// until storage.rs becomes the compat facade, so lumen::storage keeps its
+// public surface.
 pub use crate::index::application::engine::collections::DropOutcome;
 pub use crate::index::application::engine::index::MAX_INDEX_ITEMS;
 pub use crate::index::application::engine::raft_dispatch::ApplyOutcome;
@@ -34,19 +35,24 @@ pub use crate::index::domain::query::sort::MAX_SORT_KEYS;
 pub use crate::index::domain::query::validate_query;
 pub use crate::index::domain::sortable_f64::SortableF64;
 pub use crate::index::domain::storage_error::StorageError;
+pub use crate::index::infrastructure::collection_retirement::{
+    collection_reclaimer_snapshot, CollectionReclaimerSnapshot,
+};
+pub use crate::index::infrastructure::snapshot_v1::{
+    CollectionSnapshot, FieldIndexSnapshot, LegacyInvertedIndex, SnapshotV1,
+};
 
 #[cfg(test)]
-use std::cell::Cell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{mpsc, Arc, Mutex, OnceLock};
+use std::collections::{BTreeMap, BTreeSet};
+#[cfg(test)]
+use std::sync::Arc;
 #[cfg(test)]
 use std::time::Duration;
 
+#[cfg(test)]
 use anyhow::{anyhow, bail, Result};
 #[cfg(test)]
 use roaring::RoaringBitmap;
-use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use crate::index::application::checkpoint_capture::{
@@ -62,8 +68,9 @@ use crate::index::application::frozen_checkpoint::FrozenCollectionFiles;
 use crate::index::application::recovery_profile::{RecoveryPhase, RecoveryProfile};
 #[cfg(test)]
 use crate::index::domain::analysis::tokenize;
-use crate::index::domain::collection::coverage::{FieldAudit, TEXT_UNAUDITABLE};
+#[cfg(test)]
 use crate::index::domain::collection::Collection;
+#[cfg(test)]
 use crate::index::domain::fast_hash::FastHashMap;
 #[cfg(test)]
 use crate::index::domain::field_index::FieldIndex;
@@ -100,7 +107,8 @@ use crate::index::domain::set_index::SetIndex;
 use crate::index::domain::sortable_f64::MISSING_SORTABLE_F64_BITS;
 #[cfg(test)]
 use crate::index::domain::text_index::TextIndex;
-use crate::index::domain::vector::quantize::ScalarCodebook;
+#[cfg(test)]
+use crate::index::infrastructure::collection_retirement::CollectionRetirementWorker;
 #[cfg(test)]
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 #[cfg(test)]
@@ -112,7 +120,8 @@ use crate::shared_kernel::types::query::{
     HammingQuery, HasChildQuery, KnnQuery, MatchOp, MatchQuery, PrefixQuery, QueryNode, RangeBound,
     RangeQuery, SortMissing, SortOrder, SortSpec, TermQuery, TermsQuery,
 };
-use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, VectorSpec};
+#[cfg(test)]
+use crate::shared_kernel::types::schema::{Analyzer, FieldSpec};
 #[cfg(test)]
 use crate::shared_kernel::types::search::{
     DuplicatesRequest, SearchHit, SearchRequest, SearchResponse,
@@ -122,837 +131,6 @@ use crate::shared_kernel::types::{
     document::{FieldValue, IndexRequest, ReplaceDocsRequest},
     schema::{CreateCollectionRequest, FieldType},
 };
-
-// #3992 deterministic test oracle.  This is thread-local so concurrent unit
-// tests and the asynchronous reclaimer cannot affect the caller-thread check.
-// The truncate test uses an unavailable worker and requires this to remain
-// zero, proving the apply thread did not reach the per-document primitive.
-#[cfg(test)]
-thread_local! {
-    pub(crate) static DROP_EID_CALLS: Cell<u64> = const { Cell::new(0) };
-    // #3997 structural oracles are thread-local so parallel storage tests
-    // cannot perturb the counter that one test resets and asserts.
-    pub(crate) static MATERIALIZED_SORT_COMPARISONS: Cell<u64> = const { Cell::new(0) };
-    pub(crate) static MATERIALIZED_SORT_RETAINED_HIGH_WATER: Cell<u64> = const { Cell::new(0) };
-    // #4246 cost oracle: how many (term, staged row) pairs a read path
-    // inspected. `/stats` must stay O(live terms + staged tokens); the
-    // per-term staged scan it replaced was O(terms x staged_rows).
-    static STAGED_TERM_PROBES: Cell<u64> = const { Cell::new(0) };
-}
-
-// #4246: the thread `Engine::stats` last ran on. The HTTP handler must hand
-// that read to the blocking executor, never the reactor worker, so this is
-// process-wide: the observing test thread is not the thread being recorded.
-#[cfg(test)]
-pub(crate) static STATS_THREAD: Mutex<Option<std::thread::ThreadId>> = Mutex::new(None);
-#[cfg(test)]
-static RETIREMENT_FAILSAFE_RETAINS: AtomicU64 = AtomicU64::new(0);
-
-/// Count one inspection of a staged Text row on behalf of one term. Compiled
-/// out entirely outside `cfg(test)`.
-#[inline]
-pub(crate) fn note_staged_term_probes(_probes: u64) {
-    #[cfg(test)]
-    STAGED_TERM_PROBES.with(|probes| probes.set(probes.get().saturating_add(_probes)));
-}
-
-#[cfg(test)]
-fn reset_staged_term_probes() {
-    STAGED_TERM_PROBES.with(|probes| probes.set(0));
-}
-
-#[cfg(test)]
-fn staged_term_probes() -> u64 {
-    STAGED_TERM_PROBES.with(Cell::get)
-}
-
-#[cfg(test)]
-pub(crate) fn reset_stats_thread() {
-    *STATS_THREAD.lock().expect("stats thread record") = None;
-}
-
-/// The thread the most recent `Engine::stats` call ran on, or `None` when no
-/// call has been recorded since the last reset.
-#[cfg(test)]
-pub(crate) fn last_stats_thread() -> Option<std::thread::ThreadId> {
-    *STATS_THREAD.lock().expect("stats thread record")
-}
-
-/// One detached-generation reclaim token removes no more than this many
-/// external-id items. This is an item-count work bound only. It is not a hard
-/// byte limit, a portable allocator-time limit, or a complete destructor-time
-/// limit: one item can still contain an unbounded value, and final container
-/// destruction is reported separately below.
-const RETIRED_DOCUMENTS_PER_TASK: usize = 1_024;
-
-/// Read-only process-wide diagnostics for detached collection reclamation.
-///
-/// These counters never participate in logical apply. They let the scale
-/// harness measure the queue after `docs:truncate` without turning local
-/// cleanup speed into a Raft admission or success condition.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CollectionReclaimerSnapshot {
-    /// Generations retained by the registry, whether queued or active.
-    pub pending_generations: usize,
-    /// Generations handed to the reclaimer since process start.
-    pub submitted_generations: u64,
-    /// Generations whose final destructor completed off the apply thread.
-    pub completed_generations: u64,
-    /// Task tokens currently waiting in the one shared queue.
-    pub queued_tasks: usize,
-    /// Largest observed `queued_tasks` value since process start.
-    pub queue_high_water: usize,
-    /// Task tokens currently executing across all configured workers.
-    pub active_tasks: usize,
-}
-
-static RETIREMENT_SUBMITTED_GENERATIONS: AtomicU64 = AtomicU64::new(0);
-static RETIREMENT_COMPLETED_GENERATIONS: AtomicU64 = AtomicU64::new(0);
-static RETIREMENT_QUEUED_TASKS: AtomicUsize = AtomicUsize::new(0);
-static RETIREMENT_QUEUE_HIGH_WATER: AtomicUsize = AtomicUsize::new(0);
-static RETIREMENT_ACTIVE_TASKS: AtomicUsize = AtomicUsize::new(0);
-// A receiver may dequeue immediately after `send`. This lock makes the queue
-// counter increment visible before the matching decrement without wrapping
-// the channel or holding a lock while `recv` blocks.
-static RETIREMENT_QUEUE_METRICS_LOCK: Mutex<()> = Mutex::new(());
-
-#[cfg(test)]
-thread_local! {
-    pub(crate) static CHECKPOINT_COLLECTION_OPENS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-    pub(crate) static CHECKPOINT_WRITE_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
-}
-
-pub(crate) fn checkpoint_write_boundary() {
-    #[cfg(test)]
-    CHECKPOINT_WRITE_HOOK.with(|hook| {
-        let hook = hook.borrow_mut().take();
-        if let Some(hook) = hook {
-            hook();
-        }
-    });
-}
-
-/// One detached generation remains in this registry until the background
-/// reclaimer has drained its per-document work and performed final cleanup.
-/// Keeping the registry's strong reference is deliberate: a failed handoff
-/// must retain memory, never fall back to a synchronous destructor in Raft
-/// apply.
-struct RetiredGeneration {
-    id: u64,
-    collection: Mutex<Option<Collection>>,
-}
-
-impl RetiredGeneration {
-    fn new(id: u64, collection: Collection) -> Self {
-        Self {
-            id,
-            collection: Mutex::new(Some(collection)),
-        }
-    }
-
-    /// Drain one indivisible reclaim task. The mutex makes this generation
-    /// single-owner even when several shared-queue workers are active. A task
-    /// completes only when its next token is accepted by the shared queue or
-    /// its generation is removed from the registry; destruction itself cannot
-    /// be rolled back once Rust begins dropping the final collection.
-    fn drain_document_task(&self) -> RetireTaskProgress {
-        let mut guard = self
-            .collection
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let collection = guard
-            .as_mut()
-            .expect("retired generation must have one collection while queued");
-        let retired_documents = collection.retire_document_batch(RETIRED_DOCUMENTS_PER_TASK);
-        if collection.interner.to_eid.is_empty() {
-            let collection = guard
-                .take()
-                .expect("retired generation collection disappeared during final task");
-            RetireTaskProgress::Complete {
-                retired_documents,
-                collection,
-            }
-        } else {
-            RetireTaskProgress::More { retired_documents }
-        }
-    }
-}
-
-enum RetireTaskProgress {
-    More {
-        retired_documents: usize,
-    },
-    Complete {
-        retired_documents: usize,
-        collection: Collection,
-    },
-}
-
-/// A token represents one bounded slice of one retired generation. There is
-/// at most one queued token per generation: completing a slice creates the
-/// next token only after the worker owns the current one.
-pub(crate) struct RetireTask {
-    generation: Arc<RetiredGeneration>,
-}
-
-/// Process-wide ownership registry. It is intentionally separate from the
-/// queue: the queue has one small token per active generation, while this map
-/// retains a generation if a worker fails before requeueing it.
-struct RetiredGenerationRegistry {
-    next_id: AtomicU64,
-    generations: Mutex<FastHashMap<u64, Arc<RetiredGeneration>>>,
-}
-
-impl RetiredGenerationRegistry {
-    fn register(&self, collection: Collection) -> Arc<RetiredGeneration> {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let generation = Arc::new(RetiredGeneration::new(id, collection));
-        self.generations
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(id, Arc::clone(&generation));
-        RETIREMENT_SUBMITTED_GENERATIONS.fetch_add(1, Ordering::Release);
-        generation
-    }
-
-    fn complete(&self, id: u64) {
-        let removed = self
-            .generations
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(&id)
-            .is_some();
-        if removed {
-            RETIREMENT_COMPLETED_GENERATIONS.fetch_add(1, Ordering::Release);
-        }
-    }
-}
-
-static RETIRED_GENERATIONS: OnceLock<RetiredGenerationRegistry> = OnceLock::new();
-
-fn retired_generation_registry() -> &'static RetiredGenerationRegistry {
-    RETIRED_GENERATIONS.get_or_init(|| RetiredGenerationRegistry {
-        next_id: AtomicU64::new(1),
-        generations: Mutex::new(FastHashMap::default()),
-    })
-}
-
-/// Return a non-blocking diagnostic snapshot of the shared reclaimer.
-///
-/// The values are observational and can change immediately after return. A
-/// caller that needs to measure one truncate should take a baseline, issue the
-/// API request, then wait until `completed_generations` advances and
-/// `pending_generations` returns to its baseline.
-pub fn collection_reclaimer_snapshot() -> CollectionReclaimerSnapshot {
-    let pending_generations = retired_generation_registry()
-        .generations
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .len();
-    CollectionReclaimerSnapshot {
-        pending_generations,
-        submitted_generations: RETIREMENT_SUBMITTED_GENERATIONS.load(Ordering::Acquire),
-        completed_generations: RETIREMENT_COMPLETED_GENERATIONS.load(Ordering::Acquire),
-        queued_tasks: RETIREMENT_QUEUED_TASKS.load(Ordering::Acquire),
-        queue_high_water: RETIREMENT_QUEUE_HIGH_WATER.load(Ordering::Acquire),
-        active_tasks: RETIREMENT_ACTIVE_TASKS.load(Ordering::Acquire),
-    }
-}
-
-/// Process-wide retirement queue for collections detached by `docs:truncate`.
-///
-/// A truncate state-machine apply never waits for reclaimer progress and never
-/// makes its durable outcome depend on local queue progress. The queue holds
-/// one bounded-work token per active retired generation. Configured workers
-/// share one receiver. The default is one worker; `LUMEN_RECLAIM_WORKERS`
-/// allows up to four. A long retirement yields after each token and lets
-/// another worker run another generation. A token processes at most
-/// [`RETIRED_DOCUMENTS_PER_TASK`] external-id items. This does not claim a
-/// hard byte bound or portable CPU/allocator-time bound because a current
-/// field value and final container have no such cap.
-///
-/// If no worker starts or a requeue fails, the registry intentionally retains
-/// the detached generation. Synchronous destruction could make one replica's
-/// committed apply depend on local cleanup speed. The failure is logged and
-/// never changes visible collection state.
-const DEFAULT_COLLECTION_RETIREMENT_WORKERS: usize = 1;
-const MAX_COLLECTION_RETIREMENT_WORKERS: usize = 4;
-
-fn collection_retirement_worker_count(configured: Option<&str>) -> usize {
-    configured
-        .and_then(|value| value.parse::<usize>().ok())
-        .filter(|count| *count > 0)
-        .map(|count| count.min(MAX_COLLECTION_RETIREMENT_WORKERS))
-        .unwrap_or(DEFAULT_COLLECTION_RETIREMENT_WORKERS)
-}
-
-fn configured_collection_retirement_worker_count() -> usize {
-    let configured = std::env::var("LUMEN_RECLAIM_WORKERS").ok();
-    collection_retirement_worker_count(configured.as_deref())
-}
-
-pub(crate) enum CollectionRetirementWorker {
-    Ready(mpsc::Sender<RetireTask>),
-    Unavailable,
-}
-
-static COLLECTION_RETIREMENT_WORKER: OnceLock<CollectionRetirementWorker> = OnceLock::new();
-
-pub(crate) fn collection_retirement_worker() -> &'static CollectionRetirementWorker {
-    COLLECTION_RETIREMENT_WORKER.get_or_init(|| {
-        let (sender, receiver) = mpsc::channel::<RetireTask>();
-        let receiver = Arc::new(Mutex::new(receiver));
-        let mut workers_started = 0;
-
-        for worker_index in 0..configured_collection_retirement_worker_count() {
-            let receiver = Arc::clone(&receiver);
-            let sender_for_worker = sender.clone();
-            let name = format!("lumen-collection-reclaimer-{worker_index}");
-            match std::thread::Builder::new().name(name).spawn(move || {
-                collection_retirement_loop(receiver, sender_for_worker);
-            }) {
-                Ok(_) => workers_started += 1,
-                Err(error) => {
-                    tracing::error!(%error, worker_index, "start collection retirement worker")
-                }
-            }
-        }
-
-        if workers_started == 0 {
-            CollectionRetirementWorker::Unavailable
-        } else {
-            CollectionRetirementWorker::Ready(sender)
-        }
-    })
-}
-
-fn collection_retirement_loop(
-    receiver: Arc<Mutex<mpsc::Receiver<RetireTask>>>,
-    sender: mpsc::Sender<RetireTask>,
-) {
-    loop {
-        // The receiver lock covers only dequeue. A worker never holds it while
-        // it drains a generation, which lets another worker own the next task.
-        let Some(task) = receive_retirement_task(receiver.as_ref()) else {
-            return;
-        };
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            run_retire_task(task, &sender);
-        }));
-        finish_retirement_task();
-        if result.is_err() {
-            // The registry still owns the generation entry after a task panic.
-            // Do not re-run partly-mutated detached state or block an apply.
-            tracing::error!("collection retirement task panicked; generation retained");
-        }
-    }
-}
-
-fn receive_retirement_task(receiver: &Mutex<mpsc::Receiver<RetireTask>>) -> Option<RetireTask> {
-    let task = receiver
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .recv()
-        .ok();
-    if task.is_some() {
-        mark_retirement_task_dequeued();
-    }
-    task
-}
-
-#[cfg(test)]
-fn try_receive_retirement_task(
-    receiver: &mpsc::Receiver<RetireTask>,
-) -> std::result::Result<RetireTask, mpsc::TryRecvError> {
-    let task = receiver.try_recv()?;
-    mark_retirement_task_dequeued();
-    Ok(task)
-}
-
-fn mark_retirement_task_dequeued() {
-    let _metrics = RETIREMENT_QUEUE_METRICS_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let queued = RETIREMENT_QUEUED_TASKS.fetch_sub(1, Ordering::AcqRel);
-    debug_assert!(queued > 0, "a dequeued retirement task must be counted");
-    RETIREMENT_ACTIVE_TASKS.fetch_add(1, Ordering::Release);
-}
-
-fn finish_retirement_task() {
-    let active = RETIREMENT_ACTIVE_TASKS.fetch_sub(1, Ordering::AcqRel);
-    debug_assert!(active > 0, "a completed retirement task must be active");
-}
-
-fn send_retirement_task(
-    sender: &mpsc::Sender<RetireTask>,
-    task: RetireTask,
-) -> std::result::Result<(), mpsc::SendError<RetireTask>> {
-    let _metrics = RETIREMENT_QUEUE_METRICS_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    sender.send(task)?;
-    let queued = RETIREMENT_QUEUED_TASKS.fetch_add(1, Ordering::AcqRel) + 1;
-    RETIREMENT_QUEUE_HIGH_WATER.fetch_max(queued, Ordering::AcqRel);
-    Ok(())
-}
-
-fn run_retire_task(task: RetireTask, sender: &mpsc::Sender<RetireTask>) {
-    let generation_id = task.generation.id;
-    match task.generation.drain_document_task() {
-        RetireTaskProgress::More { retired_documents } => {
-            debug_assert_eq!(retired_documents, RETIRED_DOCUMENTS_PER_TASK);
-            let next = RetireTask {
-                generation: task.generation,
-            };
-            if let Err(error) = send_retirement_task(sender, next) {
-                retain_retirement_task_failsafe(error.0, "worker channel disconnected");
-            }
-        }
-        RetireTaskProgress::Complete {
-            retired_documents,
-            collection,
-        } => {
-            debug_assert!(retired_documents <= RETIRED_DOCUMENTS_PER_TASK);
-            // This final drop can still be unbounded: `HashMap` capacities,
-            // segment handles, and field/vector internals do not expose an
-            // incremental destruction API. It remains off the apply thread.
-            // A panic cannot be rolled back, so retain the registry entry and
-            // let the worker's outer catch retain it without acknowledgement.
-            drop(collection);
-            retired_generation_registry().complete(generation_id);
-        }
-    }
-}
-
-fn retain_retirement_task_failsafe(task: RetireTask, reason: &'static str) {
-    tracing::error!(%reason, generation_id = task.generation.id, "collection retirement unavailable; retaining detached generation");
-    #[cfg(test)]
-    RETIREMENT_FAILSAFE_RETAINS.fetch_add(1, Ordering::Relaxed);
-    // The registry holds a strong reference. Dropping this failed token cannot
-    // run the collection destructor on the apply thread.
-    drop(task);
-}
-
-pub(crate) fn retire_collection_with(worker: &CollectionRetirementWorker, old: Collection) {
-    let generation = retired_generation_registry().register(old);
-    let task = RetireTask { generation };
-    match worker {
-        CollectionRetirementWorker::Ready(sender) => {
-            if let Err(error) = send_retirement_task(sender, task) {
-                retain_retirement_task_failsafe(error.0, "worker channel disconnected");
-            }
-        }
-        CollectionRetirementWorker::Unavailable => {
-            retain_retirement_task_failsafe(task, "worker failed to start");
-        }
-    }
-}
-
-pub(crate) fn hard_link_checkpoint_tree(
-    origin: &std::path::Path,
-    target: &std::path::Path,
-) -> Result<()> {
-    std::fs::create_dir_all(target)?;
-    for entry in std::fs::read_dir(origin)? {
-        let entry = entry?;
-        let metadata = std::fs::symlink_metadata(entry.path())?;
-        if metadata.file_type().is_symlink() {
-            bail!("checkpoint origin contains a symlink");
-        }
-        let destination = target.join(entry.file_name());
-        if metadata.is_dir() {
-            hard_link_checkpoint_tree(&entry.path(), &destination)?;
-        } else if metadata.is_file() {
-            std::fs::hard_link(entry.path(), destination)
-                .map_err(|e| anyhow!("hard link checkpoint origin: {e}"))?;
-        } else {
-            bail!("checkpoint origin contains a nonregular file");
-        }
-    }
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Snapshot wire types
-// ---------------------------------------------------------------------------
-
-/// The format this build WRITES. Readers accept `1..=SNAPSHOT_VERSION`; see
-/// [`SnapshotV1::version`].
-///
-/// 2 dropped the CONTENTS of the `terms` / `elements` inverted maps from the
-/// Keyword and Set arms. Reading forward is unaffected — a format-1 document's
-/// populated map is dropped on arrival and `forward` restores the field, which
-/// `tests/it/snapshot_ships_only_the_forward_column.rs` pins.
-///
-/// Reading BACKWARD needed care, because 0.4.29 is released and a version gate
-/// does not work the way it looks like it does. `version` is a field of the
-/// same struct being deserialised; there is no point at which it is read
-/// first. So an 0.4.29 build, whose `terms` is a required field with no
-/// `#[serde(default)]`, would fail inside serde on the missing key before its
-/// own `!= 1` check ever ran — reporting a missing field on a file that is
-/// perfectly intact. The sharp case is a ROLLBACK: `rdb.rs` writes a
-/// format-2 snapshot to the data directory in CBOR, the operator rolls the
-/// node back to 0.4.29 mid-incident, and 0.4.29 fails to decode its own data
-/// directory with a message that reads like corruption.
-///
-/// [`LegacyInvertedIndex`] is why that does not happen: the two keys stay on
-/// the wire as empty maps, so a released 0.4.29 parses the document and
-/// refuses it by version, in its own words, with the remedy (upgrade the
-/// binary) named. The payload saving is unchanged — what cost bytes was the
-/// dictionary, not the key.
-///
-/// The same applies to every other boundary these documents cross:
-/// `/admin/restore`, a reshard delta between shards, and a Raft catch-up into
-/// a peer that has not been upgraded yet. All of them now refuse by version.
-pub(crate) const SNAPSHOT_VERSION: u32 = 2;
-
-/// Top-level snapshot document. JSON-serialisable.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SnapshotV1 {
-    /// Format version. Bump when the wire layout changes
-    /// incompatibly so old snapshots can be detected at restore.
-    pub version: u32,
-    pub collections: BTreeMap<String, CollectionSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CollectionSnapshot {
-    pub schema: BTreeMap<String, FieldSpec>,
-    pub version: u32,
-    pub eid_fields: HashMap<String, BTreeSet<String>>,
-    pub fields: BTreeMap<String, FieldIndexSnapshot>,
-}
-
-impl SnapshotV1 {
-    /// The reindex audit, asked of the DOCUMENT instead of a restored engine.
-    ///
-    /// This must answer exactly what [`Engine::reindex_needed`] answers for the
-    /// same bytes, and `tests/it/reopen_names_the_fields_that_need_reindexing.rs`
-    /// runs both over one document and requires the same rows — the differential
-    /// is what keeps the two from drifting.
-    ///
-    /// It exists because the audience is an operator holding a backup file,
-    /// deciding whether to import it at all. Restoring into a throwaway
-    /// `Engine` to ask would materialise every interner, roaring bitmap and
-    /// forward map of the entire backup in RAM — a multiple of the file size,
-    /// on the machine that most needs the answer — while every fact the audit
-    /// reads is already a plain field of the parsed document.
-    pub fn reindex_needed(&self) -> Vec<ReindexNeeded> {
-        struct Tally<'a> {
-            field: &'a FieldIndexSnapshot,
-            covered: u64,
-            holds: bool,
-            probe: bool,
-        }
-        let mut out = Vec::new();
-        // `collections` and `fields` are both `BTreeMap`, so the rows come out
-        // ordered by collection then field with no sort — the same order
-        // `Engine::reindex_needed` sorts into.
-        for (collection, coll) in &self.collections {
-            let mut tally: BTreeMap<&str, Tally<'_>> = coll
-                .fields
-                .iter()
-                .filter_map(|(name, field)| {
-                    let (holds, probe) = match field.audit_kind() {
-                        FieldAudit::PerId => (false, true),
-                        FieldAudit::WholeIndex(populated) => (populated, false),
-                        FieldAudit::Unauditable(_) => return None,
-                    };
-                    Some((
-                        name.as_str(),
-                        Tally {
-                            field,
-                            covered: 0,
-                            holds,
-                            probe,
-                        },
-                    ))
-                })
-                .collect();
-            for (eid, cov) in &coll.eid_fields {
-                for name in cov {
-                    if let Some(t) = tally.get_mut(name.as_str()) {
-                        t.covered += 1;
-                        if t.probe && !t.holds {
-                            t.holds = t.field.holds(eid);
-                        }
-                    }
-                }
-            }
-            out.extend(
-                tally
-                    .into_iter()
-                    .filter(|(_, t)| t.covered > 0 && !t.holds)
-                    .map(|(field, t)| ReindexNeeded {
-                        collection: collection.clone(),
-                        field: field.to_string(),
-                        documents_covered: t.covered,
-                    }),
-            );
-        }
-        out
-    }
-
-    /// Every field [`SnapshotV1::reindex_needed`] did not examine. See
-    /// [`FieldNotAudited`].
-    pub fn fields_not_audited(&self) -> Vec<FieldNotAudited> {
-        self.collections
-            .iter()
-            .flat_map(|(collection, coll)| {
-                coll.fields
-                    .iter()
-                    .filter_map(move |(field, index)| match index.audit_kind() {
-                        FieldAudit::Unauditable(reason) => Some(FieldNotAudited {
-                            collection: collection.clone(),
-                            field: field.clone(),
-                            reason: reason.to_string(),
-                        }),
-                        _ => None,
-                    })
-            })
-            .collect()
-    }
-
-    /// Per collection, how many live documents this document's census carries —
-    /// the same figure `stats` reports as `documents_indexed`. It travels with
-    /// the verdict so "nothing is damaged" reads differently from "nothing was
-    /// read".
-    pub fn documents_scanned(&self) -> BTreeMap<String, u64> {
-        self.collections
-            .iter()
-            .map(|(id, coll)| (id.clone(), coll.eid_fields.len() as u64))
-            .collect()
-    }
-}
-
-/// A field that exists only so a format-1 READER can parse a format-2
-/// document and reach its own version check.
-///
-/// 0.4.29 is released. Its `FieldIndexSnapshot::Keyword` requires a `terms`
-/// key and its `Set` requires `elements`, neither carrying `#[serde(default)]`
-/// — so a 0.4.29 build fails inside serde on the missing key BEFORE
-/// `Engine::restore` ever compares versions. The operator then reads
-/// `missing field \`terms\`` (or, from `rdb.rs`'s CBOR, something less legible
-/// still) off a file that is not damaged, on a rollback where the only thing
-/// wrong is that the binary is too old to say so. Emitting `{}` here costs two
-/// bytes per field and hands 0.4.29 back the version error it already knows
-/// how to print.
-///
-/// It is written and never read: `skip_deserializing` drops a format-1
-/// document's populated map on arrival, which is what
-/// `FieldIndexSnapshot::from_snapshot` wants anyway — the inverted index is
-/// rebuilt from `forward` in both formats, so the map on the wire never had a
-/// reader.
-///
-/// Delete this, and bump the format again, once no supported release still
-/// requires the key. `tests/it/snapshot_ships_only_the_forward_column.rs` pins that
-/// it stays empty; nothing else may put a value in it.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct LegacyInvertedIndex;
-
-impl Serialize for LegacyInvertedIndex {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeMap as _;
-        serializer.serialize_map(Some(0))?.end()
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum FieldIndexSnapshot {
-    Text {
-        analyzer: Analyzer,
-        tokens: BTreeMap<String, BTreeMap<String, u32>>,
-        forward: HashMap<String, (BTreeSet<String>, u32)>,
-        doc_count: u64,
-        total_doc_len: u64,
-        bytes: u64,
-    },
-    /// Only the forward column travels. `from_snapshot` rebuilds `terms` from
-    /// it — it has to, because a snapshot whose persisted inverted index
-    /// disagreed with its own forward column would otherwise restore into an
-    /// index that answers queries no document satisfies. Once the reader
-    /// derives one representation from the other, serialising both is writing
-    /// a value nobody reads: a `terms` field on the wire is decoded out of the
-    /// segment at snapshot time, written to disk, shipped to a Raft follower
-    /// mid-catch-up, and dropped on arrival.
-    ///
-    /// A format-1 document still carries a populated one; `terms` below drops
-    /// it on arrival, and `forward` — always complete, even there — is what
-    /// restores. The key itself stays on the wire, empty, so a released 0.4.29
-    /// can still parse this document and refuse it by version rather than by
-    /// serde; see [`LegacyInvertedIndex`].
-    Keyword {
-        #[serde(default, skip_deserializing)]
-        terms: LegacyInvertedIndex,
-        forward: HashMap<String, String>,
-        bytes: u64,
-    },
-    Number {
-        /// Stored as `f64` on the wire; `SortableF64` is re-derived on
-        /// restore.
-        forward: HashMap<String, f64>,
-        bytes: u64,
-    },
-    /// Forward column only, for the reason the Keyword arm above states, with
-    /// the same empty [`LegacyInvertedIndex`] under the key 0.4.29 requires.
-    Set {
-        #[serde(default, skip_deserializing)]
-        elements: LegacyInvertedIndex,
-        forward: HashMap<String, BTreeSet<String>>,
-        bytes: u64,
-    },
-    /// Vector snapshot.
-    ///
-    /// HNSW graphs are not serialized directly — on restore the
-    /// vectors are bulk-reinserted into a fresh graph, which is fast
-    /// enough (millions per second on CPU) and avoids tying us to the
-    /// upstream graph format. The codebook is carried verbatim when
-    /// SQ is enabled so decoding reproduces the exact same f32 values
-    /// that were originally indexed.
-    Vector {
-        spec: VectorSpec,
-        vectors: Vec<(String, Vec<f32>)>,
-        codebook: Option<ScalarCodebook>,
-        bytes: u64,
-    },
-    Hash {
-        /// external_id → 64-bit hash.
-        forward: HashMap<String, u64>,
-        bytes: u64,
-    },
-}
-
-impl FieldIndexSnapshot {
-    /// What the reindex audit can learn about this arm, in the same three
-    /// shapes [`FieldIndex::audit_kind`] answers in. The two must agree arm for
-    /// arm: `SnapshotV1::reindex_needed` and `Engine::reindex_needed` are one
-    /// verdict asked of the document and of the restored engine.
-    ///
-    /// [`FieldIndex::audit_kind`]: crate::index::domain::field_index::FieldIndex::audit_kind
-    fn audit_kind(&self) -> FieldAudit {
-        match self {
-            FieldIndexSnapshot::Text { .. } => FieldAudit::Unauditable(TEXT_UNAUDITABLE),
-            FieldIndexSnapshot::Keyword { .. }
-            | FieldIndexSnapshot::Number { .. }
-            | FieldIndexSnapshot::Set { .. }
-            | FieldIndexSnapshot::Hash { .. } => FieldAudit::PerId,
-            FieldIndexSnapshot::Vector { vectors, .. } => {
-                FieldAudit::WholeIndex(!vectors.is_empty())
-            }
-        }
-    }
-
-    /// Whether the forward column carries `eid`.
-    ///
-    /// This is the document-side twin of [`FieldIndex::holds`], and it reads the
-    /// exact column `from_snapshot` restores the index from — so "the document
-    /// holds it" and "the restored index answers for it" cannot come apart
-    /// without a `from_snapshot` bug, which is a different failure from the one
-    /// this audit is looking for.
-    ///
-    /// [`FieldIndex::holds`]: crate::index::domain::field_index::FieldIndex::holds
-    fn holds(&self, eid: &str) -> bool {
-        match self {
-            FieldIndexSnapshot::Keyword { forward, .. } => forward.contains_key(eid),
-            FieldIndexSnapshot::Number { forward, .. } => forward.contains_key(eid),
-            FieldIndexSnapshot::Set { forward, .. } => forward.contains_key(eid),
-            FieldIndexSnapshot::Hash { forward, .. } => forward.contains_key(eid),
-            FieldIndexSnapshot::Text { .. } | FieldIndexSnapshot::Vector { .. } => true,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Production checkpoint (Stage 2 Phase 2f-2): the disk engine as the running
-// binary's persistence — a segment checkpoint supersedes the CBOR RDB.
-// ---------------------------------------------------------------------------
-//
-// A checkpoint is a directory `dir/<collection>/` per collection, each holding
-// `<field>.lseg` segments, the `_collection.lmeta.lseg` EID column, any vector
-// `<field>.eids.lseg` sidecars, and a `_schema.json` (the field specs + version
-// + applied_seq, carried out-of-band so reopen knows each field's type without a
-// CBOR snapshot). `flush_to_segments` is the periodic snapshotter's call:
-// re-seal-capable (`Collection::seal_to_segments` gathers base-doc values through
-// the segment-aware dispatch, so a checkpoint AFTER a prior seal+drop is correct),
-// idempotent, and repeatable. `reopen_from_segment_dir` is cold-start: reopen
-// every collection via `Collection::open_from_segments` (no whole-collection load)
-// and return the max applied_seq so the WAL tail replays from there.
-//
-// Atomicity is the caller's (`SegmentRdbStore`): it stages a whole generation
-// under a temp dir and atomically renames it into place, so a torn checkpoint
-// never replaces a good one. `flush_to_segments` writes into whatever `dir` it is
-// handed; it does not own the atomic-rename.
-
-/// Per-collection checkpoint sidecar persisted next to the segments so a reopen
-/// knows each field's type + the collection version + the WAL position the seal
-/// is current as of — the schema the live `Collection::open_from_segments` needs
-/// out-of-band. Phase 2f-2.
-#[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct CheckpointSchema {
-    pub(crate) version: u32,
-    pub(crate) applied_seq: u64,
-    pub(crate) fields: BTreeMap<String, FieldSpec>,
-    #[serde(default)]
-    pub(crate) segment_layout: CheckpointLayout,
-}
-
-/// The marker is absent in shipped checkpoints. Public field names never
-/// become path components in newly published generations.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) enum CheckpointLayout {
-    #[default]
-    #[serde(rename = "legacy-raw-v0")]
-    Legacy,
-    #[serde(rename = "encoded-fields-v1")]
-    Encoded,
-}
-
-impl CheckpointLayout {
-    pub(crate) fn field_stem(self, name: &str) -> String {
-        match self {
-            Self::Legacy => name.to_owned(),
-            Self::Encoded => format!("fields/{}", collection_dir_name(name)),
-        }
-    }
-
-    pub(crate) fn from_sidecar(sidecar: &serde_json::Value) -> Result<Self> {
-        sidecar
-            .get("segment_layout")
-            .cloned()
-            .map(serde_json::from_value)
-            .transpose()
-            .map(|layout| layout.unwrap_or_default())
-            .map_err(Into::into)
-    }
-}
-
-pub(crate) const CHECKPOINT_SCHEMA_FILE: &str = "_schema.json";
-
-/// A collection id → filename-safe subdir name (hex-encoded), so any
-/// collection id is a valid directory.
-pub(crate) fn collection_dir_name(name: &str) -> String {
-    name.bytes().map(|b| format!("{b:02x}")).collect()
-}
-
-/// Decode a checkpoint subdir's hex-encoded name back to the collection id.
-/// `None` if the leaf is not valid hex (a stray file/dir in the checkpoint).
-pub(crate) fn collection_name_from_dir(dir: &std::path::Path) -> Option<String> {
-    let leaf = dir.file_name()?.to_str()?;
-    if leaf.is_empty() || leaf.len() % 2 != 0 {
-        return None;
-    }
-    let mut bytes = Vec::with_capacity(leaf.len() / 2);
-    let raw = leaf.as_bytes();
-    let mut i = 0;
-    while i < raw.len() {
-        let hi = (raw[i] as char).to_digit(16)?;
-        let lo = (raw[i + 1] as char).to_digit(16)?;
-        bytes.push((hi * 16 + lo) as u8);
-        i += 2;
-    }
-    String::from_utf8(bytes).ok()
-}
 
 // ---------------------------------------------------------------------------
 // Test seam: seal a Number field to a disk segment (disk tier)
@@ -6143,8 +5321,9 @@ mod segment_vector_diff_tests {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use crate::index::domain::field_index::delta::DROP_EID_CALLS;
 
     #[test]
     fn recovery_profile_is_opt_in_and_keeps_only_aggregate_counts_and_timings() {
@@ -6226,7 +5405,7 @@ mod tests {
 
     use crate::shared_kernel::types::query::{DuplicatedQuery, ExistsQuery};
 
-    fn build_users_schema() -> CreateCollectionRequest {
+    pub(crate) fn build_users_schema() -> CreateCollectionRequest {
         let mut fields = BTreeMap::new();
         fields.insert(
             "bio".into(),
@@ -6279,7 +5458,7 @@ mod tests {
         CreateCollectionRequest { fields }
     }
 
-    fn item(
+    pub(crate) fn item(
         eid: &str,
         field: &str,
         value: FieldValue,
@@ -8837,218 +8016,6 @@ mod tests {
             e.stats("users").unwrap().documents_indexed,
             1,
             "the retained schema must accept a new document immediately"
-        );
-    }
-
-    #[test]
-    fn unavailable_retirement_worker_fails_safe_without_changing_apply_semantics() {
-        let before = RETIREMENT_FAILSAFE_RETAINS.load(Ordering::Relaxed);
-        let detached = Collection::new(BTreeMap::new()).unwrap();
-        retire_collection_with(&CollectionRetirementWorker::Unavailable, detached);
-        assert_eq!(
-            RETIREMENT_FAILSAFE_RETAINS.load(Ordering::Relaxed),
-            before + 1,
-            "a failed worker handoff must retain the old generation instead of dropping it on the apply thread"
-        );
-    }
-
-    #[test]
-    fn retired_generation_splits_document_reclaim_into_fixed_size_tasks() {
-        let e = Engine::new();
-        e.create_collection("users", build_users_schema()).unwrap();
-        let documents = RETIRED_DOCUMENTS_PER_TASK * 2 + 1;
-        let mut items = Vec::with_capacity(documents);
-        for document in 0..documents {
-            items.push(item(
-                &format!("u{document}"),
-                "email",
-                FieldValue::String(format!("u{document}@example.com")),
-            ));
-        }
-        e.index(
-            "users",
-            IndexRequest {
-                items,
-                request_id: None,
-            },
-        )
-        .unwrap();
-        assert_eq!(
-            e.stats("users").unwrap().documents_indexed,
-            documents as u64
-        );
-
-        let detached = e
-            .state
-            .write()
-            .unwrap()
-            .collections
-            .remove("users")
-            .expect("test collection exists");
-        DROP_EID_CALLS.with(|calls| calls.set(0));
-        let generation = RetiredGeneration::new(0, detached);
-        let mut task_sizes = Vec::new();
-        let final_collection = loop {
-            match generation.drain_document_task() {
-                RetireTaskProgress::More { retired_documents } => {
-                    task_sizes.push(retired_documents);
-                }
-                RetireTaskProgress::Complete {
-                    retired_documents,
-                    collection,
-                } => {
-                    task_sizes.push(retired_documents);
-                    break collection;
-                }
-            }
-        };
-
-        assert_eq!(
-            task_sizes,
-            vec![RETIRED_DOCUMENTS_PER_TASK, RETIRED_DOCUMENTS_PER_TASK, 1],
-            "each token owns one bounded document slice"
-        );
-        DROP_EID_CALLS.with(|calls| {
-            assert_eq!(
-                calls.get(),
-                documents as u64,
-                "the detached worker removed each indexed field exactly once"
-            );
-        });
-        assert!(final_collection.interner.to_eid.is_empty());
-        assert!(final_collection.interner.to_hash.is_empty());
-        assert!(final_collection.eid_fields.is_empty());
-        assert!(final_collection.cell_versions.is_empty());
-        assert!(final_collection.doc_versions.is_empty());
-        assert!(final_collection.field_checksums.is_empty());
-        assert_eq!(final_collection.fields["email"].bytes(), 0);
-        drop(final_collection);
-    }
-
-    #[test]
-    fn retired_generation_requeues_exactly_one_token_until_completion() {
-        let e = Engine::new();
-        e.create_collection("users", build_users_schema()).unwrap();
-        let documents = RETIRED_DOCUMENTS_PER_TASK + 1;
-        let items = (0..documents)
-            .map(|document| {
-                item(
-                    &format!("u{document}"),
-                    "email",
-                    FieldValue::String(format!("u{document}@example.com")),
-                )
-            })
-            .collect();
-        e.index(
-            "users",
-            IndexRequest {
-                items,
-                request_id: None,
-            },
-        )
-        .unwrap();
-        let detached = e
-            .state
-            .write()
-            .unwrap()
-            .collections
-            .remove("users")
-            .expect("test collection exists");
-        let generation = Arc::new(RetiredGeneration::new(0, detached));
-        let (sender, receiver) = mpsc::channel();
-
-        run_retire_task(
-            RetireTask {
-                generation: Arc::clone(&generation),
-            },
-            &sender,
-        );
-        let completion = try_receive_retirement_task(&receiver)
-            .expect("one incomplete generation must requeue one token");
-        assert!(
-            receiver.try_recv().is_err(),
-            "one generation may not enqueue multiple concurrent tokens"
-        );
-
-        run_retire_task(completion, &sender);
-        finish_retirement_task();
-        assert!(
-            receiver.try_recv().is_err(),
-            "the final token must acknowledge completion without requeueing"
-        );
-        assert!(
-            generation.collection.lock().unwrap().is_none(),
-            "completion consumes the detached collection exactly once"
-        );
-    }
-
-    #[test]
-    fn shared_retirement_receiver_assigns_distinct_generation_tokens_to_workers() {
-        let (sender, receiver) = mpsc::channel();
-        let receiver = Arc::new(Mutex::new(receiver));
-        let first = Arc::new(RetiredGeneration::new(
-            41,
-            Collection::new(BTreeMap::new()).unwrap(),
-        ));
-        let second = Arc::new(RetiredGeneration::new(
-            42,
-            Collection::new(BTreeMap::new()).unwrap(),
-        ));
-        send_retirement_task(
-            &sender,
-            RetireTask {
-                generation: Arc::clone(&first),
-            },
-        )
-        .unwrap();
-        send_retirement_task(
-            &sender,
-            RetireTask {
-                generation: Arc::clone(&second),
-            },
-        )
-        .unwrap();
-        drop(sender);
-
-        let barrier = Arc::new(std::sync::Barrier::new(3));
-        let (observed_sender, observed_receiver) = mpsc::channel();
-        std::thread::scope(|scope| {
-            for _ in 0..2 {
-                let receiver = Arc::clone(&receiver);
-                let barrier = Arc::clone(&barrier);
-                let observed_sender = observed_sender.clone();
-                scope.spawn(move || {
-                    barrier.wait();
-                    let task = receive_retirement_task(receiver.as_ref())
-                        .expect("each worker receives one pre-enqueued token");
-                    observed_sender.send(task.generation.id).unwrap();
-                    finish_retirement_task();
-                });
-            }
-            barrier.wait();
-        });
-
-        let mut observed = vec![
-            observed_receiver.recv().unwrap(),
-            observed_receiver.recv().unwrap(),
-        ];
-        observed.sort_unstable();
-        assert_eq!(observed, vec![41, 42]);
-        assert!(
-            receiver.lock().unwrap().try_recv().is_err(),
-            "the two workers consumed both tokens exactly once"
-        );
-    }
-
-    #[test]
-    fn collection_reclaimer_worker_count_defaults_and_caps() {
-        assert_eq!(collection_retirement_worker_count(None), 1);
-        assert_eq!(collection_retirement_worker_count(Some("0")), 1);
-        assert_eq!(collection_retirement_worker_count(Some("invalid")), 1);
-        assert_eq!(collection_retirement_worker_count(Some("2")), 2);
-        assert_eq!(
-            collection_retirement_worker_count(Some("99")),
-            MAX_COLLECTION_RETIREMENT_WORKERS
         );
     }
 
@@ -11753,6 +10720,9 @@ mod external_version_lww_tests {
 #[cfg(test)]
 mod sort_missing_tests {
     use super::*;
+    use crate::index::domain::query::sort_missing::{
+        MATERIALIZED_SORT_COMPARISONS, MATERIALIZED_SORT_RETAINED_HIGH_WATER,
+    };
     use crate::shared_kernel::types::{
         document::IndexItem,
         query::{ExistsQuery, SortMissing},
@@ -12098,6 +11068,7 @@ mod sort_missing_tests {
 #[cfg(test)]
 mod has_child_sort_tests {
     use super::*;
+    use crate::index::domain::query::sort_missing::MATERIALIZED_SORT_RETAINED_HIGH_WATER;
     use crate::shared_kernel::types::document::IndexItem;
 
     fn kw() -> FieldSpec {
@@ -13147,6 +12118,7 @@ mod batch_unindex_docs_tests {
 #[cfg(test)]
 mod staged_text_stats_tests {
     use super::*;
+    use crate::index::domain::text_index::{reset_staged_term_probes, staged_term_probes};
     use crate::index::infrastructure::staging::staged_text_row;
     use crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions;
 

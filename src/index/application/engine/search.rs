@@ -22,6 +22,8 @@ use crate::index::domain::query::predicate::{
 use crate::index::domain::query::sort::{
     sort_score, sort_value_at, sort_values_for_doc, validate_sort_request, SortValue,
 };
+#[cfg(test)]
+use crate::index::domain::query::sort_missing::MATERIALIZED_SORT_RETAINED_HIGH_WATER;
 use crate::index::domain::query::sort_missing::{
     missing_heap_keys, try_missing_keyword_bitmap_plan, MissingSortHeapCandidate,
 };
@@ -32,8 +34,6 @@ use crate::index::domain::query::{query_needs_universe, validate_query};
 use crate::index::domain::storage_error::StorageError;
 use crate::shared_kernel::types::query::{QueryNode, SortMissing};
 use crate::shared_kernel::types::search::{SearchHit, SearchRequest, SearchResponse};
-#[cfg(test)]
-use crate::storage::MATERIALIZED_SORT_RETAINED_HIGH_WATER;
 
 impl Engine {
     pub fn search(&self, collection_id: &str, req: SearchRequest) -> Result<SearchResponse> {

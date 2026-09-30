@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::index::application::engine::Engine;
 use crate::index::domain::storage_error::StorageError;
-use crate::storage::{SnapshotV1, SNAPSHOT_VERSION};
+use crate::index::infrastructure::snapshot_v1::{SnapshotV1, SNAPSHOT_VERSION};
 
 /// `(to_map_version, bucket, collection_id, total_chunks)` — see
 /// [`Engine::apply_reshard_prune_chunk`].

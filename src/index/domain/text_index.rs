@@ -6,6 +6,8 @@
 pub(crate) mod query;
 pub(crate) mod terms;
 
+#[cfg(test)]
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -16,6 +18,32 @@ use crate::index::domain::postings::Postings;
 use crate::index::domain::query::rank::MatchRankCache;
 use crate::index::domain::token_set::TokenSet;
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+
+#[cfg(test)]
+thread_local! {
+    // #4246 cost oracle: how many (term, staged row) pairs a read path
+    // inspected. `/stats` must stay O(live terms + staged tokens); the
+    // per-term staged scan it replaced was O(terms x staged_rows).
+    static STAGED_TERM_PROBES: Cell<u64> = const { Cell::new(0) };
+}
+
+/// Count one inspection of a staged Text row on behalf of one term. Compiled
+/// out entirely outside `cfg(test)`.
+#[inline]
+fn note_staged_term_probes(_probes: u64) {
+    #[cfg(test)]
+    STAGED_TERM_PROBES.with(|probes| probes.set(probes.get().saturating_add(_probes)));
+}
+
+#[cfg(test)]
+pub(crate) fn reset_staged_term_probes() {
+    STAGED_TERM_PROBES.with(|probes| probes.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn staged_term_probes() -> u64 {
+    STAGED_TERM_PROBES.with(Cell::get)
+}
 
 #[derive(Debug, Default)]
 pub(crate) struct TextIndex {

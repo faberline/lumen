@@ -95,7 +95,8 @@ pub(in crate::persistence) fn write_compacted_field(
     if sidecar.get("fields") != Some(&collection.schema) {
         bail!("staged checkpoint schema differs from catalog during compaction");
     }
-    let layout = crate::storage::CheckpointLayout::from_sidecar(&sidecar)?;
+    let layout =
+        crate::index::infrastructure::checkpoint_fs::CheckpointLayout::from_sidecar(&sidecar)?;
     let stem = layout.field_stem(field);
     let last = inputs.last().expect("validated non-empty");
     let (segment_rel, rows_rel, kind, ordinal) = if includes_base {

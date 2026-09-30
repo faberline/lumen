@@ -20,11 +20,11 @@ use crate::index::domain::number_index::NumberIndex;
 use crate::index::domain::set_index::SetIndex;
 use crate::index::domain::text_index::TextIndex;
 use crate::index::domain::vector::flat_cpu_index::FlatCpuIndex;
-use crate::shared_kernel::types::schema::{FieldSpec, VectorSpec};
-use crate::storage::{
+use crate::index::infrastructure::checkpoint_fs::{
     checkpoint_write_boundary, collection_dir_name, hard_link_checkpoint_tree, CheckpointLayout,
     CheckpointSchema, CHECKPOINT_SCHEMA_FILE,
 };
+use crate::shared_kernel::types::schema::{FieldSpec, VectorSpec};
 
 /// Detached file work. It has no reference to Engine or its state lock.
 pub(crate) struct FrozenCheckpoint {

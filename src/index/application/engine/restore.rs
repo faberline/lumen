@@ -10,7 +10,7 @@ use anyhow::{anyhow, bail, Result};
 use crate::index::application::engine::Engine;
 use crate::index::domain::collection::coverage::{FieldNotAudited, ReindexNeeded};
 use crate::index::domain::collection::Collection;
-use crate::storage::{SnapshotV1, SNAPSHOT_VERSION};
+use crate::index::infrastructure::snapshot_v1::{SnapshotV1, SNAPSHOT_VERSION};
 
 impl Engine {
     /// Snapshot every collection's in-memory state. The result is a

@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::json;
 
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::operator::application::reshard_driver::oversize::{
     clear_oversize_block, oversize_block_condition, record_oversize_block,
     should_skip_for_oversize, OversizedDocumentBlock, OVERSIZE_RECHECK_TICKS,
@@ -14,7 +15,6 @@ use crate::operator::application::reshard_driver::transfer::{
 };
 use crate::operator::application::reshard_driver::DriveOutcome;
 use crate::sharding::domain::reshard_batch::ReshardBatch;
-use crate::storage::SnapshotV1;
 
 // ---- #1444 R2: oversized-doc reshard remediation --------------------
 

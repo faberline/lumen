@@ -4,6 +4,7 @@ use std::sync::Arc;
 use storage_durable::CommitStep;
 
 use crate::api::RestoreSink;
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::ingest::application::write_coordinator::errors::{RestartRequired, StorageFullError};
 use crate::persistence::application::restore::tests::{
     assert_collections, current_bytes, engine_with, replacement_snapshot, setup, FailAt, WATERMARK,
@@ -12,7 +13,6 @@ use crate::persistence::application::restore::{
     RestoreNotCommitted, RestoreUnavailable, SegmentRestoreSink, UnavailableRestoreSink,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
-use crate::storage::SnapshotV1;
 
 #[tokio::test]
 async fn invalid_snapshot_does_not_wait_on_gate_or_change_state() {

@@ -20,8 +20,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use storage_durable::{FsyncPolicy, SnapshotFileStore};
 
+use crate::index::application::engine::Engine;
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::persistence::domain::rdb_store::RdbStore;
-use crate::{index::application::engine::Engine, storage::SnapshotV1};
 
 /// A snapshot plus the log sequence it is current as of.
 #[derive(Debug, Serialize, Deserialize)]

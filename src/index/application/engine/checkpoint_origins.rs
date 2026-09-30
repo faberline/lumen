@@ -17,7 +17,7 @@ use crate::index::application::live_delta::{
 };
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::sortable_f64::MISSING_SORTABLE_F64_BITS;
-use crate::storage::collection_dir_name;
+use crate::index::infrastructure::checkpoint_fs::collection_dir_name;
 
 impl Engine {
     pub(crate) fn bind_checkpoint_origins(

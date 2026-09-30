@@ -212,7 +212,7 @@ async fn sealed_hnsw_cache_is_invalidated_by_direct_reshard_and_restore_calls() 
     seal(sink.clone()).await;
     assert!(engine
         .apply_reshard_batch(
-            crate::storage::SnapshotV1 {
+            crate::index::infrastructure::snapshot_v1::SnapshotV1 {
                 version: 0,
                 collections: BTreeMap::new(),
             },

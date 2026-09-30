@@ -2,6 +2,8 @@
 //! once to a bitmap, then the keyword's posting buckets streamed in field
 //! order, with each bucket's selection bounded by the page.
 
+#[cfg(test)]
+use std::cell::Cell;
 use std::cmp::Ordering as CmpOrdering;
 use std::collections::{BTreeSet, BinaryHeap};
 
@@ -21,8 +23,14 @@ use crate::index::domain::query::sort::{compare_sort_value, SortValue};
 use crate::index::domain::query::terms::field_presence_bitmap;
 use crate::shared_kernel::types::query::{QueryNode, SortMissing, SortOrder, SortSpec};
 use crate::shared_kernel::types::search::{SearchHit, SearchRequest};
+
 #[cfg(test)]
-use crate::storage::MATERIALIZED_SORT_COMPARISONS;
+thread_local! {
+    // #3997 structural oracles are thread-local so parallel storage tests
+    // cannot perturb the counter that one test resets and asserts.
+    pub(crate) static MATERIALIZED_SORT_COMPARISONS: Cell<u64> = const { Cell::new(0) };
+    pub(crate) static MATERIALIZED_SORT_RETAINED_HIGH_WATER: Cell<u64> = const { Cell::new(0) };
+}
 
 /// One normalized field-sort component for the bounded missing-aware heap.
 /// Its ordering is the public sort ordering: smaller is a better result. A

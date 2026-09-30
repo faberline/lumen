@@ -11,7 +11,7 @@ use crate::index::domain::fast_hash::FastHashMap;
 use crate::index::domain::field_coverage::FieldCoverage;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::interner::Interner;
-use crate::storage::{CollectionSnapshot, FieldIndexSnapshot};
+use crate::index::infrastructure::snapshot_v1::{CollectionSnapshot, FieldIndexSnapshot};
 
 impl Collection {
     pub(crate) fn to_snapshot(&self) -> Result<CollectionSnapshot> {
