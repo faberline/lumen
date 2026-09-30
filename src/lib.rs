@@ -105,8 +105,8 @@ mod shared_kernel;
 /// schema, the query-shape cookbook, and the field/analyzer catalog — the
 /// agent-integration surface, emitted without a running server.
 pub mod spec;
-pub mod storage;
 pub use crate::access::infrastructure::tls;
+pub use crate::compat::storage;
 pub use crate::compat::tokenize;
 pub use crate::compat::types;
 pub use crate::compat::vector_index;

@@ -23,8 +23,8 @@ pub(crate) struct KeywordIndex {
     /// Dense live-tail forward cache for hot per-doc predicates and snapshots.
     /// `forward` remains a sparse compatibility/fallback map for restored older
     /// snapshots, while new writes avoid a per-doc HashMap insert.
-    pub(crate) dense_forward: Vec<Option<String>>,
-    pub(crate) forward: FastHashMap<u32, String>,
+    pub(in crate::index) dense_forward: Vec<Option<String>>,
+    pub(in crate::index) forward: FastHashMap<u32, String>,
     pub(crate) bytes: u64,
     /// Stage 2 disk-tier (Phase 2e-A): a sealed columnar mmap segment covering
     /// doc ids `[0..n_docs)` — a sorted prefix-compressed string DICT plus a
@@ -35,7 +35,7 @@ pub(crate) struct KeywordIndex {
     /// state so OR/AND posting walks are untouched. DEFAULTS to `None`; while it
     /// is `None` (nothing sealed) every read path is byte-for-byte the
     /// in-RAM path. Purely additive.
-    pub(crate) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
+    pub(in crate::index) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
     /// QUERY-TIME TOMBSTONE (Phase 2h-1 FIX): base docids `[0..seg.n_docs)`
     /// deleted SINCE the last seal. The inverted `terms` index was DROPPED to
     /// disk at seal, so `drop_eid` can no longer remove a sealed base id from
@@ -79,7 +79,7 @@ impl KeywordIndex {
     /// overlay: an update keeps the tombstone but supplies a replacement there,
     /// while a true delete has no live forward entry and remains absent.
     #[inline]
-    pub(crate) fn keyword_at(&self, id: u32) -> Option<String> {
+    pub(in crate::index) fn keyword_at(&self, id: u32) -> Option<String> {
         if let Some(value) = self.dense_forward.get(id as usize).and_then(|v| v.as_ref()) {
             return Some(value.clone());
         }

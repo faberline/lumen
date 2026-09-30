@@ -65,7 +65,7 @@ impl Interner {
         }
     }
 
-    pub(crate) fn id(&self, eid: &str) -> Option<u32> {
+    pub(in crate::index) fn id(&self, eid: &str) -> Option<u32> {
         self.id_with_hash(eid, hash_external_id(eid))
     }
 

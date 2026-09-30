@@ -30,7 +30,7 @@ use crate::shared_kernel::types::schema::{FieldSpec, VectorSpec};
 pub(crate) struct FrozenCheckpoint {
     // File payloads must drop before the capture releases their charge.
     pub(super) files: Vec<(String, FrozenCollectionFiles)>,
-    pub(crate) capture: CheckpointCapture,
+    pub(super) capture: CheckpointCapture,
 }
 
 pub(super) enum FrozenCollectionFiles {

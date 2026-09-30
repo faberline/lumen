@@ -17,7 +17,7 @@ pub(crate) struct SetIndex {
     /// `KeywordIndex::dup_values`); drives `duplicates` without a full
     /// `elements` scan. Cleared at seal.
     pub(crate) dup_values: BTreeSet<String>,
-    pub(crate) forward: FastHashMap<u32, BTreeSet<String>>,
+    pub(in crate::index) forward: FastHashMap<u32, BTreeSet<String>>,
     pub(crate) bytes: u64,
     /// Stage 2 disk-tier (Phase 2e-A): a sealed columnar mmap segment covering
     /// doc ids `[0..n_docs)` — a shared sorted string DICT (var-width) + a fixed
@@ -31,7 +31,7 @@ pub(crate) struct SetIndex {
     /// O(live tail), not O(distinct set elements). DEFAULTS to `None`; while it
     /// is `None` (nothing sealed) every read path is byte-for-byte the
     /// in-RAM path. Purely additive.
-    pub(crate) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
+    pub(in crate::index) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
     /// QUERY-TIME TOMBSTONE (Phase 2h-2): base docids `[0..seg.n_docs)` deleted
     /// SINCE the last seal. The inverted `elements` index was DROPPED to disk at
     /// seal, so `drop_eid` can no longer remove a sealed base id from the
@@ -56,7 +56,7 @@ impl SetIndex {
     /// `self.forward.get(&id).map(|s| s.contains(el))`. The segment stores the
     /// exact member strings, so membership matches the live `forward` entry.
     #[inline]
-    pub(crate) fn set_contains(&self, id: u32, el: &str) -> bool {
+    pub(in crate::index) fn set_contains(&self, id: u32, el: &str) -> bool {
         if let Some(set) = self.forward.get(&id) {
             return set.contains(el);
         }
@@ -105,7 +105,7 @@ impl SetIndex {
     /// value. Used by `drop_eid` after the forward payload has been dropped to
     /// disk, so the inverted `elements` postings are still removed on delete.
     #[inline]
-    pub(crate) fn set_members(&self, id: u32) -> Option<BTreeSet<String>> {
+    pub(in crate::index) fn set_members(&self, id: u32) -> Option<BTreeSet<String>> {
         if let Some(set) = self.forward.get(&id) {
             return Some(set.clone());
         }

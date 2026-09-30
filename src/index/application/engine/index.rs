@@ -44,7 +44,7 @@ fn flush_group_coverage(
 }
 
 impl Engine {
-    pub(crate) fn index_inner(
+    pub(in crate::index::application) fn index_inner(
         &self,
         collection_id: &str,
         req: IndexRequest,

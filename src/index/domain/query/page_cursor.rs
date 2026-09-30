@@ -32,7 +32,7 @@ fn encode_cursor(json: String) -> String {
     STANDARD_NO_PAD.encode(json)
 }
 
-pub(crate) fn make_cursor(offset: usize) -> String {
+pub(in crate::index) fn make_cursor(offset: usize) -> String {
     encode_cursor(format!("{{\"offset\":{offset}}}"))
 }
 

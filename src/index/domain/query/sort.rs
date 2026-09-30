@@ -196,3 +196,6 @@ pub(crate) fn sort_score(value: &SortValue) -> f32 {
         SortValue::Keyword(_) => 1.0,
     }
 }
+
+#[cfg(test)]
+mod tests;

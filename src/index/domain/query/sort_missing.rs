@@ -28,8 +28,8 @@ use crate::shared_kernel::types::search::{SearchHit, SearchRequest};
 thread_local! {
     // #3997 structural oracles are thread-local so parallel storage tests
     // cannot perturb the counter that one test resets and asserts.
-    pub(crate) static MATERIALIZED_SORT_COMPARISONS: Cell<u64> = const { Cell::new(0) };
-    pub(crate) static MATERIALIZED_SORT_RETAINED_HIGH_WATER: Cell<u64> = const { Cell::new(0) };
+    static MATERIALIZED_SORT_COMPARISONS: Cell<u64> = const { Cell::new(0) };
+    pub(in crate::index) static MATERIALIZED_SORT_RETAINED_HIGH_WATER: Cell<u64> = const { Cell::new(0) };
 }
 
 /// One normalized field-sort component for the bounded missing-aware heap.
@@ -299,3 +299,6 @@ pub(crate) fn try_missing_keyword_bitmap_plan(
         .collect();
     Ok(Some((hits, total)))
 }
+
+#[cfg(test)]
+mod tests;

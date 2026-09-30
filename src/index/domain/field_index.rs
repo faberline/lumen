@@ -197,3 +197,6 @@ impl FieldIndex {
         // analyzer / open SST" hooks on the LSM backend.
     }
 }
+
+#[cfg(test)]
+mod tests;

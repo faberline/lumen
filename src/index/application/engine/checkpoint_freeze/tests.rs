@@ -377,3 +377,5 @@ fn checkpoint_freeze_exchanges_journal_for_all_field_backends() {
         }
     }
 }
+
+mod background_merge;

@@ -48,7 +48,7 @@ impl TextIndex {
     /// composing `text_projection::live_term_count` walk, and a torn segment
     /// dictionary reports the staged-plus-tail fold alone, both fail-closed the
     /// same way the torn-segment branch below is.
-    pub(crate) fn live_unique_tokens(&self) -> u64 {
+    pub(in crate::index::domain) fn live_unique_tokens(&self) -> u64 {
         let composed = self.composed_live_term_count();
         // Tokens carried ONLY by staged rows or the live tail. Bounded by one
         // checkpoint interval of writes, so this set never grows with the
@@ -146,3 +146,6 @@ impl TextIndex {
         count
     }
 }
+
+#[cfg(test)]
+mod tests;

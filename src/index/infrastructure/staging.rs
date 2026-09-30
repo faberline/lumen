@@ -4,5 +4,5 @@
 //! reserves the input, the workspace and the reader separately.
 
 pub(in crate::index) mod large_text_row;
-pub(crate) mod staged_text_row;
+pub(in crate::index) mod staged_text_row;
 pub(in crate::index) mod staged_vector_row;

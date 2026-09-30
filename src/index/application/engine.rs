@@ -38,7 +38,7 @@ use crate::metrics::Metrics;
 #[derive(Default)]
 pub struct Engine {
     pub(crate) capture_barrier: crate::shared_kernel::capture_barrier::CaptureBarrier,
-    pub(crate) state: RwLock<EngineState>,
+    pub(in crate::index) state: RwLock<EngineState>,
     pub(super) metrics: Metrics,
     draining: AtomicBool,
     /// #1457 R1: receiver-side accumulator for `POST /admin/reshard:prune`
@@ -53,7 +53,7 @@ pub struct Engine {
     /// immune to system clock adjustments.
     prune_accum_tick: AtomicU64,
     // Release metadata charges only after the live state has dropped.
-    pub(crate) changes: crate::index::application::admission::record_reservation::EngineChanges,
+    pub(super) changes: crate::index::application::admission::record_reservation::EngineChanges,
     pub(crate) layer_maintenance: Arc<crate::persistence::application::capacity::Registry>,
     // Last: files remain available until live readers and pending payloads drop.
     checkpoint_root_guards:

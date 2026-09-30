@@ -10,9 +10,9 @@ use crate::ingest::domain::change_budget::{AdmissionError, ChangeBudget, Owner, 
 
 static NEXT_ENGINE: AtomicU64 = AtomicU64::new(1);
 
-pub(crate) struct EngineChanges {
+pub(in crate::index::application) struct EngineChanges {
     pub(in crate::index::application) records: RecordChargeJournal,
-    pub(crate) owner: Owner,
+    pub(in crate::index::application) owner: Owner,
     pub(in crate::index::application) budget: ChangeBudget,
     pub(super) id: u64,
 }

@@ -54,7 +54,7 @@ impl Engine {
     /// custom-method routes such as `POST /collections:search`, so keeping
     /// it out of collection ids means the `:search` verb syntax can never be
     /// ambiguous with a collection id.
-    pub(crate) fn create_collection_inner(
+    pub(in crate::index::application) fn create_collection_inner(
         &self,
         collection_id: &str,
         req: CreateCollectionRequest,

@@ -22,7 +22,7 @@ use crate::shared_kernel::types::schema::Analyzer;
 pub(super) const TEXT_SCRATCH_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Default)]
-pub(crate) struct PreparedTextRows {
+pub(super) struct PreparedTextRows {
     epoch: u64,
     collection: Option<(String, u64, u32)>,
     rows: BTreeMap<usize, BTreeMap<String, Arc<staged_text_row::StagedTextRow>>>,

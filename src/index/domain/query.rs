@@ -3,20 +3,20 @@
 //! Non-text leaves score a constant 1.0, a match scores BM25, and the
 //! combinators sum their children's scores.
 
-pub(crate) mod clause;
+mod clause;
 pub(crate) mod eval;
 pub(crate) mod filter_page;
-pub(crate) mod knn;
-pub(crate) mod page_cursor;
+mod knn;
+pub(in crate::index) mod page_cursor;
 pub(crate) mod plan;
 pub(crate) mod predicate;
 pub(crate) mod prepared_match;
 pub(crate) mod range;
 pub(crate) mod range_conjunction;
 pub(crate) mod rank;
-pub(crate) mod selectivity;
+mod selectivity;
 pub(crate) mod sort;
-pub(crate) mod sort_missing;
+pub(in crate::index) mod sort_missing;
 pub(crate) mod sort_plan;
 pub(crate) mod terms;
 pub(crate) mod text_match;

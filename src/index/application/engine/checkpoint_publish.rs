@@ -254,3 +254,6 @@ impl Engine {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

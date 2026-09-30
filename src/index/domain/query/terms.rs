@@ -276,3 +276,6 @@ pub(super) fn eval_terms(coll: &Collection, t: &TermsQuery) -> Result<RoaringBit
     }
     Ok(acc)
 }
+
+#[cfg(test)]
+mod tests;

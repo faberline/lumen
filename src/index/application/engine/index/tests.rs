@@ -140,3 +140,5 @@ fn idempotency_skips_duplicate_request_id() {
     let r = e.index("users", req).unwrap();
     assert_eq!(r.indexed, 0);
 }
+
+mod external_version_lww;

@@ -100,7 +100,7 @@ impl Postings {
         }
     }
     /// tf of `id`, if present (random access for the filtered-AND predicate path).
-    pub(crate) fn tf(&self, id: u32) -> Option<u32> {
+    pub(super) fn tf(&self, id: u32) -> Option<u32> {
         self.docids.binary_search(&id).ok().map(|pos| self.tfs[pos])
     }
     pub(crate) fn df(&self) -> usize {

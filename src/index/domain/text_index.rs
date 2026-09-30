@@ -36,12 +36,12 @@ fn note_staged_term_probes(_probes: u64) {
 }
 
 #[cfg(test)]
-pub(crate) fn reset_staged_term_probes() {
+fn reset_staged_term_probes() {
     STAGED_TERM_PROBES.with(|probes| probes.set(0));
 }
 
 #[cfg(test)]
-pub(crate) fn staged_term_probes() -> u64 {
+fn staged_term_probes() -> u64 {
     STAGED_TERM_PROBES.with(Cell::get)
 }
 
@@ -62,20 +62,20 @@ pub(crate) struct TextIndex {
     /// always returns this map to empty. Every read that folds these rows must
     /// therefore cost at most O(staged tokens) per call and never
     /// O(corpus terms x staged rows).
-    pub(crate) staged_rows:
+    pub(in crate::index) staged_rows:
         BTreeMap<u32, Arc<crate::index::infrastructure::staging::staged_text_row::StagedTextRow>>,
     /// token → flat docid-sorted postings (docid + tf).
-    pub(crate) tokens: BTreeMap<String, Postings>,
+    pub(in crate::index) tokens: BTreeMap<String, Postings>,
     /// Dense doc-len indexed by doc-id (zero may be an explicit empty value).
     /// Replaces a per-doc `forward` HashMap probe with a sequential Vec read on
     /// the hot loop.
-    pub(crate) lens: Vec<u32>,
+    pub(in crate::index) lens: Vec<u32>,
     /// dense doc-id → distinct tokens emitted. Used ONLY by `drop_eid` /
     /// snapshots / coverage, so new writes avoid a per-doc HashMap insert.
     pub(crate) distinct: Vec<Option<TokenSet>>,
     // Cold delta rows keep their stable runtime IDs without allocating a dense prefix.
     pub(crate) delta_docs: FastHashMap<u32, (u32, TokenSet)>,
-    pub(crate) doc_count: u64,
+    pub(in crate::index) doc_count: u64,
     pub(crate) total_doc_len: u64,
     pub(crate) bytes: u64,
     /// Stage 2 disk-tier (Phase 2e-B): a sealed columnar mmap segment covering
@@ -88,7 +88,7 @@ pub(crate) struct TextIndex {
     /// retains explicit live overlays and is otherwise dropped with the sealed
     /// base. DEFAULTS to `None`; while it is `None` (nothing sealed) every read
     /// path is byte-for-byte the in-RAM path. Purely additive.
-    pub(crate) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
+    pub(in crate::index) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
     /// Hot BM25 rankings for unique-doc match shapes (single token, multi-token
     /// AND), cleared on any text mutation/seal so cached scores never cross
     /// corpus states. Each entry is lazily sorted only as far as the largest
@@ -110,7 +110,7 @@ pub(crate) struct TextIndex {
     /// in-RAM `tokens`/`distinct` tail. DEFAULTS empty; stays empty while no
     /// segment is attached (the in-RAM `tokens` path needs no tombstone — a delete
     /// mutates `tokens` directly). Mirrors 2h-1/2h-2/2h-3's four touch-points.
-    pub(crate) tombstones: RoaringBitmap,
+    pub(in crate::index) tombstones: RoaringBitmap,
     /// Memoized composed live-term count (#4246). Only consulted when the
     /// composed reader cannot answer in O(1) — i.e. when there are pending
     /// deletes, or a compaction left the additive invariant behind. Keyed by

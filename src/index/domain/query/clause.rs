@@ -27,7 +27,7 @@ use crate::shared_kernel::types::query::{MatchOp, QueryNode};
 /// match. Only valid for [`is_predicable`] nodes in embedded mode.
 ///
 /// [`is_predicable`]: crate::index::domain::query::selectivity::is_predicable
-pub(crate) fn clause_matches(coll: &Collection, node: &QueryNode, id: u32) -> Result<Option<f32>> {
+pub(super) fn clause_matches(coll: &Collection, node: &QueryNode, id: u32) -> Result<Option<f32>> {
     let unknown = |field: &str| StorageError::UnknownField {
         collection: "<>".into(),
         field: field.to_string(),
@@ -162,7 +162,7 @@ pub(super) fn apply_conjuncts(
 }
 
 /// Evaluate a Term/Terms/Range conjunct to its doc bitmap (in-memory path).
-pub(crate) fn eval_filter_bitmap(coll: &Collection, node: &QueryNode) -> Result<RoaringBitmap> {
+pub(super) fn eval_filter_bitmap(coll: &Collection, node: &QueryNode) -> Result<RoaringBitmap> {
     match node {
         QueryNode::Term(t) => eval_term(coll, t),
         QueryNode::Terms(t) => eval_terms(coll, t),

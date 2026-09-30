@@ -29,7 +29,7 @@ use crate::shared_kernel::types::query::{MatchOp, QueryNode};
 
 /// Conjuncts the planner can check as a per-doc predicate. Anything else
 /// (nested And/Or, Knn) forces the materialize-and-intersect fallback.
-pub(crate) fn is_predicable(node: &QueryNode) -> bool {
+pub(super) fn is_predicable(node: &QueryNode) -> bool {
     matches!(
         node,
         QueryNode::Term(_)
@@ -56,7 +56,7 @@ pub(crate) fn is_predicable(node: &QueryNode) -> bool {
 /// keeps its graded score.
 ///
 /// [`eval_hamming`]: crate::index::domain::query::knn::eval_hamming
-pub(crate) fn is_exact_hamming(node: &QueryNode) -> bool {
+fn is_exact_hamming(node: &QueryNode) -> bool {
     matches!(node, QueryNode::Hamming(h) if h.max_distance == 0)
 }
 
@@ -64,7 +64,7 @@ pub(crate) fn is_exact_hamming(node: &QueryNode) -> bool {
 /// materializing it — used to pick the conjunct to drive the AND from. Reads
 /// only posting/bucket lengths. Returns `u64::MAX` for shapes we don't drive
 /// from (so a leaf is always preferred).
-pub(crate) fn estimate_selectivity(coll: &Collection, node: &QueryNode) -> u64 {
+pub(super) fn estimate_selectivity(coll: &Collection, node: &QueryNode) -> u64 {
     match node {
         // #182: the id list size is a cheap upper bound on matched docs — a
         // small ids clause is a good (selective) driver for the AND.
@@ -160,9 +160,9 @@ pub(crate) fn estimate_selectivity(coll: &Collection, node: &QueryNode) -> u64 {
 /// is reused across enough candidates to be worth holding.
 ///
 /// [`TextIndex::tok_postings_at`]: crate::index::domain::text_index::TextIndex::tok_postings_at
-pub(crate) const SPARSE_CANDIDATE_MAX: u64 = 64;
+pub(super) const SPARSE_CANDIDATE_MAX: u64 = 64;
 
-pub(crate) enum FilterCandidatePlan {
+pub(super) enum FilterCandidatePlan {
     Ready(RoaringBitmap),
     // Keep bitmap construction lazy so the keyword/range top-k fast path can
     // still return a page without first materializing the whole filter set.
@@ -170,7 +170,7 @@ pub(crate) enum FilterCandidatePlan {
 }
 
 impl FilterCandidatePlan {
-    pub(crate) fn resolve(
+    pub(super) fn resolve(
         self,
         coll: &Collection,
         filters: &[&QueryNode],
@@ -190,7 +190,7 @@ impl FilterCandidatePlan {
 /// Exact Hamming's estimate is only a prior, so hash collisions must pass this
 /// cardinality check too. All other cases retain the original estimates and
 /// rarest-positive planning, including its score accumulation order.
-pub(crate) fn plan_filter_candidates(
+pub(super) fn plan_filter_candidates(
     coll: &Collection,
     filters: &[&QueryNode],
     filter_nots: &[&QueryNode],
@@ -216,3 +216,6 @@ pub(crate) fn plan_filter_candidates(
         None => FilterCandidatePlan::Deferred,
     }))
 }
+
+#[cfg(test)]
+mod tests;

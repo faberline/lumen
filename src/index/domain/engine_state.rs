@@ -10,7 +10,7 @@ use crate::index::domain::collection::Collection;
 
 #[derive(Debug, Default)]
 pub(crate) struct EngineState {
-    pub(crate) collections: BTreeMap<String, Collection>,
+    pub(in crate::index) collections: BTreeMap<String, Collection>,
     pub(crate) next_collection_generation: u64,
     pub(crate) checkpoint_namespace: Option<std::path::PathBuf>,
 }

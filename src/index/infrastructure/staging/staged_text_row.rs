@@ -60,7 +60,7 @@ pub(in crate::index) enum StageAllocation {
 
 impl StagedTextRow {
     #[cfg(test)]
-    pub(crate) fn stage(
+    pub(in crate::index) fn stage(
         input: &str,
         analyzer: Analyzer,
         scratch_bytes: usize,

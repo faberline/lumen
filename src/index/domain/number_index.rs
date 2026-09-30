@@ -86,11 +86,11 @@ pub(crate) struct NumberIndex {
     /// `KeywordIndex::dup_values`); drives `duplicates` without a full
     /// `values` scan. Cleared at seal.
     pub(crate) dup_values: BTreeSet<SortableF64>,
-    pub(crate) forward: FastHashMap<u32, SortableF64>,
+    pub(in crate::index) forward: FastHashMap<u32, SortableF64>,
     /// Dense live-tail forward cache for hot per-doc predicates. `forward`
     /// remains the sparse ownership/snapshot map; this avoids HashMap lookup in
     /// bitmap-driven numeric filters on large in-memory indexes.
-    pub(crate) dense_forward: Vec<u64>,
+    pub(in crate::index) dense_forward: Vec<u64>,
     /// Per `(keyword field, term)` numeric skip lists. Each cached term stores its
     /// posting docids sorted by this number field's sortable bits, so
     /// `Term(s)(keyword) ∩ Range(number)` counts by binary-searching one small list
@@ -121,7 +121,7 @@ pub(crate) struct NumberIndex {
     /// boolean queries drive from the mmap (`value_postings` / `range_postings`)
     /// and the in-RAM `values` BTreeMap is DROPPED at seal (RAM after reopen is
     /// O(live tail), not O(distinct numeric values)).
-    pub(crate) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
+    pub(in crate::index) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
     /// QUERY-TIME TOMBSTONE (Phase 2h-3): base docids `[0..seg.n_docs)` deleted
     /// SINCE the last seal. The inverted/range `values` index was DROPPED to disk
     /// at seal, so `drop_eid` can no longer remove a sealed base id from the
@@ -136,7 +136,7 @@ pub(crate) struct NumberIndex {
     /// Set 2h-2 tombstone (same shape, same four touch-points: record in
     /// `drop_eid`, subtract in the posting accessors, exclude in `live_values`,
     /// clear at re-seal).
-    pub(crate) tombstones: RoaringBitmap,
+    pub(in crate::index) tombstones: RoaringBitmap,
 }
 
 impl NumberIndex {
@@ -153,12 +153,12 @@ impl NumberIndex {
     /// so `SortableF64::new` cannot fail here; if it ever did we fall back to
     /// the live map rather than panic.
     #[inline]
-    pub(crate) fn number_at(&self, id: u32) -> Option<SortableF64> {
+    pub(in crate::index) fn number_at(&self, id: u32) -> Option<SortableF64> {
         self.number_bits_at(id).map(SortableF64::from_bits)
     }
 
     #[inline]
-    pub(crate) fn live_number_at(&self, id: u32) -> Option<SortableF64> {
+    pub(in crate::index) fn live_number_at(&self, id: u32) -> Option<SortableF64> {
         self.number_at(id)
     }
 

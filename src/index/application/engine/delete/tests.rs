@@ -166,3 +166,5 @@ fn truncate_docs_preserves_schema_version_and_never_walks_documents() {
         "the retained schema must accept a new document immediately"
     );
 }
+
+mod batch_unindex_docs;

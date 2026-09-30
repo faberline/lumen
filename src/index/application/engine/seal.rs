@@ -101,7 +101,7 @@ impl Engine {
     /// the mmap. A doc indexed AFTER sealing (id >= n_docs) re-populates the
     /// live `terms`/`forward` tail, which `term_postings`/`keyword_at` compose
     /// with the segment base. Returns the sealed doc count.
-    pub(crate) fn __seal_keyword_field_to_segment(
+    pub(in crate::index) fn __seal_keyword_field_to_segment(
         &self,
         collection_id: &str,
         field: &str,
@@ -250,7 +250,7 @@ impl Engine {
     /// and `drop_eid` tombstones a sealed base id. `doc_len()` reads the explicit
     /// overlay before the segment DocLen column. Mirrors PRODUCTION
     /// `seal_to_segment`. Returns the sealed doc count.
-    pub(crate) fn __seal_text_field_to_segment(
+    pub(in crate::index) fn __seal_text_field_to_segment(
         &self,
         collection_id: &str,
         field: &str,
@@ -311,7 +311,7 @@ impl Engine {
     /// `forward` in dense docid order `[0..n_docs)` (absent docs → `None`) via
     /// [`crate::persistence::infrastructure::segment::hash_writer::write_hash_segment`]. Mirrors the Number seam. Returns
     /// the sealed doc count.
-    pub(crate) fn __seal_hash_field_to_segment(
+    pub(in crate::index) fn __seal_hash_field_to_segment(
         &self,
         collection_id: &str,
         field: &str,

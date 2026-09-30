@@ -14,7 +14,7 @@ use anyhow::{bail, Result};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SortableF64(u64);
 
-pub(crate) const MISSING_SORTABLE_F64_BITS: u64 = 0xfff8_0000_0000_0000;
+pub(in crate::index) const MISSING_SORTABLE_F64_BITS: u64 = 0xfff8_0000_0000_0000;
 
 impl SortableF64 {
     pub fn new(x: f64) -> Result<Self> {

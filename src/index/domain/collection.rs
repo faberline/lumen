@@ -38,19 +38,19 @@ pub(crate) struct Collection {
     pub(crate) next_field_dirty_revision: u64,
     pub(crate) change_journal:
         crate::ingest::domain::change_journal::ChangeJournal<CheckpointValue>,
-    pub(crate) requires_full_checkpoint: bool,
+    pub(in crate::index) requires_full_checkpoint: bool,
     /// True only while the journal describes every row since this collection
     /// was empty. A missing origin alone cannot prove this after restore or a
     /// checkpoint namespace change.
     pub(crate) journal_complete_since_empty: bool,
     pub(crate) version: u32,
     pub(crate) schema: BTreeMap<String, FieldSpec>,
-    pub(crate) fields: FastHashMap<String, FieldIndex>,
+    pub(in crate::index) fields: FastHashMap<String, FieldIndex>,
     /// external_id ↔ dense u32 doc-id. Posting lists carry the u32.
-    pub(crate) interner: Interner,
+    pub(in crate::index) interner: Interner,
     /// Tracks which fields each doc-id wrote into — supports
     /// "delete all fields for this eid".
-    pub(crate) eid_fields: FastHashMap<u32, FieldCoverage>,
+    pub(in crate::index) eid_fields: FastHashMap<u32, FieldCoverage>,
     /// Recent request_id → timestamp; drives idempotency.
     pub(crate) seen_requests: VecDeque<(String, Instant)>,
     /// When set, the collection is soft-deleted — reads/writes return
@@ -70,14 +70,14 @@ pub(crate) struct Collection {
     /// `IndexItem.version`. A strictly-older versioned write is dropped at apply
     /// time. In-memory only (reconstructed by WAL replay); durability across
     /// snapshot/seal is a follow-up.
-    pub(crate) cell_versions: FastHashMap<u32, FastHashMap<String, u64>>,
+    pub(in crate::index) cell_versions: FastHashMap<u32, FastHashMap<String, u64>>,
     /// #1292: doc-level last-write-wins for `PUT .../docs:replace`. Sparse
     /// `doc-id → highest applied doc version`, populated only for docs
     /// replaced with an explicit `ReplaceDocItem.version`. Unlike
     /// `cell_versions` (per `(doc, field)`), this is one version per doc:
     /// a strictly-older versioned replace drops the entire item. In-memory
     /// only (reconstructed by WAL replay), same as `cell_versions`.
-    pub(crate) doc_versions: FastHashMap<u32, u64>,
+    pub(in crate::index) doc_versions: FastHashMap<u32, u64>,
     /// #1293: `docs:replace` no-op suppression side cache. Sparse `doc-id →
     /// field-name → FxHash content checksum` of the last value actually
     /// *written* to a `text`/`vector` field via `docs:replace` — the only
@@ -88,7 +88,7 @@ pub(crate) struct Collection {
     /// a missing entry after a restart just means the next replace of that
     /// field always applies (safe: writing is never wrong, only silently
     /// skipping would be).
-    pub(crate) field_checksums: FastHashMap<u32, FastHashMap<String, u64>>,
+    pub(in crate::index) field_checksums: FastHashMap<u32, FastHashMap<String, u64>>,
 }
 
 pub(crate) type FieldDirtySnapshot = BTreeMap<String, BTreeMap<String, u64>>;
@@ -203,7 +203,7 @@ impl Collection {
         }
     }
 
-    pub(crate) fn clear_search_cache(&mut self) {
+    pub(in crate::index) fn clear_search_cache(&mut self) {
         // Conservative invalidation precedes mutation. Even a partially failed
         // batch must never reuse its earlier immutable checkpoint bytes.
         self.data_version = self.data_version.saturating_add(1);

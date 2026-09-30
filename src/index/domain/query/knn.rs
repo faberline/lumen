@@ -113,7 +113,7 @@ fn eval_knn_inner(
 /// Hamming near-duplicate search: every doc whose 64-bit hash is within
 /// `max_distance` bits of the query hash, scored by similarity (closer →
 /// higher). Brute-force scan over the field's forward map.
-pub(crate) fn eval_hamming(coll: &Collection, q: &HammingQuery) -> Result<ScoredHits> {
+pub(super) fn eval_hamming(coll: &Collection, q: &HammingQuery) -> Result<ScoredHits> {
     let fi = coll
         .fields
         .get(&q.field)

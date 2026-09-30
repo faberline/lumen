@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct FieldCoverage {
+pub(in crate::index) struct FieldCoverage {
     pub(crate) names: Vec<String>,
 }
 
@@ -34,7 +34,7 @@ impl FieldCoverage {
         true
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub(in crate::index) fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
 

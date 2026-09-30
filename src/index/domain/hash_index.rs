@@ -12,7 +12,7 @@ use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 /// sub-linear; perceptual-hash corpora are typically small relative to text.
 #[derive(Debug, Default)]
 pub(crate) struct HashIndex {
-    pub(crate) forward: FastHashMap<u32, u64>,
+    pub(in crate::index) forward: FastHashMap<u32, u64>,
     pub(crate) bytes: u64,
     pub(crate) tombstones: RoaringBitmap,
     /// Stage 2 disk-tier (Phase 2d): a sealed columnar mmap segment covering
@@ -21,7 +21,7 @@ pub(crate) struct HashIndex {
     /// `forward` tail for ids `>= n_docs`. DEFAULTS to `None`; while it is
     /// `None` (nothing sealed) the read
     /// path is byte-for-byte the in-RAM path. Purely additive.
-    pub(crate) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
+    pub(in crate::index) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
 }
 
 impl HashIndex {
@@ -31,7 +31,7 @@ impl HashIndex {
     /// is attached — this is exactly `self.forward.get(&id)`. The segment stores the
     /// raw `u64`, so a hit is bit-equal to the live entry.
     #[inline]
-    pub(crate) fn hash_at(&self, id: u32) -> Option<u64> {
+    pub(in crate::index) fn hash_at(&self, id: u32) -> Option<u64> {
         if let Some(value) = self.forward.get(&id) {
             return Some(*value);
         }
