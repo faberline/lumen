@@ -53,8 +53,8 @@ pub use crate::compat::backup_sink;
 mod compat;
 pub use crate::compat::config;
 pub use crate::compat::coordinator;
+pub use crate::compat::dx;
 pub use crate::sharding::application::consumer;
-pub mod dx;
 mod index;
 mod ingest;
 pub use crate::compat::metrics;
@@ -101,11 +101,11 @@ pub use crate::compat::segment_rdb;
 pub use crate::compat::segment_restore;
 mod sharding;
 mod shared_kernel;
+pub use crate::access::infrastructure::tls;
 /// Offline machine-readable self-description (`lumen spec`): OpenAPI / JSON
 /// schema, the query-shape cookbook, and the field/analyzer catalog — the
 /// agent-integration surface, emitted without a running server.
-pub mod spec;
-pub use crate::access::infrastructure::tls;
+pub use crate::compat::spec;
 pub use crate::compat::storage;
 pub use crate::compat::tokenize;
 pub use crate::compat::types;

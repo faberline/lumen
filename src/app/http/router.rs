@@ -266,7 +266,7 @@ pub fn router_with_admission(
     let probes = service_http::standard_probe_routes_canonical_json(
         readiness,
         Some(metrics),
-        crate::spec::openapi_json,
+        crate::app::spec::openapi_json,
     );
     let admin = Router::new()
         .route("/version", get(version))

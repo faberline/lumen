@@ -1,11 +1,10 @@
-// HANDWRITE-BEGIN gap="missing-generator:dx-contract:lumen-runtime-renderer" tracker="1683" reason="The runtime renderer binds TD task decisions to Rust FieldType capabilities; AW has the dx-contract parser/skeleton but not yet this cross-source Rust emitter."
 //! Generated Developer & Agent Experience surface for Lumen.
 //!
 //! Runtime field operations come from [`FieldType::capabilities`]. Task
-//! navigation decisions are compiled from `src/dx-contract.yaml`, which this
-//! module `include_str!`s so the contract is in the binary rather than read at
-//! run time — runbook prose, typed inputs, and command templates cannot become
-//! a second hand-maintained CLI catalogue.
+//! navigation decisions are compiled from `src/app/spec/dx-contract.yaml`,
+//! which this module `include_str!`s so the contract is in the binary rather
+//! than read at run time — runbook prose, typed inputs, and command templates
+//! cannot become a second hand-maintained CLI catalogue.
 //!
 //! The split is deliberate and it is an authority split, not a layout one. The
 //! yaml owns task classification, narrative, preconditions, typed inputs,
@@ -21,7 +20,7 @@ use serde_json::{json, Value};
 
 use crate::shared_kernel::types::schema::FieldType;
 
-const DX_CONTRACT_REF: &str = "src/dx-contract.yaml";
+const DX_CONTRACT_REF: &str = "src/app/spec/dx-contract.yaml";
 const DX_CONTRACT_SOURCE: &str = include_str!("dx-contract.yaml");
 
 /// Field declarations and query operations emitted by `lumen spec --fields`.
@@ -257,4 +256,3 @@ mod tests {
         assert!(super::shared_provider("unknown-provider").is_err());
     }
 }
-// HANDWRITE-END
