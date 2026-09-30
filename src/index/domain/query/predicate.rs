@@ -15,7 +15,11 @@ use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::query::QueryNode;
 
 /// Boolean: does `id` satisfy `node`? (Score ignored — used by sort-walk.)
-pub(crate) fn query_predicate(coll: &Collection, node: &QueryNode, id: u32) -> Result<bool> {
+pub(in crate::index) fn query_predicate(
+    coll: &Collection,
+    node: &QueryNode,
+    id: u32,
+) -> Result<bool> {
     Ok(match node {
         QueryNode::Term(_)
         | QueryNode::Terms(_)
@@ -69,7 +73,7 @@ pub(super) fn query_has_knn(node: &QueryNode) -> bool {
 /// #181: does the query tree contain a `has_child` clause anywhere? Such a query
 /// must be sorted via the materialized path (eval_query resolves the join),
 /// never the per-doc keyset planner.
-pub(crate) fn query_has_has_child(node: &QueryNode) -> bool {
+pub(in crate::index) fn query_has_has_child(node: &QueryNode) -> bool {
     match node {
         QueryNode::HasChild(_) => true,
         QueryNode::And(cs) | QueryNode::Or(cs) => cs.iter().any(query_has_has_child),
@@ -80,7 +84,7 @@ pub(crate) fn query_has_has_child(node: &QueryNode) -> bool {
 
 /// Constant-score = no scored clause anywhere (no `match`, no `knn`). All
 /// matches score equally, so collapse can early-terminate (any `limit` groups).
-pub(crate) fn query_is_constant_score(node: &QueryNode) -> bool {
+pub(in crate::index) fn query_is_constant_score(node: &QueryNode) -> bool {
     match node {
         // HasChild produces a constant-score bitmap, but collapse early-term
         // can't DRIVE through it (no per-doc predicate) → treat as non-constant
@@ -157,7 +161,7 @@ fn term_or_range_iter<'a>(
 /// Pick the cheapest Term/Range leaf to drive an early-terminating collapse.
 /// `And` → its cheapest such child; a top-level Term/Range → itself; otherwise
 /// `None` (Or/Not/scored queries fall back to the full collapse path).
-pub(crate) fn collapse_driver<'a>(
+pub(in crate::index) fn collapse_driver<'a>(
     coll: &'a Collection,
     query: &'a QueryNode,
 ) -> Option<Box<dyn Iterator<Item = u32> + 'a>> {

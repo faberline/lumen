@@ -15,7 +15,7 @@ use crate::index::domain::sortable_f64::{
 
 impl NumberIndex {
     #[inline]
-    pub(crate) fn clear_keyword_range_cache(&mut self) {
+    pub(in crate::index) fn clear_keyword_range_cache(&mut self) {
         if let Ok(cache) = self.keyword_range_cache.get_mut() {
             cache.clear();
         }
@@ -51,7 +51,7 @@ impl NumberIndex {
         (distinct, df)
     }
 
-    pub(crate) fn build_range_stats(&self) -> std::sync::Arc<NumberRangeStats> {
+    fn build_range_stats(&self) -> std::sync::Arc<NumberRangeStats> {
         let built = std::sync::Arc::new(NumberRangeStats::build(&self.values));
         if let Ok(mut guard) = self.range_stats.write() {
             // A concurrent estimate may have built it first; either snapshot is
@@ -61,7 +61,7 @@ impl NumberIndex {
         built
     }
 
-    pub(crate) fn keyword_range_docs(
+    pub(in crate::index::domain) fn keyword_range_docs(
         &self,
         keyword_field: &str,
         term: &str,
@@ -101,7 +101,7 @@ impl NumberIndex {
         built
     }
 
-    pub(crate) fn keyword_range_bitmap(
+    pub(in crate::index::domain) fn keyword_range_bitmap(
         &self,
         keyword_field: &str,
         term: &str,
@@ -157,7 +157,7 @@ impl NumberIndex {
     /// `None` only when the value is absent from BOTH sources (callers keep their
     /// `.unwrap_or_default()` empty-posting semantics).
     #[inline]
-    pub(crate) fn value_postings(
+    pub(in crate::index::domain) fn value_postings(
         &self,
         key: SortableF64,
     ) -> Option<std::borrow::Cow<'_, RoaringBitmap>> {
@@ -195,7 +195,7 @@ impl NumberIndex {
     ///   `values.range((low, high))` postings. Byte-identical result set to the
     ///   in-RAM range walk over the same data.
     #[inline]
-    pub(crate) fn range_postings(
+    pub(in crate::index::domain) fn range_postings(
         &self,
         low: std::ops::Bound<SortableF64>,
         high: std::ops::Bound<SortableF64>,
@@ -237,7 +237,7 @@ impl NumberIndex {
     /// (a small over-count only affects clause ORDERING, never the result set,
     /// which comes from `value_postings`).
     #[inline]
-    pub(crate) fn value_df(&self, key: SortableF64) -> u64 {
+    pub(in crate::index) fn value_df(&self, key: SortableF64) -> u64 {
         if let Some(seg) = &self.segment {
             let base = seg.number_value_df(key.bits()).unwrap_or(0);
             let tail = self.values.get(&key).map(|p| p.len()).unwrap_or(0);
@@ -252,7 +252,7 @@ impl NumberIndex {
     /// count-prefix range df PLUS the live-tail range lengths. Like `value_df`,
     /// does NOT subtract the tombstone (ordering-only input).
     #[inline]
-    pub(crate) fn range_df(
+    pub(in crate::index::domain) fn range_df(
         &self,
         low: std::ops::Bound<SortableF64>,
         high: std::ops::Bound<SortableF64>,
@@ -272,7 +272,7 @@ impl NumberIndex {
     }
 
     #[inline]
-    pub(crate) fn range_distinct_count(
+    pub(in crate::index::domain) fn range_distinct_count(
         &self,
         low: std::ops::Bound<SortableF64>,
         high: std::ops::Bound<SortableF64>,

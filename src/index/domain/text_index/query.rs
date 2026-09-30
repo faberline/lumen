@@ -33,7 +33,7 @@ impl TextIndex {
     /// semantics where `drop_eid` removes an emptied token from `tokens`. Tombstones
     /// only ever hold base ids (`< seg.n_docs`), so this never touches a tail id.
     #[inline]
-    pub(crate) fn tok_postings(&self, tok: &str) -> Option<TokPostings<'_>> {
+    pub(in crate::index) fn tok_postings(&self, tok: &str) -> Option<TokPostings<'_>> {
         if self.staged_rows.is_empty() {
             return self.unstaged_tok_postings(tok);
         }
@@ -88,7 +88,11 @@ impl TextIndex {
     /// the returned streams. Falls back to `tok_postings` when the sparse
     /// route is not cheaper or not exact (no segment, torn map, dense base
     /// lacking the token).
-    pub(crate) fn tok_postings_at(&self, tok: &str, candidates: &[u32]) -> Option<TokPostings<'_>> {
+    pub(in crate::index::domain) fn tok_postings_at(
+        &self,
+        tok: &str,
+        candidates: &[u32],
+    ) -> Option<TokPostings<'_>> {
         let Some(seg) = &self.segment else {
             return self.tok_postings(tok);
         };
@@ -257,7 +261,7 @@ impl TextIndex {
     /// tombstones). `eval_match`'s `And` branch uses this so an N-token
     /// intersection probes N-1 tokens with zero-allocation binary searches and
     /// streams only the DRIVING (rarest) token's postings.
-    pub(crate) fn tok_probe(&self, tok: &str) -> TokProbe<'_> {
+    pub(in crate::index::domain) fn tok_probe(&self, tok: &str) -> TokProbe<'_> {
         let seg = self
             .segment
             .as_ref()
@@ -294,7 +298,7 @@ impl TextIndex {
     /// with an in-RAM oracle. (`estimate_selectivity` only orders clauses, but
     /// keeping `df` live avoids a stale over-count after a delete-after-seal.)
     #[inline]
-    pub(crate) fn tok_df(&self, tok: &str) -> Option<usize> {
+    pub(in crate::index) fn tok_df(&self, tok: &str) -> Option<usize> {
         if !self.staged_rows.is_empty() {
             return self.tok_postings(tok).map(|posting| posting.df());
         }

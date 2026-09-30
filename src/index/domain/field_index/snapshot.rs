@@ -27,7 +27,7 @@ use crate::index::infrastructure::snapshot_v1::{FieldIndexSnapshot, LegacyInvert
 impl FieldIndex {
     /// `field_ids` are the ids the collection's coverage map says carry THIS
     /// field — the only ids a forward gather can find anything under.
-    pub(crate) fn to_snapshot(
+    pub(in crate::index::domain) fn to_snapshot(
         &self,
         interner: &Interner,
         field_ids: &[u32],
@@ -165,7 +165,10 @@ impl FieldIndex {
 }
 
 impl FieldIndex {
-    pub(crate) fn from_snapshot(snap: FieldIndexSnapshot, interner: &mut Interner) -> Result<Self> {
+    pub(in crate::index::domain) fn from_snapshot(
+        snap: FieldIndexSnapshot,
+        interner: &mut Interner,
+    ) -> Result<Self> {
         Ok(match snap {
             FieldIndexSnapshot::Text {
                 analyzer,

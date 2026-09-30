@@ -55,7 +55,7 @@ enum LoadedGraph<'a> {
     Dot(Hnsw<'a, f32, DistDot>),
 }
 
-pub(in crate::index) fn load(
+fn load(
     spec: VectorSpec,
     vectors: &[(String, Vec<f32>)],
     codebook: Option<ScalarCodebook>,

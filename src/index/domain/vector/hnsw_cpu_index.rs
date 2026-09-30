@@ -37,14 +37,14 @@ pub struct HnswCpuIndex {
 
 /// Diagnostic-only outcome for one HNSW restore attempt.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum HnswGraphCacheResult {
+pub(in crate::index) enum HnswGraphCacheResult {
     Hit,
     Absent,
     Rejected,
 }
 
 impl HnswGraphCacheResult {
-    pub(crate) fn as_str(self) -> &'static str {
+    pub(in crate::index) fn as_str(self) -> &'static str {
         match self {
             Self::Hit => "hit",
             Self::Absent => "absent",
@@ -56,17 +56,17 @@ impl HnswGraphCacheResult {
 /// Timings for one authoritative HNSW restoration. They are emitted by the
 /// storage layer and do not alter graph-cache acceptance or fallback behavior.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct HnswRestoreTiming {
-    pub(crate) cache_result: Option<HnswGraphCacheResult>,
-    pub(crate) cache_prepare: Duration,
-    pub(crate) cache_fingerprint: Duration,
-    pub(crate) cache_manifest: Duration,
-    pub(crate) cache_payload_hash: Duration,
-    pub(crate) cache_materialize: Duration,
-    pub(crate) cache_deserialize: Duration,
-    pub(crate) cache_validate: Duration,
-    pub(crate) fallback_rebuild: Duration,
-    pub(crate) total: Duration,
+pub(in crate::index) struct HnswRestoreTiming {
+    pub(in crate::index) cache_result: Option<HnswGraphCacheResult>,
+    pub(in crate::index) cache_prepare: Duration,
+    pub(in crate::index) cache_fingerprint: Duration,
+    pub(in crate::index) cache_manifest: Duration,
+    pub(in crate::index) cache_payload_hash: Duration,
+    pub(in crate::index) cache_materialize: Duration,
+    pub(in crate::index) cache_deserialize: Duration,
+    pub(in crate::index) cache_validate: Duration,
+    pub(in crate::index) fallback_rebuild: Duration,
+    pub(in crate::index) total: Duration,
 }
 
 impl HnswRestoreTiming {
@@ -85,9 +85,9 @@ impl HnswRestoreTiming {
 }
 
 #[derive(Debug)]
-pub(crate) struct HnswRestoreFailure {
-    pub(crate) error: anyhow::Error,
-    pub(crate) timing: HnswRestoreTiming,
+pub(in crate::index) struct HnswRestoreFailure {
+    pub(in crate::index) error: anyhow::Error,
+    pub(in crate::index) timing: HnswRestoreTiming,
 }
 
 pub(in crate::index) struct HnswCpuInner {
@@ -207,7 +207,7 @@ impl HnswBackend {
 }
 
 impl HnswCpuIndex {
-    pub(crate) fn restore_with_graph_cache(
+    pub(in crate::index) fn restore_with_graph_cache(
         spec: VectorSpec,
         vectors: Vec<(String, Vec<f32>)>,
         codebook: Option<ScalarCodebook>,
@@ -218,7 +218,7 @@ impl HnswCpuIndex {
             .map_err(|failure| failure.error)
     }
 
-    pub(crate) fn restore_with_graph_cache_timed(
+    pub(in crate::index) fn restore_with_graph_cache_timed(
         spec: VectorSpec,
         vectors: Vec<(String, Vec<f32>)>,
         codebook: Option<ScalarCodebook>,

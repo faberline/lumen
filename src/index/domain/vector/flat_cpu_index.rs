@@ -49,7 +49,7 @@ struct FlatLayer {
 pub(super) struct FlatVecs {
     pub(super) data: HashMap<u32, Vec<f32>>,
     eids: Vec<String>,
-    pub(super) dim: usize,
+    dim: usize,
     pub(super) seg: Option<Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
     pub(super) n_base: usize,
     tomb: roaring::RoaringBitmap,
@@ -199,10 +199,7 @@ impl FlatCpuIndex {
         Ok(Some(eids))
     }
 
-    pub(super) fn seal_to_segment_prod(
-        &self,
-        path: &std::path::Path,
-    ) -> Result<Option<Vec<String>>> {
+    fn seal_to_segment_prod(&self, path: &std::path::Path) -> Result<Option<Vec<String>>> {
         self.seal_checkpoint(path, None)
     }
 

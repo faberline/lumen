@@ -149,11 +149,11 @@ impl StagedTextRow {
         })
     }
 
-    pub(crate) fn reader(&self) -> &Arc<SegmentReader> {
+    pub(in crate::index) fn reader(&self) -> &Arc<SegmentReader> {
         &self.reader
     }
 
-    pub(crate) fn doc_len(&self) -> u32 {
+    pub(in crate::index) fn doc_len(&self) -> u32 {
         self.doc_len
     }
 
@@ -163,7 +163,7 @@ impl StagedTextRow {
 
     /// Match the live Text index accounting: each distinct token stores its
     /// bytes plus this document's external ID once.
-    pub(crate) fn indexed_bytes(&self, external_id: &str) -> u64 {
+    pub(in crate::index) fn indexed_bytes(&self, external_id: &str) -> u64 {
         // Match the existing live `TextIndex::bytes` arithmetic exactly. A
         // staged row has at most its checked `u32` document-token count, so
         // these sums are bounded by the admitted record payload in practice.

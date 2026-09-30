@@ -4,24 +4,24 @@
 //! combinators sum their children's scores.
 
 mod clause;
-pub(crate) mod eval;
-pub(crate) mod filter_page;
+pub(in crate::index) mod eval;
+mod filter_page;
 mod knn;
 pub(in crate::index) mod page_cursor;
-pub(crate) mod plan;
-pub(crate) mod predicate;
-pub(crate) mod prepared_match;
-pub(crate) mod range;
-pub(crate) mod range_conjunction;
-pub(crate) mod rank;
+pub(in crate::index) mod plan;
+pub(in crate::index) mod predicate;
+mod prepared_match;
+pub(super) mod range;
+mod range_conjunction;
+pub(super) mod rank;
 mod selectivity;
 pub(crate) mod sort;
 pub(in crate::index) mod sort_missing;
-pub(crate) mod sort_plan;
-pub(crate) mod terms;
-pub(crate) mod text_match;
-pub(crate) mod topk;
-pub(crate) mod zip_cursor;
+pub(in crate::index) mod sort_plan;
+mod terms;
+pub(in crate::index) mod text_match;
+pub(in crate::index) mod topk;
+mod zip_cursor;
 
 use std::collections::HashMap;
 
@@ -109,7 +109,7 @@ pub fn validate_query(root: &QueryNode) -> std::result::Result<(), StorageError>
 /// conjunct of an `And` is applied as a *filter* and needs no universe, so the
 /// common `And[positive…, Not[…]]` shape skips the O(N) clone. This mirrors
 /// `eval_query` exactly — keep the two in sync.
-pub(crate) fn query_needs_universe(q: &QueryNode) -> bool {
+pub(in crate::index) fn query_needs_universe(q: &QueryNode) -> bool {
     match q {
         QueryNode::Not(_) => true,
         QueryNode::Or(children) => children.iter().any(query_needs_universe),

@@ -2,5 +2,5 @@
 //! and the bounded streaming lowercase of one long whitespace token.
 
 #[cfg(feature = "jieba")]
-pub(crate) mod jieba_disk_route;
-pub(crate) mod unicode_lower_stream;
+pub(in crate::index) mod jieba_disk_route;
+pub(super) mod unicode_lower_stream;

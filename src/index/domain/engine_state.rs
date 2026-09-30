@@ -9,14 +9,14 @@ use anyhow::{anyhow, Result};
 use crate::index::domain::collection::Collection;
 
 #[derive(Debug, Default)]
-pub(crate) struct EngineState {
+pub(in crate::index) struct EngineState {
     pub(in crate::index) collections: BTreeMap<String, Collection>,
-    pub(crate) next_collection_generation: u64,
-    pub(crate) checkpoint_namespace: Option<std::path::PathBuf>,
+    pub(in crate::index) next_collection_generation: u64,
+    pub(in crate::index) checkpoint_namespace: Option<std::path::PathBuf>,
 }
 
 impl EngineState {
-    pub(crate) fn allocate_collection_generation(&mut self) -> Result<u64> {
+    pub(in crate::index) fn allocate_collection_generation(&mut self) -> Result<u64> {
         let generation = self.next_collection_generation.max(1);
         self.next_collection_generation = generation
             .checked_add(1)

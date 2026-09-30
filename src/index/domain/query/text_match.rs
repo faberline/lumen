@@ -158,7 +158,7 @@ pub(super) fn eval_match(coll: &Collection, m: &MatchQuery) -> Result<ScoredHits
 /// and a unique-key `out.entry(id).or_insert(0.0) += c` equals `c` (single
 /// token), while the `And` driver sums per token starting from `0.0f32` exactly
 /// as the map branch does before its single `insert`.
-pub(crate) fn eval_match_topk(
+pub(in crate::index) fn eval_match_topk(
     coll: &Collection,
     m: &MatchQuery,
     interner: &Interner,

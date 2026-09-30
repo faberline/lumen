@@ -11,10 +11,10 @@ use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 /// No LSH bucketing yet (linear over the forward map) — correct, not yet
 /// sub-linear; perceptual-hash corpora are typically small relative to text.
 #[derive(Debug, Default)]
-pub(crate) struct HashIndex {
+pub(in crate::index) struct HashIndex {
     pub(in crate::index) forward: FastHashMap<u32, u64>,
-    pub(crate) bytes: u64,
-    pub(crate) tombstones: RoaringBitmap,
+    pub(in crate::index) bytes: u64,
+    pub(in crate::index) tombstones: RoaringBitmap,
     /// Stage 2 disk-tier (Phase 2d): a sealed columnar mmap segment covering
     /// doc ids `[0..n_docs)`. When present, the per-doc hash read in the Hamming
     /// scan (`hash_at`) reads the segment for sealed ids and the in-RAM
@@ -55,14 +55,16 @@ impl HashIndex {
 }
 
 /// Parse a `hash` field value: a 64-bit hex string, optionally `0x`-prefixed.
-pub(crate) fn parse_hash(s: &str) -> Result<u64> {
+pub(in crate::index) fn parse_hash(s: &str) -> Result<u64> {
     parse_hash_number(s)
         .map_err(|e| anyhow!("hash field expects a 64-bit hex string (got `{s}`): {e}"))
 }
 
 /// Allocation-free numeric parse for retained WAL values. The ordinary error
 /// response keeps its existing diagnostic through `parse_hash` above.
-pub(crate) fn parse_hash_number(s: &str) -> std::result::Result<u64, std::num::ParseIntError> {
+pub(in crate::index) fn parse_hash_number(
+    s: &str,
+) -> std::result::Result<u64, std::num::ParseIntError> {
     let t = s.trim();
     let hex = t
         .strip_prefix("0x")

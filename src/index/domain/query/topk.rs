@@ -30,7 +30,7 @@ use crate::index::domain::text_index::TextIndex;
 use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::query::QueryNode;
 
-pub(crate) fn eval_predicable_and_topk(
+pub(in crate::index) fn eval_predicable_and_topk(
     coll: &Collection,
     q: &QueryNode,
     interner: &Interner,

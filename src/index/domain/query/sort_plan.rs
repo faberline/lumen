@@ -73,7 +73,7 @@ fn cursor_value_matches_kind(value: &SortValue, kind: SortFieldKind) -> bool {
     )
 }
 
-pub(crate) fn sort_after_for_request(
+pub(in crate::index) fn sort_after_for_request(
     coll: &Collection,
     sort: Option<&[SortSpec]>,
     parsed_cursor: &Option<PageCursor>,

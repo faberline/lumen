@@ -24,7 +24,7 @@ static NONCE: AtomicU64 = AtomicU64::new(0);
 thread_local! { static LAST_STAGE_DIRECTORY: RefCell<Option<PathBuf>> = const { RefCell::new(None) }; }
 
 #[cfg(test)]
-pub(super) fn last_stage_directory_for_test() -> Option<PathBuf> {
+fn last_stage_directory_for_test() -> Option<PathBuf> {
     LAST_STAGE_DIRECTORY.with(|last| last.borrow().clone())
 }
 
@@ -41,7 +41,7 @@ impl StagedVectorRow {
     /// bytes and may begin at any address. The callback must accept both the
     /// bounded decode buffer and reader metadata before any allocation or file
     /// creation happens.
-    pub(crate) fn stage(
+    pub(in crate::index) fn stage(
         payload: &[u8],
         dim: u32,
         mut reserve: impl FnMut(usize) -> Result<()>,
@@ -102,7 +102,7 @@ impl StagedVectorRow {
     /// The codebook is widened once over the complete row, then each value is
     /// encoded and decoded with the same arithmetic as vector_index::encode_sq
     /// and decode_sq. Only one bounded native-byte chunk is allocated.
-    pub(crate) fn stage_sq_canonical(
+    pub(in crate::index) fn stage_sq_canonical(
         &self,
         mut codebook: crate::index::domain::vector::quantize::ScalarCodebook,
         mut reserve: impl FnMut(usize) -> Result<()>,
@@ -148,10 +148,10 @@ impl StagedVectorRow {
         ))
     }
 
-    pub(crate) fn dim(&self) -> usize {
+    pub(in crate::index) fn dim(&self) -> usize {
         self.dim
     }
-    pub(crate) const fn retained_metadata_bound() -> usize {
+    pub(in crate::index) const fn retained_metadata_bound() -> usize {
         READER_METADATA_BYTES
     }
     pub(crate) fn as_f32_slice(&self) -> &[f32] {

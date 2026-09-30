@@ -62,7 +62,7 @@ thread_local! {
 // The segment READ paths that serve live queries are fully exercised and are
 // NOT covered by this allow.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) const EID_META_FILE: &str = "_collection.lmeta.lseg";
+pub(in crate::index) const EID_META_FILE: &str = "_collection.lmeta.lseg";
 
 #[cfg_attr(not(test), allow(dead_code))]
 impl Collection {
@@ -86,7 +86,7 @@ impl Collection {
         self.seal_to_segments_with_layout(dir, applied_seq, CheckpointLayout::Legacy)
     }
 
-    pub(crate) fn seal_to_segments_with_layout(
+    pub(in crate::index) fn seal_to_segments_with_layout(
         &mut self,
         dir: &std::path::Path,
         applied_seq: u64,
@@ -154,7 +154,7 @@ impl Collection {
         )
     }
 
-    pub(crate) fn open_from_segments_with_vectors(
+    pub(in crate::index) fn open_from_segments_with_vectors(
         dir: &std::path::Path,
         schema: BTreeMap<String, FieldSpec>,
         version: u32,

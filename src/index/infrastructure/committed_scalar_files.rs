@@ -27,18 +27,18 @@ use std::sync::{
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
-pub(crate) struct PreparedScalarFile {
-    pub(crate) reader: Arc<SegmentReader>,
-    pub(super) external_ids: Vec<String>,
-    pub(super) item_ordinals: Vec<usize>,
-    pub(super) field: String,
-    pub(super) bytes: u64,
-    pub(crate) retained_bytes: usize,
+pub(in crate::index) struct PreparedScalarFile {
+    pub(in crate::index) reader: Arc<SegmentReader>,
+    external_ids: Vec<String>,
+    item_ordinals: Vec<usize>,
+    field: String,
+    bytes: u64,
+    pub(in crate::index) retained_bytes: usize,
 }
 
 /// A total requirement, not an incremental allocation request. Both callbacks
 /// run outside apply. A failed callback leaves the source entirely unchanged.
-pub(super) fn prepare(
+fn prepare(
     scanner: &FastIndexScanner<'_>,
     field: &str,
     winning: &[usize],
@@ -66,7 +66,7 @@ pub(super) fn prepare(
 /// checked its document and flattened-field limits. This retains every field,
 /// ordinal, type, and reservation check; it only omits Index's item-count
 /// policy so a bounded Replace command may flatten to more than 1,000 fields.
-pub(crate) fn prepare_validated_fields(
+pub(in crate::index) fn prepare_validated_fields(
     scanner: &FastIndexScanner<'_>,
     field: &str,
     winning: &[usize],

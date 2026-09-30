@@ -26,7 +26,7 @@ impl NumberIndex {
     ///   value iff >=1 live doc remains. Tail-only values (indexed after the seal)
     ///   are folded in too. Returns a `BTreeMap`, so iteration is ascending by
     ///   value — identical order to the in-RAM `values`.
-    pub(crate) fn live_values(&self) -> BTreeMap<SortableF64, RoaringBitmap> {
+    pub(in crate::index) fn live_values(&self) -> BTreeMap<SortableF64, RoaringBitmap> {
         let Some(seg) = &self.segment else {
             return self.values.clone();
         };
@@ -66,7 +66,7 @@ impl NumberIndex {
     ///   `values` driver was DROPPED at seal. Iterating it is ascending by value,
     ///   identical order to the in-RAM map on the same data.
     #[inline]
-    pub(crate) fn sorted_values(
+    pub(in crate::index::domain) fn sorted_values(
         &self,
     ) -> std::borrow::Cow<'_, BTreeMap<SortableF64, RoaringBitmap>> {
         if self.segment.is_some() {
@@ -102,7 +102,7 @@ impl NumberIndex {
     /// Both sources are ascending; a value present in BOTH the segment column and
     /// the live tail is visited ONCE with the unioned posting (the merge advances
     /// both cursors on a key tie), matching the in-RAM single-entry-per-value map.
-    pub(crate) fn sorted_walk_segment<F>(
+    pub(in crate::index::domain) fn sorted_walk_segment<F>(
         &self,
         seg: &ComposedSegmentReader,
         descending: bool,
@@ -189,7 +189,7 @@ impl NumberIndex {
     /// BTreeMap. Exact total is counted from posting lengths whenever possible; docid
     /// iteration is only needed while filling the page, or when tombstones force a
     /// live count for a base posting.
-    pub(crate) fn range_page_segment(
+    pub(in crate::index::domain) fn range_page_segment(
         &self,
         seg: &ComposedSegmentReader,
         low: std::ops::Bound<SortableF64>,

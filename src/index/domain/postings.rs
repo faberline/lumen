@@ -8,8 +8,8 @@
 /// access chased heap-scattered tree nodes.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Postings {
-    pub(crate) docids: Vec<u32>,
-    pub(crate) tfs: Vec<u32>,
+    pub(in crate::index) docids: Vec<u32>,
+    pub(in crate::index) tfs: Vec<u32>,
 }
 
 impl Postings {
@@ -61,7 +61,7 @@ impl Postings {
             }
         }
     }
-    pub(crate) fn upsert_add(&mut self, id: u32, delta: u32) {
+    pub(in crate::index) fn upsert_add(&mut self, id: u32, delta: u32) {
         match self.docids.last().copied() {
             None => {
                 self.docids.push(id);
@@ -89,7 +89,7 @@ impl Postings {
             }
         }
     }
-    pub(crate) fn remove(&mut self, id: u32) -> bool {
+    pub(in crate::index) fn remove(&mut self, id: u32) -> bool {
         match self.docids.binary_search(&id) {
             Ok(pos) => {
                 self.docids.remove(pos);
@@ -103,7 +103,7 @@ impl Postings {
     pub(super) fn tf(&self, id: u32) -> Option<u32> {
         self.docids.binary_search(&id).ok().map(|pos| self.tfs[pos])
     }
-    pub(crate) fn df(&self) -> usize {
+    pub(super) fn df(&self) -> usize {
         self.docids.len()
     }
 }
@@ -121,13 +121,13 @@ impl Postings {
 /// distinct token instead of a 4 MiB materialization per token occurrence.
 ///
 /// [`TextIndex::tok_postings_at`]: crate::index::domain::text_index::TextIndex::tok_postings_at
-pub(crate) struct SparsePosting {
-    pub(crate) df: usize,
-    pub(crate) docids: Vec<u32>,
-    pub(crate) tfs: Vec<u32>,
+pub(in crate::index) struct SparsePosting {
+    pub(super) df: usize,
+    pub(super) docids: Vec<u32>,
+    pub(super) tfs: Vec<u32>,
 }
 
-pub(crate) enum TokPostings<'a> {
+pub(in crate::index) enum TokPostings<'a> {
     Live(&'a Postings),
     /// The candidate-only projection of the active posting (#4246). `df()` is
     /// the exact composed df, NOT the projection's length; `docids()`/`tfs()`
@@ -151,7 +151,7 @@ pub(crate) enum TokPostings<'a> {
 
 impl<'a> TokPostings<'a> {
     #[inline]
-    pub(crate) fn docids(&self) -> &[u32] {
+    pub(in crate::index) fn docids(&self) -> &[u32] {
         match self {
             TokPostings::Live(p) => &p.docids,
             TokPostings::Sparse(p) => &p.docids,
@@ -160,7 +160,7 @@ impl<'a> TokPostings<'a> {
         }
     }
     #[inline]
-    pub(crate) fn tfs(&self) -> &[u32] {
+    pub(in crate::index) fn tfs(&self) -> &[u32] {
         match self {
             TokPostings::Live(p) => &p.tfs,
             TokPostings::Sparse(p) => &p.tfs,
@@ -169,7 +169,7 @@ impl<'a> TokPostings<'a> {
         }
     }
     #[inline]
-    pub(crate) fn df(&self) -> usize {
+    pub(super) fn df(&self) -> usize {
         match self {
             TokPostings::Sparse(p) => p.df,
             _ => self.docids().len(),
@@ -178,7 +178,7 @@ impl<'a> TokPostings<'a> {
     /// tf of `id` via binary-search (docids ascending), or `None` — the same
     /// random-access probe `Postings::tf` does, on either source.
     #[inline]
-    pub(crate) fn tf(&self, id: u32) -> Option<u32> {
+    pub(super) fn tf(&self, id: u32) -> Option<u32> {
         match self {
             TokPostings::Live(p) => p.tf(id),
             TokPostings::Sparse(p) => p.docids.binary_search(&id).ok().map(|pos| p.tfs[pos]),

@@ -151,7 +151,7 @@ fn live_terms(index: &TextIndex) -> Result<Terms<'_>> {
     Ok(Box::new(UnionTerms::new(sources)?))
 }
 
-pub(crate) fn live_term_count(index: &TextIndex) -> Result<u64> {
+pub(in crate::index) fn live_term_count(index: &TextIndex) -> Result<u64> {
     let mut count = 0;
     for term in live_terms(index)? {
         if index.tok_postings(term?.as_ref()).is_some() {
@@ -221,7 +221,7 @@ impl TextStreamView for LiveProjection<'_> {
     }
 }
 
-pub(crate) fn write_live(
+pub(in crate::index) fn write_live(
     path: &std::path::Path,
     seq: u64,
     index: &TextIndex,

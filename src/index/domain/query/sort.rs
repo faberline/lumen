@@ -19,13 +19,13 @@ use crate::shared_kernel::types::search::SearchRequest;
 pub const MAX_SORT_KEYS: usize = 4;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum SortValue {
+pub(in crate::index) enum SortValue {
     Number(u64),
     Keyword(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SortAfter {
+pub(in crate::index) struct SortAfter {
     pub(super) values: Vec<SortValue>,
     pub(super) docid: u32,
 }
@@ -74,7 +74,7 @@ fn query_can_be_sort_predicate(node: &QueryNode) -> bool {
     }
 }
 
-pub(crate) fn validate_sort_request(
+pub(in crate::index) fn validate_sort_request(
     coll: &Collection,
     collection_id: &str,
     req: &SearchRequest,
@@ -112,7 +112,7 @@ pub(crate) fn validate_sort_request(
     Ok(())
 }
 
-pub(crate) fn sort_value_at(
+pub(in crate::index) fn sort_value_at(
     coll: &Collection,
     spec: &SortSpec,
     id: u32,
@@ -133,7 +133,7 @@ pub(crate) fn sort_value_at(
     }
 }
 
-pub(crate) fn sort_values_for_doc(
+pub(in crate::index) fn sort_values_for_doc(
     coll: &Collection,
     sort: &[SortSpec],
     id: u32,
@@ -190,7 +190,7 @@ pub(super) fn is_after_sort_cursor(
     compare_sort_tuples(values, docid, &after.values, after.docid, sort) == CmpOrdering::Greater
 }
 
-pub(crate) fn sort_score(value: &SortValue) -> f32 {
+pub(in crate::index) fn sort_score(value: &SortValue) -> f32 {
     match value {
         SortValue::Number(bits) => SortableF64::from_bits(*bits).to_f64() as f32,
         SortValue::Keyword(_) => 1.0,

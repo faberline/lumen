@@ -11,11 +11,15 @@ use crate::index::domain::collection::Collection;
 use crate::index::domain::field_index::FieldIndex;
 
 impl Collection {
-    pub(crate) fn mark_field_dirty(&mut self, field: &str, external_id: &str) -> Result<()> {
+    pub(in crate::index) fn mark_field_dirty(
+        &mut self,
+        field: &str,
+        external_id: &str,
+    ) -> Result<()> {
         self.mark_field_dirty_charged(field, external_id, None)
     }
 
-    pub(crate) fn mark_field_dirty_charged(
+    pub(in crate::index) fn mark_field_dirty_charged(
         &mut self,
         field: &str,
         external_id: &str,
@@ -56,7 +60,7 @@ impl Collection {
         Ok(())
     }
 
-    pub(crate) fn checkpoint_value(
+    pub(in crate::index) fn checkpoint_value(
         &self,
         field: &str,
         external_id: &str,
@@ -105,11 +109,11 @@ impl Collection {
         }
     }
 
-    pub(crate) fn field_dirty_snapshot(&self) -> BTreeMap<String, BTreeMap<String, u64>> {
+    pub(in crate::index) fn field_dirty_snapshot(&self) -> BTreeMap<String, BTreeMap<String, u64>> {
         self.field_dirty.clone()
     }
 
-    pub(crate) fn acknowledge_field_dirty(
+    pub(in crate::index) fn acknowledge_field_dirty(
         &mut self,
         captured: &BTreeMap<String, BTreeMap<String, u64>>,
     ) {
@@ -125,12 +129,12 @@ impl Collection {
     }
 
     #[cfg(test)]
-    pub(crate) fn field_dirty_len(&self, field: &str) -> usize {
+    fn field_dirty_len(&self, field: &str) -> usize {
         self.field_dirty.get(field).map_or(0, BTreeMap::len)
     }
 
     #[cfg(test)]
-    pub(crate) fn requires_full_checkpoint(&self) -> bool {
+    fn requires_full_checkpoint(&self) -> bool {
         self.requires_full_checkpoint
     }
 }

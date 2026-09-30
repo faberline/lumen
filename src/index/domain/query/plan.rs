@@ -31,14 +31,14 @@ use crate::shared_kernel::types::search::SearchRequest;
 /// `SortedField` pages continue via keyset (sort-value bits + docid),
 /// `Posting` pages keep the legacy offset cursor (posting/docid order has no
 /// resumable sort key).
-pub(crate) enum PlanKind {
+pub(in crate::index) enum PlanKind {
     SortedField,
     Posting,
     /// The general evaluator's score-desc + external_id-asc ranking.
     ScoreRanked,
 }
 
-pub(crate) fn try_plan(
+pub(in crate::index) fn try_plan(
     coll: &Collection,
     req: &SearchRequest,
     offset: usize,

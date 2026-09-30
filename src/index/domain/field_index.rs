@@ -2,10 +2,10 @@
 //! hash indexes a field can hold, built from the field's spec, with the
 //! per-field reads the collection's stats and reindex audit need.
 
-pub(crate) mod delta;
-pub(crate) mod open;
-pub(crate) mod seal;
-pub(crate) mod snapshot;
+pub(in crate::index) mod delta;
+mod open;
+mod seal;
+mod snapshot;
 
 use anyhow::{anyhow, Result};
 
@@ -20,7 +20,7 @@ use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, FieldType, Vector
 
 /// One field's index. Vector fields hold a heap-allocated trait
 /// object pointing at the chosen backend.
-pub(crate) enum FieldIndex {
+pub(in crate::index) enum FieldIndex {
     Text {
         analyzer: Analyzer,
         idx: TextIndex,
@@ -60,7 +60,7 @@ impl std::fmt::Debug for FieldIndex {
 }
 
 impl FieldIndex {
-    pub(crate) fn from_spec(spec: &FieldSpec) -> Result<Self> {
+    pub(in crate::index) fn from_spec(spec: &FieldSpec) -> Result<Self> {
         Ok(match spec.field_type {
             FieldType::Text => FieldIndex::Text {
                 analyzer: spec.analyzer.unwrap_or(Analyzer::WhitespaceLower),
@@ -83,7 +83,7 @@ impl FieldIndex {
         })
     }
 
-    pub(crate) fn field_type(&self) -> FieldType {
+    pub(in crate::index) fn field_type(&self) -> FieldType {
         match self {
             FieldIndex::Text { .. } => FieldType::Text,
             FieldIndex::Keyword(_) => FieldType::Keyword,
@@ -94,7 +94,7 @@ impl FieldIndex {
         }
     }
 
-    pub(crate) fn bytes(&self) -> u64 {
+    pub(in crate::index) fn bytes(&self) -> u64 {
         match self {
             FieldIndex::Text { idx, .. } => idx.bytes,
             FieldIndex::Keyword(k) => k.bytes,
@@ -109,7 +109,7 @@ impl FieldIndex {
     /// [`FieldAudit`] — and note that an arm answering
     /// [`FieldAudit::Unauditable`] is reported to the caller as unexamined
     /// rather than silently folded into a clean verdict.
-    pub(crate) fn audit_kind(&self) -> FieldAudit {
+    pub(super) fn audit_kind(&self) -> FieldAudit {
         match self {
             FieldIndex::Text { .. } => FieldAudit::Unauditable(TEXT_UNAUDITABLE),
             FieldIndex::Keyword(_)
@@ -127,7 +127,7 @@ impl FieldIndex {
     /// [`FieldAudit::PerId`] for; the others answer `true` so that a caller
     /// that probes them anyway cannot manufacture a damage report out of an
     /// arm this cannot speak for.
-    pub(crate) fn holds(&self, id: u32) -> bool {
+    pub(super) fn holds(&self, id: u32) -> bool {
         match self {
             FieldIndex::Keyword(k) => k.keyword_at(id).is_some(),
             FieldIndex::Number(n) => n.live_number_at(id).is_some(),
@@ -137,7 +137,7 @@ impl FieldIndex {
         }
     }
 
-    pub(crate) fn unique_terms(&self) -> u64 {
+    pub(in crate::index) fn unique_terms(&self) -> u64 {
         match self {
             // Phase 2h-4 FIX: a SEALED Text field has an empty in-RAM `tokens`
             // (dropped at seal), so `tokens.len()` would report 0. Count distinct
@@ -182,7 +182,7 @@ impl FieldIndex {
     /// Mean tokens per document on `text` fields; `None` on any other
     /// type. Exposes the BM25 length-normalization denominator so
     /// callers can reason about scoring stability.
-    pub(crate) fn avg_doc_len(&self) -> Option<f32> {
+    pub(in crate::index) fn avg_doc_len(&self) -> Option<f32> {
         match self {
             FieldIndex::Text { idx, .. } if idx.doc_count > 0 => {
                 Some(idx.total_doc_len as f32 / idx.doc_count as f32)
@@ -191,7 +191,7 @@ impl FieldIndex {
         }
     }
 
-    pub(crate) fn add_field(&self) {
+    pub(in crate::index) fn add_field(&self) {
         // Field indexes are created when a field is added; nothing to do
         // beyond construction. Method exists to mirror future "register
         // analyzer / open SST" hooks on the LSM backend.

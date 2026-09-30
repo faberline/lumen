@@ -3,6 +3,6 @@
 
 use rustc_hash::FxHashMap;
 
-pub(crate) type FastHashMap<K, V> = FxHashMap<K, V>;
+pub(in crate::index) type FastHashMap<K, V> = FxHashMap<K, V>;
 
-pub(crate) type FastHashSet<K> = rustc_hash::FxHashSet<K>;
+pub(super) type FastHashSet<K> = rustc_hash::FxHashSet<K>;

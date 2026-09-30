@@ -29,7 +29,7 @@ impl FieldIndex {
     /// (demand-paged); only the driver is in RAM. `spec` supplies the field type
     /// (and the Vector sub-spec); `vec_row_eids` is the persisted vector row→eid
     /// mapping (only consulted for a Vector field).
-    pub(crate) fn open_from_segment(
+    pub(in crate::index) fn open_from_segment(
         spec: &FieldSpec,
         dir: &std::path::Path,
         field_name: &str,

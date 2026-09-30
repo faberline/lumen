@@ -26,7 +26,7 @@ impl Engine {
         self.reopen_from_segment_dir_with_vectors(dir, false)
     }
 
-    pub(crate) fn reopen_from_segment_dir_with_vectors(
+    fn reopen_from_segment_dir_with_vectors(
         &self,
         dir: &std::path::Path,
         defer_hnsw: bool,

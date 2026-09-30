@@ -26,7 +26,7 @@ use crate::index::domain::query::{constant_score, query_needs_universe, ScoredHi
 use crate::index::domain::storage_error::StorageError;
 use crate::shared_kernel::types::query::{HasChildQuery, KnnQuery, QueryNode};
 
-pub(crate) fn eval_query(
+pub(in crate::index) fn eval_query(
     coll: &Collection,
     collection_id: &str,
     q: &QueryNode,

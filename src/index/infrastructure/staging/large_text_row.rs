@@ -28,7 +28,7 @@ use crate::persistence::infrastructure::segment::text_row_stage::{
 };
 use crate::persistence::infrastructure::segment::SegmentReader;
 
-pub(crate) const LARGE_TOKEN_SOURCE_BYTES: usize = 64 * 1024;
+pub(in crate::index) const LARGE_TOKEN_SOURCE_BYTES: usize = 64 * 1024;
 const MAPPED_TOKEN_BYTES: usize = 256;
 const IO_BUFFER_BYTES: usize = 8 * 1024;
 const RAW_OFFSET_COPY_BYTES: usize = 64 * 1024;
@@ -37,14 +37,14 @@ static NONCE: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(test)]
 #[derive(Clone, Copy)]
-pub(super) enum TokenFailure {
+enum TokenFailure {
     Normalize,
     Map,
 }
 #[cfg(test)]
 thread_local! { static TOKEN_FAILURE: Cell<Option<TokenFailure>> = const { Cell::new(None) }; }
 #[cfg(test)]
-pub(super) fn set_token_failure_for_test(failure: Option<TokenFailure>) {
+fn set_token_failure_for_test(failure: Option<TokenFailure>) {
     TOKEN_FAILURE.with(|current| current.set(failure));
 }
 fn token_failure(_stage: &'static str) -> Result<()> {
@@ -64,16 +64,16 @@ fn token_failure(_stage: &'static str) -> Result<()> {
 }
 
 #[derive(Debug)]
-pub(crate) struct LargeTextRowReceipt {
+pub(super) struct LargeTextRowReceipt {
     pub(super) doc_len: u32,
-    pub(crate) final_reader_metadata_bytes: usize,
+    pub(super) final_reader_metadata_bytes: usize,
 }
 
 /// Stage one exact `for_whitespace_lower_cow` row.  `reserve` is called before
 /// every helper-owned allocation. It is additive: `options.scratch_bytes` and
 /// the caller's `3 * threshold + 64` short-lower workspace were already
 /// reserved by the enclosing staged-row owner and are not charged again.
-pub(crate) fn stage_large_whitespace_row(
+pub(super) fn stage_large_whitespace_row(
     input: &str,
     final_path: &Path,
     scratch_dir: &Path,

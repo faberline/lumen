@@ -11,7 +11,7 @@ use crate::index::domain::fast_hash::FastHashSet;
 /// Small rows avoid a hash allocation. Large rows own each distinct token in
 /// a hash set, so normalization does not scan all preceding terms per token.
 #[derive(Debug, Clone)]
-pub(crate) enum TokenSet {
+pub(in crate::index) enum TokenSet {
     Inline(SmallVec<[String; 8]>),
     Indexed(FastHashSet<String>),
 }
@@ -23,7 +23,7 @@ impl Default for TokenSet {
 }
 
 impl TokenSet {
-    pub(crate) fn insert_str(&mut self, token: &str) -> bool {
+    pub(in crate::index) fn insert_str(&mut self, token: &str) -> bool {
         match self {
             Self::Inline(tokens) => {
                 if tokens.iter().any(|seen| seen == token) {
@@ -51,7 +51,7 @@ impl TokenSet {
         }
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &String> {
+    pub(in crate::index) fn iter(&self) -> impl Iterator<Item = &String> {
         let (inline, indexed) = match self {
             Self::Inline(tokens) => (Some(tokens), None),
             Self::Indexed(tokens) => (None, Some(tokens)),

@@ -11,21 +11,21 @@ use crate::index::domain::fast_hash::FastHashMap;
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 
 #[derive(Debug, Default)]
-pub(crate) struct KeywordIndex {
+pub(in crate::index) struct KeywordIndex {
     /// term → docs (RoaringBitmap so AND/OR is compressed-SIMD, not random
     /// per-doc forward lookups — the difference at 1M-doc filter intersection).
-    pub(crate) terms: BTreeMap<String, RoaringBitmap>,
+    pub(in crate::index) terms: BTreeMap<String, RoaringBitmap>,
     /// Side-index of LIVE-tail terms whose posting holds >= 2 docs, maintained
     /// O(log n) at index/delete time so `duplicates` iterates only candidate
     /// groups instead of scanning every distinct term. Tail-only state: cleared
     /// at seal (the sealed path enumerates the segment dict instead).
-    pub(crate) dup_values: BTreeSet<String>,
+    pub(in crate::index) dup_values: BTreeSet<String>,
     /// Dense live-tail forward cache for hot per-doc predicates and snapshots.
     /// `forward` remains a sparse compatibility/fallback map for restored older
     /// snapshots, while new writes avoid a per-doc HashMap insert.
     pub(in crate::index) dense_forward: Vec<Option<String>>,
     pub(in crate::index) forward: FastHashMap<u32, String>,
-    pub(crate) bytes: u64,
+    pub(in crate::index) bytes: u64,
     /// Stage 2 disk-tier (Phase 2e-A): a sealed columnar mmap segment covering
     /// doc ids `[0..n_docs)` — a sorted prefix-compressed string DICT plus a
     /// fixed `u32[n_docs]` dict-id forward column. When present, per-doc Keyword
@@ -54,14 +54,14 @@ pub(crate) struct KeywordIndex {
     /// `tombstones: RoaringBitmap`, records sealed-base deletes into it in
     /// `drop_eid`, subtracts it in the segment-ON branch of its posting accessor,
     /// and clears it at re-seal. Same shape, same four touch-points.
-    pub(crate) tombstones: RoaringBitmap,
+    pub(in crate::index) tombstones: RoaringBitmap,
 }
 
 /// Result of walking keyword posting buckets in lexical field-sort order.
 /// `Unavailable` is fail-closed: a torn segment falls back to the generic
 /// bounded top-k path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum KeywordBucketWalk {
+pub(super) enum KeywordBucketWalk {
     Completed,
     Stopped,
     Unavailable,
@@ -98,7 +98,7 @@ impl KeywordIndex {
     }
 
     #[inline]
-    pub(crate) fn set_keyword(&mut self, id: u32, value: String) {
+    pub(in crate::index) fn set_keyword(&mut self, id: u32, value: String) {
         let ix = id as usize;
         if self.dense_forward.len() <= ix {
             self.dense_forward.resize_with(ix + 1, || None);
@@ -107,7 +107,7 @@ impl KeywordIndex {
     }
 
     #[inline]
-    pub(crate) fn remove_keyword(&mut self, id: u32) -> Option<String> {
+    pub(in crate::index) fn remove_keyword(&mut self, id: u32) -> Option<String> {
         let dense = self
             .dense_forward
             .get_mut(id as usize)
@@ -115,7 +115,7 @@ impl KeywordIndex {
         dense.or_else(|| self.forward.remove(&id))
     }
 
-    pub(crate) fn forward_len(&self) -> usize {
+    pub(in crate::index) fn forward_len(&self) -> usize {
         self.dense_forward.iter().filter(|v| v.is_some()).count() + self.forward.len()
     }
 
@@ -146,7 +146,10 @@ impl KeywordIndex {
     /// `None` only when the term is absent from BOTH sources (so callers keep
     /// their `.unwrap_or_default()` empty-posting semantics).
     #[inline]
-    pub(crate) fn term_postings(&self, value: &str) -> Option<std::borrow::Cow<'_, RoaringBitmap>> {
+    pub(in crate::index) fn term_postings(
+        &self,
+        value: &str,
+    ) -> Option<std::borrow::Cow<'_, RoaringBitmap>> {
         if let Some(seg) = &self.segment {
             // Segment base, MINUS the query-time tombstone (base docids deleted
             // since the last seal — the on-disk postings can't be mutated, so the
@@ -190,7 +193,7 @@ impl KeywordIndex {
     /// emitted documents are identical. Keeping df off the full posting decode is
     /// the whole point of the count-prefix, so the over-count is accepted.
     #[inline]
-    pub(crate) fn term_df(&self, value: &str) -> u64 {
+    pub(in crate::index) fn term_df(&self, value: &str) -> u64 {
         if let Some(seg) = &self.segment {
             let base = seg.keyword_df(value).unwrap_or(0);
             let tail = self.terms.get(value).map(|p| p.len()).unwrap_or(0);
@@ -212,7 +215,7 @@ impl KeywordIndex {
     ///   `terms` for the same value, and keep the term iff >=1 live doc remains.
     ///   Tail-only terms (indexed after the seal, absent from the dict) are folded
     ///   in too. The result MATCHES the in-RAM `terms` snapshot on the same data.
-    pub(crate) fn live_terms(&self) -> BTreeMap<String, RoaringBitmap> {
+    pub(in crate::index) fn live_terms(&self) -> BTreeMap<String, RoaringBitmap> {
         let Some(seg) = &self.segment else {
             return self.terms.clone();
         };
@@ -246,7 +249,7 @@ impl KeywordIndex {
     /// time. Equal terms union the tail posting after tombstones are removed;
     /// tail-only terms retain their lexical place. Any torn ordinal entry is
     /// fail-closed and lets the caller take the generic exact fallback.
-    pub(crate) fn visit_sorted_posting_buckets<F>(
+    pub(super) fn visit_sorted_posting_buckets<F>(
         &self,
         descending: bool,
         mut visit: F,
@@ -358,7 +361,7 @@ impl KeywordIndex {
 /// Values whose live posting holds >= 2 docs — seeds the duplicates side-index
 /// (`dup_values`) when an inverted map is rebuilt wholesale (snapshot restore);
 /// the write/delete paths maintain it incrementally afterwards.
-pub(crate) fn dup_values_of<K: Ord + Clone>(map: &BTreeMap<K, RoaringBitmap>) -> BTreeSet<K> {
+pub(super) fn dup_values_of<K: Ord + Clone>(map: &BTreeMap<K, RoaringBitmap>) -> BTreeSet<K> {
     map.iter()
         .filter(|(_, set)| set.len() >= 2)
         .map(|(k, _)| k.clone())

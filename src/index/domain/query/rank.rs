@@ -59,7 +59,7 @@ pub(super) fn text_doc_len_at(idx: &TextIndex, segment_doc_lens: Option<&[u32]>,
 /// the top, so this `Ord` intentionally makes the *worst* retained hit greatest:
 /// lower score is worse; for an equal score, larger external_id is worse.
 #[derive(Debug)]
-pub(crate) struct TopRankedHit {
+pub(super) struct TopRankedHit {
     id: u32,
     score: f32,
     external_id: String,
@@ -164,7 +164,7 @@ pub(super) fn match_rank_key(op: MatchOp, tokens: &[String]) -> String {
 /// every match (the other half of the cold-500k-AND perf fix, alongside the
 /// zipper probe in `build_and_ranked`).
 #[derive(Debug)]
-pub(crate) struct MatchRankCache {
+pub(in crate::index) struct MatchRankCache {
     pub(super) entries: Vec<(u32, f32)>,
     pub(super) sorted_len: usize,
 }
@@ -274,4 +274,4 @@ pub(super) fn build_single_token_ranked(input: SingleTokenRankInput<'_>) -> Vec<
 }
 
 #[cfg(test)]
-pub(crate) mod tests;
+pub(super) mod tests;

@@ -3,6 +3,6 @@
 //! tokens one at a time instead of collecting them.
 
 #[cfg(not(feature = "jieba"))]
-pub(crate) mod jieba_fallback_stream;
+pub(in crate::index) mod jieba_fallback_stream;
 pub(crate) mod ngram_stream;
 pub(crate) mod tokenize;

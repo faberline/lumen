@@ -49,7 +49,7 @@ impl SortableF64 {
     /// ([`segment`](crate::persistence::infrastructure::segment) `ROLE_NUMBER_SORTED`)
     /// stores and binary-searches. Phase 2h-3.
     #[inline]
-    pub(crate) fn bits(self) -> u64 {
+    pub(in crate::index) fn bits(self) -> u64 {
         self.0
     }
 
@@ -57,7 +57,7 @@ impl SortableF64 {
     /// [`Self::bits`]) — used to lift an on-disk sorted-value key back into the
     /// in-RAM key space. Phase 2h-3.
     #[inline]
-    pub(crate) fn from_bits(bits: u64) -> Self {
+    pub(in crate::index) fn from_bits(bits: u64) -> Self {
         SortableF64(bits)
     }
 }
@@ -70,7 +70,7 @@ impl SortableF64 {
 /// on-disk `number_range_window`, which already collapses these to an empty
 /// window. A range with at least one `Unbounded` end is never empty by this rule.
 /// Phase 2h-3 (defensive: an inverted range was previously an unguarded panic).
-pub(crate) fn range_is_empty(
+pub(super) fn range_is_empty(
     low: std::ops::Bound<SortableF64>,
     high: std::ops::Bound<SortableF64>,
 ) -> bool {
@@ -95,7 +95,7 @@ pub(crate) fn range_is_empty(
 /// exactly the same inclusive/exclusive semantics `BTreeMap::range` does, so a
 /// segment-driven range is byte-identical to the in-RAM `values.range`. Phase 2h-3.
 #[inline]
-pub(crate) fn bound_to_bits(b: std::ops::Bound<SortableF64>) -> Option<(u64, bool)> {
+pub(super) fn bound_to_bits(b: std::ops::Bound<SortableF64>) -> Option<(u64, bool)> {
     use std::ops::Bound;
     match b {
         Bound::Included(v) => Some((v.bits(), true)),
@@ -104,7 +104,7 @@ pub(crate) fn bound_to_bits(b: std::ops::Bound<SortableF64>) -> Option<(u64, boo
     }
 }
 
-pub(crate) fn range_cache_key(
+pub(super) fn range_cache_key(
     lo: &std::ops::Bound<SortableF64>,
     hi: &std::ops::Bound<SortableF64>,
 ) -> String {

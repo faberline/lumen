@@ -40,7 +40,7 @@ pub fn tokenize(text: &str, analyzer: Analyzer) -> Vec<String> {
     index_text::tokenize(text, shared_analyzer(analyzer))
 }
 
-pub(crate) fn for_whitespace_lower_cow<'a>(
+pub(in crate::index) fn for_whitespace_lower_cow<'a>(
     text: &'a str,
     mut emit: impl FnMut(Cow<'a, str>),
 ) -> u32 {

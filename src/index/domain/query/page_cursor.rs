@@ -16,7 +16,7 @@ use crate::index::domain::query::sort::SortValue;
 
 /// A parsed pagination cursor.
 #[derive(Debug)]
-pub(crate) enum PageCursor {
+pub(in crate::index) enum PageCursor {
     /// Legacy offset skip.
     Offset(u64),
     /// Continue a single-number-field sorted walk after (sort-value bits, docid).
@@ -36,13 +36,13 @@ pub(in crate::index) fn make_cursor(offset: usize) -> String {
     encode_cursor(format!("{{\"offset\":{offset}}}"))
 }
 
-pub(crate) fn make_sort_cursor(bits: u64, docid: u32) -> String {
+pub(in crate::index) fn make_sort_cursor(bits: u64, docid: u32) -> String {
     encode_cursor(format!(
         "{{\"v\":2,\"m\":\"sort\",\"k\":{bits},\"d\":{docid}}}"
     ))
 }
 
-pub(crate) fn make_sort_values_cursor(values: &[SortValue], docid: u32) -> String {
+pub(in crate::index) fn make_sort_values_cursor(values: &[SortValue], docid: u32) -> String {
     let keys: Vec<serde_json::Value> = values
         .iter()
         .map(|value| match value {
@@ -54,12 +54,12 @@ pub(crate) fn make_sort_values_cursor(values: &[SortValue], docid: u32) -> Strin
     encode_cursor(payload.to_string())
 }
 
-pub(crate) fn make_score_cursor(score: f32, eid: &str) -> String {
+pub(in crate::index) fn make_score_cursor(score: f32, eid: &str) -> String {
     let payload = serde_json::json!({"v": 2, "m": "score", "k": score.to_bits(), "t": eid});
     encode_cursor(payload.to_string())
 }
 
-pub(crate) fn parse_page_cursor(s: &str) -> Option<PageCursor> {
+pub(in crate::index) fn parse_page_cursor(s: &str) -> Option<PageCursor> {
     use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
     let raw = STANDARD_NO_PAD.decode(s).ok()?;
     let v: serde_json::Value = serde_json::from_slice(&raw).ok()?;

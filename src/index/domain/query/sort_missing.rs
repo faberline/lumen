@@ -36,7 +36,7 @@ thread_local! {
 /// Its ordering is the public sort ordering: smaller is a better result. A
 /// `BinaryHeap` then exposes the worst retained result at `peek()`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum MissingHeapKey {
+pub(in crate::index) enum MissingHeapKey {
     MissingFirst,
     PresentAsc(SortValue),
     PresentDesc(SortValue),
@@ -81,11 +81,11 @@ impl PartialOrd for MissingHeapKey {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct MissingSortHeapCandidate {
-    pub(crate) id: u32,
-    pub(crate) tuple: Vec<Option<SortValue>>,
-    pub(crate) keys: Vec<MissingHeapKey>,
-    pub(crate) external_id: String,
+pub(in crate::index) struct MissingSortHeapCandidate {
+    pub(in crate::index) id: u32,
+    pub(in crate::index) tuple: Vec<Option<SortValue>>,
+    pub(in crate::index) keys: Vec<MissingHeapKey>,
+    pub(in crate::index) external_id: String,
 }
 
 impl Ord for MissingSortHeapCandidate {
@@ -107,7 +107,7 @@ impl PartialOrd for MissingSortHeapCandidate {
     }
 }
 
-pub(crate) fn missing_heap_keys(
+pub(in crate::index) fn missing_heap_keys(
     tuple: &[Option<SortValue>],
     sort: &[SortSpec],
 ) -> Vec<MissingHeapKey> {
@@ -183,7 +183,7 @@ fn constant_filter_bitmap_for_missing_sort(
 /// `missing:first`, discovering the leading missing group necessarily scans
 /// matches, but selection inside that group remains bounded by page size.
 ///
-pub(crate) fn try_missing_keyword_bitmap_plan(
+pub(in crate::index) fn try_missing_keyword_bitmap_plan(
     coll: &Collection,
     collection_id: &str,
     req: &SearchRequest,

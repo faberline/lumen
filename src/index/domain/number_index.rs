@@ -2,8 +2,8 @@
 //! doc-to-value forward map and the lazy order statistics that answer a range
 //! estimate, over a sealed segment base plus the live tail.
 
-pub(crate) mod range;
-pub(crate) mod sorted;
+mod range;
+mod sorted;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::RwLock;
@@ -24,7 +24,7 @@ use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 /// Estimation-only state: it never feeds result evaluation, so a rebuild race
 /// can at worst pick a different (still correct) plan.
 #[derive(Debug)]
-pub(crate) struct NumberRangeStats {
+pub(in crate::index) struct NumberRangeStats {
     /// Distinct live values (sortable bits), ascending.
     keys: Vec<u64>,
     /// `cum_df[i]` = total docs across `keys[..i]`; `len = keys.len() + 1`.
@@ -39,7 +39,7 @@ pub(crate) struct NumberRangeStats {
 const RANGE_STATS_BUILD_THRESHOLD: u64 = 1024;
 
 impl NumberRangeStats {
-    pub(crate) fn build(values: &BTreeMap<SortableF64, RoaringBitmap>) -> Self {
+    fn build(values: &BTreeMap<SortableF64, RoaringBitmap>) -> Self {
         let mut keys = Vec::with_capacity(values.len());
         let mut cum_df = Vec::with_capacity(values.len() + 1);
         cum_df.push(0);
@@ -53,7 +53,7 @@ impl NumberRangeStats {
     }
 
     /// `(distinct, df)` over the half-open index window the bounds select.
-    pub(crate) fn range(
+    fn range(
         &self,
         low: std::ops::Bound<SortableF64>,
         high: std::ops::Bound<SortableF64>,
@@ -80,12 +80,12 @@ impl NumberRangeStats {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct NumberIndex {
-    pub(crate) values: BTreeMap<SortableF64, RoaringBitmap>,
+pub(in crate::index) struct NumberIndex {
+    pub(in crate::index) values: BTreeMap<SortableF64, RoaringBitmap>,
     /// Side-index of LIVE-tail values whose posting holds >= 2 docs (see
     /// `KeywordIndex::dup_values`); drives `duplicates` without a full
     /// `values` scan. Cleared at seal.
-    pub(crate) dup_values: BTreeSet<SortableF64>,
+    pub(in crate::index) dup_values: BTreeSet<SortableF64>,
     pub(in crate::index) forward: FastHashMap<u32, SortableF64>,
     /// Dense live-tail forward cache for hot per-doc predicates. `forward`
     /// remains the sparse ownership/snapshot map; this avoids HashMap lookup in
@@ -97,17 +97,18 @@ pub(crate) struct NumberIndex {
     /// instead of random-probing the numeric forward column. This is deliberately
     /// lazy per term, not whole-field, so the segment tier does not materialize a
     /// high-cardinality keyword field into RAM just because one hot term was read.
-    pub(crate) keyword_range_cache: RwLock<FastHashMap<String, std::sync::Arc<Vec<(u64, u32)>>>>,
+    pub(in crate::index) keyword_range_cache:
+        RwLock<FastHashMap<String, std::sync::Arc<Vec<(u64, u32)>>>>,
     /// Per `(keyword field, term, numeric range)` candidate bitmaps for hot
     /// `Match(text) ∩ Term(keyword) ∩ Range(number)` shapes. This is query-only
     /// derived state, invalidated with `keyword_range_cache`.
-    pub(crate) keyword_range_bitmap_cache:
+    pub(in crate::index) keyword_range_bitmap_cache:
         RwLock<FastHashMap<String, std::sync::Arc<RoaringBitmap>>>,
     /// Lazy [`NumberRangeStats`] over the live `values` tree for planner range
     /// ESTIMATES (`range_df` / `range_distinct_count`). Query-only derived
     /// state, invalidated with `keyword_range_cache`.
-    pub(crate) range_stats: RwLock<Option<std::sync::Arc<NumberRangeStats>>>,
-    pub(crate) bytes: u64,
+    pub(in crate::index) range_stats: RwLock<Option<std::sync::Arc<NumberRangeStats>>>,
+    pub(in crate::index) bytes: u64,
     /// Stage 2 disk-tier (Phase 2c): a sealed columnar mmap segment covering
     /// doc ids `[0..n_docs)`. When present, per-doc Number PREDICATE point
     /// lookups (`number_at`) read the segment for sealed ids and the in-RAM
@@ -163,7 +164,7 @@ impl NumberIndex {
     }
 
     #[inline]
-    pub(crate) fn number_bits_at(&self, id: u32) -> Option<u64> {
+    pub(super) fn number_bits_at(&self, id: u32) -> Option<u64> {
         if let Some(bits) = self.dense_forward.get(id as usize).copied() {
             if bits != MISSING_SORTABLE_F64_BITS {
                 return Some(bits);
@@ -185,7 +186,7 @@ impl NumberIndex {
     }
 
     #[inline]
-    pub(crate) fn number_in_bounds(
+    pub(super) fn number_in_bounds(
         &self,
         id: u32,
         lo: &std::ops::Bound<SortableF64>,
@@ -196,7 +197,7 @@ impl NumberIndex {
     }
 
     #[inline]
-    pub(crate) fn set_number(&mut self, id: u32, key: SortableF64) {
+    pub(in crate::index) fn set_number(&mut self, id: u32, key: SortableF64) {
         // Callers clear keyword range caches once before a write batch; doing it
         // per numeric item dominated bulk ingest.
         let ix = id as usize;
@@ -207,7 +208,7 @@ impl NumberIndex {
     }
 
     #[inline]
-    pub(crate) fn remove_number(&mut self, id: u32) -> Option<SortableF64> {
+    pub(super) fn remove_number(&mut self, id: u32) -> Option<SortableF64> {
         let dense = self.dense_forward.get_mut(id as usize).and_then(|slot| {
             if *slot == MISSING_SORTABLE_F64_BITS {
                 None
@@ -222,7 +223,7 @@ impl NumberIndex {
         dense.or(sparse)
     }
 
-    pub(crate) fn forward_len(&self) -> usize {
+    pub(in crate::index) fn forward_len(&self) -> usize {
         self.dense_forward
             .iter()
             .filter(|bits| **bits != MISSING_SORTABLE_F64_BITS)
@@ -241,7 +242,7 @@ impl NumberIndex {
     /// (`try_plan`) uses to drive `sorted_walk_segment` (Phase 2m). `None` when no
     /// segment is attached (the in-RAM `values` BTreeMap is the sort driver).
     #[inline]
-    pub(crate) fn segment_ref(&self) -> Option<&std::sync::Arc<ComposedSegmentReader>> {
+    pub(super) fn segment_ref(&self) -> Option<&std::sync::Arc<ComposedSegmentReader>> {
         self.segment.as_ref()
     }
 }

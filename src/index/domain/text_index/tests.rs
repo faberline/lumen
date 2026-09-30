@@ -45,13 +45,17 @@ fn tok_probe_wiring_through_text_index_staged_overrides_live() {
 /// universe, so `tok_postings_at` is compared against `tok_postings`
 /// itself — the same code the production BM25 scan reads — for the exact
 /// df and every candidate's tf.
-pub(crate) struct SparseFixture {
-    pub(crate) idx: TextIndex,
+pub(in crate::index::domain) struct SparseFixture {
+    pub(in crate::index::domain) idx: TextIndex,
     tokens: Vec<&'static str>,
-    pub(crate) universe: u32,
+    pub(in crate::index::domain) universe: u32,
 }
 
-pub(crate) fn sparse_fixture(dir: &std::path::Path, seed: u64, resident: bool) -> SparseFixture {
+pub(in crate::index::domain) fn sparse_fixture(
+    dir: &std::path::Path,
+    seed: u64,
+    resident: bool,
+) -> SparseFixture {
     struct Rng(u64);
     impl Rng {
         fn next(&mut self) -> u64 {
@@ -158,7 +162,7 @@ pub(crate) fn sparse_fixture(dir: &std::path::Path, seed: u64, resident: bool) -
     }
 }
 
-pub(crate) fn sparse_candidates(universe: u32, seed: u64) -> Vec<u32> {
+pub(in crate::index::domain) fn sparse_candidates(universe: u32, seed: u64) -> Vec<u32> {
     let mut x = seed | 1;
     (0..universe + 5)
         .filter(|_| {

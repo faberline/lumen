@@ -13,19 +13,19 @@ use crate::index::domain::fast_hash::FastHashMap;
 /// re-indexing an eid returns the same id; deletes do not reuse ids (they
 /// compact on the next snapshot round-trip).
 #[derive(Debug, Default)]
-pub(crate) struct Interner {
-    pub(crate) to_hash: FastHashMap<u64, InternerBucket>,
-    pub(crate) to_eid: Vec<String>,
+pub(in crate::index) struct Interner {
+    pub(in crate::index) to_hash: FastHashMap<u64, InternerBucket>,
+    pub(in crate::index) to_eid: Vec<String>,
 }
 
 #[derive(Debug)]
-pub(crate) enum InternerBucket {
+pub(in crate::index) enum InternerBucket {
     One(u32),
     Many(Vec<u32>),
 }
 
 impl Interner {
-    pub(crate) fn intern(&mut self, eid: &str) -> u32 {
+    pub(in crate::index) fn intern(&mut self, eid: &str) -> u32 {
         self.intern_with_status(eid).0
     }
 
@@ -40,7 +40,7 @@ impl Interner {
         (id, true)
     }
 
-    pub(crate) fn intern_owned_with_status(&mut self, eid: String) -> (u32, bool) {
+    pub(in crate::index) fn intern_owned_with_status(&mut self, eid: String) -> (u32, bool) {
         let hash = hash_external_id(&eid);
         if let Some(id) = self.id_with_hash(&eid, hash) {
             return (id, false);
@@ -76,7 +76,7 @@ impl Interner {
         }
     }
 
-    pub(crate) fn resolve(&self, id: u32) -> &str {
+    pub(in crate::index) fn resolve(&self, id: u32) -> &str {
         &self.to_eid[id as usize]
     }
 
@@ -85,7 +85,7 @@ impl Interner {
     /// not shift any remaining id. The hash bucket is compacted at the same
     /// item boundary instead of leaving a collection-sized lookup map for the
     /// final destructor.
-    pub(crate) fn take_last_for_retirement(&mut self) -> Option<(u32, String)> {
+    pub(super) fn take_last_for_retirement(&mut self) -> Option<(u32, String)> {
         let id = self.to_eid.len().checked_sub(1)? as u32;
         let external_id = self.to_eid.pop()?;
         self.remove_hash_id(hash_external_id(&external_id), id);

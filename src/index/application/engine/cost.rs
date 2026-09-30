@@ -109,7 +109,7 @@ impl Engine {
     }
 
     /// Allocation-free selection before reserving the exact cost workspace.
-    pub(crate) fn may_need_default_ngram_workspace(
+    pub(in crate::index::application) fn may_need_default_ngram_workspace(
         &self,
         entry: &crate::shared_kernel::log_entry::RaftLogEntry,
     ) -> bool {
@@ -123,7 +123,7 @@ impl Engine {
     }
 
     /// The admission owner reserves the fixed Ngram table before this call.
-    pub(crate) fn estimate_record_exact_default_ngram_cost(
+    pub(in crate::index::application) fn estimate_record_exact_default_ngram_cost(
         &self,
         entry: &crate::shared_kernel::log_entry::RaftLogEntry,
     ) -> crate::ingest::domain::change_record_cost::RecordEstimate {

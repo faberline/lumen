@@ -28,7 +28,7 @@ struct FrozenChargeGroup {
 /// Engine-wide metadata ownership for records whose effects are not represented
 /// by a collection row (schema, request-id, truncate, and force-drop work).
 /// Its vector moves at a capture cut; it never visits individual rows.
-pub(crate) struct RecordChargeJournal {
+pub(in crate::index::application) struct RecordChargeJournal {
     inner: Arc<Mutex<State>>,
 }
 
@@ -39,7 +39,7 @@ impl Default for RecordChargeJournal {
 }
 
 impl RecordChargeJournal {
-    pub(crate) fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(State::default())),
         }
@@ -47,7 +47,7 @@ impl RecordChargeJournal {
 
     /// One clone per accepted record, regardless of how many collection rows
     /// carry clones of the same charge.
-    pub(crate) fn retain(&self, charge: RetainedCharge) {
+    pub(super) fn retain(&self, charge: RetainedCharge) {
         self.inner
             .lock()
             .expect("record charge journal poisoned")
@@ -55,7 +55,7 @@ impl RecordChargeJournal {
             .push(charge);
     }
 
-    pub(crate) fn freeze(&self) -> FrozenRecordCharges {
+    pub(super) fn freeze(&self) -> FrozenRecordCharges {
         let mut state = self.inner.lock().expect("record charge journal poisoned");
         state.next_batch = state
             .next_batch
@@ -74,7 +74,7 @@ impl RecordChargeJournal {
         }
     }
 
-    pub(crate) fn acknowledge_through(&self, frozen: &FrozenRecordCharges) -> bool {
+    pub(super) fn acknowledge_through(&self, frozen: &FrozenRecordCharges) -> bool {
         let Some(inner) = frozen.journal.upgrade() else {
             return false;
         };
@@ -99,7 +99,7 @@ impl RecordChargeJournal {
     /// frozen containers until the restore path has dropped the replaced live
     /// payload and every retained capture clone.
     #[must_use = "the detached guard owns record charges until it is dropped"]
-    pub(crate) fn discard_for_restore(&self) -> DetachedRecordCharges {
+    pub(in crate::index::application) fn discard_for_restore(&self) -> DetachedRecordCharges {
         let mut state = self.inner.lock().expect("record charge journal poisoned");
         DetachedRecordCharges {
             active: std::mem::take(&mut state.active),
@@ -112,7 +112,7 @@ impl RecordChargeJournal {
     /// O(1). The source owner's retained charges keep their original budget
     /// identity; this journal adds only the Arc that keeps them alive until a
     /// live checkpoint acknowledges the adopted cut.
-    pub(crate) fn adopt_for_restore(&self, detached: DetachedRecordCharges) {
+    pub(in crate::index::application) fn adopt_for_restore(&self, detached: DetachedRecordCharges) {
         self.inner
             .lock()
             .expect("record charge journal poisoned")
@@ -125,7 +125,7 @@ impl RecordChargeJournal {
 ///
 /// This has no acknowledgement method. Dropping it releases only the journal's
 /// own handles; retryable frozen capture clones remain their real owners.
-pub(crate) struct DetachedRecordCharges {
+pub(in crate::index::application) struct DetachedRecordCharges {
     active: Vec<RetainedCharge>,
     adopted: Vec<Arc<DetachedRecordCharges>>,
     frozen: BTreeMap<u64, Arc<FrozenChargeGroup>>,
@@ -133,7 +133,7 @@ pub(crate) struct DetachedRecordCharges {
 
 /// Retryable frozen ownership. Cloning is O(1), and dropping a publication
 /// handle never frees the contained charges while another handle survives.
-pub(crate) struct FrozenRecordCharges {
+pub(super) struct FrozenRecordCharges {
     journal: Weak<Mutex<State>>,
     id: u64,
     #[allow(dead_code)]

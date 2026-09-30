@@ -48,7 +48,7 @@ pub(super) struct PreparedMatch<'a> {
     /// One entry per token: its resolved postings + precomputed idf. `None` for a
     /// token absent from the index (so AND can short-circuit, OR can skip).
     per_token: Vec<Option<(TokPostings<'a>, f32)>>,
-    pub(super) op: MatchOp,
+    op: MatchOp,
     n_tokens: usize,
     avgdl: f32,
 }
@@ -59,7 +59,7 @@ impl<'a> PreparedMatch<'a> {
 
     /// Resolve the postings for every token once. `None` when the corpus is empty
     /// or `tokens` is empty (matches the old `match_doc_score` early-outs exactly).
-    pub(super) fn resolve(idx: &'a TextIndex, tokens: &[String], op: MatchOp) -> Option<Self> {
+    fn resolve(idx: &'a TextIndex, tokens: &[String], op: MatchOp) -> Option<Self> {
         let (corpus_n, corpus_total_len) = idx.bm25_corpus();
         if corpus_n == 0 || tokens.is_empty() {
             return None;

@@ -61,7 +61,7 @@ impl RecoveryProfile {
     }
 
     #[cfg(test)]
-    pub(crate) fn for_test() -> Self {
+    fn for_test() -> Self {
         Self::new(true)
     }
 
@@ -92,7 +92,7 @@ impl RecoveryProfile {
         }
     }
 
-    pub(crate) fn collection_opened(&self, elapsed: Duration) {
+    pub(super) fn collection_opened(&self, elapsed: Duration) {
         if self.enabled {
             let elapsed_ms = elapsed.as_millis() as u64;
             let mut data = self
@@ -105,7 +105,7 @@ impl RecoveryProfile {
         }
     }
 
-    pub(crate) fn vector_opened(
+    pub(in crate::index) fn vector_opened(
         &self,
         backend: crate::shared_kernel::types::schema::VectorBackend,
         elapsed: Duration,
@@ -129,7 +129,7 @@ impl RecoveryProfile {
         }
     }
 
-    pub(crate) fn coverage_rebuilt(&self, elapsed: Duration) {
+    pub(in crate::index) fn coverage_rebuilt(&self, elapsed: Duration) {
         if self.enabled {
             self.inner
                 .lock()

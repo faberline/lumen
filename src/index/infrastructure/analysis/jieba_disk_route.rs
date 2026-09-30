@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 const SLOT_BYTES: usize = 16;
 const PAGE_BYTES: usize = 4096;
 const SLOTS_PER_PAGE: usize = PAGE_BYTES / SLOT_BYTES;
-pub(crate) const ROUTE_CACHE_BYTES: usize = 2 * PAGE_BYTES;
+pub(in crate::index) const ROUTE_CACHE_BYTES: usize = 2 * PAGE_BYTES;
 
 struct Page {
     number: Option<usize>,
@@ -26,7 +26,7 @@ impl Page {
     }
 }
 
-pub(crate) struct DiskRoute {
+pub(in crate::index::infrastructure) struct DiskRoute {
     file: File,
     path: PathBuf,
     slots: usize,
@@ -37,7 +37,7 @@ pub(crate) struct DiskRoute {
 impl DiskRoute {
     /// `directory` is the staging owner's private directory. The route never
     /// accepts a caller-selected file name, and never replaces an existing file.
-    pub(crate) fn create(directory: &Path) -> io::Result<Self> {
+    pub(in crate::index::infrastructure) fn create(directory: &Path) -> io::Result<Self> {
         let path = directory.join("jieba-route.tmp");
         let mut options = OpenOptions::new();
         options.read(true).write(true).create_new(true);

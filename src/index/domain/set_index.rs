@@ -11,14 +11,14 @@ use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::types::document::FieldValue;
 
 #[derive(Debug, Default)]
-pub(crate) struct SetIndex {
-    pub(crate) elements: BTreeMap<String, RoaringBitmap>,
+pub(in crate::index) struct SetIndex {
+    pub(in crate::index) elements: BTreeMap<String, RoaringBitmap>,
     /// Side-index of LIVE-tail elements whose posting holds >= 2 docs (see
     /// `KeywordIndex::dup_values`); drives `duplicates` without a full
     /// `elements` scan. Cleared at seal.
-    pub(crate) dup_values: BTreeSet<String>,
+    pub(in crate::index) dup_values: BTreeSet<String>,
     pub(in crate::index) forward: FastHashMap<u32, BTreeSet<String>>,
-    pub(crate) bytes: u64,
+    pub(in crate::index) bytes: u64,
     /// Stage 2 disk-tier (Phase 2e-A): a sealed columnar mmap segment covering
     /// doc ids `[0..n_docs)` — a shared sorted string DICT (var-width) + a fixed
     /// `u32[n_docs + 1]` CSR offsets column + a fixed `u32[*]` packed dict-id
@@ -45,7 +45,7 @@ pub(crate) struct SetIndex {
     /// segment is attached. The exact reuse of the Keyword 2h-1 tombstone (same
     /// shape, same four touch-points: record in `drop_eid`, subtract in the
     /// posting accessor, exclude in `live_elements`, clear at re-seal).
-    pub(crate) tombstones: RoaringBitmap,
+    pub(in crate::index) tombstones: RoaringBitmap,
 }
 
 impl SetIndex {
@@ -78,7 +78,7 @@ impl SetIndex {
     /// `Terms` predicate site. Reads the segment members ONCE (not once per
     /// candidate value) when sealed, falling back to the live `forward` set.
     #[inline]
-    pub(crate) fn set_contains_any(&self, id: u32, values: &[FieldValue]) -> bool {
+    pub(super) fn set_contains_any(&self, id: u32, values: &[FieldValue]) -> bool {
         if let Some(set) = self.forward.get(&id) {
             return values
                 .iter()
@@ -135,7 +135,7 @@ impl SetIndex {
     /// deleted doc's memberships into the forward column, and `from_snapshot`
     /// rebuilds the inverted index from exactly that column.
     #[inline]
-    pub(crate) fn live_set_members(&self, id: u32) -> Option<BTreeSet<String>> {
+    pub(super) fn live_set_members(&self, id: u32) -> Option<BTreeSet<String>> {
         self.set_members(id)
     }
 
@@ -166,7 +166,10 @@ impl SetIndex {
     /// `None` only when the element is absent from BOTH sources (so callers keep
     /// their `.unwrap_or_default()` empty-posting semantics).
     #[inline]
-    pub(crate) fn element_postings(&self, el: &str) -> Option<std::borrow::Cow<'_, RoaringBitmap>> {
+    pub(in crate::index) fn element_postings(
+        &self,
+        el: &str,
+    ) -> Option<std::borrow::Cow<'_, RoaringBitmap>> {
         if let Some(seg) = &self.segment {
             // Segment base, MINUS the query-time tombstone (base docids deleted
             // since the last seal — the on-disk postings can't be mutated), then
@@ -203,7 +206,7 @@ impl SetIndex {
     /// clause; the emitted documents are identical. Keeping df off the full
     /// posting decode is the whole point of the count-prefix.
     #[inline]
-    pub(crate) fn element_df(&self, el: &str) -> u64 {
+    pub(in crate::index) fn element_df(&self, el: &str) -> u64 {
         if let Some(seg) = &self.segment {
             let base = seg.set_df(el).unwrap_or(0);
             let tail = self.elements.get(el).map(|p| p.len()).unwrap_or(0);
@@ -225,7 +228,7 @@ impl SetIndex {
     ///   `elements` for the same value, and keep the element iff >=1 live doc
     ///   remains. Tail-only elements (indexed after the seal, absent from the
     ///   dict) are folded in too.
-    pub(crate) fn live_elements(&self) -> BTreeMap<String, RoaringBitmap> {
+    pub(in crate::index) fn live_elements(&self) -> BTreeMap<String, RoaringBitmap> {
         let Some(seg) = &self.segment else {
             return self.elements.clone();
         };

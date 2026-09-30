@@ -20,7 +20,7 @@ impl FieldIndex {
     /// Remove every posting written by doc-id `id` (external_id `eid`, needed
     /// only for the String-keyed vector backend) and return the number of
     /// bytes freed (approximate, used to keep `bytes` honest).
-    pub(crate) fn drop_eid(&mut self, id: u32, eid: &str) -> u64 {
+    pub(in crate::index) fn drop_eid(&mut self, id: u32, eid: &str) -> u64 {
         #[cfg(test)]
         DROP_EID_CALLS.with(|calls| calls.set(calls.get().saturating_add(1)));
         match self {

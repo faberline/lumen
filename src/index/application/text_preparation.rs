@@ -59,7 +59,7 @@ impl PreparedTextRows {
     pub(super) fn retained_reader_bytes(&self) -> usize {
         self.retained_reader_bytes
     }
-    pub(super) fn scratch_growth_bytes(&self) -> usize {
+    fn scratch_growth_bytes(&self) -> usize {
         self.scratch_growth_bytes
     }
 }

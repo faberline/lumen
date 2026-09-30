@@ -9,7 +9,7 @@
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum JiebaFallbackStreamError<E> {
+pub(in crate::index) enum JiebaFallbackStreamError<E> {
     Callback(E),
     TokenCountOverflow,
 }
@@ -29,7 +29,7 @@ impl<E: std::error::Error + 'static> std::error::Error for JiebaFallbackStreamEr
 
 /// Emit the exact feature-off `index_text::Analyzer::Jieba` tokens without
 /// collecting all input scalars or tokens. The callback must not retain `token`.
-pub(crate) fn stream_fallback_jieba<E>(
+pub(in crate::index) fn stream_fallback_jieba<E>(
     input: &str,
     mut emit: impl FnMut(&str) -> Result<(), E>,
 ) -> Result<u32, JiebaFallbackStreamError<E>> {
@@ -153,7 +153,7 @@ fn emit_token<E>(
     emit(token).map_err(JiebaFallbackStreamError::Callback)
 }
 
-pub(crate) fn is_cjk_char(character: char) -> bool {
+pub(in crate::index) fn is_cjk_char(character: char) -> bool {
     let code = character as u32;
     (0x4E00..=0x9FFF).contains(&code)
         || (0x3400..=0x4DBF).contains(&code)

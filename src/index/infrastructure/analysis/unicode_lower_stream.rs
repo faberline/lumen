@@ -12,19 +12,19 @@ use std::io::{Seek, SeekFrom, Write};
 
 use anyhow::{anyhow, bail, Result};
 
-pub(crate) const LOWER_OUTPUT_BUFFER_BYTES: usize = 64 * 1024;
+const LOWER_OUTPUT_BUFFER_BYTES: usize = 64 * 1024;
 const CONTEXT_PROBE_BYTES: usize = 128;
 const LOWER_STREAM_METADATA_BYTES: usize = 4096;
 
 /// The bounded reservation needed before the primitive allocates or writes.
-pub(crate) const fn lowercase_stream_workspace_bytes() -> usize {
+pub(in crate::index::infrastructure) const fn lowercase_stream_workspace_bytes() -> usize {
     LOWER_OUTPUT_BUFFER_BYTES + CONTEXT_PROBE_BYTES + LOWER_STREAM_METADATA_BYTES
 }
 
 /// Lowercase `input` with the same result as `str::to_lowercase`, without a
 /// whole-token output string. `reserve` must accept the fixed workspace before
 /// this function allocates its output buffer or writes to `writer`.
-pub(crate) fn write_streaming_lowercase<W: Write + Seek>(
+pub(in crate::index::infrastructure) fn write_streaming_lowercase<W: Write + Seek>(
     input: &str,
     writer: &mut W,
     mut reserve: impl FnMut(usize) -> Result<()>,

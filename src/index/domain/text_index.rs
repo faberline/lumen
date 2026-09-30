@@ -3,8 +3,8 @@
 //! live and staged overlays written since, with the tombstones that hide
 //! deleted base docs until the next seal.
 
-pub(crate) mod query;
-pub(crate) mod terms;
+mod query;
+mod terms;
 
 #[cfg(test)]
 use std::cell::Cell;
@@ -46,7 +46,7 @@ fn staged_term_probes() -> u64 {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct TextIndex {
+pub(in crate::index) struct TextIndex {
     /// Prepared rows are immutable disk payloads. Their local row is always 0.
     /// They remain live overlays until the matching checkpoint is published.
     ///
@@ -72,12 +72,12 @@ pub(crate) struct TextIndex {
     pub(in crate::index) lens: Vec<u32>,
     /// dense doc-id → distinct tokens emitted. Used ONLY by `drop_eid` /
     /// snapshots / coverage, so new writes avoid a per-doc HashMap insert.
-    pub(crate) distinct: Vec<Option<TokenSet>>,
+    pub(in crate::index) distinct: Vec<Option<TokenSet>>,
     // Cold delta rows keep their stable runtime IDs without allocating a dense prefix.
-    pub(crate) delta_docs: FastHashMap<u32, (u32, TokenSet)>,
+    pub(in crate::index) delta_docs: FastHashMap<u32, (u32, TokenSet)>,
     pub(in crate::index) doc_count: u64,
-    pub(crate) total_doc_len: u64,
-    pub(crate) bytes: u64,
+    pub(in crate::index) total_doc_len: u64,
+    pub(in crate::index) bytes: u64,
     /// Stage 2 disk-tier (Phase 2e-B): a sealed columnar mmap segment covering
     /// the WHOLE field for doc ids `[0..n_docs)` — a sorted token DICT + a
     /// parallel per-token STORED posting block (text tf is NOT rebuildable, so
@@ -94,7 +94,8 @@ pub(crate) struct TextIndex {
     /// corpus states. Each entry is lazily sorted only as far as the largest
     /// page requested so far — see `MatchRankCache`, the cold-500k-AND perf
     /// fix that replaces an eager full sort of every match on every cold query.
-    pub(crate) match_rank_cache: RwLock<FastHashMap<String, std::sync::Arc<Mutex<MatchRankCache>>>>,
+    pub(in crate::index) match_rank_cache:
+        RwLock<FastHashMap<String, std::sync::Arc<Mutex<MatchRankCache>>>>,
     /// QUERY-TIME TOMBSTONE (Phase 2h-4): base docids `[0..seg.n_docs)` deleted
     /// SINCE the last seal. The inverted `tokens` postings AND the corpus-deriving
     /// `distinct` map were DROPPED to disk at seal, so `drop_eid` can no longer
@@ -116,7 +117,7 @@ pub(crate) struct TextIndex {
     /// deletes, or a compaction left the additive invariant behind. Keyed by
     /// the exact reader identity AND the exact tombstone set, so it is
     /// impossible for it to serve a stale number.
-    pub(crate) live_term_cache: Mutex<Option<LiveTermCache>>,
+    pub(in crate::index) live_term_cache: Mutex<Option<LiveTermCache>>,
 }
 
 /// Memoized composed live-term count for one `(reader, tombstone set)` pair.
@@ -126,20 +127,20 @@ pub(crate) struct TextIndex {
 /// an un-delete between two reads can never look unchanged. Both are bounded by
 /// the deletes taken since the last seal, never by the corpus.
 #[derive(Debug)]
-pub(crate) struct LiveTermCache {
+pub(in crate::index) struct LiveTermCache {
     reader: std::sync::Weak<ComposedSegmentReader>,
     tombstones: RoaringBitmap,
     value: u64,
 }
 
 impl TextIndex {
-    pub(crate) fn clear_match_rank_cache(&self) {
+    pub(in crate::index) fn clear_match_rank_cache(&self) {
         if let Ok(mut cache) = self.match_rank_cache.write() {
             cache.clear();
         }
     }
 
-    pub(crate) fn doc_len(&self, id: u32) -> u32 {
+    pub(in crate::index) fn doc_len(&self, id: u32) -> u32 {
         if let Some(row) = self.staged_rows.get(&id) {
             return row.doc_len();
         }
@@ -160,14 +161,14 @@ impl TextIndex {
         }
         self.lens.get(id as usize).copied().unwrap_or(0)
     }
-    pub(crate) fn distinct_at(&self, id: u32) -> Option<&TokenSet> {
+    pub(in crate::index) fn distinct_at(&self, id: u32) -> Option<&TokenSet> {
         self.delta_docs
             .get(&id)
             .map(|(_, tokens)| tokens)
             .or_else(|| self.distinct.get(id as usize).and_then(Option::as_ref))
     }
 
-    pub(crate) fn take_distinct(&mut self, id: u32) -> Option<TokenSet> {
+    pub(in crate::index) fn take_distinct(&mut self, id: u32) -> Option<TokenSet> {
         if let Some((_, tokens)) = self.delta_docs.remove(&id) {
             return Some(tokens);
         }
@@ -179,7 +180,7 @@ impl TextIndex {
     /// Remove a current live overlay, if present. The presence marker is the
     /// `Some(TokenSet)` entry, so an explicit empty text value is removed here
     /// too. This must run before sealed-base tombstone handling for reused ids.
-    pub(crate) fn drop_live_overlay(&mut self, id: u32, eid: &str) -> Option<u64> {
+    pub(super) fn drop_live_overlay(&mut self, id: u32, eid: &str) -> Option<u64> {
         if let Some(row) = self.staged_rows.remove(&id) {
             let freed = row.indexed_bytes(eid);
             self.doc_count = self.doc_count.saturating_sub(1);
@@ -210,11 +211,11 @@ impl TextIndex {
     }
 
     #[cfg(test)]
-    pub(crate) fn distinct_is_empty(&self) -> bool {
+    pub(in crate::index) fn distinct_is_empty(&self) -> bool {
         self.delta_docs.is_empty() && self.distinct.iter().all(Option::is_none)
     }
 
-    pub(crate) fn distinct_iter(&self) -> impl Iterator<Item = (u32, &TokenSet)> {
+    pub(in crate::index) fn distinct_iter(&self) -> impl Iterator<Item = (u32, &TokenSet)> {
         self.distinct
             .iter()
             .enumerate()
@@ -226,7 +227,7 @@ impl TextIndex {
             )
     }
 
-    pub(crate) fn distinct_ids(&self) -> impl Iterator<Item = u32> + '_ {
+    pub(super) fn distinct_ids(&self) -> impl Iterator<Item = u32> + '_ {
         self.distinct_iter().map(|(id, _)| id)
     }
 
@@ -243,7 +244,7 @@ impl TextIndex {
     /// On a FIRST seal (no delete, no tail) the live scalars equal the header, so
     /// the BM25 score is unchanged from 2e-B. The `doc_count == 0` short-circuit in
     /// the caller mirrors the live path.
-    pub(crate) fn bm25_corpus(&self) -> (u64, u64) {
+    pub(in crate::index) fn bm25_corpus(&self) -> (u64, u64) {
         (self.doc_count, self.total_doc_len)
     }
 
@@ -265,7 +266,10 @@ impl TextIndex {
     /// dropped so the new segment never carries a zero-df token. The live
     /// overlays' `tokens` already exclude deletes, so they are merged after the
     /// tombstoned base has been filtered.
-    pub(crate) fn tokens_for_seal(&self, live: &dyn Fn(u32) -> bool) -> BTreeMap<String, Postings> {
+    pub(in crate::index) fn tokens_for_seal(
+        &self,
+        live: &dyn Fn(u32) -> bool,
+    ) -> BTreeMap<String, Postings> {
         let Some(seg) = &self.segment else {
             return self
                 .tokens
@@ -346,7 +350,11 @@ impl TextIndex {
 
     /// The explicit text-field presence bits to seal. Presence is separate from
     /// token length so an explicit empty value remains covered after reopen.
-    pub(crate) fn present_for_seal(&self, n_docs: u32, live: &dyn Fn(u32) -> bool) -> Vec<bool> {
+    pub(in crate::index) fn present_for_seal(
+        &self,
+        n_docs: u32,
+        live: &dyn Fn(u32) -> bool,
+    ) -> Vec<bool> {
         (0..n_docs)
             .map(|id| {
                 if !live(id) {
@@ -364,4 +372,4 @@ impl TextIndex {
 }
 
 #[cfg(test)]
-pub(crate) mod tests;
+pub(super) mod tests;

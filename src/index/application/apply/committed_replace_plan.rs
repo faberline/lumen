@@ -181,7 +181,7 @@ pub(super) struct ReplacePlan {
     pub(super) final_checksums: Vec<ReplaceChecksumFinal>,
     pub(super) fields_written: u64,
     pub(super) fields_skipped: u64,
-    pub(super) reservation: usize,
+    reservation: usize,
 }
 
 /// Replacement has a document limit, not the generic Index field-item limit.

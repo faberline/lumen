@@ -5,11 +5,11 @@
 //! base absorbs them.
 
 pub(crate) mod admission;
-pub(crate) mod apply;
+mod apply;
 pub(crate) mod checkpoint_capture;
 pub(crate) mod engine;
 pub(crate) mod frozen_checkpoint;
 mod live_base;
-pub(crate) mod live_delta;
+mod live_delta;
 pub(crate) mod recovery_profile;
 mod text_preparation;

@@ -14,7 +14,7 @@ impl Engine {
     /// Price only the one owned, decoded delivery. Normalized changes and
     /// transport clones do not exist yet. `begin_admitted_record` must grow this
     /// reservation before creating either kind of payload.
-    pub(crate) fn record_ram_request(
+    pub(super) fn record_ram_request(
         &self,
         entry: &RaftLogEntry,
         extra_owned: usize,

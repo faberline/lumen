@@ -13,13 +13,13 @@ use crate::index::domain::postings::Postings;
 /// merged, tombstone-filtered, precedence-resolved `(docid, tf)` pairs in
 /// ascending order for the DRIVING (rarest) token only, so an N-token AND
 /// never materializes more than one token's postings.
-pub(crate) struct TokProbe<'a> {
-    pub(crate) seg: Option<std::sync::Arc<(Vec<u32>, Vec<u32>)>>,
-    pub(crate) live: Option<&'a Postings>,
+pub(super) struct TokProbe<'a> {
+    pub(super) seg: Option<std::sync::Arc<(Vec<u32>, Vec<u32>)>>,
+    pub(super) live: Option<&'a Postings>,
     /// `(docid, tf)` pairs, ascending by docid — one entry per staged row that
     /// carries this token (bounded by `staged_rows.len()`, not corpus size).
-    pub(crate) staged: Vec<(u32, u32)>,
-    pub(crate) tombstones: &'a RoaringBitmap,
+    pub(super) staged: Vec<(u32, u32)>,
+    pub(super) tombstones: &'a RoaringBitmap,
 }
 
 impl<'a> TokProbe<'a> {
@@ -30,7 +30,7 @@ impl<'a> TokProbe<'a> {
     /// empty active posting naturally yields zero matches either as the
     /// driving token (empty `iter_active`) or as a probe (every `tf` misses).
     #[inline]
-    pub(crate) fn definitely_absent(&self) -> bool {
+    pub(super) fn definitely_absent(&self) -> bool {
         self.seg.is_none() && self.live.is_none() && self.staged.is_empty()
     }
 
@@ -38,7 +38,7 @@ impl<'a> TokProbe<'a> {
     /// pick which token drives the intersection (a heuristic, not the exact
     /// `df` — the exact `df` for `idf` comes from `iter_active().count()`).
     #[inline]
-    pub(crate) fn upper_bound_len(&self) -> usize {
+    pub(super) fn upper_bound_len(&self) -> usize {
         self.staged.len()
             + self.live.map_or(0, |p| p.docids.len())
             + self.seg.as_ref().map_or(0, |s| s.0.len())
@@ -54,7 +54,7 @@ impl<'a> TokProbe<'a> {
     /// the cost is bounded by the overlay and tombstone sizes, not by the
     /// segment length. A probe with no segment lane falls back to the
     /// streaming count, which is then bounded by the overlay itself.
-    pub(crate) fn active_len(&self) -> usize {
+    pub(super) fn active_len(&self) -> usize {
         let seg_ids: &[u32] = match &self.seg {
             Some(seg) => &seg.0[..],
             None => return self.iter_active().count(),
@@ -120,7 +120,7 @@ impl<'a> TokProbe<'a> {
     /// when that base id is ALSO tombstoned; a pure-segment id is dropped when
     /// tombstoned. No allocation.
     #[inline]
-    pub(crate) fn tf(&self, id: u32) -> Option<u32> {
+    pub(super) fn tf(&self, id: u32) -> Option<u32> {
         if let Ok(pos) = self.staged.binary_search_by_key(&id, |&(i, _)| i) {
             return Some(self.staged[pos].1);
         }
@@ -145,7 +145,7 @@ impl<'a> TokProbe<'a> {
     /// for the driving token's candidate walk and for an exact `df` count
     /// (`iter_active().count()`), both bounded by this token's OWN active
     /// postings length, never by the corpus.
-    pub(crate) fn iter_active(&self) -> TokProbeIter<'_> {
+    pub(super) fn iter_active(&self) -> TokProbeIter<'_> {
         TokProbeIter {
             seg_ids: self.seg.as_ref().map(|s| &s.0[..]).unwrap_or(&[]),
             seg_tfs: self.seg.as_ref().map(|s| &s.1[..]).unwrap_or(&[]),
@@ -185,7 +185,7 @@ fn gallop_to(ids: &[u32], pos: &mut usize, target: u32) -> bool {
     *pos < n && ids[*pos] == target
 }
 
-pub(crate) struct TokProbeIter<'a> {
+pub(super) struct TokProbeIter<'a> {
     seg_ids: &'a [u32],
     seg_tfs: &'a [u32],
     seg_pos: usize,

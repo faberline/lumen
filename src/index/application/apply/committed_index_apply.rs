@@ -39,12 +39,12 @@ thread_local! {
 }
 
 #[cfg(test)]
-pub(super) fn reset_text_workspace_retries_for_test() {
+fn reset_text_workspace_retries_for_test() {
     TEXT_WORKSPACE_RETRIES.with(|retries| retries.set(0));
 }
 
 #[cfg(test)]
-pub(super) fn text_workspace_retries_for_test() -> u32 {
+fn text_workspace_retries_for_test() -> u32 {
     TEXT_WORKSPACE_RETRIES.with(std::cell::Cell::get)
 }
 
@@ -221,7 +221,7 @@ fn require(reserved: &mut RecordReservation, bytes: usize) -> Result<()> {
 impl Engine {
     /// `false` is an internal routing result for an unsupported command. A real
     /// preparation failure returns an error and never invokes `complete`.
-    pub(crate) fn try_apply_committed_scalar(
+    fn try_apply_committed_scalar(
         &self,
         scanner: &FastIndexScanner<'_>,
         sequence: u64,
@@ -235,7 +235,7 @@ impl Engine {
         )
     }
 
-    pub(crate) fn try_apply_committed_scalar_with_capacity_owner(
+    pub(super) fn try_apply_committed_scalar_with_capacity_owner(
         &self,
         scanner: &FastIndexScanner<'_>,
         sequence: u64,

@@ -202,7 +202,7 @@ fn in_sortable_range(
 }
 
 #[inline]
-pub(crate) fn in_sortable_bits_range(
+pub(in crate::index::domain) fn in_sortable_bits_range(
     bits: u64,
     lo: &std::ops::Bound<SortableF64>,
     hi: &std::ops::Bound<SortableF64>,
@@ -266,7 +266,7 @@ fn upper_bound_sortable_bits(values: &[(u64, u32)], bits: u64) -> usize {
 }
 
 #[inline]
-pub(crate) fn sorted_bits_window(
+pub(in crate::index::domain) fn sorted_bits_window(
     values: &[(u64, u32)],
     lo: &std::ops::Bound<SortableF64>,
     hi: &std::ops::Bound<SortableF64>,

@@ -42,7 +42,7 @@ impl Engine {
         Ok(nidx.live_number_at(id).map(SortableF64::to_f64))
     }
 
-    pub(crate) fn search_fast_string_term(
+    pub(in crate::index) fn search_fast_string_term(
         &self,
         collection_id: &str,
         field: &str,

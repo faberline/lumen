@@ -7,7 +7,7 @@ use crate::index::domain::text_index::TextIndex;
 
 // A small xorshift PRNG, dependency-free and deterministic (the same
 // recipe `tok_probe_tests` uses).
-pub(crate) struct Rng(pub(crate) u64);
+pub(in crate::index::domain::query) struct Rng(pub(crate) u64);
 
 impl Rng {
     fn next(&mut self) -> u64 {
@@ -16,12 +16,12 @@ impl Rng {
         self.0 ^= self.0 << 17;
         self.0
     }
-    pub(crate) fn below(&mut self, n: u32) -> u32 {
+    pub(in crate::index::domain::query) fn below(&mut self, n: u32) -> u32 {
         (self.next() % u64::from(n.max(1))) as u32
     }
 }
 
-pub(crate) fn interner_with(n: u32) -> Interner {
+pub(in crate::index::domain::query) fn interner_with(n: u32) -> Interner {
     let mut it = Interner::default();
     for i in 0..n {
         it.intern(&format!("eid-{i:06}"));

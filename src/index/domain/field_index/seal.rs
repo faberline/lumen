@@ -19,7 +19,7 @@ impl FieldIndex {
     /// same frozen checkpoint can be written again after a pre-publication
     /// failure.  The caller opens a separate small mmap-backed prepared index
     /// for publication.
-    pub(crate) fn write_segment_borrowed(
+    pub(in crate::index) fn write_segment_borrowed(
         &self,
         field_name: &str,
         dir: &std::path::Path,
@@ -132,7 +132,7 @@ impl FieldIndex {
     /// it, and reopen's `record_field_coverage` never re-adds it — the delete is
     /// GC'd instead of resurrected. A first-time seal of an undeleted corpus has
     /// `live(id) == true` for every value-bearing id, so the gather is unchanged.
-    pub(crate) fn seal_to_segment(
+    pub(in crate::index::domain) fn seal_to_segment(
         &mut self,
         field_name: &str,
         dir: &std::path::Path,

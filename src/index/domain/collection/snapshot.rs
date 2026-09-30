@@ -14,7 +14,7 @@ use crate::index::domain::interner::Interner;
 use crate::index::infrastructure::snapshot_v1::{CollectionSnapshot, FieldIndexSnapshot};
 
 impl Collection {
-    pub(crate) fn to_snapshot(&self) -> Result<CollectionSnapshot> {
+    pub(in crate::index) fn to_snapshot(&self) -> Result<CollectionSnapshot> {
         // Which ids carry which field, in ONE walk of the coverage map.
         // `eid_fields` is the document census — `documents_indexed` counts it,
         // and a full delete removes the entry — so an id absent from it names
@@ -58,7 +58,7 @@ impl Collection {
         })
     }
 
-    pub(crate) fn from_snapshot(snap: CollectionSnapshot) -> Result<Self> {
+    pub(in crate::index) fn from_snapshot(snap: CollectionSnapshot) -> Result<Self> {
         // Re-intern every external_id (eid_fields covers all indexed docs) so
         // the field postings below resolve to the same dense ids.
         let mut interner = Interner::default();

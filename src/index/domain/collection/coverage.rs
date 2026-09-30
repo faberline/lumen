@@ -46,7 +46,7 @@ pub struct FieldNotAudited {
     pub reason: String,
 }
 
-pub(crate) const TEXT_UNAUDITABLE: &str =
+pub(in crate::index) const TEXT_UNAUDITABLE: &str =
     "a Text field writes a forward entry for every covered document, \
      explicit-empty values included, so a field of empty strings and a field whose contents were \
      dropped are the same bytes here";
@@ -56,7 +56,7 @@ pub(crate) const TEXT_UNAUDITABLE: &str =
 /// The three answers are genuinely different, and collapsing them is what made
 /// the audit overclaim: `Unauditable` is not a healthy verdict, and
 /// `WholeIndex` catches a field emptied outright but not one emptied in part.
-pub(crate) enum FieldAudit {
+pub(in crate::index) enum FieldAudit {
     /// Every covered document can be probed individually. Damage is "the census
     /// covers N documents and not one of them has a value".
     PerId,
@@ -76,7 +76,7 @@ impl Collection {
     /// `to_snapshot` gathers through, so the answer is about the collection as
     /// it stands — a field re-indexed after the reopen that reported it stops
     /// being reported, and a field sealed since the reopen does not start.
-    pub(crate) fn reindex_needed(&self, collection: &str) -> Vec<ReindexNeeded> {
+    pub(in crate::index) fn reindex_needed(&self, collection: &str) -> Vec<ReindexNeeded> {
         // One walk of the coverage map, probing as it goes.
         //
         // The shape this replaces materialised a `Vec<u32>` of every covered id
@@ -145,7 +145,7 @@ impl Collection {
     /// Every field of this collection the audit above could not examine. See
     /// [`FieldNotAudited`]. O(fields) — no walk of the census is needed,
     /// because the answer is a property of the arm, not of the documents.
-    pub(crate) fn fields_not_audited(&self, collection: &str) -> Vec<FieldNotAudited> {
+    pub(in crate::index) fn fields_not_audited(&self, collection: &str) -> Vec<FieldNotAudited> {
         let mut out: Vec<FieldNotAudited> = self
             .fields
             .iter()

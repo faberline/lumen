@@ -13,7 +13,7 @@ use crate::index::domain::storage_error::StorageError;
 use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
 
-pub(crate) fn validate_schema(schema: &BTreeMap<String, FieldSpec>) -> Result<()> {
+pub(in crate::index) fn validate_schema(schema: &BTreeMap<String, FieldSpec>) -> Result<()> {
     for (name, spec) in schema {
         if name.is_empty() {
             bail!("field name cannot be empty");
@@ -50,7 +50,7 @@ pub(crate) fn validate_schema(schema: &BTreeMap<String, FieldSpec>) -> Result<()
     Ok(())
 }
 
-pub(crate) fn value_kind(v: &FieldValue) -> &'static str {
+pub(in crate::index) fn value_kind(v: &FieldValue) -> &'static str {
     match v {
         FieldValue::String(_) => "string",
         FieldValue::Number(_) => "number",
@@ -65,7 +65,11 @@ pub(crate) fn value_kind(v: &FieldValue) -> &'static str {
 /// ordering matters). Kept in sync with `apply_value`'s arms by hand: any
 /// new `(FieldIndex, FieldValue)` pairing accepted there must be mirrored
 /// here.
-pub(crate) fn validate_value(fi: &FieldIndex, value: &FieldValue, field_name: &str) -> Result<()> {
+pub(in crate::index) fn validate_value(
+    fi: &FieldIndex,
+    value: &FieldValue,
+    field_name: &str,
+) -> Result<()> {
     match (fi, value) {
         (FieldIndex::Text { .. }, FieldValue::String(_)) => Ok(()),
         (FieldIndex::Keyword(_), FieldValue::String(_)) => Ok(()),

@@ -60,7 +60,7 @@ impl Engine {
             .map(|_| ())
     }
 
-    pub(crate) fn flush_checkpoint_collections(
+    fn flush_checkpoint_collections(
         &self,
         dir: &std::path::Path,
         up_to_seq: u64,
