@@ -1,4 +1,5 @@
-//! Where index meets clients outside the HTTP API: the native binary search
-//! wire.
+//! Where index meets its clients: the HTTP handlers for collections and their
+//! reads, and the native binary search wire.
 
+pub(crate) mod http;
 pub(crate) mod native_wire;

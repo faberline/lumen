@@ -143,11 +143,12 @@ infrastructure = "src/operator/infrastructure"
 
 [[contexts]]
 name = "sharding"
-depends_on = ["index", "ingest"]
+depends_on = ["access", "index", "ingest"]
 [contexts.layers]
 domain = "src/sharding/domain"
 application = "src/sharding/application"
 infrastructure = "src/sharding/infrastructure"
+interfaces = "src/sharding/interfaces"
 
 [[contexts]]
 name = "replication"
@@ -158,23 +159,25 @@ application = "src/replication/application"
 
 [[contexts]]
 name = "ingest"
-depends_on = []
+depends_on = ["access"]
 [contexts.layers]
 domain = "src/ingest/domain"
 application = "src/ingest/application"
 infrastructure = "src/ingest/infrastructure"
+interfaces = "src/ingest/interfaces"
 
 [[contexts]]
 name = "persistence"
-depends_on = ["index", "ingest"]
+depends_on = ["access", "index", "ingest"]
 [contexts.layers]
 domain = "src/persistence/domain"
 application = "src/persistence/application"
 infrastructure = "src/persistence/infrastructure"
+interfaces = "src/persistence/interfaces"
 
 [[contexts]]
 name = "index"
-depends_on = []
+depends_on = ["access"]
 [contexts.layers]
 domain = "src/index/domain"
 application = "src/index/application"
@@ -195,6 +198,12 @@ rule = "B3"
 paths = ["src/access/interfaces/http.rs"]
 subject = "interfaces->infrastructure"
 reason = "auth_middleware is service_auth::async_auth_middleware instantiated at LumenVerifier, so the middleware names the adapter type. P2: instantiate it at the application-side verifier port instead."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/sharding/interfaces/http/reshard.rs"]
+subject = "interfaces->domain"
+reason = "The reshard verbs take the sharding domain's wire formats as their bodies (a ReshardBatch, a ReshardPruneChunk), cut /admin/backup:scoped's subset with snapshot_bucket_subset, and build the VirtualBucketShardMap /admin/reshard:evict hands the engine, as they did in api.rs. P2: a sharding application service owns the apply, prune, scoped export and evict use cases over the domain, and the verbs call it."
 
 [[exceptions]]
 rule = "B3"
@@ -1333,9 +1342,10 @@ paths = [
   "src/sharding/domain/prune_chunk.rs",
   "src/sharding/domain/reshard_batch.rs",
   "src/sharding/domain/snapshot_subset.rs",
+  "src/sharding/interfaces/http/reshard.rs",
 ]
 subject = "index.infrastructure"
-reason = "The reshard formats are cut from and merged into the snapshot document: snapshot_subset takes a bucket's documents out of a SnapshotV1's CollectionSnapshots and FieldIndexSnapshots, a ReshardBatch carries the subset, merge_snapshot_delta merges a delta's collections and field indexes into the base, and a prune chunk is planned against a SnapshotV1. P2: the snapshot document becomes a published language in shared_kernel (see the index application->infrastructure exception on reshard_apply above), which sharding reads without depending on index."
+reason = "The reshard formats are cut from and merged into the snapshot document: snapshot_subset takes a bucket's documents out of a SnapshotV1's CollectionSnapshots and FieldIndexSnapshots, a ReshardBatch carries the subset, merge_snapshot_delta merges a delta's collections and field indexes into the base, a prune chunk is planned against a SnapshotV1, and /admin/backup:scoped answers with the subset as a SnapshotV1. P2: the snapshot document becomes a published language in shared_kernel (see the index application->infrastructure exception on reshard_apply above), which sharding reads without depending on index."
 
 [[exceptions]]
 rule = "B4"
@@ -1355,9 +1365,10 @@ paths = [
   "src/persistence/application/ports/restore_sink.rs",
   "src/persistence/application/restore.rs",
   "src/persistence/infrastructure/rdb.rs",
+  "src/persistence/interfaces/http/backup.rs",
 ]
 subject = "index.infrastructure"
-reason = "The RDB file is an encoded RdbSnapshot, a SnapshotV1 with the WAL sequence it is current as of, and RestoreSink and the restore sinks that implement it take the SnapshotV1 that /admin/restore decoded. P2: EngineSnapshotRepository (see the domain->infrastructure exception on rdb_store above), with the snapshot document in shared_kernel."
+reason = "The RDB file is an encoded RdbSnapshot, a SnapshotV1 with the WAL sequence it is current as of, /admin/backup answers with the engine's SnapshotV1, and RestoreSink and the restore sinks that implement it take the SnapshotV1 that /admin/restore decoded. P2: EngineSnapshotRepository (see the domain->infrastructure exception on rdb_store above), with the snapshot document in shared_kernel."
 
 [[exceptions]]
 rule = "B4"

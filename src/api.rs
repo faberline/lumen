@@ -17,15 +17,13 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use axum::{
-    extract::{Extension, FromRequest, Path, Query, Request, State},
+    extract::{Request, State},
     http::{Method, StatusCode},
     middleware::from_fn_with_state,
     response::{IntoResponse, Json},
     routing::{delete, get, post, put},
     Router,
 };
-use futures::{StreamExt, TryStreamExt};
-use serde::{Deserialize, Serialize};
 use service_http::{MetricsProvider, ReadinessHook};
 use utoipa::{
     openapi::{
@@ -39,19 +37,26 @@ use axum::http::HeaderMap;
 use axum::middleware::{from_fn, Next};
 
 use crate::access::{
-    application::{
-        auth_config::AuthConfig,
-        authorization::{AuthContext, Role},
-    },
+    application::{auth_config::AuthConfig, authorization::AuthContext},
     infrastructure::lumen_verifier::LumenVerifier,
     interfaces::http::auth_middleware,
 };
-use crate::index::application::engine::{collections::DropOutcome, Engine};
+use crate::index::application::engine::Engine;
 use crate::index::application::ports::search_backend::LocalEngineSearch;
 pub use crate::index::application::ports::search_backend::SearchBackend;
 use crate::index::domain::storage_error::StorageError;
 use crate::index::infrastructure::search_executor::BlockingSearchExecutor;
-use crate::index::infrastructure::snapshot_v1::SnapshotV1;
+use crate::index::interfaces::http::batch_search::batch_search;
+use crate::index::interfaces::http::collections::{
+    create_collection, drop_collection, drop_field, list_collections,
+};
+use crate::index::interfaces::http::duplicates::duplicates;
+use crate::index::interfaces::http::query_method::{
+    collection_id_query_dispatch, collection_id_query_probe, collections_query_dispatch,
+    collections_query_probe,
+};
+use crate::index::interfaces::http::search::{search, search_all};
+use crate::index::interfaces::http::stats::stats;
 use crate::ingest::application::ports::write_backend::LocalWriteBackend;
 pub use crate::ingest::application::ports::write_backend::WriteBackend;
 use crate::ingest::application::write_coordinator::{
@@ -61,16 +66,26 @@ use crate::ingest::application::write_coordinator::{
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::wal_log::SharedWal;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
+// The router still serves the deprecated `index` and `delete_external_id`.
+#[allow(deprecated)]
+use crate::ingest::interfaces::http::delete::{
+    delete_doc, delete_external_id, truncate_docs, unindex_docs,
+};
+#[allow(deprecated)]
+use crate::ingest::interfaces::http::index::{index, reindex_stream};
+use crate::ingest::interfaces::http::replace::{replace_doc, replace_docs};
+use crate::persistence::application::ports::checkpoint_sink::NoopCheckpoint;
 pub use crate::persistence::application::ports::checkpoint_sink::{
     CheckpointSink, HnswCacheDurability, HnswCacheSealReceipt,
-};
-use crate::persistence::application::ports::checkpoint_sink::{
-    HnswCacheSealInvalidated, HnswCacheSealUnavailable, NoopCheckpoint,
 };
 use crate::persistence::application::ports::restore_sink::InMemoryRestoreSink;
 pub use crate::persistence::application::ports::restore_sink::RestoreSink;
 use crate::persistence::application::restore::{RestoreNotCommitted, RestoreUnavailable};
-use crate::persistence::infrastructure::backup_sink::{BackupSink, LocalFsSink};
+use crate::persistence::interfaces::http::backup::{backup, backup_to_local, restore};
+use crate::persistence::interfaces::http::checkpoint::{
+    admin_checkpoint, admin_restart_seal_hnsw_cache, HnswCacheSealMutationStamp,
+    HnswCacheSealResponse,
+};
 use crate::replication::domain::{
     cluster_state::ReadConsistency, cluster_state_view::ClusterStateView, raft_role::RaftRole,
 };
@@ -79,14 +94,16 @@ pub use crate::sharding::domain::forward_error::{
     ShardForwardMisrouted, ShardForwardRemoteError, ShardForwardUnavailable,
     ShardMapVersionMismatch,
 };
-use crate::sharding::domain::reshard_batch::ReshardBatch;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
+use crate::sharding::interfaces::http::fence::reshard_fence;
+use crate::sharding::interfaces::http::reshard::{
+    backup_scoped, reshard_apply, reshard_evict, reshard_prune,
+};
 use crate::shared_kernel::types::{
     api_error::ApiError,
     document::{
-        validate_batch_unindex_docs_request, BatchUnindexDocsRequest, FieldValue, IndexItem,
-        IndexRequest, IndexResponse, ReplaceDocBody, ReplaceDocItem, ReplaceDocResult,
-        ReplaceDocsRequest, ReplaceDocsResponse, MAX_BATCH_REPLACE_SIZE, MAX_INDEX_BATCH_SIZE,
+        BatchUnindexDocsRequest, FieldValue, IndexItem, IndexRequest, IndexResponse,
+        ReplaceDocBody, ReplaceDocItem, ReplaceDocResult, ReplaceDocsRequest, ReplaceDocsResponse,
     },
     query::{KnnQuery, MatchOp, MatchQuery, QueryNode, RangeQuery, TermQuery, TermsQuery},
     schema::{
@@ -96,7 +113,7 @@ use crate::shared_kernel::types::{
     search::{
         BatchSearchRequest, BatchSearchResponse, BatchSearchResult, DuplicateGroup,
         DuplicatesRequest, DuplicatesResponse, SearchAllRequest, SearchAllResponse, SearchHit,
-        SearchRequest, SearchResponse, MAX_BATCH_SEARCH_SIZE,
+        SearchRequest, SearchResponse,
     },
     stats::{CacheStats, FieldStats, StatsResponse, StorageStats},
 };
@@ -137,15 +154,6 @@ impl ReadinessHook for ServingReadiness {
     }
 }
 
-/// How many authorization checks one request may have in flight at once.
-///
-/// The multi-collection paths (`GET /collections`, `POST /collections:search`)
-/// ask one `SubjectAccessReview` per collection. Serially that is a round trip
-/// per item; unbounded it is a way to point a fleet's whole list surface at the
-/// apiserver at once. The cache absorbs the repeat traffic, so this bound only
-/// has to keep the cold case civil.
-const AUTHORIZATION_CONCURRENCY: usize = 16;
-
 #[derive(Clone)]
 pub struct AppState {
     pub engine: Arc<Engine>,
@@ -156,7 +164,7 @@ pub struct AppState {
     /// replace it with a fan-in router while keeping writes/stats local.
     pub search_backend: Arc<dyn SearchBackend>,
     /// Shared bounded bridge for every local synchronous HTTP search path.
-    search_executor: BlockingSearchExecutor,
+    pub(crate) search_executor: BlockingSearchExecutor,
     /// Writes go through a [`WriteSink`]: the WAL-seam coordinator for
     /// embedded, or the raft host for `--wal raft`. Reads use
     /// `engine` directly. See `coordinator` / `wal` / `raft_sm`.
@@ -172,7 +180,7 @@ pub struct AppState {
     pub checkpoint: Arc<dyn CheckpointSink>,
     /// Restore backend for `POST /admin/restore`. Defaults to an in-memory
     /// candidate-and-swap sink; the server binary may wire a durable variant.
-    restore_sink: Arc<dyn RestoreSink>,
+    pub(crate) restore_sink: Arc<dyn RestoreSink>,
     /// Bounded write pause on still-moving virtual buckets during a
     /// reshard's final `CatchingUp` pass (#1396 R2). Defaults to unarmed
     /// (every write passes through unchanged); the reshard driver arms it
@@ -185,20 +193,6 @@ pub struct AppState {
     /// `routing_remote::RoutedRouter` via [`Self::with_routed`]; tests and
     /// every other deployment shape leave this `None`.
     pub routed: Option<Arc<dyn RoutedBackend>>,
-}
-
-#[derive(Serialize, utoipa::ToSchema)]
-struct HnswCacheSealMutationStamp {
-    epoch: u64,
-    apply_revision: u64,
-}
-
-#[derive(Serialize, utoipa::ToSchema)]
-struct HnswCacheSealResponse {
-    sealed: bool,
-    cache_fields: usize,
-    durability: &'static str,
-    mutation_stamp: HnswCacheSealMutationStamp,
 }
 
 /// A bounded, status-visible write pause on a set of still-moving virtual
@@ -243,7 +237,12 @@ impl WriteFence {
     /// would overflow (#1443 R3) — the caller must treat that as a failed arm
     /// rather than silently panicking with the fence lock held, which would
     /// poison it for every subsequent write/clear on this pod.
-    fn arm(&self, virtual_bucket_count: u32, buckets: BTreeSet<u32>, ttl: Duration) -> bool {
+    pub(crate) fn arm(
+        &self,
+        virtual_bucket_count: u32,
+        buckets: BTreeSet<u32>,
+        ttl: Duration,
+    ) -> bool {
         let Some(deadline) = Instant::now().checked_add(ttl) else {
             return false;
         };
@@ -257,7 +256,7 @@ impl WriteFence {
     }
 
     /// Explicitly disarm, independent of `deadline`.
-    fn clear(&self) {
+    pub(crate) fn clear(&self) {
         *self.lock() = None;
     }
 
@@ -444,33 +443,33 @@ impl AppState {
         version,
         metrics,
         debug_cluster,
-        list_collections,
-        create_collection,
-        drop_collection,
-        drop_field,
-        index,
-        delete_external_id,
-        replace_docs,
-        replace_doc,
-        delete_doc,
-        truncate_docs,
-        unindex_docs,
-        reindex_stream,
-        search,
-        search_all,
-        batch_search,
-        duplicates,
-        stats,
-        backup,
-        backup_to_local,
-        restore,
-        backup_scoped,
-        reshard_apply,
-        reshard_prune,
-        reshard_evict,
-        reshard_fence,
-        admin_checkpoint,
-        admin_restart_seal_hnsw_cache,
+        crate::index::interfaces::http::collections::list_collections,
+        crate::index::interfaces::http::collections::create_collection,
+        crate::index::interfaces::http::collections::drop_collection,
+        crate::index::interfaces::http::collections::drop_field,
+        crate::ingest::interfaces::http::index::index,
+        crate::ingest::interfaces::http::delete::delete_external_id,
+        crate::ingest::interfaces::http::replace::replace_docs,
+        crate::ingest::interfaces::http::replace::replace_doc,
+        crate::ingest::interfaces::http::delete::delete_doc,
+        crate::ingest::interfaces::http::delete::truncate_docs,
+        crate::ingest::interfaces::http::delete::unindex_docs,
+        crate::ingest::interfaces::http::index::reindex_stream,
+        crate::index::interfaces::http::search::search,
+        crate::index::interfaces::http::search::search_all,
+        crate::index::interfaces::http::batch_search::batch_search,
+        crate::index::interfaces::http::duplicates::duplicates,
+        crate::index::interfaces::http::stats::stats,
+        crate::persistence::interfaces::http::backup::backup,
+        crate::persistence::interfaces::http::backup::backup_to_local,
+        crate::persistence::interfaces::http::backup::restore,
+        crate::sharding::interfaces::http::reshard::backup_scoped,
+        crate::sharding::interfaces::http::reshard::reshard_apply,
+        crate::sharding::interfaces::http::reshard::reshard_prune,
+        crate::sharding::interfaces::http::reshard::reshard_evict,
+        crate::sharding::interfaces::http::fence::reshard_fence,
+        crate::persistence::interfaces::http::checkpoint::admin_checkpoint,
+        crate::persistence::interfaces::http::checkpoint::admin_restart_seal_hnsw_cache,
     ),
     components(schemas(
         CreateCollectionRequest,
@@ -815,7 +814,7 @@ async fn debug_cluster(State(state): State<AppState>) -> Json<ClusterStateView> 
     Json(view)
 }
 
-fn read_consistency_from(headers: &HeaderMap) -> ReadConsistency {
+pub(crate) fn read_consistency_from(headers: &HeaderMap) -> ReadConsistency {
     ReadConsistency::from_header(
         headers
             .get("x-read-consistency")
@@ -847,7 +846,10 @@ fn read_consistency_from(headers: &HeaderMap) -> ReadConsistency {
 ///   today, so `Bounded` on a non-leader replica always rejects rather than
 ///   report a fabricated lag figure (see `spawn_cluster_state_poller` in
 ///   `src/bin/lumen.rs`, #1349).
-fn enforce_read_consistency(state: &AppState, consistency: ReadConsistency) -> Result<(), ApiErr> {
+pub(crate) fn enforce_read_consistency(
+    state: &AppState,
+    consistency: ReadConsistency,
+) -> Result<(), ApiErr> {
     let Some(cluster) = state.cluster.as_ref() else {
         return Ok(());
     };
@@ -915,7 +917,7 @@ fn enforce_read_consistency(state: &AppState, consistency: ReadConsistency) -> R
 /// uncovered — fencing DELETE like every other write closes it fully, at
 /// the ordinary cost (a retryable 503) of any write to a fenced bucket. See
 /// the module's #1396 R2 write-fence doc on [`WriteFence`].
-fn enforce_write_fence(
+pub(crate) fn enforce_write_fence(
     state: &AppState,
     collection_id: &str,
     external_id: &str,
@@ -932,7 +934,7 @@ fn enforce_write_fence(
     Ok(())
 }
 
-fn enforce_collection_write_fence(state: &AppState) -> Result<(), ApiErr> {
+pub(crate) fn enforce_collection_write_fence(state: &AppState) -> Result<(), ApiErr> {
     if state.write_fence.blocks_any() {
         return Err(ApiErr::new(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -955,7 +957,7 @@ fn enforce_collection_write_fence(state: &AppState) -> Result<(), ApiErr> {
 /// I/O, so this never itself contributes to a full disk. Reads/search/health
 /// are exempt — they keep serving while degraded (see the `readyz`
 /// discussion in this issue's report: a degraded node still answers reads).
-fn enforce_storage_writable(state: &AppState) -> Result<(), ApiErr> {
+pub(crate) fn enforce_storage_writable(state: &AppState) -> Result<(), ApiErr> {
     if state.writer.restart_required() {
         return Err(ApiErr::new(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -977,7 +979,7 @@ fn enforce_storage_writable(state: &AppState) -> Result<(), ApiErr> {
     Ok(())
 }
 
-async fn acquire_direct_mutation_permit(
+pub(crate) async fn acquire_direct_mutation_permit(
     state: &AppState,
 ) -> Result<Option<tokio::sync::OwnedRwLockReadGuard<()>>, ApiErr> {
     enforce_storage_writable(state)?;
@@ -1043,877 +1045,13 @@ async fn readyz(State(state): State<AppState>) -> (StatusCode, &'static str) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Collections
-// ---------------------------------------------------------------------------
-
-#[utoipa::path(
-    get,
-    path = "/collections",
-    tag = "Collections",
-    responses((status = 200, description = "List collection IDs", body = [String]))
-)]
-async fn list_collections(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-) -> Result<Json<Vec<String>>, ApiErr> {
-    let all = state.engine.list_collections().map_err(ApiErr::from)?;
-    // Filter to what the caller can actually read. Each id is its own
-    // SubjectAccessReview, so the checks go out concurrently — but bounded, or
-    // one list request against a fleet with thousands of collections becomes
-    // thousands of simultaneous apiserver calls.
-    //
-    // A denial removes the collection from the listing. An *unanswered* check
-    // does not: silently dropping it would tell the caller the collection does
-    // not exist on the strength of an apiserver outage, and a wrong listing is
-    // harder to notice than a 503.
-    let visible: Vec<Option<String>> = futures::stream::iter(all)
-        .map(|id| {
-            let auth = &auth;
-            async move {
-                match auth.ensure(&id, Role::Read).await {
-                    Ok(()) => Ok(Some(id)),
-                    Err(crate::access::application::authorization::AuthErr::Forbidden {
-                        ..
-                    }) => Ok(None),
-                    Err(e) => Err(ApiErr::from(e)),
-                }
-            }
-        })
-        .buffered(AUTHORIZATION_CONCURRENCY)
-        .try_collect()
-        .await?;
-    Ok(Json(visible.into_iter().flatten().collect()))
-}
-
-#[utoipa::path(
-    put,
-    path = "/collections/{collection_id}",
-    tag = "Collections",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    request_body = CreateCollectionRequest,
-    responses(
-        (status = 200, description = "Collection created", body = CreateCollectionResponse),
-        (status = 400, description = "Invalid schema",     body = ApiError),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn create_collection(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path(collection_id): Path<String>,
-    Json(req): Json<CreateCollectionRequest>,
-) -> Result<Json<CreateCollectionResponse>, ApiErr> {
-    auth.ensure(&collection_id, Role::Admin).await?;
-    enforce_storage_writable(&state)?;
-    // #2496: fan create_collection out across every physical shard when
-    // routed — a collection created against only one shard left every other
-    // shard unable to serve a write that hashed there, matching the
-    // `index`/`delete_external_id`/`replace_docs` routed-or-local pattern.
-    let resp = if let Some(router) = &state.routed {
-        router
-            .create_collection(collection_id.clone(), req, &headers)
-            .await
-            .map_err(ApiErr::from)?
-    } else {
-        state
-            .write_backend
-            .create_collection(collection_id.clone(), req)
-            .await
-            .map_err(ApiErr::from)?
-    };
-    tracing::info!(
-        target: "lumen.audit",
-        event = "collection_create_or_extend",
-        subject = auth.subject().unwrap_or("anonymous"),
-        collection_id = %collection_id,
-        version = resp.version,
-        fields = resp.fields_count,
-    );
-    Ok(Json(resp))
-}
-
-#[derive(Debug, Deserialize)]
-struct DropQuery {
-    #[serde(default)]
-    force: bool,
-}
-
-#[utoipa::path(
-    delete,
-    path = "/collections/{collection_id}",
-    tag = "Collections",
-    params(
-        ("collection_id" = String, Path, description = "Collection namespace"),
-        ("force" = Option<bool>, Query, description = "Skip the soft-delete grace window")
-    ),
-    responses(
-        (status = 202, description = "Soft-deleted (grace window)"),
-        (status = 204, description = "Physically dropped"),
-        (status = 404, description = "Unknown collection"),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn drop_collection(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path(collection_id): Path<String>,
-    Query(q): Query<DropQuery>,
-) -> Result<StatusCode, ApiErr> {
-    auth.ensure(&collection_id, Role::Admin).await?;
-    enforce_storage_writable(&state)?;
-    // #2496: same routed-or-local fan-out as `create_collection` above.
-    let outcome = if let Some(router) = &state.routed {
-        router
-            .drop_collection(collection_id.clone(), q.force, &headers)
-            .await
-            .map_err(ApiErr::from)?
-    } else {
-        state
-            .write_backend
-            .drop_collection(collection_id.clone(), q.force)
-            .await
-            .map_err(ApiErr::from)?
-    };
-    let phase = match outcome {
-        DropOutcome::NotFound => {
-            return Err(ApiErr::not_found(format!(
-                "collection not found: {collection_id}"
-            )));
-        }
-        DropOutcome::Marked => "marked",
-        DropOutcome::AlreadyMarked => "already_marked",
-        DropOutcome::Physical => "physical",
-    };
-    tracing::info!(
-        target: "lumen.audit",
-        event = "collection_drop",
-        phase,
-        subject = auth.subject().unwrap_or("anonymous"),
-        collection_id = %collection_id,
-    );
-    // Soft-delete returns 202 Accepted so callers can tell it's still
-    // in the grace window; physical / already-marked return 204.
-    Ok(match outcome {
-        DropOutcome::Marked => StatusCode::ACCEPTED,
-        _ => StatusCode::NO_CONTENT,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Index
-// ---------------------------------------------------------------------------
-
-/// At most [`MAX_INDEX_BATCH_SIZE`] items per request; a longer batch is
-/// rejected with 400 before any item runs.
-#[deprecated(note = "use PUT /collections/{collection_id}/docs:replace for complete indexed rows")]
-#[utoipa::path(
-    post,
-    path = "/collections/{collection_id}/index",
-    tag = "Index",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    request_body = IndexRequest,
-    responses(
-        (status = 200, description = "Items indexed",     body = IndexResponse),
-        (status = 400, description = "Batch size over the limit", body = ApiError),
-        (status = 404, description = "Unknown collection", body = ApiError),
-        (status = 422, description = "Type mismatch",      body = ApiError),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn index(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path(collection_id): Path<String>,
-    Json(req): Json<IndexRequest>,
-) -> Result<Json<IndexResponse>, ApiErr> {
-    auth.ensure(&collection_id, Role::Write).await?;
-    enforce_storage_writable(&state)?;
-    if req.items.len() > MAX_INDEX_BATCH_SIZE {
-        return Err(ApiErr::new(
-            StatusCode::BAD_REQUEST,
-            "batch_too_large",
-            format!(
-                "batch has {} items, max is {MAX_INDEX_BATCH_SIZE}",
-                req.items.len()
-            ),
-        ));
-    }
-    for item in &req.items {
-        enforce_write_fence(&state, &collection_id, &item.external_id)?;
-    }
-    let resp = if let Some(router) = &state.routed {
-        router
-            .index(collection_id.clone(), req, &headers)
-            .await
-            .map_err(ApiErr::from)?
-    } else {
-        state
-            .write_backend
-            .index(collection_id.clone(), req)
-            .await
-            .map_err(ApiErr::from)?
-    };
-    Ok(Json(resp))
-}
-
-#[derive(Debug, Deserialize)]
-struct DeleteQuery {
-    field: Option<String>,
-}
-
-#[deprecated(
-    note = "use DELETE /collections/{collection_id}/docs/{external_id} for complete indexed-row deletion"
-)]
-#[utoipa::path(
-    delete,
-    path = "/collections/{collection_id}/index/{external_id}",
-    tag = "Index",
-    params(
-        ("collection_id" = String, Path, description = "Collection namespace"),
-        ("external_id"   = String, Path, description = "Caller-owned identifier"),
-        ("field"         = Option<String>, Query, description = "Restrict deletion to one field")
-    ),
-    responses(
-        (status = 204, description = "Deleted"),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn delete_external_id(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path((collection_id, external_id)): Path<(String, String)>,
-    Query(q): Query<DeleteQuery>,
-) -> Result<StatusCode, ApiErr> {
-    auth.ensure(&collection_id, Role::Write).await?;
-    enforce_storage_writable(&state)?;
-    enforce_write_fence(&state, &collection_id, &external_id)?;
-    if let Some(router) = &state.routed {
-        router
-            .delete(collection_id.clone(), external_id, q.field, &headers)
-            .await
-            .map_err(ApiErr::from)?;
-    } else {
-        state
-            .write_backend
-            .delete(collection_id.clone(), external_id, q.field)
-            .await
-            .map_err(ApiErr::from)?;
-    }
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Deletes the complete indexed row for one caller-owned external id. Lumen
-/// indexes caller-owned fields only; source-record hydration stays with the
-/// caller.
-#[utoipa::path(
-    delete,
-    operation_id = "delete_doc",
-    path = "/collections/{collection_id}/docs/{external_id}",
-    tag = "Index",
-    params(
-        ("collection_id" = String, Path, description = "Collection namespace"),
-        ("external_id"   = String, Path, description = "Caller-owned identifier")
-    ),
-    responses(
-        (status = 204, description = "Deleted"),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn delete_doc(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path((collection_id, external_id)): Path<(String, String)>,
-) -> Result<StatusCode, ApiErr> {
-    auth.ensure(&collection_id, Role::Write).await?;
-    enforce_storage_writable(&state)?;
-    enforce_write_fence(&state, &collection_id, &external_id)?;
-    if let Some(router) = &state.routed {
-        router
-            .delete(collection_id.clone(), external_id, None, &headers)
-            .await
-            .map_err(ApiErr::from)?;
-    } else {
-        state
-            .write_backend
-            .delete(collection_id.clone(), external_id, None)
-            .await
-            .map_err(ApiErr::from)?;
-    }
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Empty all indexed documents while retaining the collection declaration.
-///
-/// A successful response means this physical shard has durably swapped to the
-/// empty document state.  In routed mode each shard has that same boundary,
-/// but callers can observe a mixed cross-shard window while the fan-out runs.
-#[utoipa::path(
-    post,
-    operation_id = "truncate_docs",
-    path = "/collections/{collection_id}/docs:truncate",
-    tag = "Index",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    responses(
-        (status = 204, description = "Documents truncated; schema is unchanged"),
-        (status = 503, description = "Reshard fence or routed shard unavailable", body = ApiError),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn truncate_docs(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path(collection_id): Path<String>,
-    request: Request,
-) -> Result<StatusCode, ApiErr> {
-    auth.ensure(&collection_id, Role::Write).await?;
-    // A no-body custom method must not silently accept a stale `request_id`
-    // or another future selector.  Read at most one byte so a malformed large
-    // body cannot become an allocation-based denial of service.
-    let body = axum::body::to_bytes(request.into_body(), 1)
-        .await
-        .map_err(|_| {
-            ApiErr::new(
-                StatusCode::BAD_REQUEST,
-                "bad_request",
-                "truncate takes no request body",
-            )
-        })?;
-    if !body.is_empty() {
-        return Err(ApiErr::new(
-            StatusCode::BAD_REQUEST,
-            "bad_request",
-            "truncate takes no request body",
-        ));
-    }
-    enforce_storage_writable(&state)?;
-    // A truncate covers every document bucket.  It cannot safely pass a
-    // reshard cutover fence merely because it has no single external id.
-    enforce_collection_write_fence(&state)?;
-    if let Some(router) = &state.routed {
-        router
-            .truncate_docs(collection_id, &headers)
-            .await
-            .map_err(ApiErr::from)?;
-    } else {
-        state
-            .write_backend
-            .truncate_docs(collection_id)
-            .await
-            .map_err(ApiErr::from)?;
-    }
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Remove complete indexed rows for a bounded caller-supplied id list.
-///
-/// Validation happens before storage admission, reshard fences, routing, and
-/// durable publish.  Routed requests partition the list by current ownership;
-/// each nonempty physical shard receives one atomic durable command.
-#[utoipa::path(
-    post,
-    operation_id = "batch_unindex_docs",
-    path = "/collections/{collection_id}/docs:unindex",
-    tag = "Index",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    request_body = BatchUnindexDocsRequest,
-    responses(
-        (status = 204, description = "Documents unindexed"),
-        (status = 400, description = "Malformed body, empty/duplicate ids, or more than 1000 ids", body = ApiError),
-        (status = 503, description = "Reshard fence or routed shard unavailable", body = ApiError),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn unindex_docs(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path(collection_id): Path<String>,
-    request: Request,
-) -> Result<StatusCode, ApiErr> {
-    auth.ensure(&collection_id, Role::Write).await?;
-
-    // Axum's default JSON rejection may use several client-error statuses
-    // depending on the failure source.  This fixed command promises 400 for
-    // every malformed JSON/body-shape case, before any write fence or route.
-    let Json(req) = Json::<BatchUnindexDocsRequest>::from_request(request, &state)
-        .await
-        .map_err(|error| {
-            ApiErr::new(
-                StatusCode::BAD_REQUEST,
-                "bad_request",
-                format!("invalid docs:unindex body: {error}"),
-            )
-        })?;
-    validate_batch_unindex_docs_request(&req).map_err(|error| {
-        ApiErr::new(
-            StatusCode::BAD_REQUEST,
-            "bad_request",
-            format!("invalid docs:unindex body: {error}"),
-        )
-    })?;
-
-    enforce_storage_writable(&state)?;
-    for external_id in &req.external_ids {
-        enforce_write_fence(&state, &collection_id, external_id)?;
-    }
-    if let Some(router) = &state.routed {
-        router
-            .unindex_docs(collection_id, req, &headers)
-            .await
-            .map_err(ApiErr::from)?;
-    } else {
-        state
-            .write_backend
-            .unindex_docs(collection_id, req)
-            .await
-            .map_err(ApiErr::from)?;
-    }
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Batch full-replacement upsert: each item's `fields` becomes the doc's
-/// entire indexed state, implicitly deleting any declared schema field the
-/// doc has today but that is absent from `fields`. `docs:replace` is one
-/// literal path segment (AIP-136 custom-method syntax) appended after
-/// `{collection_id}`, so it registers directly in axum next to
-/// `/collections/{collection_id}/docs/{external_id}` without any capture
-/// ambiguity — collection ids are validated to reject `:`.
-///
-/// PUT is deliberate: this is idempotent full replacement (plus optional
-/// doc-level last-write-wins), so replaying the same request converges to
-/// the same state. Own the *complete* row for a doc? Use `docs:replace`.
-/// Own only *some* fields and want to add/update those without touching
-/// the rest? Use `POST .../index` instead.
-///
-/// One bad item (unknown field, type mismatch) never fails the batch — the
-/// batch-level status stays 200 and that item's [`ReplaceDocResult`]
-/// carries the error. Only a malformed body or an over-limit batch returns
-/// 400.
-#[utoipa::path(
-    put,
-    path = "/collections/{collection_id}/docs:replace",
-    tag = "Index",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    request_body = ReplaceDocsRequest,
-    responses(
-        (status = 200, description = "Per-item results, same order and length as `docs`", body = ReplaceDocsResponse),
-        (status = 400, description = "Malformed body or batch size over the limit", body = ApiError),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn replace_docs(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path(collection_id): Path<String>,
-    Json(req): Json<ReplaceDocsRequest>,
-) -> Result<Json<ReplaceDocsResponse>, ApiErr> {
-    auth.ensure(&collection_id, Role::Write).await?;
-    enforce_storage_writable(&state)?;
-    if req.docs.len() > MAX_BATCH_REPLACE_SIZE {
-        return Err(ApiErr::new(
-            StatusCode::BAD_REQUEST,
-            "batch_too_large",
-            format!(
-                "batch has {} items, max is {MAX_BATCH_REPLACE_SIZE}",
-                req.docs.len()
-            ),
-        ));
-    }
-    for doc in &req.docs {
-        enforce_write_fence(&state, &collection_id, &doc.external_id)?;
-    }
-    let resp = replace_docs_routed_or_local(&state, &headers, collection_id, req).await?;
-    Ok(Json(resp))
-}
-
-/// Shared write-backend/router branch for [`replace_docs`] and
-/// [`replace_doc`] (its single-doc sugar).
-async fn replace_docs_routed_or_local(
-    state: &AppState,
-    headers: &HeaderMap,
-    collection_id: String,
-    req: ReplaceDocsRequest,
-) -> Result<ReplaceDocsResponse, ApiErr> {
-    if let Some(router) = &state.routed {
-        router
-            .replace_docs(collection_id, req, headers)
-            .await
-            .map_err(ApiErr::from)
-    } else {
-        state
-            .write_backend
-            .replace_docs(collection_id, req)
-            .await
-            .map_err(ApiErr::from)
-    }
-}
-
-/// Single-resource sugar over `docs:replace`: exactly the one-item batch
-/// `{"docs": [{"external_id": ..., "version": ..., "fields": {...}}]}`,
-/// unwrapped back into a bare [`ReplaceDocResult`]. See [`replace_docs`]
-/// for the full-replacement / doc-level LWW semantics — the batch-level
-/// status stays 200 here too; a bad item comes back as
-/// `{"status":"error",...}` in the body rather than as an HTTP error.
-#[utoipa::path(
-    put,
-    path = "/collections/{collection_id}/docs/{external_id}",
-    tag = "Index",
-    params(
-        ("collection_id" = String, Path, description = "Collection namespace"),
-        ("external_id"   = String, Path, description = "Caller-owned identifier")
-    ),
-    request_body = ReplaceDocBody,
-    responses(
-        (status = 200, description = "Replacement result for this doc", body = ReplaceDocResult),
-        (status = 400, description = "Malformed body", body = ApiError),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn replace_doc(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path((collection_id, external_id)): Path<(String, String)>,
-    Json(body): Json<ReplaceDocBody>,
-) -> Result<Json<ReplaceDocResult>, ApiErr> {
-    auth.ensure(&collection_id, Role::Write).await?;
-    enforce_storage_writable(&state)?;
-    enforce_write_fence(&state, &collection_id, &external_id)?;
-    let req = ReplaceDocsRequest {
-        docs: vec![ReplaceDocItem {
-            external_id,
-            version: body.version,
-            fields: body.fields,
-        }],
-    };
-    let resp = replace_docs_routed_or_local(&state, &headers, collection_id, req).await?;
-    let result = resp.results.into_iter().next().ok_or_else(|| {
-        ApiErr::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "internal",
-            "no result for single-doc replace".to_string(),
-        )
-    })?;
-    Ok(Json(result))
-}
-
-// ---------------------------------------------------------------------------
-// Query
-// ---------------------------------------------------------------------------
-
-#[utoipa::path(
-    post,
-    path = "/collections/{collection_id}/search",
-    tag = "Query",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    request_body = SearchRequest,
-    responses((status = 200, description = "Search hits", body = SearchResponse))
-)]
-async fn search(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path(collection_id): Path<String>,
-    Json(req): Json<SearchRequest>,
-) -> Result<Json<SearchResponse>, ApiErr> {
-    Ok(Json(
-        search_core(&state, &auth, &headers, &collection_id, req).await?,
-    ))
-}
-
-/// Export every matching external id in one explicit full-materialization
-/// request. The local engine evaluates the request while holding one read-lock
-/// snapshot; routed deployments collect one independently consistent snapshot
-/// per shard and intentionally do not claim a cross-shard transaction.
-#[utoipa::path(
-    post,
-    path = "/collections/{collection_id}/search:all",
-    tag = "Query",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    request_body = SearchAllRequest,
-    responses(
-        (status = 200, description = "All matching external ids; materializes the complete result set", body = SearchAllResponse),
-        (status = 400, description = "Invalid query or unsupported sort", body = ApiError)
-    )
-)]
-async fn search_all(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path(collection_id): Path<String>,
-    Json(req): Json<SearchAllRequest>,
-) -> Result<Json<SearchAllResponse>, ApiErr> {
-    let response = search_core(
-        &state,
-        &auth,
-        &headers,
-        &collection_id,
-        SearchRequest {
-            query: req.query,
-            limit: u32::MAX,
-            offset: 0,
-            cursor: None,
-            routing_key: req.routing_key,
-            sort: req.sort,
-            track_total: true,
-            collapse: None,
-        },
-    )
-    .await?;
-    Ok(Json(SearchAllResponse {
-        external_ids: response
-            .hits
-            .into_iter()
-            .map(|hit| hit.external_id)
-            .collect(),
-        total: response.total,
-        took_ms: response.took_ms,
-        took_us: response.took_us,
-    }))
-}
-
-/// Shared implementation behind `POST /collections/{collection_id}/search`
-/// and its `QUERY /collections/{collection_id}` twin
-/// ([`collection_id_query_dispatch`], epic #1296 R1: every QUERY endpoint
-/// keeps a POST twin — same handler, identical response). Consults
-/// `state.routed` first (#1398 R1) — a routed deployment scatters/forwards
-/// by ownership; every other deployment falls through to `search_backend`
-/// unchanged.
-async fn search_core(
-    state: &AppState,
-    auth: &AuthContext,
-    headers: &HeaderMap,
-    collection_id: &str,
-    req: SearchRequest,
-) -> Result<SearchResponse, ApiErr> {
-    auth.ensure(collection_id, Role::Read).await?;
-    let consistency = read_consistency_from(headers);
-    enforce_read_consistency(state, consistency)?;
-    if let Some(router) = &state.routed {
-        return router
-            .search(collection_id, req, headers)
-            .await
-            .map_err(ApiErr::from);
-    }
-    run_local_search(state, collection_id, req)
-        .await
-        .map_err(ApiErr::from)
-}
-
-/// Runs a local synchronous backend outside the Tokio reactor. Keep this one
-/// helper shared by single-search and batch-search handlers so batch items
-/// cannot bypass the readiness-preserving boundary.
-async fn run_local_search(
-    state: &AppState,
-    collection_id: &str,
-    req: SearchRequest,
-) -> Result<SearchResponse> {
-    let backend = Arc::clone(&state.search_backend);
-    let collection_id = collection_id.to_string();
-    state
-        .search_executor
-        .run(move || backend.search(&collection_id, req))
-        .await
-}
-
-/// msearch-style batch search: N independent `(collection, SearchRequest)`
-/// items in one HTTP request, fanned out concurrently. `collections:search`
-/// is one literal path segment (AIP-136 custom-method syntax), so it
-/// registers directly in axum next to `/collections` and
-/// `/collections/{collection_id}` without any capture ambiguity.
-///
-/// One item failing (e.g. an unknown collection) never fails the batch —
-/// the batch-level status stays 200 and that item's [`BatchSearchResult`]
-/// carries the error. Only a malformed body or an over-limit batch returns
-/// 400. Cursors, sort, and collapse all stay per-item: there is no merged
-/// cursor and no cross-collection score merging.
-#[utoipa::path(
-    post,
-    path = "/collections:search",
-    tag = "Query",
-    request_body = BatchSearchRequest,
-    responses(
-        (status = 200, description = "Per-item results, same order and length as `searches`", body = BatchSearchResponse),
-        (status = 400, description = "Malformed body or batch size over the limit", body = ApiError)
-    )
-)]
-async fn batch_search(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Json(req): Json<BatchSearchRequest>,
-) -> Result<Json<BatchSearchResponse>, ApiErr> {
-    Ok(Json(batch_search_core(&state, &auth, &headers, req).await?))
-}
-
-/// Shared implementation behind `POST /collections:search` and its `QUERY
-/// /collections` twin ([`collections_query_dispatch`], epic #1296 R1: every
-/// QUERY endpoint keeps a POST twin — same handler, identical response).
-async fn batch_search_core(
-    state: &AppState,
-    auth: &AuthContext,
-    headers: &HeaderMap,
-    req: BatchSearchRequest,
-) -> Result<BatchSearchResponse, ApiErr> {
-    if req.searches.len() > MAX_BATCH_SEARCH_SIZE {
-        return Err(ApiErr::new(
-            StatusCode::BAD_REQUEST,
-            "batch_too_large",
-            format!(
-                "batch has {} items, max is {MAX_BATCH_SEARCH_SIZE}",
-                req.searches.len()
-            ),
-        ));
-    }
-    let consistency = read_consistency_from(headers);
-    enforce_read_consistency(state, consistency)?;
-    // `buffered`, not `buffer_unordered`: the response contract is that
-    // `results` matches `searches` in order and length, and each item's
-    // authorization now costs a SubjectAccessReview, so the bound matters as
-    // much as the concurrency does.
-    let results: Vec<BatchSearchResult> = futures::stream::iter(req.searches)
-        .map(|item| {
-            let state = state.clone();
-            let auth = auth.clone();
-            let headers = headers.clone();
-            async move {
-                if let Err(e) = auth.ensure(&item.collection, Role::Read).await {
-                    return batch_search_auth_error(e);
-                }
-                let result = if let Some(router) = &state.routed {
-                    router
-                        .search(&item.collection, item.request, &headers)
-                        .await
-                } else {
-                    run_local_search(&state, &item.collection, item.request).await
-                };
-                match result {
-                    Ok(response) => BatchSearchResult::Ok { response },
-                    Err(e) => batch_search_storage_error(e),
-                }
-            }
-        })
-        .buffered(AUTHORIZATION_CONCURRENCY)
-        .collect()
-        .await;
-    Ok(BatchSearchResponse { results })
-}
-
-// ---------------------------------------------------------------------------
-// QUERY (RFC 10008) — dual-registered POST twins (epic #1296 R1)
-// ---------------------------------------------------------------------------
-//
-// axum has no native `Method::QUERY`/`MethodFilter::QUERY` yet
-// (tokio-rs/axum#3799, PR #3801 open). The interim dispatch below registers
-// each route's `fallback` — the handler axum calls for any method not
-// explicitly claimed by that route's `get`/`post`/`put`/`delete`/`options`/
-// `head` combinators — and re-checks the method by hand via
-// `Method::from_bytes(b"QUERY")`. Replace `is_query_method` and both
-// `*_query_dispatch` fallbacks with native `MethodFilter::QUERY` combinators
-// once that PR lands; `*_query_probe` (OPTIONS/HEAD) can move to ordinary
-// combinators unchanged.
-
-/// `true` for the RFC 10008 QUERY method. `http::Method` has no `QUERY`
-/// constant yet, so this matches the wire token the same way
-/// `Method::from_bytes(b"QUERY")` would.
-fn is_query_method(method: &Method) -> bool {
-    Method::from_bytes(b"QUERY").is_ok_and(|query| *method == query)
-}
-
-/// 405 for any method that reaches a QUERY-dispatch fallback without
-/// actually being QUERY. Normal traffic never hits this arm — `PUT`/
-/// `DELETE`/`GET`/`OPTIONS`/`HEAD` are all claimed by explicit combinators
-/// ahead of the fallback — it only guards stray/unsupported methods.
-fn query_method_not_allowed(allow: &'static str) -> axum::response::Response {
-    axum::response::Response::builder()
-        .status(StatusCode::METHOD_NOT_ALLOWED)
-        .header(axum::http::header::ALLOW, allow)
-        .body(axum::body::Body::empty())
-        .expect("static not-allowed headers are always valid")
-}
-
-/// `OPTIONS`/`HEAD` probe response shared by both QUERY targets: advertises
-/// `Accept-Query: application/json` (RFC 10008 discovery) and lists the
-/// target's full method set, QUERY included, in `Allow`.
-fn query_probe_response(allow: &'static str) -> axum::response::Response {
-    axum::response::Response::builder()
-        .status(StatusCode::NO_CONTENT)
-        .header(axum::http::header::ALLOW, allow)
-        .header("accept-query", "application/json")
-        .body(axum::body::Body::empty())
-        .expect("static probe headers are always valid")
-}
-
-async fn collection_id_query_probe() -> axum::response::Response {
-    query_probe_response("PUT, DELETE, QUERY, OPTIONS, HEAD")
-}
-
-async fn collections_query_probe() -> axum::response::Response {
-    query_probe_response("GET, QUERY, OPTIONS, HEAD")
-}
-
-/// `QUERY /collections/{collection_id}` — dual-registered twin of `POST
-/// /collections/{collection_id}/search` (same [`search_core`] handler,
-/// identical response for identical bodies). Content-Type is mandatory on
-/// QUERY per RFC 10008; reusing [`Json`]'s own `FromRequest` for the body
-/// gives that for free — missing/mismatched `Content-Type` rejects with 415,
-/// byte-identical to what the POST twin already returns for the same input.
-async fn collection_id_query_dispatch(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Path(collection_id): Path<String>,
-    request: Request,
-) -> axum::response::Response {
-    if !is_query_method(request.method()) {
-        return query_method_not_allowed("PUT, DELETE, QUERY, OPTIONS, HEAD");
-    }
-    let headers = request.headers().clone();
-    match Json::<SearchRequest>::from_request(request, &state).await {
-        Ok(Json(req)) => match search_core(&state, &auth, &headers, &collection_id, req).await {
-            Ok(resp) => Json(resp).into_response(),
-            Err(e) => e.into_response(),
-        },
-        Err(rejection) => rejection.into_response(),
-    }
-}
-
-/// `QUERY /collections` — dual-registered twin of `POST /collections:search`
-/// (same [`batch_search_core`] handler, identical response for identical
-/// bodies). See [`collection_id_query_dispatch`] for the Content-Type/415
-/// and interim-fallback rationale.
-async fn collections_query_dispatch(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    request: Request,
-) -> axum::response::Response {
-    if !is_query_method(request.method()) {
-        return query_method_not_allowed("GET, QUERY, OPTIONS, HEAD");
-    }
-    let headers = request.headers().clone();
-    match Json::<BatchSearchRequest>::from_request(request, &state).await {
-        Ok(Json(req)) => match batch_search_core(&state, &auth, &headers, req).await {
-            Ok(resp) => Json(resp).into_response(),
-            Err(e) => e.into_response(),
-        },
-        Err(rejection) => rejection.into_response(),
-    }
-}
-
 /// Classify one batch item's search failure into a
 /// [`BatchSearchResult::Error`] instead of failing the whole batch. Mirrors
 /// `From<anyhow::Error> for ApiErr`'s `StorageError` classification, but the
 /// `code` values line up with the batch wire contract
 /// (`"collection_not_found"`, ...) rather than `ApiErr`'s internal `kind`
 /// strings.
-fn batch_search_storage_error(e: anyhow::Error) -> BatchSearchResult {
+pub(crate) fn batch_search_storage_error(e: anyhow::Error) -> BatchSearchResult {
     let code = match e.downcast_ref::<StorageError>() {
         Some(StorageError::CollectionNotFound(_)) => "collection_not_found",
         Some(StorageError::InvalidCollectionName(_)) => "invalid_collection_name",
@@ -1934,928 +1072,6 @@ fn batch_search_storage_error(e: anyhow::Error) -> BatchSearchResult {
         code: code.to_string(),
         message: e.to_string(),
     }
-}
-
-/// Classify one batch item's auth rejection into a
-/// [`BatchSearchResult::Error`].
-///
-/// The per-item envelope reuses [`AuthErr::wire`], so a batch item and a
-/// single-collection request report a denial — or an unanswered
-/// SubjectAccessReview — with the same code and the same wording. One item's
-/// failure never fails the batch: the caller may legitimately hold read on
-/// some of the collections it asked about and not others.
-fn batch_search_auth_error(
-    e: crate::access::application::authorization::AuthErr,
-) -> BatchSearchResult {
-    let (_, code, message) = e.wire();
-    BatchSearchResult::Error {
-        code: code.to_string(),
-        message,
-    }
-}
-
-#[utoipa::path(
-    post,
-    path = "/collections/{collection_id}/duplicates",
-    tag = "Query",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    request_body = DuplicatesRequest,
-    responses((status = 200, description = "Duplicate groups", body = DuplicatesResponse))
-)]
-/// Local-shard only, deliberately not wired to `state.routed` (#1398 known
-/// gap, #1442 R6): `Engine::duplicates` filters by `min_group_size` *before*
-/// any cross-shard merge could happen, so scatter-then-merge would silently
-/// miss a true cross-shard group (e.g. one copy per shard under
-/// `min_group_size: 2`) — a correctness regression, not a routing gap. A
-/// correct cross-shard implementation needs unfiltered per-shard candidate
-/// groups from `storage.rs`, out of scope here. #1442 R6 closes the "silent
-/// wrong answer" gap this left in routed multi-shard mode: rather than
-/// unchanged pre-#1398 behavior (silently answering from local-shard data
-/// only, missing cross-shard duplicate groups with no indication), a routed
-/// deployment now rejects with a distinct, non-retryable error so a caller
-/// can tell "not supported here" from "no duplicates found".
-async fn duplicates(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    headers: HeaderMap,
-    Path(collection_id): Path<String>,
-    Json(req): Json<DuplicatesRequest>,
-) -> Result<Json<DuplicatesResponse>, ApiErr> {
-    auth.ensure(&collection_id, Role::Read).await?;
-    let _consistency = read_consistency_from(&headers);
-    if state.routed.is_some() {
-        return Err(ApiErr::new(
-            StatusCode::NOT_IMPLEMENTED,
-            "duplicates_not_routed",
-            "duplicate detection is local-shard-only and does not merge across shards; not \
-             supported in routed multi-shard mode (#1442 R6)"
-                .to_string(),
-        ));
-    }
-    Ok(Json(
-        state
-            .engine
-            .duplicates(&collection_id, req)
-            .map_err(ApiErr::from)?,
-    ))
-}
-
-#[utoipa::path(
-    get,
-    path = "/collections/{collection_id}/stats",
-    tag = "Query",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    responses((status = 200, description = "Collection stats", body = StatsResponse))
-)]
-async fn stats(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Path(collection_id): Path<String>,
-) -> Result<Json<StatsResponse>, ApiErr> {
-    auth.ensure(&collection_id, Role::Read).await?;
-    // `Engine::stats` holds the state read lock and walks every live term of
-    // every field, including one checkpoint interval of un-absorbed staged
-    // Text rows (#4246). That is CPU-bound Engine work, so it goes through the
-    // same bounded blocking bridge the search handlers use rather than
-    // stalling the reactor worker that also serves `/healthz` (see the rule
-    // above `BlockingSearchExecutor`).
-    let engine = Arc::clone(&state.engine);
-    let requested = collection_id.clone();
-    Ok(Json(
-        state
-            .search_executor
-            .run(move || engine.stats(&requested))
-            .await
-            .map_err(ApiErr::from)?,
-    ))
-}
-
-/// Streaming bulk-reindex endpoint.
-///
-/// Body is NDJSON of `IndexItem` records (one per line). Response is
-/// an NDJSON stream of progress events:
-///
-/// ```text
-/// {"event":"progress","indexed_total":1000,"batch_indexed":1000,"elapsed_ms":42}
-/// {"event":"progress","indexed_total":2000,"batch_indexed":1000,"elapsed_ms":85}
-/// ...
-/// {"event":"done","indexed_total":2473,"elapsed_ms":210}
-/// ```
-///
-/// Errors are surfaced as `{"event":"error","line":N,"message":"..."}`
-/// inline; the stream continues so partial progress is observable.
-///
-/// Rejected outright in routed multi-shard mode (#1442 R6): the spawned
-/// batch loop below writes through `state.write_backend` directly, bypassing
-/// both `state.routed`'s per-item shard ownership and `enforce_write_fence`
-/// (the same per-item reshard-cutover pause every other write path
-/// observes). Routing each streamed item by ownership and fencing it
-/// individually, inside a detached `tokio::spawn` task that already streams
-/// its own NDJSON response back, is a materially bigger change than this
-/// bounded hardening pass — an accepted, documented fallback per R6's own
-/// scope rather than a half-routed implementation that could silently
-/// mis-shard or skip the write fence.
-#[utoipa::path(
-    post,
-    path = "/collections/{collection_id}/reindex/stream",
-    tag = "Index",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
-    request_body(content = String, description = "NDJSON of IndexItem records, one per line"),
-    responses(
-        (status = 200, description = "NDJSON stream of progress events, terminated by a done event"),
-        (status = 501, description = "Not supported in routed multi-shard mode (#1442 R6)", body = ApiError)
-    )
-)]
-async fn reindex_stream(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Path(collection_id): Path<String>,
-    body: axum::body::Bytes,
-) -> Result<axum::response::Response, ApiErr> {
-    use axum::body::Body;
-    use std::time::Instant;
-    use tokio::sync::mpsc;
-
-    auth.ensure(&collection_id, Role::Write).await?;
-    if state.routed.is_some() {
-        return Err(ApiErr::new(
-            StatusCode::NOT_IMPLEMENTED,
-            "reindex_stream_not_routed",
-            "streaming bulk reindex bypasses per-item shard ownership and the write fence; not \
-             supported in routed multi-shard mode, use POST .../index instead (#1442 R6)"
-                .to_string(),
-        ));
-    }
-
-    const BATCH_SIZE: usize = 1_000;
-    let (tx, rx) = mpsc::channel::<Result<axum::body::Bytes, std::io::Error>>(16);
-    let writer = state.write_backend.clone();
-    let collection = collection_id.clone();
-
-    tokio::spawn(async move {
-        let started = Instant::now();
-        let mut batch: Vec<IndexItem> = Vec::with_capacity(BATCH_SIZE);
-        let mut indexed_total = 0u64;
-        let send = |tx: &mpsc::Sender<_>, line: serde_json::Value| {
-            let mut s = line.to_string();
-            s.push('\n');
-            let bytes = axum::body::Bytes::from(s.into_bytes());
-            tx.try_send(Ok::<_, std::io::Error>(bytes))
-        };
-
-        for (lineno, raw) in body.split(|&b| b == b'\n').enumerate() {
-            let line = raw.trim_ascii();
-            if line.is_empty() {
-                continue;
-            }
-            let item: IndexItem = match serde_json::from_slice(line) {
-                Ok(i) => i,
-                Err(e) => {
-                    let _ = send(
-                        &tx,
-                        serde_json::json!({
-                            "event": "error",
-                            "line": lineno + 1,
-                            "message": e.to_string(),
-                        }),
-                    );
-                    continue;
-                }
-            };
-            batch.push(item);
-
-            if batch.len() >= BATCH_SIZE {
-                let drained = std::mem::replace(&mut batch, Vec::with_capacity(BATCH_SIZE));
-                let batch_start = Instant::now();
-                match writer
-                    .index(
-                        collection.clone(),
-                        IndexRequest {
-                            items: drained,
-                            request_id: None,
-                        },
-                    )
-                    .await
-                {
-                    Ok(r) => {
-                        indexed_total += r.indexed as u64;
-                        let _ = send(
-                            &tx,
-                            serde_json::json!({
-                                "event": "progress",
-                                "indexed_total": indexed_total,
-                                "batch_indexed": r.indexed,
-                                "elapsed_ms": started.elapsed().as_millis() as u64,
-                                "batch_elapsed_ms": batch_start.elapsed().as_millis() as u64,
-                            }),
-                        );
-                    }
-                    Err(e) => {
-                        let _ = send(
-                            &tx,
-                            serde_json::json!({
-                                "event": "error",
-                                "line": lineno + 1,
-                                "message": e.to_string(),
-                            }),
-                        );
-                    }
-                }
-            }
-        }
-
-        // Final flush of whatever's left in the batch.
-        if !batch.is_empty() {
-            let batch_start = Instant::now();
-            if let Ok(r) = writer
-                .index(
-                    collection.clone(),
-                    IndexRequest {
-                        items: batch,
-                        request_id: None,
-                    },
-                )
-                .await
-            {
-                indexed_total += r.indexed as u64;
-                let _ = send(
-                    &tx,
-                    serde_json::json!({
-                        "event": "progress",
-                        "indexed_total": indexed_total,
-                        "batch_indexed": r.indexed,
-                        "elapsed_ms": started.elapsed().as_millis() as u64,
-                        "batch_elapsed_ms": batch_start.elapsed().as_millis() as u64,
-                    }),
-                );
-            }
-        }
-
-        let _ = send(
-            &tx,
-            serde_json::json!({
-                "event": "done",
-                "indexed_total": indexed_total,
-                "elapsed_ms": started.elapsed().as_millis() as u64,
-            }),
-        );
-
-        tracing::info!(
-            target: "lumen.audit",
-            event = "reindex_stream_done",
-            subject = auth.subject().unwrap_or("anonymous"),
-            collection_id = %collection,
-            indexed_total,
-            elapsed_ms = started.elapsed().as_millis() as u64,
-        );
-    });
-
-    let stream =
-        futures::stream::unfold(rx, |mut rx| async move { rx.recv().await.map(|r| (r, rx)) });
-    let resp = axum::response::Response::builder()
-        .status(StatusCode::OK)
-        .header("content-type", "application/x-ndjson")
-        .body(Body::from_stream(stream))
-        .map_err(|e| {
-            ApiErr::new(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "stream_init",
-                e.to_string(),
-            )
-        })?;
-    Ok(resp)
-}
-
-#[utoipa::path(
-    delete,
-    path = "/collections/{collection_id}/fields/{field_name}",
-    tag = "Collections",
-    params(
-        ("collection_id" = String, Path, description = "Collection namespace"),
-        ("field_name"    = String, Path, description = "Field to drop")
-    ),
-    responses(
-        (status = 200, description = "Field dropped; new schema version", body = serde_json::Value),
-        (status = 404, description = "Unknown collection or field",       body = ApiError)
-    )
-)]
-async fn drop_field(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Path((collection_id, field_name)): Path<(String, String)>,
-) -> Result<Json<serde_json::Value>, ApiErr> {
-    auth.ensure(&collection_id, Role::Admin).await?;
-    let version = state
-        .write_backend
-        .drop_field(collection_id.clone(), field_name.clone())
-        .await
-        .map_err(ApiErr::from)?;
-    tracing::info!(
-        target: "lumen.audit",
-        event = "field_drop",
-        subject = auth.subject().unwrap_or("anonymous"),
-        collection_id = %collection_id,
-        field_name = %field_name,
-        version,
-    );
-    Ok(Json(serde_json::json!({
-        "collection_id": collection_id,
-        "field_name": field_name,
-        "version": version,
-    })))
-}
-
-// ---------------------------------------------------------------------------
-// Backup / restore (cluster-wide admin)
-// ---------------------------------------------------------------------------
-
-/// Dump the entire engine state as a single JSON document.
-#[utoipa::path(
-    get,
-    path = "/admin/backup",
-    tag = "Admin",
-    responses(
-        (status = 200, description = "Full engine snapshot as JSON", body = serde_json::Value),
-        (status = 403, description = "Missing admin role", body = ApiError)
-    )
-)]
-async fn backup(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-) -> Result<Json<SnapshotV1>, ApiErr> {
-    // Cluster-wide admin op: needs admin on wildcard.
-    auth.ensure_admin(Role::Admin).await?;
-    tracing::info!(
-        target: "lumen.audit",
-        event = "backup_started",
-        subject = auth.subject().unwrap_or("anonymous"),
-    );
-    Ok(Json(state.engine.snapshot().map_err(ApiErr::from)?))
-}
-
-#[derive(Debug, Deserialize)]
-struct LocalBackupRequest {
-    /// Filesystem path the snapshot will be written into.
-    path: String,
-    /// Key prefix; the file will be named `{prefix}-{unix_seconds}.json`.
-    #[serde(default = "default_backup_prefix")]
-    prefix: String,
-}
-
-fn default_backup_prefix() -> String {
-    "lumen-backup".into()
-}
-
-/// Snapshot the engine and persist it via a `LocalFsSink`. Returns the
-/// final key the sink chose. The path is created if missing.
-#[utoipa::path(
-    post,
-    path = "/admin/backup/local",
-    tag = "Admin",
-    request_body = serde_json::Value,
-    responses(
-        (status = 200, description = "Snapshot written; sink identity and object key", body = serde_json::Value),
-        (status = 400, description = "Invalid local sink path", body = ApiError),
-        (status = 403, description = "Missing admin role", body = ApiError)
-    )
-)]
-async fn backup_to_local(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Json(req): Json<LocalBackupRequest>,
-) -> Result<Json<serde_json::Value>, ApiErr> {
-    auth.ensure_admin(Role::Admin).await?;
-    let snap = state.engine.snapshot().map_err(ApiErr::from)?;
-    let payload = serde_json::to_vec(&snap)
-        .map_err(|e| ApiErr::new(StatusCode::INTERNAL_SERVER_ERROR, "encode", e.to_string()))?;
-    let sink = LocalFsSink::new(&req.path, &req.prefix)
-        .map_err(|e| ApiErr::new(StatusCode::BAD_REQUEST, "bad_sink", e.to_string()))?;
-    let key = sink
-        .put(std::time::SystemTime::now(), &payload)
-        .map_err(|e| ApiErr::new(StatusCode::INTERNAL_SERVER_ERROR, "sink_put", e.to_string()))?;
-    tracing::info!(
-        target: "lumen.audit",
-        event = "backup_local",
-        subject = auth.subject().unwrap_or("anonymous"),
-        sink = %sink.identity(),
-        key = %key,
-        bytes = payload.len(),
-    );
-    Ok(Json(serde_json::json!({
-        "sink": sink.identity(),
-        "key": key,
-        "bytes": payload.len(),
-    })))
-}
-
-/// Restore the engine from a snapshot dump produced by `/admin/backup`.
-/// Replaces all existing state.
-#[utoipa::path(
-    post,
-    path = "/admin/restore",
-    tag = "Admin",
-    request_body = serde_json::Value,
-    responses(
-        (status = 204, description = "Engine state replaced from the snapshot"),
-        (status = 403, description = "Missing admin role", body = ApiError),
-        (status = 500, description = "Restore failed", body = ApiError),
-        (status = 503, description = "Restore temporarily unavailable", body = ApiError),
-        (status = 422, description = "Malformed or incompatible snapshot", body = ApiError),
-        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
-    )
-)]
-async fn restore(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Json(snap): Json<SnapshotV1>,
-) -> Result<StatusCode, ApiErr> {
-    auth.ensure_admin(Role::Admin).await?;
-    enforce_storage_writable(&state)?;
-    state
-        .restore_sink
-        .restore(snap)
-        .await
-        .map_err(ApiErr::from)?;
-    tracing::info!(
-        target: "lumen.audit",
-        event = "restore_applied",
-        subject = auth.subject().unwrap_or("anonymous"),
-    );
-    Ok(StatusCode::NO_CONTENT)
-}
-
-// ---------------------------------------------------------------------------
-// Reshard admin verbs (#1380): batch-apply, bucket-scoped export, evict.
-// Plus `/admin/checkpoint` (#1389), the on-demand durability step that makes
-// the other three's mutations survive the cutover restart the driver itself
-// triggers, and `/admin/reshard:prune` (#1457 R1), the final migration
-// pass's independently chunked authoritative-replace scope.
-//
-// `reshard.rs`'s tested primitives (`bucket_moves`, `snapshot_reshard_batches`,
-// `snapshot_reshard_prune_chunks`) emit bounded `ReshardBatch`/
-// `ReshardPruneChunk` units for checkpointed migration; the five verbs below
-// are the wire surface that moves them and makes them durable. All five
-// require `Role::Admin` on `*`, same as `/admin/backup`/`/admin/restore`
-// above.
-// ---------------------------------------------------------------------------
-
-/// `POST /admin/reshard:apply`: additively merge one [`ReshardBatch`] into
-/// the live engine (upsert semantics for the batch's documents; never a
-/// full replace, unlike `/admin/restore`). Idempotent — a retried batch
-/// (operator resume after a checkpoint) converges to the same query-visible
-/// state; see [`Engine::apply_reshard_batch`].
-#[utoipa::path(
-    post,
-    path = "/admin/reshard:apply",
-    tag = "Admin",
-    request_body = serde_json::Value,
-    responses(
-        (status = 200, description = "Batch merged additively (safe to retry)", body = serde_json::Value),
-        (status = 400, description = "Malformed batch or snapshot version mismatch", body = ApiError)
-    )
-)]
-async fn reshard_apply(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Json(batch): Json<ReshardBatch>,
-) -> Result<Json<serde_json::Value>, ApiErr> {
-    auth.ensure_admin(Role::Admin).await?;
-    let _mutation_permit = acquire_direct_mutation_permit(&state).await?;
-    let outcome = state
-        .engine
-        .apply_reshard_batch(batch.snapshot, None)
-        .map_err(ApiErr::from)?;
-    tracing::info!(
-        target: "lumen.audit",
-        event = "reshard_batch_applied",
-        subject = auth.subject().unwrap_or("anonymous"),
-        bucket = batch.bucket,
-        from_shard = batch.from_shard,
-        to_shard = batch.to_shard,
-        from_map_version = batch.from_map_version,
-        to_map_version = batch.to_map_version,
-        collections_touched = outcome.collections_touched,
-        documents_upserted = outcome.documents_upserted,
-        documents_pruned = outcome.documents_pruned,
-    );
-    Ok(Json(serde_json::json!({
-        "collections_touched": outcome.collections_touched,
-        "documents_upserted": outcome.documents_upserted,
-        "documents_pruned": outcome.documents_pruned,
-    })))
-}
-
-/// `POST /admin/reshard:prune`: accumulate one [`ReshardPruneChunk`] of the
-/// final migration pass's authoritative "keep" set for one `(bucket,
-/// collection_id)` pair, and prune once every chunk has arrived (#1457 R1).
-/// Unlike `/admin/reshard:apply` (purely additive), this verb is what makes
-/// the final pass authoritative for the buckets it copies: a document
-/// deleted on the source during the split is absent from the accumulated
-/// keep set and is pruned here instead of surviving as a stale copy from an
-/// earlier additive pass. Idempotent per chunk (safe to retry after a 413)
-/// and as a whole group (safe to re-send every chunk after a driver
-/// restart); see [`Engine::apply_reshard_prune_chunk`].
-#[utoipa::path(
-    post,
-    path = "/admin/reshard:prune",
-    tag = "Admin",
-    request_body = serde_json::Value,
-    responses(
-        (status = 200, description = "Chunk accumulated; pruned once every chunk of its group has arrived", body = serde_json::Value),
-        (status = 400, description = "Malformed chunk", body = ApiError)
-    )
-)]
-async fn reshard_prune(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Json(chunk): Json<crate::sharding::domain::prune_chunk::ReshardPruneChunk>,
-) -> Result<Json<serde_json::Value>, ApiErr> {
-    auth.ensure_admin(Role::Admin).await?;
-    let _mutation_permit = acquire_direct_mutation_permit(&state).await?;
-    let to_map_version = chunk.to_map_version;
-    let bucket = chunk.bucket;
-    let collection_id = chunk.collection_id.clone();
-    let chunk_index = chunk.chunk_index;
-    let total_chunks = chunk.total_chunks;
-    let outcome = state
-        .engine
-        .apply_reshard_prune_chunk(chunk)
-        .map_err(ApiErr::from)?;
-    if outcome.complete {
-        tracing::info!(
-            target: "lumen.audit",
-            event = "reshard_prune_applied",
-            subject = auth.subject().unwrap_or("anonymous"),
-            bucket,
-            to_map_version,
-            collection_id = collection_id.as_str(),
-            chunk_index,
-            total_chunks,
-            documents_pruned = outcome.documents_pruned,
-        );
-    }
-    Ok(Json(serde_json::json!({
-        "complete": outcome.complete,
-        "documents_pruned": outcome.documents_pruned,
-    })))
-}
-
-#[derive(Debug, Deserialize)]
-struct ScopedBackupRequest {
-    /// Same `virtual_bucket_count` the caller's [`VirtualBucketShardMap`]
-    /// uses — must match what `snapshot_reshard_batches` was/will be called
-    /// with so bucket membership agrees.
-    virtual_bucket_count: u32,
-    /// Only documents whose bucket is in this set are included.
-    buckets: BTreeSet<u32>,
-}
-
-/// `POST /admin/backup:scoped`: like `GET /admin/backup`, but restricted to
-/// documents routed to the requested virtual buckets — a source shard can
-/// export just the buckets that are moving instead of a full-engine dump.
-/// Bucket membership is computed with the same hash `reshard::
-/// snapshot_reshard_batches` uses ([`crate::reshard::snapshot_bucket_subset`]),
-/// so an export and a later-computed batch can never disagree.
-#[utoipa::path(
-    post,
-    path = "/admin/backup:scoped",
-    tag = "Admin",
-    request_body = serde_json::Value,
-    responses(
-        (status = 200, description = "SnapshotV1 restricted to the requested virtual buckets", body = serde_json::Value),
-        (status = 400, description = "Invalid virtual_bucket_count", body = ApiError)
-    )
-)]
-async fn backup_scoped(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Json(req): Json<ScopedBackupRequest>,
-) -> Result<Json<SnapshotV1>, ApiErr> {
-    auth.ensure_admin(Role::Admin).await?;
-    let full = state.engine.snapshot().map_err(ApiErr::from)?;
-    let scoped = crate::sharding::domain::snapshot_subset::snapshot_bucket_subset(
-        &full,
-        req.virtual_bucket_count,
-        &req.buckets,
-    )
-    .map_err(ApiErr::from)?;
-    tracing::info!(
-        target: "lumen.audit",
-        event = "backup_scoped",
-        subject = auth.subject().unwrap_or("anonymous"),
-        virtual_bucket_count = req.virtual_bucket_count,
-        buckets = req.buckets.len(),
-    );
-    Ok(Json(scoped))
-}
-
-#[derive(Debug, Deserialize)]
-struct ReshardEvictRequest {
-    /// This shard's physical index in `assignments`.
-    shard: u32,
-    /// The newer map version being cut over to; carried for audit logging.
-    map_version: u64,
-    /// `bucket -> physical shard` assignment for the newer map. Its length
-    /// is the virtual bucket count.
-    assignments: Vec<u32>,
-    physical_shard_count: u32,
-}
-
-/// `POST /admin/reshard:evict`: source-side post-cutover eviction. Given a
-/// newer virtual-bucket map and this shard's index within it, removes
-/// exactly the documents whose bucket no longer routes to this shard —
-/// nothing else. A separate, explicitly-invoked step; never implicit in
-/// `/admin/reshard:apply` or `/admin/backup*`. Idempotent — a document
-/// already evicted by a prior call no longer matches and is skipped.
-#[utoipa::path(
-    post,
-    path = "/admin/reshard:evict",
-    tag = "Admin",
-    request_body = serde_json::Value,
-    responses(
-        (status = 200, description = "Documents no longer owned by this shard removed", body = serde_json::Value),
-        (status = 400, description = "Invalid virtual bucket map", body = ApiError)
-    )
-)]
-async fn reshard_evict(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Json(req): Json<ReshardEvictRequest>,
-) -> Result<Json<serde_json::Value>, ApiErr> {
-    auth.ensure_admin(Role::Admin).await?;
-    let _mutation_permit = acquire_direct_mutation_permit(&state).await?;
-    let map =
-        VirtualBucketShardMap::new(req.map_version, req.assignments, req.physical_shard_count)
-            .map_err(ApiErr::from)?;
-    let outcome = state
-        .engine
-        .evict_not_owned(&map, req.shard)
-        .map_err(ApiErr::from)?;
-    tracing::info!(
-        target: "lumen.audit",
-        event = "reshard_evict",
-        subject = auth.subject().unwrap_or("anonymous"),
-        shard = req.shard,
-        map_version = req.map_version,
-        collections_touched = outcome.collections_touched,
-        documents_evicted = outcome.documents_evicted,
-    );
-    Ok(Json(serde_json::json!({
-        "collections_touched": outcome.collections_touched,
-        "documents_evicted": outcome.documents_evicted,
-    })))
-}
-
-/// `POST /admin/checkpoint` (#1389): force a synchronous durability
-/// checkpoint of the live engine state and return only once it is committed.
-/// The reshard driver's cutover calls this on every shard it just migrated
-/// data into or evicted data from, so `/admin/reshard:apply`/`:evict`'s
-/// mutations — which bypass `WriteCoordinator`/the AOF — reach durability
-/// before the driver triggers the cutover rolling restart, instead of
-/// depending on the next periodic `LUMEN_SNAPSHOT_SECS` tick. `persisted:
-/// false` means no durable store is configured on this node (nothing to
-/// lose on restart, e.g. dev mode); a production/operator deployment with
-/// segment persistence configured always reports `true` on success. See
-/// [`CheckpointSink`].
-#[utoipa::path(
-    post,
-    path = "/admin/checkpoint",
-    tag = "Admin",
-    responses(
-        (status = 200, description = "Checkpoint committed (or vacuously satisfied if no durable store is configured)", body = serde_json::Value),
-        (status = 400, description = "Checkpoint write failed", body = ApiError)
-    )
-)]
-async fn admin_checkpoint(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-) -> Result<Json<serde_json::Value>, ApiErr> {
-    auth.ensure_admin(Role::Admin).await?;
-    // The concrete checkpoint sink acquires the shared checkpoint permit. An
-    // API-level permit here can deadlock behind a queued exclusive restore.
-    enforce_storage_writable(&state)?;
-    let persisted = state
-        .checkpoint
-        .checkpoint_now()
-        .await
-        .map_err(ApiErr::from)?;
-    tracing::info!(
-        target: "lumen.audit",
-        event = "admin_checkpoint",
-        subject = auth.subject().unwrap_or("anonymous"),
-        persisted,
-    );
-    Ok(Json(serde_json::json!({ "persisted": persisted })))
-}
-
-/// `POST /admin/restart:seal-hnsw-cache`: publish the optional HNSW graph
-/// bytes that a planned restart may use after it replays the authoritative
-/// checkpoint and AOF. It takes no request body. The response is deliberately
-/// strict because the performance harness treats any missing field as a failed
-/// restart preparation rather than guessing that a cache is usable.
-#[utoipa::path(
-    post,
-    path = "/admin/restart:seal-hnsw-cache",
-    tag = "Admin",
-    responses(
-        (status = 200, description = "HNSW graph cache sealed at a durable mutation boundary", body = HnswCacheSealResponse),
-        (status = 401, description = "Authentication required", body = ApiError),
-        (status = 403, description = "Missing admin role", body = ApiError),
-        (status = 409, description = "No current HNSW graph is sealable or the graph changed during sealing", body = ApiError),
-        (status = 500, description = "HNSW cache sealing failed", body = ApiError),
-        (status = 503, description = "Restart required", body = ApiError),
-        (status = 507, description = "Node storage is full", body = ApiError)
-    )
-)]
-async fn admin_restart_seal_hnsw_cache(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-) -> Result<Json<HnswCacheSealResponse>, ApiErr> {
-    auth.ensure_admin(Role::Admin).await?;
-    enforce_storage_writable(&state)?;
-    let receipt = state
-        .checkpoint
-        .seal_hnsw_graph_cache()
-        .await
-        .map_err(hnsw_cache_seal_api_error)?;
-    tracing::info!(
-        target: "lumen.audit",
-        event = "admin_restart_seal_hnsw_cache",
-        subject = auth.subject().unwrap_or("anonymous"),
-        cache_fields = receipt.cache_fields,
-        durability = receipt.durability.as_str(),
-        mutation_epoch = receipt.mutation_epoch,
-        mutation_apply_revision = receipt.mutation_apply_revision,
-    );
-    Ok(Json(HnswCacheSealResponse {
-        sealed: true,
-        cache_fields: receipt.cache_fields,
-        durability: receipt.durability.as_str(),
-        mutation_stamp: HnswCacheSealMutationStamp {
-            epoch: receipt.mutation_epoch,
-            apply_revision: receipt.mutation_apply_revision,
-        },
-    }))
-}
-
-fn hnsw_cache_seal_api_error(error: anyhow::Error) -> ApiErr {
-    if error.downcast_ref::<HnswCacheSealUnavailable>().is_some() {
-        return ApiErr::new(
-            StatusCode::CONFLICT,
-            "planned_restart_cache_unavailable",
-            error.to_string(),
-        );
-    }
-    if error.downcast_ref::<HnswCacheSealInvalidated>().is_some() {
-        return ApiErr::new(
-            StatusCode::CONFLICT,
-            "planned_restart_cache_invalidated",
-            error.to_string(),
-        );
-    }
-    if error.downcast_ref::<RestartRequired>().is_some() {
-        return ApiErr::new(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "restart_required",
-            error.to_string(),
-        );
-    }
-    if crate::ingest::application::write_coordinator::errors::is_storage_full(&error)
-        || error.downcast_ref::<StorageFullError>().is_some()
-    {
-        return ApiErr::new(
-            StatusCode::INSUFFICIENT_STORAGE,
-            "storage_full",
-            error.to_string(),
-        );
-    }
-    ApiErr::new(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "planned_restart_cache_failed",
-        error.to_string(),
-    )
-}
-
-fn default_fence_ttl_secs() -> u64 {
-    300
-}
-
-/// Upper bound on `ReshardFenceRequest::ttl_secs` (#1443 R3): well above any
-/// real driver tick, but small enough that `Instant::now().checked_add` never
-/// overflows and a malformed/malicious admin request can never arm an
-/// effectively-permanent write pause.
-const MAX_FENCE_TTL_SECS: u64 = 3600;
-
-#[derive(Debug, Deserialize)]
-struct ReshardFenceRequest {
-    /// Same `virtual_bucket_count` the caller's map uses, matching
-    /// [`ScopedBackupRequest`]'s convention.
-    virtual_bucket_count: u32,
-    /// Buckets to pause writes on. An empty set explicitly clears any
-    /// currently-armed fence, independent of its deadline.
-    buckets: BTreeSet<u32>,
-    /// How long the pause stays armed if never explicitly cleared (a
-    /// crashed-driver backstop; see [`WriteFence`]'s doc). Defaults to 300s —
-    /// generous relative to one driver tick (`DRIVER_POLL_INTERVAL`, 20s in
-    /// `reshard_driver.rs`) plus a full migration-pass HTTP round trip, while
-    /// still bounded well under any operator-visible SLO.
-    #[serde(default = "default_fence_ttl_secs")]
-    ttl_secs: u64,
-}
-
-/// `POST /admin/reshard:fence`: arm or clear a bounded write pause on a set
-/// of virtual buckets (#1396 R2). The reshard driver's cutover
-/// (`service_k8s::reshard_driver::advance_catching_up`) arms this over exactly
-/// the buckets its final `CatchingUp` migration pass is about to copy,
-/// immediately before that pass, and clears it (`buckets: []`) once the
-/// pass/evict/checkpoint/cutover sequence finishes — on success or on
-/// `Blocked`. A write to a fenced bucket is rejected with `503
-/// bucket_write_paused` rather than silently dropped or applied against a
-/// map that is about to change; see [`WriteFence`] for the crash-safety
-/// (TTL) argument.
-#[utoipa::path(
-    post,
-    path = "/admin/reshard:fence",
-    tag = "Admin",
-    request_body = serde_json::Value,
-    responses(
-        (status = 200, description = "Fence armed or cleared", body = serde_json::Value),
-        (status = 400, description = "Invalid virtual_bucket_count", body = ApiError)
-    )
-)]
-async fn reshard_fence(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Json(req): Json<ReshardFenceRequest>,
-) -> Result<Json<serde_json::Value>, ApiErr> {
-    auth.ensure_admin(Role::Admin).await?;
-    if req.virtual_bucket_count == 0 {
-        return Err(ApiErr::new(
-            StatusCode::BAD_REQUEST,
-            "invalid_virtual_bucket_count",
-            "virtual_bucket_count must be > 0",
-        ));
-    }
-    if req.buckets.is_empty() {
-        state.write_fence.clear();
-        // #2475: publish the same clear on `/metrics` so
-        // `render::prometheus_rule`'s `LumenReshardWorkflowStalled` alert
-        // (which reads `lumen_reshard_fence_active`) reflects it too.
-        state.engine.metrics().set_reshard_fence_active(false);
-        tracing::info!(
-            target: "lumen.audit",
-            event = "reshard_fence_cleared",
-            subject = auth.subject().unwrap_or("anonymous"),
-        );
-    } else {
-        // #1443 R3: reject a nonsensical TTL as 400 rather than letting
-        // `WriteFence::arm`'s `Instant::now() + ttl` overflow — `0` would
-        // arm-then-immediately-expire (never actually pausing anything, a
-        // silent no-op the caller would wrongly believe closed the write
-        // window), and anything above the generous upper bound is either a
-        // malformed request or would arm an effectively-permanent pause.
-        if req.ttl_secs == 0 || req.ttl_secs > MAX_FENCE_TTL_SECS {
-            return Err(ApiErr::new(
-                StatusCode::BAD_REQUEST,
-                "invalid_ttl_secs",
-                format!(
-                    "ttl_secs must be in 1..={MAX_FENCE_TTL_SECS}, got {}",
-                    req.ttl_secs
-                ),
-            ));
-        }
-        if !state.write_fence.arm(
-            req.virtual_bucket_count,
-            req.buckets.clone(),
-            Duration::from_secs(req.ttl_secs),
-        ) {
-            // Unreachable in practice now that ttl_secs is bounded above,
-            // but `arm` still reports overflow explicitly (#1443 R3) rather
-            // than panicking — surface it as the same 400 shape instead of a
-            // silently-unarmed 200.
-            return Err(ApiErr::new(
-                StatusCode::BAD_REQUEST,
-                "invalid_ttl_secs",
-                "ttl_secs would overflow the fence deadline",
-            ));
-        }
-        // #2475: `reshard_fence_armed_unixtime` lets the alert distinguish
-        // a fence still mid-`CatchingUp`-pass from one the driver never
-        // came back to clear.
-        state.engine.metrics().set_reshard_fence_active(true);
-        tracing::info!(
-            target: "lumen.audit",
-            event = "reshard_fence_armed",
-            subject = auth.subject().unwrap_or("anonymous"),
-            virtual_bucket_count = req.virtual_bucket_count,
-            buckets = req.buckets.len(),
-            ttl_secs = req.ttl_secs,
-        );
-    }
-    Ok(Json(serde_json::json!({
-        "armed": !req.buckets.is_empty(),
-        "buckets": req.buckets,
-    })))
 }
 
 // ---------------------------------------------------------------------------
@@ -2936,11 +1152,11 @@ fn inject_query_twins(doc: &mut utoipa::openapi::OpenApi) {
 pub struct ApiErr(service_http::ApiErr);
 
 impl ApiErr {
-    fn new(status: StatusCode, kind: &'static str, message: impl Into<String>) -> Self {
+    pub(crate) fn new(status: StatusCode, kind: &'static str, message: impl Into<String>) -> Self {
         Self(service_http::ApiErr::new(status, kind, message))
     }
 
-    fn not_found(msg: impl Into<String>) -> Self {
+    pub(crate) fn not_found(msg: impl Into<String>) -> Self {
         Self::new(StatusCode::NOT_FOUND, "not_found", msg)
     }
 
@@ -3123,54 +1339,6 @@ mod restore_sink_tests {
         .expect("valid collection request")
     }
 
-    async fn assert_hnsw_cache_seal_error(
-        error: anyhow::Error,
-        expected_status: StatusCode,
-        expected_code: &str,
-    ) {
-        let response = hnsw_cache_seal_api_error(error).into_response();
-        assert_eq!(response.status(), expected_status);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("error body");
-        let envelope: serde_json::Value = serde_json::from_slice(&body).expect("JSON envelope");
-        assert_eq!(envelope["error"], expected_code);
-    }
-
-    #[tokio::test]
-    async fn hnsw_cache_seal_errors_fail_closed_with_stable_envelopes() {
-        assert_hnsw_cache_seal_error(
-            anyhow::Error::new(HnswCacheSealUnavailable("no graph".to_string())),
-            StatusCode::CONFLICT,
-            "planned_restart_cache_unavailable",
-        )
-        .await;
-        assert_hnsw_cache_seal_error(
-            anyhow::Error::new(HnswCacheSealInvalidated("graph changed".to_string())),
-            StatusCode::CONFLICT,
-            "planned_restart_cache_invalidated",
-        )
-        .await;
-        assert_hnsw_cache_seal_error(
-            anyhow::Error::new(RestartRequired("replay first".to_string())),
-            StatusCode::SERVICE_UNAVAILABLE,
-            "restart_required",
-        )
-        .await;
-        assert_hnsw_cache_seal_error(
-            anyhow::Error::new(StorageFullError("disk full".to_string())),
-            StatusCode::INSUFFICIENT_STORAGE,
-            "storage_full",
-        )
-        .await;
-        assert_hnsw_cache_seal_error(
-            anyhow::Error::msg("cache write failed"),
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "planned_restart_cache_failed",
-        )
-        .await;
-    }
-
     #[tokio::test]
     async fn default_sink_atomically_replaces_live_state() {
         let live = Arc::new(Engine::new());
@@ -3294,50 +1462,5 @@ mod restore_sink_tests {
             .unwrap();
         let envelope: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(envelope["error"], "restore_unavailable");
-    }
-}
-
-/// `/stats` is a CPU-bound Engine read (#4246): with a checkpoint interval of
-/// staged Text rows resident it walks every live term, so it belongs on the
-/// blocking executor with the search handlers, never on a reactor worker.
-#[cfg(test)]
-mod stats_executor_tests {
-    use super::*;
-    use crate::shared_kernel::types::schema::CreateCollectionRequest;
-
-    fn collection_request() -> CreateCollectionRequest {
-        serde_json::from_value(serde_json::json!({
-            "fields": { "body": { "type": "text" } }
-        }))
-        .expect("valid collection request")
-    }
-
-    #[tokio::test]
-    async fn stats_runs_the_engine_read_off_the_reactor_thread() {
-        let engine = Arc::new(Engine::new());
-        engine
-            .create_collection("c", collection_request())
-            .expect("create collection");
-        let state = AppState::open(engine);
-        crate::index::application::engine::stats::reset_stats_thread();
-        // `#[tokio::test]` is a current-thread runtime: this IS the reactor
-        // worker, so an inline `Engine::stats` records exactly this thread.
-        let reactor = std::thread::current().id();
-
-        let response = stats(
-            State(state),
-            Extension(AuthContext::Open),
-            Path("c".to_string()),
-        )
-        .await
-        .unwrap_or_else(|_| panic!("stats responds"));
-
-        assert_eq!(response.0.documents_indexed, 0);
-        let ran_on = crate::index::application::engine::stats::last_stats_thread()
-            .expect("Engine::stats must have run");
-        assert_ne!(
-            ran_on, reactor,
-            "CPU-bound Engine::stats must run on the blocking executor, not the reactor"
-        );
     }
 }
