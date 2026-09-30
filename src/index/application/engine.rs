@@ -31,9 +31,9 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
+use crate::app::observability::metrics::Metrics;
 use crate::index::application::engine::reshard_prune::{PruneAccumKey, PruneAccumState};
 use crate::index::domain::engine_state::EngineState;
-use crate::metrics::Metrics;
 
 #[derive(Default)]
 pub struct Engine {

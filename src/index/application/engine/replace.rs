@@ -11,13 +11,13 @@ use std::time::Instant;
 use anyhow::{anyhow, Result};
 use rustc_hash::FxHasher;
 
+use crate::app::observability::metrics::{apply_telemetry::CommittedApplyTelemetry, Metrics};
 use crate::index::application::engine::Engine;
 use crate::index::domain::collection::Collection;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::hash_index::parse_hash;
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::index::domain::storage_error::StorageError;
-use crate::metrics::{CommittedApplyTelemetry, Metrics};
 use crate::shared_kernel::types::document::{
     FieldValue, ReplaceDocResult, ReplaceDocsRequest, ReplaceDocsResponse, MAX_BATCH_REPLACE_SIZE,
 };

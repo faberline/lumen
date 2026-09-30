@@ -12,6 +12,7 @@ pub mod backup;
 pub mod backup_sink;
 pub mod config;
 pub mod coordinator;
+pub mod metrics;
 pub mod native_wire;
 #[cfg(feature = "operator")]
 pub mod operator;

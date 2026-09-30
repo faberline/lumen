@@ -68,7 +68,7 @@ fn term_hits(engine: &Engine, collection: &str, field: &str, value: &str) -> usi
 /// Every assertion here is invariant in `idle_collections`, so the caller
 /// can compare two runs directly.
 fn drain_one_merge_job(idle_collections: usize) -> MergeJobShape {
-    use crate::metrics::MergeStep;
+    use crate::app::observability::metrics::labels::MergeStep;
 
     const HOT_FIELD: &str = "h_alpha";
     const IDLE_FIELDS: [&str; 2] = ["i_alpha", "i_beta"];

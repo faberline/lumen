@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 
+use crate::app::observability::metrics::apply_telemetry::CommittedApplyTelemetry;
 use crate::index::application::apply::apply_prepared_value;
 use crate::index::application::engine::Engine;
 use crate::index::domain::collection::Collection;
@@ -11,7 +12,6 @@ use crate::index::domain::field_coverage::FieldCoverage;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::schema_validation::validate_value;
 use crate::index::domain::storage_error::StorageError;
-use crate::metrics::CommittedApplyTelemetry;
 use crate::shared_kernel::types::document::{ReplaceDocItem, ReplaceDocResult};
 
 impl Engine {

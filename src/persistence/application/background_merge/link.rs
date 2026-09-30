@@ -27,13 +27,13 @@ use std::time::Duration;
 /// that actually published, so every `phase` row shares one denominator.
 #[derive(Default)]
 pub(super) struct MergeStepCosts {
-    entries: [(Duration, u64); crate::metrics::MERGE_STEP_COUNT],
+    entries: [(Duration, u64); crate::app::observability::metrics::labels::MERGE_STEP_COUNT],
 }
 
 impl MergeStepCosts {
     pub(super) fn record(
         &mut self,
-        step: crate::metrics::MergeStep,
+        step: crate::app::observability::metrics::labels::MergeStep,
         elapsed: Duration,
         files: u64,
     ) {
@@ -44,19 +44,23 @@ impl MergeStepCosts {
 
     pub(super) fn publish(
         &self,
-        metrics: &crate::metrics::Metrics,
+        metrics: &crate::app::observability::metrics::Metrics,
         total: Duration,
         save_gate_held: Duration,
         fields: u64,
     ) {
-        for step in crate::metrics::MergeStep::ALL {
-            if step == crate::metrics::MergeStep::Total {
+        for step in crate::app::observability::metrics::labels::MergeStep::ALL {
+            if step == crate::app::observability::metrics::labels::MergeStep::Total {
                 continue;
             }
             let (elapsed, files) = self.entries[step.index()];
             metrics.observe_segment_merge_step(step, elapsed, files);
         }
-        metrics.observe_segment_merge_step(crate::metrics::MergeStep::Total, total, 0);
+        metrics.observe_segment_merge_step(
+            crate::app::observability::metrics::labels::MergeStep::Total,
+            total,
+            0,
+        );
         metrics.observe_segment_merge_save_gate(save_gate_held);
         metrics.incr_segment_merge_fields(fields);
     }

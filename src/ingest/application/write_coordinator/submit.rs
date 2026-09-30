@@ -168,7 +168,7 @@ impl WriteCoordinator {
         // Full local admission is a retryable refusal before this record can
         // consume a WAL sequence. Oversized and context-dependent records
         // preserve the old path until root wires durable preparation.
-        let kind = crate::metrics::ApplyKind::from_entry(&entry);
+        let kind = crate::app::observability::metrics::labels::ApplyKind::from_entry(&entry);
         let admission_started_at = std::time::Instant::now();
         let submit_deadline = tokio::time::Instant::now() + SUBMIT_TIMEOUT;
         let admission_deadline = submit_deadline - LOCAL_CAPACITY_APPLY_RESERVE;
@@ -194,7 +194,7 @@ impl WriteCoordinator {
                 })??;
         self.engine.metrics().observe_coordinator_stage(
             kind,
-            crate::metrics::CoordinatorStage::AdmissionToMutationGate,
+            crate::app::observability::metrics::labels::CoordinatorStage::AdmissionToMutationGate,
             admission_started_at.elapsed(),
         );
         let (published_tx, published_rx) = oneshot::channel();

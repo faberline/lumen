@@ -15,7 +15,7 @@ use storage_durable::CurrentTarget;
 /// dominated it.
 #[test]
 fn a_published_merge_job_records_every_phase_step_in_the_metric_registry() {
-    use crate::metrics::MergeStep;
+    use crate::app::observability::metrics::labels::MergeStep;
 
     const IDLE_COLLECTIONS: usize = 8;
     const HOT_FIELDS: [&str; 1] = ["h_alpha"];
@@ -127,7 +127,7 @@ fn a_published_merge_job_records_every_phase_step_in_the_metric_registry() {
 #[test]
 #[ignore = "measurement: prints a per-phase cost breakdown, asserts no wall-clock budget"]
 fn measure_background_merge_job_cost_by_collection_count() {
-    use crate::metrics::MergeStep;
+    use crate::app::observability::metrics::labels::MergeStep;
 
     const HOT_FIELDS: [&str; 3] = ["h_alpha", "h_beta", "h_gamma"];
     // The durable perf probe's schema width, so an idle collection here

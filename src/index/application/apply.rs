@@ -17,6 +17,7 @@ use std::time::Instant;
 use anyhow::{bail, Result};
 use roaring::RoaringBitmap;
 
+use crate::app::observability::metrics::apply_telemetry::CommittedApplyTelemetry;
 use crate::index::domain::analysis::{ngram_stream, tokenize};
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::hash_index::parse_hash;
@@ -26,7 +27,6 @@ use crate::index::domain::sortable_f64::SortableF64;
 use crate::index::domain::storage_error::StorageError;
 use crate::index::domain::text_index::TextIndex;
 use crate::index::domain::token_set::TokenSet;
-use crate::metrics::CommittedApplyTelemetry;
 use crate::shared_kernel::types::document::FieldValue;
 use crate::shared_kernel::types::schema::{Analyzer, FieldType};
 

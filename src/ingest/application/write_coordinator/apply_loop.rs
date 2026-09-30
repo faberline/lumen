@@ -341,10 +341,10 @@ impl WriteCoordinator {
                                         return false;
                                     }
                                 };
-                                let apply_kind = crate::metrics::ApplyKind::from_entry(&rec.entry);
+                                let apply_kind = crate::app::observability::metrics::labels::ApplyKind::from_entry(&rec.entry);
                                 eng.metrics().observe_coordinator_stage(
                                     apply_kind,
-                                    crate::metrics::CoordinatorStage::PublishToApplyStart,
+                                    crate::app::observability::metrics::labels::CoordinatorStage::PublishToApplyStart,
                                     pending.enqueued_at.elapsed(),
                                 );
                                 let version = rec.version;
@@ -470,9 +470,9 @@ impl WriteCoordinator {
                                             let prepared_entry =
                                                 guard.entry().expect("unapplied prepared entry");
                                             let apply_kind =
-                                                crate::metrics::ApplyKind::from_entry(prepared_entry);
+                                                crate::app::observability::metrics::labels::ApplyKind::from_entry(prepared_entry);
                                             let apply_items =
-                                                crate::metrics::apply_item_count(prepared_entry);
+                                                crate::app::observability::metrics::labels::apply_item_count(prepared_entry);
                                             let outcome = eng.apply_prepared_raft_entry(&mut guard);
                                             eng.metrics().observe_coordinator_apply(
                                                 apply_kind,
@@ -557,7 +557,7 @@ impl WriteCoordinator {
                                     .advance_sequence(seq);
                                 eng.metrics().observe_coordinator_stage(
                                     apply_kind,
-                                    crate::metrics::CoordinatorStage::ApplyToWaiter,
+                                    crate::app::observability::metrics::labels::CoordinatorStage::ApplyToWaiter,
                                     apply_started_at.elapsed(),
                                 );
                                 // Release both halves before publishing the applied watermark.

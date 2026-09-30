@@ -74,7 +74,7 @@ impl SegmentRdbStore {
         let capture_before_started = Instant::now();
         let mut capture = engine.capture_background_merge(identities(&prior))?;
         costs.record(
-            crate::metrics::MergeStep::CaptureBefore,
+            crate::app::observability::metrics::labels::MergeStep::CaptureBefore,
             capture_before_started.elapsed(),
             0,
         );
@@ -124,7 +124,7 @@ impl SegmentRdbStore {
             let scratch_links =
                 link_collection(&source.path, &scratch_path, collection_id.as_str())?;
             costs.record(
-                crate::metrics::MergeStep::LinkScratch,
+                crate::app::observability::metrics::labels::MergeStep::LinkScratch,
                 link_scratch_started.elapsed(),
                 scratch_links as u64,
             );
@@ -157,7 +157,7 @@ impl SegmentRdbStore {
                 final_outputs.insert(output.output.field.clone().unwrap_or_default(), output);
             }
             costs.record(
-                crate::metrics::MergeStep::Compact,
+                crate::app::observability::metrics::labels::MergeStep::Compact,
                 compact_started.elapsed(),
                 compacted_input_count,
             );
@@ -262,7 +262,7 @@ impl SegmentRdbStore {
             let mut inherited_current_files =
                 link_collections_with_paths(&latest.path, &path, &latest_manifest)?;
             costs.record(
-                crate::metrics::MergeStep::LinkGeneration,
+                crate::app::observability::metrics::labels::MergeStep::LinkGeneration,
                 link_generation_started.elapsed(),
                 inherited_current_files.len() as u64,
             );
@@ -307,7 +307,7 @@ impl SegmentRdbStore {
             let manifest_write_started = Instant::now();
             write_generation_manifest(&path, &manifest)?;
             costs.record(
-                crate::metrics::MergeStep::ManifestWrite,
+                crate::app::observability::metrics::labels::MergeStep::ManifestWrite,
                 manifest_write_started.elapsed(),
                 1,
             );
@@ -322,7 +322,7 @@ impl SegmentRdbStore {
             let validate_started = Instant::now();
             validate_generation_layout_with_prior(&record, Some((&latest.path, &latest_manifest)))?;
             costs.record(
-                crate::metrics::MergeStep::ValidateLayout,
+                crate::app::observability::metrics::labels::MergeStep::ValidateLayout,
                 validate_started.elapsed(),
                 0,
             );
@@ -335,14 +335,14 @@ impl SegmentRdbStore {
                 }
             }
             costs.record(
-                crate::metrics::MergeStep::InheritFiles,
+                crate::app::observability::metrics::labels::MergeStep::InheritFiles,
                 inherit_started.elapsed(),
                 inherited,
             );
             let pending_started = Instant::now();
             let pending = telemetry::pending_deltas(&path, &manifest.collections)?;
             costs.record(
-                crate::metrics::MergeStep::PendingDeltas,
+                crate::app::observability::metrics::labels::MergeStep::PendingDeltas,
                 pending_started.elapsed(),
                 0,
             );
@@ -403,7 +403,7 @@ impl SegmentRdbStore {
                 .metrics()
                 .set_segment_pending_delta(pending.0, pending.1);
             costs.record(
-                crate::metrics::MergeStep::CapturePublish,
+                crate::app::observability::metrics::labels::MergeStep::CapturePublish,
                 capture_publish_elapsed,
                 0,
             );

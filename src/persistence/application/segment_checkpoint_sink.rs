@@ -60,12 +60,12 @@ impl CheckpointTraceOrigin {
 /// path. It deliberately owns no checkpoint state, so it cannot change save,
 /// trim, or publication ordering.
 struct CheckpointAttempt<'a> {
-    metrics: &'a crate::metrics::Metrics,
+    metrics: &'a crate::app::observability::metrics::Metrics,
     failed: bool,
 }
 
 impl<'a> CheckpointAttempt<'a> {
-    fn start(metrics: &'a crate::metrics::Metrics) -> Self {
+    fn start(metrics: &'a crate::app::observability::metrics::Metrics) -> Self {
         metrics.start_segment_checkpoint_attempt();
         Self {
             metrics,

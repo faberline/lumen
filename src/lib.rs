@@ -57,12 +57,12 @@ pub use crate::sharding::application::consumer;
 pub mod dx;
 mod index;
 mod ingest;
-/// Write-log entry vocabulary (always compiled; the active write path uses it).
-pub use crate::shared_kernel::log_entry;
-pub mod metrics;
+pub use crate::compat::metrics;
 /// Native length-prefixed CBOR search wire for Rust clients that need the engine
 /// over a lower fixed-cost transport than HTTP/JSON.
 pub use crate::compat::native_wire;
+/// Write-log entry vocabulary (always compiled; the active write path uses it).
+pub use crate::shared_kernel::log_entry;
 /// K8s Operator: the `Lumen` CRD plus the reconcile loop that renders + applies
 /// the Lumen serving/data-plane resources. The CRD and reconcile loop are behind
 /// the `operator` feature so the serving binary never pulls in kube-rs; pure
