@@ -290,3 +290,6 @@ impl NumberIndex {
         tail
     }
 }
+
+#[cfg(test)]
+mod tests;

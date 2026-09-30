@@ -32,7 +32,7 @@ impl Engine {
     /// sealing (id >= n_docs) is NOT covered by the segment and stays served
     /// from the live `forward` tail — exactly the live/sealed split the runtime
     /// will use. Returns the sealed doc count.
-    pub(crate) fn __seal_number_field_to_segment(
+    pub(super) fn __seal_number_field_to_segment(
         &self,
         collection_id: &str,
         field: &str,

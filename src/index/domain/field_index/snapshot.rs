@@ -327,3 +327,6 @@ impl FieldIndex {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

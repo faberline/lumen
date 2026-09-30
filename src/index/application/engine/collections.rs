@@ -302,3 +302,6 @@ impl Engine {
             .collect())
     }
 }
+
+#[cfg(test)]
+mod tests;

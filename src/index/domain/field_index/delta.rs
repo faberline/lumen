@@ -13,7 +13,7 @@ use crate::index::domain::field_index::FieldIndex;
 // zero, proving the apply thread did not reach the per-document primitive.
 #[cfg(test)]
 thread_local! {
-    pub(crate) static DROP_EID_CALLS: Cell<u64> = const { Cell::new(0) };
+    pub(in crate::index) static DROP_EID_CALLS: Cell<u64> = const { Cell::new(0) };
 }
 
 impl FieldIndex {

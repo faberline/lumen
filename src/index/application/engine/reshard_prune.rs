@@ -20,7 +20,7 @@ pub(super) type PruneAccumKey = (u64, u32, String, u32);
 /// rejected with [`StorageError::PruneAccumulatorFull`] once reached, so an
 /// abandoned migration or a flood of bogus keys can't grow the accumulator
 /// without bound.
-pub(crate) const PRUNE_ACCUM_MAX_ENTRIES: usize = 256;
+const PRUNE_ACCUM_MAX_ENTRIES: usize = 256;
 
 /// #1467 R4: an accumulator entry older than this many
 /// [`Engine::apply_reshard_prune_chunk`] calls (tracked via
@@ -29,14 +29,14 @@ pub(crate) const PRUNE_ACCUM_MAX_ENTRIES: usize = 256;
 /// pass sends every chunk for a key back-to-back within one HTTP round
 /// trip loop, so thousands of intervening calls is generous slack for
 /// concurrent unrelated passes on other keys.
-pub(crate) const PRUNE_ACCUM_MAX_AGE_TICKS: u64 = 4096;
+const PRUNE_ACCUM_MAX_AGE_TICKS: u64 = 4096;
 
 /// #1467 R4: sanity cap on `ReshardPruneChunk::total_chunks` — rejected
 /// with [`StorageError::InvalidPruneChunk`] outright rather than accepted
 /// into the accumulator, since a chunk count this large could never
 /// plausibly complete from the sender's own chunking (`chunk_ids_by_bytes`
 /// in `src/reshard.rs` targets far fewer, larger chunks).
-pub(crate) const PRUNE_ACCUM_MAX_TOTAL_CHUNKS: u32 = 4096;
+const PRUNE_ACCUM_MAX_TOTAL_CHUNKS: u32 = 4096;
 
 #[derive(Debug, Default)]
 pub(super) struct PruneAccumState {
@@ -206,3 +206,6 @@ pub struct ReshardPruneOutcome {
     pub complete: bool,
     pub documents_pruned: u32,
 }
+
+#[cfg(test)]
+mod tests;

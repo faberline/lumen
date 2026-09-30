@@ -292,3 +292,6 @@ impl Engine {
         Ok(resp)
     }
 }
+
+#[cfg(test)]
+mod tests;

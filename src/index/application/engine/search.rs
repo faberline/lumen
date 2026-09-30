@@ -536,3 +536,6 @@ impl Engine {
 fn search_cache_key(req: &SearchRequest) -> Result<String> {
     serde_json::to_string(req).map_err(Into::into)
 }
+
+#[cfg(test)]
+mod tests;

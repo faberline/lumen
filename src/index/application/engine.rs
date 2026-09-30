@@ -24,6 +24,8 @@ mod restore;
 mod seal;
 mod search;
 pub(crate) mod stats;
+#[cfg(test)]
+pub(in crate::index) mod tests;
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -37,7 +39,7 @@ use crate::metrics::Metrics;
 pub struct Engine {
     pub(crate) capture_barrier: crate::shared_kernel::capture_barrier::CaptureBarrier,
     pub(crate) state: RwLock<EngineState>,
-    pub(crate) metrics: Metrics,
+    pub(super) metrics: Metrics,
     draining: AtomicBool,
     /// #1457 R1: receiver-side accumulator for `POST /admin/reshard:prune`
     /// chunks, keyed by `(to_map_version, bucket, collection_id,

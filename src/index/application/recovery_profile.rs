@@ -65,7 +65,7 @@ impl RecoveryProfile {
         Self::new(true)
     }
 
-    pub(crate) fn new(enabled: bool) -> Self {
+    fn new(enabled: bool) -> Self {
         Self {
             enabled,
             inner: Arc::new(Mutex::new(RecoveryProfileData::default())),
@@ -147,3 +147,6 @@ impl RecoveryProfile {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

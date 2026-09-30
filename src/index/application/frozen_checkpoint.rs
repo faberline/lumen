@@ -29,11 +29,11 @@ use crate::shared_kernel::types::schema::{FieldSpec, VectorSpec};
 /// Detached file work. It has no reference to Engine or its state lock.
 pub(crate) struct FrozenCheckpoint {
     // File payloads must drop before the capture releases their charge.
-    pub(crate) files: Vec<(String, FrozenCollectionFiles)>,
+    pub(super) files: Vec<(String, FrozenCollectionFiles)>,
     pub(crate) capture: CheckpointCapture,
 }
 
-pub(crate) enum FrozenCollectionFiles {
+pub(super) enum FrozenCollectionFiles {
     Linked(std::path::PathBuf),
     EmptyBase {
         schema: BTreeMap<String, FieldSpec>,
@@ -48,7 +48,7 @@ pub(crate) enum FrozenCollectionFiles {
     },
 }
 
-pub(crate) enum FrozenField {
+pub(super) enum FrozenField {
     Column(FieldIndex),
     Vectors {
         spec: VectorSpec,

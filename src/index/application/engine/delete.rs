@@ -154,7 +154,7 @@ impl Engine {
         self.truncate_docs_with_retirement(collection_id, collection_retirement_worker())
     }
 
-    pub(crate) fn truncate_docs_with_retirement(
+    fn truncate_docs_with_retirement(
         &self,
         collection_id: &str,
         retirement_worker: &CollectionRetirementWorker,
@@ -184,3 +184,6 @@ impl Engine {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

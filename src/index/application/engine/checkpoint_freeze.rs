@@ -305,3 +305,6 @@ impl Engine {
         Ok(FrozenCheckpoint { capture, files })
     }
 }
+
+#[cfg(test)]
+mod tests;

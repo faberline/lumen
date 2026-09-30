@@ -109,7 +109,7 @@ enum RetireTaskProgress {
 /// A token represents one bounded slice of one retired generation. There is
 /// at most one queued token per generation: completing a slice creates the
 /// next token only after the worker owns the current one.
-pub(crate) struct RetireTask {
+pub(in crate::index) struct RetireTask {
     generation: Arc<RetiredGeneration>,
 }
 
@@ -209,7 +209,7 @@ fn configured_collection_retirement_worker_count() -> usize {
     collection_retirement_worker_count(configured.as_deref())
 }
 
-pub(crate) enum CollectionRetirementWorker {
+pub(in crate::index) enum CollectionRetirementWorker {
     Ready(mpsc::Sender<RetireTask>),
     Unavailable,
 }

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
 use std::sync::{mpsc, Arc, Mutex};
 
+use crate::index::application::engine::tests::{build_users_schema, item};
 use crate::index::application::engine::Engine;
 use crate::index::domain::collection::Collection;
 use crate::index::domain::field_index::delta::DROP_EID_CALLS;
@@ -12,7 +13,6 @@ use crate::index::infrastructure::collection_retirement::{
     MAX_COLLECTION_RETIREMENT_WORKERS, RETIRED_DOCUMENTS_PER_TASK, RETIREMENT_FAILSAFE_RETAINS,
 };
 use crate::shared_kernel::types::document::{FieldValue, IndexRequest};
-use crate::storage::tests::{build_users_schema, item};
 
 #[test]
 fn unavailable_retirement_worker_fails_safe_without_changing_apply_semantics() {

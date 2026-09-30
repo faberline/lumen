@@ -101,3 +101,6 @@ pub(crate) fn parse_page_cursor(s: &str) -> Option<PageCursor> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -134,3 +134,6 @@ impl Collection {
         self.requires_full_checkpoint
     }
 }
+
+#[cfg(test)]
+mod tests;
