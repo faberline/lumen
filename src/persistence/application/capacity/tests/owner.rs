@@ -5,6 +5,7 @@ use std::time::Duration;
 use crate::persistence::application::capacity::tests::{engine, sink, FailSync, HoldSync, Release};
 use crate::persistence::application::capacity::worker::Owner;
 use crate::persistence::application::capacity::Fallback;
+use crate::persistence::application::ports::checkpoint_sink::CheckpointSink;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 
 #[test]
@@ -143,9 +144,7 @@ async fn manual_checkpoint_keeps_capacity_relief_on_its_publication_owner() {
             configured.then(|| Owner::start(sink.clone(), true).unwrap().unwrap());
         let prior = engine.layer_maintenance.owner();
         let saving =
-            tokio::spawn(
-                async move { crate::api::CheckpointSink::checkpoint_now(sink.as_ref()).await },
-            );
+            tokio::spawn(async move { CheckpointSink::checkpoint_now(sink.as_ref()).await });
         let entered =
             tokio::task::spawn_blocking(move || entered_rx.recv_timeout(Duration::from_secs(10)))
                 .await

@@ -12,11 +12,10 @@
 
 use std::collections::BTreeSet;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use async_trait::async_trait;
 use axum::{
     extract::{Extension, FromRequest, Path, Query, Request, State},
     http::{Method, StatusCode},
@@ -28,7 +27,6 @@ use axum::{
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use service_http::{MetricsProvider, ReadinessHook};
-use tokio::sync::Semaphore;
 use utoipa::{
     openapi::{
         self,
@@ -48,27 +46,41 @@ use crate::access::{
     infrastructure::lumen_verifier::LumenVerifier,
     interfaces::http::auth_middleware,
 };
-use crate::index::application::engine::{
-    collections::DropOutcome, raft_dispatch::ApplyOutcome, Engine,
-};
+use crate::index::application::engine::{collections::DropOutcome, Engine};
+use crate::index::application::ports::search_backend::LocalEngineSearch;
+pub use crate::index::application::ports::search_backend::SearchBackend;
 use crate::index::domain::storage_error::StorageError;
+use crate::index::infrastructure::search_executor::BlockingSearchExecutor;
 use crate::index::infrastructure::snapshot_v1::SnapshotV1;
+use crate::ingest::application::ports::write_backend::LocalWriteBackend;
+pub use crate::ingest::application::ports::write_backend::WriteBackend;
 use crate::ingest::application::write_coordinator::{
     errors::{RestartRequired, StorageFullError, SubmitStalled},
-    mutation_gate::MutationGate,
     WriteCoordinator, WriteSink,
 };
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::wal_log::SharedWal;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
+pub use crate::persistence::application::ports::checkpoint_sink::{
+    CheckpointSink, HnswCacheDurability, HnswCacheSealReceipt,
+};
+use crate::persistence::application::ports::checkpoint_sink::{
+    HnswCacheSealInvalidated, HnswCacheSealUnavailable, NoopCheckpoint,
+};
+use crate::persistence::application::ports::restore_sink::InMemoryRestoreSink;
+pub use crate::persistence::application::ports::restore_sink::RestoreSink;
 use crate::persistence::application::restore::{RestoreNotCommitted, RestoreUnavailable};
 use crate::persistence::infrastructure::backup_sink::{BackupSink, LocalFsSink};
 use crate::replication::domain::{
     cluster_state::ReadConsistency, cluster_state_view::ClusterStateView, raft_role::RaftRole,
 };
+pub use crate::sharding::application::ports::routed_backend::RoutedBackend;
+pub use crate::sharding::domain::forward_error::{
+    ShardForwardMisrouted, ShardForwardRemoteError, ShardForwardUnavailable,
+    ShardMapVersionMismatch,
+};
 use crate::sharding::domain::reshard_batch::ReshardBatch;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
-use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::{
     api_error::ApiError,
     document::{
@@ -134,57 +146,6 @@ impl ReadinessHook for ServingReadiness {
 /// has to keep the cold case civil.
 const AUTHORIZATION_CONCURRENCY: usize = 16;
 
-/// One process-wide permit pool for all HTTP and routed synchronous search
-/// legs. `RoutedRouter` is constructed separately from `AppState`, so keeping
-/// this at the bridge seam prevents each router from silently multiplying the
-/// configured blocking-work budget.
-static SEARCH_EXECUTOR_PERMITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
-
-/// Bounded bridge for the synchronous search engine. HTTP handlers must not
-/// run CPU-bound Engine work on Tokio's reactor workers: one long sort would
-/// otherwise prevent unrelated searches and readiness probes from being
-/// polled. The bound limits blocking work per serving component without
-/// adding a public configuration knob.
-#[derive(Clone)]
-pub(crate) struct BlockingSearchExecutor {
-    permits: Arc<Semaphore>,
-}
-
-impl BlockingSearchExecutor {
-    pub(crate) fn new() -> Self {
-        Self {
-            permits: SEARCH_EXECUTOR_PERMITS
-                .get_or_init(|| {
-                    let permits = std::thread::available_parallelism()
-                        .map(|parallelism| parallelism.get())
-                        .unwrap_or(1)
-                        .clamp(1, 8);
-                    Arc::new(Semaphore::new(permits))
-                })
-                .clone(),
-        }
-    }
-
-    pub(crate) async fn run<T, F>(&self, work: F) -> Result<T>
-    where
-        T: Send + 'static,
-        F: FnOnce() -> Result<T> + Send + 'static,
-    {
-        let permit = self
-            .permits
-            .clone()
-            .acquire_owned()
-            .await
-            .map_err(|_| anyhow::anyhow!("search executor is closed"))?;
-        tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            work()
-        })
-        .await
-        .map_err(|error| anyhow::anyhow!("search worker failed: {error}"))?
-    }
-}
-
 #[derive(Clone)]
 pub struct AppState {
     pub engine: Arc<Engine>,
@@ -226,103 +187,6 @@ pub struct AppState {
     pub routed: Option<Arc<dyn RoutedBackend>>,
 }
 
-pub trait SearchBackend: Send + Sync {
-    fn search(&self, collection_id: &str, req: SearchRequest) -> Result<SearchResponse>;
-}
-
-/// Forces a synchronous, awaited durability checkpoint of the live engine
-/// state (#1389). The reshard driver's cutover (`service_k8s::reshard_driver::
-/// advance_catching_up`) calls `POST /admin/checkpoint` — which routes here —
-/// on every shard it just migrated data into or evicted data from, and waits
-/// for the response before flipping `spec.shardMap` and triggering the
-/// cutover rolling restart. `Engine::apply_reshard_batch`/`evict_not_owned`
-/// (`storage.rs`, #1380) mutate engine state directly rather than through
-/// `WriteCoordinator`/the AOF, so — unlike ordinary writes — their durability
-/// is not implied by `applied_seq()`; this seam is what makes it durable
-/// on-demand instead of only on the next periodic `LUMEN_SNAPSHOT_SECS` tick.
-///
-/// [`NoopCheckpoint`] is the default (no `--data-dir`/non-segment-persistence
-/// deployments, including every existing test `AppState`): `checkpoint_now`
-/// trivially returns `Ok(false)` (nothing configured to persist, so nothing
-/// to lose across an in-process test's non-restart). The server binary wires
-/// a real segment-checkpoint-backed implementation whenever
-/// `--persistence=segment` + `--data-dir` are configured — exactly the
-/// combination the operator now renders unconditionally at
-/// `replicasPerShard <= 1` (#1387), which is the same topology the reshard
-/// driver is scoped to (see `reshard_driver`'s "Scope rail" doc).
-#[async_trait]
-pub trait CheckpointSink: Send + Sync {
-    /// Persist current engine state durably and return only once the write
-    /// is committed. `Ok(true)` when a checkpoint was actually written;
-    /// `Ok(false)` when no durable store is configured (a checkpoint request
-    /// against such a deployment is vacuously satisfied — there is nothing
-    /// on disk to fall behind). `Err` on a real write failure, which callers
-    /// (the reshard driver) must treat as "not yet durable" and retry.
-    async fn checkpoint_now(&self) -> Result<bool>;
-
-    /// Publish an optional HNSW recovery cache under a durable mutation
-    /// boundary. Only segment persistence implements this: a memory-only or
-    /// non-segment process must refuse the planned-restart optimization rather
-    /// than claim a cache it cannot make durable.
-    async fn seal_hnsw_graph_cache(&self) -> Result<HnswCacheSealReceipt> {
-        Err(anyhow::Error::new(HnswCacheSealUnavailable(
-            "HNSW restart cache sealing requires configured segment persistence".to_string(),
-        )))
-    }
-}
-
-/// Durable boundary named in a successful planned-restart HNSW cache receipt.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HnswCacheDurability {
-    AofSynced,
-    CheckpointCommitted,
-}
-
-impl HnswCacheDurability {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::AofSynced => "aof_synced",
-            Self::CheckpointCommitted => "checkpoint_committed",
-        }
-    }
-}
-
-/// Process-local receipt for an optional HNSW recovery cache publication.
-/// The wire handler below emits its intentionally fixed JSON shape.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct HnswCacheSealReceipt {
-    pub cache_fields: usize,
-    pub durability: HnswCacheDurability,
-    pub mutation_epoch: u64,
-    pub mutation_apply_revision: u64,
-}
-
-/// The server has no configured segment cache root or no live HNSW graph to
-/// seal. A caller can retry after its planned restart input becomes available.
-#[derive(Debug)]
-pub(crate) struct HnswCacheSealUnavailable(pub(crate) String);
-
-impl std::fmt::Display for HnswCacheSealUnavailable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for HnswCacheSealUnavailable {}
-
-/// A concurrent checkpoint or replacement changed the live capture stamp
-/// while an optional cache was being written. The cache cannot be reused.
-#[derive(Debug)]
-pub(crate) struct HnswCacheSealInvalidated(pub(crate) String);
-
-impl std::fmt::Display for HnswCacheSealInvalidated {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for HnswCacheSealInvalidated {}
-
 #[derive(Serialize, utoipa::ToSchema)]
 struct HnswCacheSealMutationStamp {
     epoch: u64,
@@ -335,55 +199,6 @@ struct HnswCacheSealResponse {
     cache_fields: usize,
     durability: &'static str,
     mutation_stamp: HnswCacheSealMutationStamp,
-}
-
-/// Restore backend for the administrative restore operation.
-#[async_trait]
-pub trait RestoreSink: Send + Sync {
-    async fn restore(&self, snapshot: SnapshotV1) -> Result<()>;
-}
-
-/// Default restore implementation for the in-memory engine.
-///
-/// The snapshot is restored into a disposable candidate before the exclusive
-/// mutation gate is acquired. This keeps malformed snapshots from waiting
-/// behind in-flight writes and makes the live replacement a single swap.
-struct InMemoryRestoreSink {
-    engine: Arc<Engine>,
-    mutation_gate: Option<MutationGate>,
-}
-
-impl InMemoryRestoreSink {
-    fn new(engine: Arc<Engine>, mutation_gate: Option<MutationGate>) -> Self {
-        Self {
-            engine,
-            mutation_gate,
-        }
-    }
-}
-
-#[async_trait]
-impl RestoreSink for InMemoryRestoreSink {
-    async fn restore(&self, snapshot: SnapshotV1) -> Result<()> {
-        let candidate = Engine::new();
-        candidate.restore(snapshot)?;
-        let _permit = match &self.mutation_gate {
-            Some(gate) => Some(gate.exclusive().await?),
-            None => None,
-        };
-        self.engine.activate_replacement(candidate)
-    }
-}
-
-/// Default [`CheckpointSink`] for deployments/tests with no configured
-/// durable store — see the trait doc.
-struct NoopCheckpoint;
-
-#[async_trait]
-impl CheckpointSink for NoopCheckpoint {
-    async fn checkpoint_now(&self) -> Result<bool> {
-        Ok(false)
-    }
 }
 
 /// A bounded, status-visible write pause on a set of still-moving virtual
@@ -479,261 +294,6 @@ impl WriteFence {
         self.state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-}
-
-#[async_trait]
-pub trait WriteBackend: Send + Sync {
-    async fn create_collection(
-        &self,
-        collection_id: String,
-        req: CreateCollectionRequest,
-    ) -> Result<CreateCollectionResponse>;
-
-    async fn drop_collection(&self, collection_id: String, force: bool) -> Result<DropOutcome>;
-
-    async fn index(&self, collection_id: String, req: IndexRequest) -> Result<IndexResponse>;
-
-    async fn replace_docs(
-        &self,
-        collection_id: String,
-        req: ReplaceDocsRequest,
-    ) -> Result<ReplaceDocsResponse>;
-
-    async fn truncate_docs(&self, collection_id: String) -> Result<()>;
-
-    async fn unindex_docs(&self, collection_id: String, req: BatchUnindexDocsRequest)
-        -> Result<()>;
-
-    async fn delete(
-        &self,
-        collection_id: String,
-        external_id: String,
-        field: Option<String>,
-    ) -> Result<()>;
-
-    async fn drop_field(&self, collection_id: String, field_name: String) -> Result<u32>;
-}
-
-/// Cross-pod shard routing for operator/k8s serving pods (#1398 R1-R3).
-/// `AppState::routed` is `None` for every non-routed deployment (standalone,
-/// primary/replica, and the `--search-shard-segment-dirs` fan-in path) —
-/// handlers consult it first and fall back to `search_backend`/
-/// `write_backend` unchanged when it is absent, so `shardCount:1` serving
-/// never even constructs an implementation (AC5: no forwarding overhead).
-///
-/// Every method takes the inbound request's `headers` verbatim: the sole
-/// concrete implementation ([`crate::sharding::infrastructure::routed_router::RoutedRouter`], behind
-/// the `operator` feature) checks the `x-lumen-forwarded` one-hop guard
-/// first and, when forwarding, carries the caller's `Authorization` bearer
-/// and `x-read-consistency` through unchanged (R3).
-#[async_trait]
-pub trait RoutedBackend: Send + Sync {
-    /// #2496: collection lifecycle has no single owning shard — every
-    /// physical shard must register the schema, or a write that later
-    /// routes to a shard that never heard `create_collection` 404s with
-    /// `CollectionNotFound` even though the collection genuinely exists.
-    /// The sole implementation ([`crate::sharding::infrastructure::routed_router::RoutedRouter`])
-    /// fans this out to every physical shard (local direct call plus one
-    /// forward per remote shard), mirroring
-    /// [`crate::sharding::application::engine_shard_write::EngineShardWrite::create_collection`]'s in-process
-    /// fan-out/merge semantics over cross-pod HTTP instead of an in-process
-    /// writer submit.
-    async fn create_collection(
-        &self,
-        collection_id: String,
-        req: CreateCollectionRequest,
-        headers: &HeaderMap,
-    ) -> Result<CreateCollectionResponse>;
-
-    /// #2496: same fan-out-to-every-shard requirement as
-    /// [`Self::create_collection`], merged with
-    /// [`crate::sharding::application::engine_shard_write::EngineShardWrite::drop_collection`]'s
-    /// `Physical > Marked > AlreadyMarked > NotFound` precedence.
-    async fn drop_collection(
-        &self,
-        collection_id: String,
-        force: bool,
-        headers: &HeaderMap,
-    ) -> Result<DropOutcome>;
-
-    async fn search(
-        &self,
-        collection_id: &str,
-        req: SearchRequest,
-        headers: &HeaderMap,
-    ) -> Result<SearchResponse>;
-
-    async fn index(
-        &self,
-        collection_id: String,
-        req: IndexRequest,
-        headers: &HeaderMap,
-    ) -> Result<IndexResponse>;
-
-    async fn replace_docs(
-        &self,
-        collection_id: String,
-        req: ReplaceDocsRequest,
-        headers: &HeaderMap,
-    ) -> Result<ReplaceDocsResponse>;
-
-    async fn truncate_docs(&self, collection_id: String, headers: &HeaderMap) -> Result<()>;
-
-    async fn unindex_docs(
-        &self,
-        collection_id: String,
-        req: BatchUnindexDocsRequest,
-        headers: &HeaderMap,
-    ) -> Result<()>;
-
-    async fn delete(
-        &self,
-        collection_id: String,
-        external_id: String,
-        field: Option<String>,
-        headers: &HeaderMap,
-    ) -> Result<()>;
-}
-
-#[derive(Clone)]
-struct LocalEngineSearch {
-    engine: Arc<Engine>,
-}
-
-impl SearchBackend for LocalEngineSearch {
-    fn search(&self, collection_id: &str, req: SearchRequest) -> Result<SearchResponse> {
-        self.engine.search(collection_id, req)
-    }
-}
-
-#[derive(Clone)]
-struct LocalWriteBackend {
-    writer: Arc<dyn WriteSink>,
-}
-
-impl LocalWriteBackend {
-    fn unexpected(outcome: ApplyOutcome) -> anyhow::Error {
-        anyhow::anyhow!("unexpected apply outcome: {outcome:?}")
-    }
-}
-
-#[async_trait]
-impl WriteBackend for LocalWriteBackend {
-    async fn create_collection(
-        &self,
-        collection_id: String,
-        req: CreateCollectionRequest,
-    ) -> Result<CreateCollectionResponse> {
-        match self
-            .writer
-            .submit(RaftLogEntry::CreateCollection { collection_id, req })
-            .await?
-        {
-            ApplyOutcome::Created(r) => Ok(r),
-            other => Err(Self::unexpected(other)),
-        }
-    }
-
-    async fn drop_collection(&self, collection_id: String, force: bool) -> Result<DropOutcome> {
-        match self
-            .writer
-            .submit(RaftLogEntry::DropCollection {
-                collection_id,
-                force,
-            })
-            .await?
-        {
-            ApplyOutcome::Dropped(o) => Ok(o),
-            other => Err(Self::unexpected(other)),
-        }
-    }
-
-    async fn index(&self, collection_id: String, req: IndexRequest) -> Result<IndexResponse> {
-        match self
-            .writer
-            .submit(RaftLogEntry::Index { collection_id, req })
-            .await?
-        {
-            ApplyOutcome::Indexed(r) => Ok(r),
-            other => Err(Self::unexpected(other)),
-        }
-    }
-
-    async fn replace_docs(
-        &self,
-        collection_id: String,
-        req: ReplaceDocsRequest,
-    ) -> Result<ReplaceDocsResponse> {
-        match self
-            .writer
-            .submit(RaftLogEntry::ReplaceDocs { collection_id, req })
-            .await?
-        {
-            ApplyOutcome::Replaced(r) => Ok(r),
-            other => Err(Self::unexpected(other)),
-        }
-    }
-
-    async fn truncate_docs(&self, collection_id: String) -> Result<()> {
-        match self
-            .writer
-            .submit(RaftLogEntry::TruncateDocs { collection_id })
-            .await?
-        {
-            ApplyOutcome::DocsTruncated => Ok(()),
-            other => Err(Self::unexpected(other)),
-        }
-    }
-
-    async fn unindex_docs(
-        &self,
-        collection_id: String,
-        req: BatchUnindexDocsRequest,
-    ) -> Result<()> {
-        validate_batch_unindex_docs_request(&req)?;
-        match self
-            .writer
-            .submit(RaftLogEntry::UnindexDocs { collection_id, req })
-            .await?
-        {
-            ApplyOutcome::DocsUnindexed => Ok(()),
-            other => Err(Self::unexpected(other)),
-        }
-    }
-
-    async fn delete(
-        &self,
-        collection_id: String,
-        external_id: String,
-        field: Option<String>,
-    ) -> Result<()> {
-        match self
-            .writer
-            .submit(RaftLogEntry::Delete {
-                collection_id,
-                external_id,
-                field,
-            })
-            .await?
-        {
-            ApplyOutcome::Deleted => Ok(()),
-            other => Err(Self::unexpected(other)),
-        }
-    }
-
-    async fn drop_field(&self, collection_id: String, field_name: String) -> Result<u32> {
-        match self
-            .writer
-            .submit(RaftLogEntry::DropField {
-                collection_id,
-                field_name,
-            })
-            .await?
-        {
-            ApplyOutcome::FieldChanged(v) => Ok(v),
-            other => Err(Self::unexpected(other)),
-        }
     }
 }
 
@@ -3396,93 +2956,6 @@ impl ApiErr {
     }
 }
 
-/// One-hop shard-forward failure — the owning shard was unreachable (pod
-/// down/rolling) or its response could not be decoded. Raised via `anyhow`
-/// by `routing_remote::RoutedRouter` so `ApiErr`'s classification stays
-/// centralized here rather than duplicated in the `operator`-gated module;
-/// R2 requires this to surface as a clear, distinctly-kinded retryable
-/// error, never a silent local answer.
-#[derive(Debug)]
-pub struct ShardForwardUnavailable(pub String);
-
-impl std::fmt::Display for ShardForwardUnavailable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for ShardForwardUnavailable {}
-
-/// The owning shard was reached and answered, but with a non-2xx status
-/// (e.g. a forwarded write hit `404`/`422`). Re-emitted locally with the
-/// same status so a forwarded error is as legible as a local one; `message`
-/// carries the remote's own `{error, message}` envelope verbatim.
-#[derive(Debug)]
-pub struct ShardForwardRemoteError {
-    pub status: u16,
-    pub message: String,
-}
-
-impl std::fmt::Display for ShardForwardRemoteError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "shard forward error ({}): {}", self.status, self.message)
-    }
-}
-
-impl std::error::Error for ShardForwardRemoteError {}
-
-/// A forwarded request declared a shard-map version that disagrees with
-/// this pod's own live map (#1442 R2). A rolling restart after a completed
-/// reshard split can run pods on two different `SHARD_MAP_*` env snapshots
-/// for a bounded window (pods only read env at boot) — rather than let the
-/// one-hop guard force a local answer that may be wrong on either side of
-/// the split, the receiver rejects with this distinct, retryable error so
-/// the caller (or its own retry policy) waits for the rollout to converge.
-#[derive(Debug)]
-pub struct ShardMapVersionMismatch {
-    pub sender_version: u64,
-    pub local_version: u64,
-}
-
-impl std::fmt::Display for ShardMapVersionMismatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "forwarded request's shard-map version {} disagrees with this pod's live version {}",
-            self.sender_version, self.local_version
-        )
-    }
-}
-
-impl std::error::Error for ShardMapVersionMismatch {}
-
-/// A forwarded request's one-hop marker (`x-lumen-forwarded`) claimed this
-/// pod, but recomputing ownership from this pod's own shard map disagrees
-/// (#1442 R1). The marker alone is caller-controlled — an external client
-/// can set it directly on a request to any pod, forcing local handling on a
-/// bucket that pod doesn't actually own — so it is now validated on
-/// receipt rather than trusted blindly; a spoofed or genuinely misrouted
-/// forward is rejected, never honored.
-#[derive(Debug)]
-pub struct ShardForwardMisrouted {
-    pub bucket: u32,
-    pub owner_shard: u32,
-    pub local_shard: u32,
-}
-
-impl std::fmt::Display for ShardForwardMisrouted {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "forwarded request targets virtual bucket {} (owned by shard {}), but this pod is \
-             shard {}; refusing to honor an unverified forwarded-hop marker",
-            self.bucket, self.owner_shard, self.local_shard
-        )
-    }
-}
-
-impl std::error::Error for ShardForwardMisrouted {}
-
 impl From<anyhow::Error> for ApiErr {
     fn from(e: anyhow::Error) -> Self {
         if e.downcast_ref::<PendingChangeCapacity>().is_some() {
@@ -3642,7 +3115,6 @@ impl From<crate::access::application::authorization::AuthErr> for ApiErr {
 mod restore_sink_tests {
     use super::*;
     use crate::shared_kernel::types::schema::CreateCollectionRequest;
-    use std::collections::BTreeMap;
 
     fn collection_request() -> CreateCollectionRequest {
         serde_json::from_value(serde_json::json!({
@@ -3697,24 +3169,6 @@ mod restore_sink_tests {
             "planned_restart_cache_failed",
         )
         .await;
-    }
-
-    #[tokio::test]
-    async fn invalid_snapshot_is_rejected_before_exclusive_gate() {
-        let engine = Arc::new(Engine::new());
-        let gate = MutationGate::default();
-        let shared = gate.shared().await.expect("shared permit");
-        let sink = InMemoryRestoreSink::new(engine, Some(gate));
-        let invalid = SnapshotV1 {
-            version: 999,
-            collections: BTreeMap::new(),
-        };
-
-        let result = tokio::time::timeout(Duration::from_millis(100), sink.restore(invalid))
-            .await
-            .expect("invalid snapshot must not wait for the exclusive gate");
-        assert!(result.is_err());
-        drop(shared);
     }
 
     #[tokio::test]
@@ -3840,51 +3294,6 @@ mod restore_sink_tests {
             .unwrap();
         let envelope: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(envelope["error"], "restore_unavailable");
-    }
-}
-
-#[cfg(test)]
-mod local_write_backend_tests {
-    use super::*;
-    use crate::ingest::domain::wal_log::WalLog;
-
-    #[tokio::test]
-    async fn invalid_batch_unindex_never_publishes_or_applies() {
-        let engine = Arc::new(Engine::new());
-        let wal = Arc::new(MemWal::new());
-        let writer = WriteCoordinator::start(wal.clone(), engine.clone());
-        let backend = LocalWriteBackend {
-            writer: writer.clone(),
-        };
-
-        let result = backend
-            .unindex_docs(
-                "documents".to_string(),
-                BatchUnindexDocsRequest {
-                    external_ids: Vec::new(),
-                },
-            )
-            .await;
-
-        assert!(result.is_err(), "an empty batch must be rejected");
-        assert_eq!(
-            wal.latest_seq().await.expect("read WAL sequence"),
-            0,
-            "invalid direct calls must not publish a WAL record"
-        );
-        assert_eq!(
-            writer.applied_seq(),
-            0,
-            "invalid direct calls must not reach Engine apply"
-        );
-        assert!(
-            engine
-                .snapshot()
-                .expect("read engine snapshot")
-                .collections
-                .is_empty(),
-            "invalid direct calls must not mutate engine state"
-        );
     }
 }
 

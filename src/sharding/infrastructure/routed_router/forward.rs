@@ -6,7 +6,7 @@ use axum::http::HeaderMap;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::api::{ShardForwardRemoteError, ShardForwardUnavailable};
+use crate::sharding::domain::forward_error::{ShardForwardRemoteError, ShardForwardUnavailable};
 use crate::sharding::infrastructure::routed_router::{
     RoutedRouter, FORWARDED_HEADER, MAP_VERSION_HEADER, READ_CONSISTENCY_HEADER,
 };

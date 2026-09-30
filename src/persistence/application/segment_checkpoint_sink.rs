@@ -10,13 +10,16 @@ use anyhow::{Context, Result};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use crate::persistence::application::ports::checkpoint_sink::{
+    CheckpointSink, HnswCacheSealReceipt,
+};
 use crate::persistence::infrastructure::checkpoint_process_state::NEXT_CHECKPOINT_ATTEMPT_ID;
 use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
     checkpoint_diagnostic_enabled, CheckpointDiagnosticContext,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 
-/// Real [`crate::api::CheckpointSink`] wiring for segment-persistence mode
+/// Real [`CheckpointSink`] wiring for segment-persistence mode
 /// (#1389): forces the same synchronous stage-then-rename checkpoint the
 /// periodic snapshotter performs (`SegmentRdbStore::save`), but synchronously
 /// on demand — this is what `POST /admin/checkpoint` answers, and what the
@@ -217,13 +220,13 @@ impl SegmentCheckpointSink {
 }
 
 #[async_trait::async_trait]
-impl crate::api::CheckpointSink for SegmentCheckpointSink {
+impl CheckpointSink for SegmentCheckpointSink {
     async fn checkpoint_now(&self) -> Result<bool> {
         self.checkpoint_with_fence(None, CheckpointTraceOrigin::Manual, None)
             .await
     }
 
-    async fn seal_hnsw_graph_cache(&self) -> Result<crate::api::HnswCacheSealReceipt> {
+    async fn seal_hnsw_graph_cache(&self) -> Result<HnswCacheSealReceipt> {
         Arc::new(SegmentCheckpointSink {
             engine: self.engine.clone(),
             store: self.store.clone(),

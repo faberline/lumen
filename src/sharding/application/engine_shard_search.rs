@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 
-use crate::api::SearchBackend;
 use crate::index::application::engine::Engine;
+use crate::index::application::ports::search_backend::SearchBackend;
 use crate::sharding::application::search_fanout::search_shards_parallel;
 use crate::sharding::domain::shard_route::SearchShardTarget;
 use crate::sharding::domain::virtual_bucket_shard_map::{

@@ -1,6 +1,6 @@
 //! Cross-pod shard routing for operator/k8s serving pods (#1398 R1-R3).
 //!
-//! [`RoutedRouter`] is the sole implementation of [`crate::api::RoutedBackend`]:
+//! [`RoutedRouter`] is the sole implementation of [`crate::sharding::application::ports::routed_backend::RoutedBackend`]:
 //! it consults the delivered [`crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap`] and
 //! either answers locally (this pod owns the target bucket) or forwards to
 //! the owning shard's pod over the same h2c client stack every other
@@ -68,10 +68,10 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use axum::http::HeaderMap;
 
-use crate::api::{
-    BlockingSearchExecutor, ShardForwardMisrouted, ShardMapVersionMismatch, WriteBackend,
-};
 use crate::index::application::engine::{collections::DropOutcome, Engine};
+use crate::index::infrastructure::search_executor::BlockingSearchExecutor;
+use crate::ingest::application::ports::write_backend::WriteBackend;
+use crate::sharding::domain::forward_error::{ShardForwardMisrouted, ShardMapVersionMismatch};
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 
 /// Internal one-hop guard header: present on every forwarded request. No

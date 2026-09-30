@@ -8,11 +8,11 @@ use anyhow::Result;
 use axum::http::HeaderMap;
 use futures::future::join_all;
 
-use crate::api::ShardForwardRemoteError;
 use crate::index::domain::storage_error::StorageError;
 use crate::sharding::application::search_fanout::{
     merge_shard_search_responses, search_request_offset,
 };
+use crate::sharding::domain::forward_error::ShardForwardRemoteError;
 use crate::sharding::infrastructure::routed_router::{percent_encode_component, RoutedRouter};
 use crate::shared_kernel::types::search::{SearchRequest, SearchResponse};
 

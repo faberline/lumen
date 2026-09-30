@@ -9,6 +9,9 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use tokio::sync::oneshot;
 
+use crate::persistence::application::ports::checkpoint_sink::{
+    HnswCacheDurability, HnswCacheSealInvalidated, HnswCacheSealReceipt, HnswCacheSealUnavailable,
+};
 use crate::persistence::application::segment_checkpoint_sink::SegmentCheckpointSink;
 use crate::persistence::infrastructure::checkpoint_process_state::{
     HnswCacheSealKey, HnswCacheSealMarker, HNSW_CACHE_SEALS,
@@ -89,11 +92,9 @@ impl SegmentCheckpointSink {
     /// A background checkpoint can still advance the capture stamp, so the
     /// marker is recorded only when the one-lock stamps before and after cache
     /// publication match exactly.
-    pub async fn seal_hnsw_graph_cache(
-        self: Arc<Self>,
-    ) -> Result<crate::api::HnswCacheSealReceipt> {
+    pub async fn seal_hnsw_graph_cache(self: Arc<Self>) -> Result<HnswCacheSealReceipt> {
         let gate = self.writer.mutation_gate().ok_or_else(|| {
-            anyhow::Error::new(crate::api::HnswCacheSealUnavailable(
+            anyhow::Error::new(HnswCacheSealUnavailable(
                 "HNSW restart cache sealing requires the standalone writer fence".to_string(),
             ))
         })?;
@@ -106,7 +107,7 @@ impl SegmentCheckpointSink {
                 self.clear_hnsw_cache_seal();
                 let result = (|| {
                     if !self.engine.has_hnsw_graphs()? {
-                        return Err(anyhow::Error::new(crate::api::HnswCacheSealUnavailable(
+                        return Err(anyhow::Error::new(HnswCacheSealUnavailable(
                             "no live HNSW graph is available for the planned restart".to_string(),
                         )));
                     }
@@ -115,7 +116,7 @@ impl SegmentCheckpointSink {
                         aof.lock()
                             .map_err(|_| anyhow::anyhow!("aof writer poisoned"))?
                             .sync()?;
-                        crate::api::HnswCacheDurability::AofSynced
+                        HnswCacheDurability::AofSynced
                     } else {
                         // The fallback must commit a complete authoritative
                         // checkpoint before exposing an optional graph cache.
@@ -124,22 +125,22 @@ impl SegmentCheckpointSink {
                         // Begin the graph-publication comparison after its own
                         // durable mutation has completed.
                         before = self.engine.capture_barrier.mutation_stamp();
-                        crate::api::HnswCacheDurability::CheckpointCommitted
+                        HnswCacheDurability::CheckpointCommitted
                     };
                     let cache_fields = self.store.save_hnsw_graph_caches(&self.engine)?;
                     if cache_fields == 0 {
-                        return Err(anyhow::Error::new(crate::api::HnswCacheSealUnavailable(
+                        return Err(anyhow::Error::new(HnswCacheSealUnavailable(
                             "no HNSW graph cache fields were published".to_string(),
                         )));
                     }
                     let after = self.engine.capture_barrier.mutation_stamp();
                     if after != before {
-                        return Err(anyhow::Error::new(crate::api::HnswCacheSealInvalidated(
+                        return Err(anyhow::Error::new(HnswCacheSealInvalidated(
                             "live mutation stamp changed while HNSW cache sealing ran".to_string(),
                         )));
                     }
                     self.record_hnsw_cache_seal(after)?;
-                    Ok(crate::api::HnswCacheSealReceipt {
+                    Ok(HnswCacheSealReceipt {
                         cache_fields,
                         durability,
                         mutation_epoch: after.epoch,

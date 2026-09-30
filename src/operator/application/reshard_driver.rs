@@ -117,7 +117,7 @@
 //! rather than merge a whole delta. (b) reuses `segment_rdb.rs`'s
 //! `SegmentRdbStore::save` verbatim — the exact call the periodic snapshotter
 //! already makes, just invoked synchronously on demand via a new
-//! `POST /admin/checkpoint` admin verb ([`crate::api::CheckpointSink`]) — no
+//! `POST /admin/checkpoint` admin verb ([`crate::persistence::application::ports::checkpoint_sink::CheckpointSink`]) — no
 //! new WAL record shape, no new apply-loop branch, no new idempotency
 //! reasoning: `save` already re-seals the *entire* current engine state
 //! (including whatever `:apply`/`:evict` already mutated) atomically
@@ -140,7 +140,7 @@
 //! `checkpoint_shard` (#1396 R3) also now requires the response body to
 //! report `persisted == true`; a `200 {"persisted": false}` — the vacuous
 //! "no durable store configured" response `admin_checkpoint` returns for
-//! [`crate::api::NoopCheckpoint`] deployments — is treated as a failed
+//! [`crate::persistence::application::ports::checkpoint_sink::NoopCheckpoint`] deployments — is treated as a failed
 //! checkpoint, not a satisfied durability gate.
 //!
 //! ## Scope rail: single-member only

@@ -7,8 +7,8 @@ use crate::index::application::engine::Engine;
 use crate::persistence::application::segment_checkpoint_sink::SegmentCheckpointSink;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 
-use crate::api::CheckpointSink;
 use crate::ingest::application::write_coordinator::WriteSink;
+use crate::persistence::application::ports::checkpoint_sink::CheckpointSink;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::{
     document::{FieldValue, IndexItem, IndexRequest},

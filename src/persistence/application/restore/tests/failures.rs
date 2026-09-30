@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use storage_durable::CommitStep;
 
-use crate::api::RestoreSink;
 use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::ingest::application::write_coordinator::errors::{RestartRequired, StorageFullError};
+use crate::persistence::application::ports::restore_sink::RestoreSink;
 use crate::persistence::application::restore::tests::{
     assert_collections, current_bytes, engine_with, replacement_snapshot, setup, FailAt, WATERMARK,
 };

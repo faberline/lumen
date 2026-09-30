@@ -10,12 +10,12 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::FutureExt;
 
-use crate::api::RestoreSink;
 use crate::index::application::engine::Engine;
 use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::ingest::application::write_coordinator::{
     mutation_gate::MutationGate, SharedAof, WriteSink,
 };
+use crate::persistence::application::ports::restore_sink::RestoreSink;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::capture_barrier::RestoreInhibition;
 

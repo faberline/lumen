@@ -250,6 +250,12 @@ paths = ["src/sharding/infrastructure/routed_router/scatter.rs"]
 subject = "infrastructure->application"
 reason = "scatter_search merges the local and forwarded pages with search_fanout's merge_shard_search_responses and search_request_offset, the merge EngineShardSearch uses in-process, so both rank a scattered search the same way. P2: the merge moves to the sharding domain and both callers use it there."
 
+[[exceptions]]
+rule = "B3"
+paths = ["src/sharding/infrastructure/routed_router/backend.rs"]
+subject = "infrastructure->application"
+reason = "RoutedRouter implements RoutedBackend, the port the HTTP handlers consult before the local backends. The port lives in sharding's application layer because every method takes the inbound HeaderMap and drop_collection returns index's DropOutcome, neither of which the domain may name. P2: the port moves to the sharding domain once the forwarded request context is a domain value and the drop outcome is ingest's (see the ingest write-port exception below)."
+
 # The Lumen and LumenFleet custom resources are the operator's domain model,
 # and their Rust types are also the CRD schema (E1). P2 splits the schema into
 # DTOs with a mapper; until then the domain names the crates the schema needs.
@@ -1079,6 +1085,12 @@ paths = [
 subject = "index.application"
 reason = "The write coordinator holds the shard's Arc<Engine>: its apply loop reserves, admits and applies each committed record on it and hands each waiter the ApplyOutcome, and a local submit sizes its record with Engine::record_owned_bytes; WAL delivery sizes records the same way, and the source stage bounds a decode with Engine::record_decode_peak. The Engine uses ingest's change budget and journal (see the ingest.domain exceptions above), so ingest does not list index in depends_on. P2: ingest's application layer defines an apply port (size, admit and apply a committed record) that the Engine implements and the composition root passes in, which removes the cycle."
 
+[[exceptions]]
+rule = "B4"
+paths = ["src/ingest/application/ports/write_backend.rs"]
+subject = "index.application"
+reason = "WriteBackend::drop_collection returns index's DropOutcome, which the handler turns into its status, and LocalWriteBackend unwraps the ApplyOutcome the write sink hands back for each entry it submits (ApplyOutcome::Dropped carries the DropOutcome). P2: the apply port above defines the apply outcome, with the drop outcome, as ingest's own types, which the Engine returns."
+
 # The committed apply path moved to index/application/apply as-is: the
 # fast-Index and replacement planners, their apply adapters, the borrowed Text
 # apply and the record dispatch boundary. It reads a retained record in place
@@ -1327,6 +1339,12 @@ reason = "The reshard formats are cut from and merged into the snapshot document
 
 [[exceptions]]
 rule = "B4"
+paths = ["src/sharding/infrastructure/routed_router.rs"]
+subject = "index.infrastructure"
+reason = "RoutedRouter runs its local search legs on BlockingSearchExecutor, the index's bounded bridge to blocking threads, so a routed pod's legs and its HTTP handlers draw on the one process-wide permit pool rather than each router adding its own. P2: the executor becomes an index application port (run a blocking search under the shared bound) that index/infrastructure implements and the composition root passes to both the app state and the router."
+
+[[exceptions]]
+rule = "B4"
 paths = ["src/operator/application/reshard_driver/transfer.rs"]
 subject = "index.infrastructure"
 reason = "The reshard driver fetches a source shard's scoped backup from /admin/backup:scoped and decodes the response as a SnapshotV1 before it cuts the batches. P2: the snapshot document in shared_kernel (see the sharding.domain exception above)."
@@ -1334,11 +1352,12 @@ reason = "The reshard driver fetches a source shard's scoped backup from /admin/
 [[exceptions]]
 rule = "B4"
 paths = [
+  "src/persistence/application/ports/restore_sink.rs",
   "src/persistence/application/restore.rs",
   "src/persistence/infrastructure/rdb.rs",
 ]
 subject = "index.infrastructure"
-reason = "The RDB file is an encoded RdbSnapshot, a SnapshotV1 with the WAL sequence it is current as of, and the restore sinks take the SnapshotV1 that /admin/restore decoded. P2: EngineSnapshotRepository (see the domain->infrastructure exception on rdb_store above), with the snapshot document in shared_kernel."
+reason = "The RDB file is an encoded RdbSnapshot, a SnapshotV1 with the WAL sequence it is current as of, and RestoreSink and the restore sinks that implement it take the SnapshotV1 that /admin/restore decoded. P2: EngineSnapshotRepository (see the domain->infrastructure exception on rdb_store above), with the snapshot document in shared_kernel."
 
 [[exceptions]]
 rule = "B4"

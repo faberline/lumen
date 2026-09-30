@@ -5,13 +5,13 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use storage_durable::{CommitStep, FailureInjector, FailurePoint};
 
-use crate::api::RestoreSink;
 use crate::index::application::engine::Engine;
 use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::ingest::application::write_coordinator::{SharedAof, WriteCoordinator};
 use crate::ingest::domain::wal_log::WalLog;
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::mem_wal::MemWal;
+use crate::persistence::application::ports::restore_sink::RestoreSink;
 use crate::persistence::application::restore::{RestorePublicationObserver, SegmentRestoreSink};
 use crate::persistence::infrastructure::aof::replay::AofReader;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;

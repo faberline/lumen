@@ -2,8 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::api::CheckpointSink;
 use crate::index::application::engine::Engine;
+use crate::persistence::application::ports::checkpoint_sink::{
+    CheckpointSink, HnswCacheDurability, HnswCacheSealUnavailable,
+};
 use crate::persistence::application::segment_checkpoint_sink::SegmentCheckpointSink;
 use crate::persistence::infrastructure::aof::aof_writer::AofWriter;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
@@ -110,10 +112,7 @@ async fn sealed_hnsw_cache_is_reused_only_until_the_next_mutation() {
 
     let receipt = sink.clone().seal_hnsw_graph_cache().await.unwrap();
     assert_eq!(receipt.cache_fields, 1);
-    assert_eq!(
-        receipt.durability,
-        crate::api::HnswCacheDurability::AofSynced
-    );
+    assert_eq!(receipt.durability, HnswCacheDurability::AofSynced);
     assert!(sink.has_current_hnsw_cache_seal());
     assert_eq!(sink.clone().save_shutdown_graph_cache().await.unwrap(), 0);
 
@@ -149,9 +148,7 @@ async fn failed_hnsw_cache_seal_clears_a_prior_marker() {
     assert!(sink.has_current_hnsw_cache_seal());
 
     let error = sink.clone().seal_hnsw_graph_cache().await.unwrap_err();
-    assert!(error
-        .downcast_ref::<crate::api::HnswCacheSealUnavailable>()
-        .is_some());
+    assert!(error.downcast_ref::<HnswCacheSealUnavailable>().is_some());
     assert!(!sink.has_current_hnsw_cache_seal());
 }
 

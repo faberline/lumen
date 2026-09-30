@@ -6,8 +6,8 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures::future::{join_all, try_join_all};
 
-use crate::api::WriteBackend;
 use crate::index::application::engine::{collections::DropOutcome, raft_dispatch::ApplyOutcome};
+use crate::ingest::application::ports::write_backend::WriteBackend;
 use crate::sharding::application::engine_shard_write::EngineShardWrite;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::{

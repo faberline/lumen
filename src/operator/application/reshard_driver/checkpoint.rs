@@ -52,7 +52,7 @@ pub(super) async fn evict_shard(
 /// A 200 response alone is not proof of durability: [`crate::api`]'s
 /// `admin_checkpoint` handler returns `200 {"persisted": false}` — not an
 /// error status — when the shard has no durable store configured (the
-/// vacuous, RAM-only [`crate::api::NoopCheckpoint`] sink; see that type's
+/// vacuous, RAM-only [`crate::persistence::application::ports::checkpoint_sink::NoopCheckpoint`] sink; see that type's
 /// docs), which is exactly the "checkpoint looked like it worked but nothing
 /// was actually made durable" gap #1396's review confirmed (a bare
 /// `is_success()` check treated that response as a satisfied gate). This

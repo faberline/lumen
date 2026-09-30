@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use axum::http::HeaderMap;
 
-use crate::api::{RoutedBackend, ShardForwardMisrouted, ShardMapVersionMismatch};
 use crate::index::application::engine::Engine;
+use crate::sharding::application::ports::routed_backend::RoutedBackend;
+use crate::sharding::domain::forward_error::{ShardForwardMisrouted, ShardMapVersionMismatch};
 use crate::sharding::infrastructure::routed_router::tests::{shard_map, DummyWrite};
 use crate::sharding::infrastructure::routed_router::{
     RoutedRouter, FORWARDED_HEADER, MAP_VERSION_HEADER,

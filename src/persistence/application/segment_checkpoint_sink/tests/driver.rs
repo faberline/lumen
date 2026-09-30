@@ -4,9 +4,9 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-use crate::api::CheckpointSink;
 use crate::index::application::engine::Engine;
 use crate::ingest::domain::change_budget::ChangeBudget;
+use crate::persistence::application::ports::checkpoint_sink::CheckpointSink;
 use crate::persistence::application::segment_checkpoint_sink::tests::{
     admitted_keyword, contains_keyword, spill_keyword_schema, wait_for_checkpoint_count, FailOnce,
 };
