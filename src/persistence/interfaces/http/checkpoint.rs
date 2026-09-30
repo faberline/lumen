@@ -8,7 +8,7 @@ use axum::response::Json;
 use serde::Serialize;
 
 use crate::access::application::authorization::{AuthContext, Role};
-use crate::api::{enforce_storage_writable, ApiErr, AppState};
+use crate::app::http::{api_err::ApiErr, app_state::AppState, guards::enforce_storage_writable};
 use crate::ingest::application::write_coordinator::errors::{RestartRequired, StorageFullError};
 use crate::persistence::application::ports::checkpoint_sink::{
     HnswCacheSealInvalidated, HnswCacheSealUnavailable,

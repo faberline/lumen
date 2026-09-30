@@ -395,7 +395,7 @@ pub struct Metrics {
     /// `NOT_RAFT` sentinel; see [`Metrics::set_raft_leader_known`].
     pub raft_leader_known: Gauge,
     /// #2475: `1` while this pod believes a reshard-driver write fence
-    /// (`POST /admin/reshard:fence`, see `crate::api::WriteFence`) is
+    /// (`POST /admin/reshard:fence`, see `crate::app::http::write_fence::WriteFence`) is
     /// currently armed on it, `0` once cleared or never armed.
     pub reshard_fence_active: Gauge,
     /// #2475: unix-epoch seconds the currently (or most recently) armed
@@ -410,7 +410,7 @@ pub struct Metrics {
     /// `io::ErrorKind::StorageFull`), `0` otherwise. Sticky: stays `1`
     /// until the periodic re-probe (`LUMEN_STORAGE_FULL_REPROBE_SECS`, see
     /// `src/bin/lumen.rs`) confirms the data dir accepts a write again, or
-    /// the process restarts. `crate::api::enforce_storage_writable` reads
+    /// the process restarts. `crate::app::http::guards::enforce_storage_writable` reads
     /// this to fast-fail mutating endpoints without touching the durable
     /// path; `render::prometheus_rule`'s `LumenStorageDegraded` alert reads
     /// the published `lumen_storage_degraded` series.

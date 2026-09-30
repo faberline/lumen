@@ -17,7 +17,7 @@ const AW_TOML: &str = include_str!("../../aw.toml");
 const README: &str = include_str!("../../README.md");
 const CARGO_TOML: &str = include_str!("../../Cargo.toml");
 const CLI: &str = include_str!("../../src/bin/lumen.rs");
-const API: &str = include_str!("../../src/api.rs");
+const API: &str = include_str!("../../src/app/http/router.rs");
 /// The auth adapter: every non-test file of the `access` context except TLS.
 const AUTH: &str = concat!(
     include_str!("../../src/access/domain/identity.rs"),

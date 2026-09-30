@@ -15,7 +15,7 @@ use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 /// `POST /admin/reshard:fence` (#1396 R2) against one shard: `buckets`
 /// non-empty arms a bounded write pause over those virtual buckets;
 /// `buckets` empty clears any currently-armed pause. See
-/// [`crate::api::WriteFence`].
+/// [`crate::app::http::write_fence::WriteFence`].
 async fn reshard_fence_call(
     http: &reqwest::Client,
     base_url: &str,

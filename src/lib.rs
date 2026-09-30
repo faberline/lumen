@@ -37,7 +37,7 @@ mod access;
 /// default; only the runtime segment-persistence path (`--persistence=segment`)
 /// drives the apply loop + cold-start through it.
 pub use crate::compat::aof;
-pub mod api;
+pub use crate::compat::api;
 mod app;
 pub use crate::compat::auth;
 /// `lumen backup` (#808): fetches a consistent snapshot from a running

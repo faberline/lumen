@@ -12,10 +12,10 @@ use axum::response::Json;
 use serde::Deserialize;
 
 use crate::access::application::authorization::{AuthContext, Role};
-use crate::api::{ApiErr, AppState};
+use crate::app::http::{api_err::ApiErr, app_state::AppState};
 
 #[cfg(doc)]
-use crate::api::WriteFence;
+use crate::app::http::write_fence::WriteFence;
 #[cfg(doc)]
 use crate::sharding::interfaces::http::reshard::ScopedBackupRequest;
 

@@ -15,7 +15,9 @@ use axum::response::Json;
 use serde::Deserialize;
 
 use crate::access::application::authorization::{AuthContext, Role};
-use crate::api::{acquire_direct_mutation_permit, ApiErr, AppState};
+use crate::app::http::{
+    api_err::ApiErr, app_state::AppState, guards::acquire_direct_mutation_permit,
+};
 use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::sharding::domain::reshard_batch::ReshardBatch;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;

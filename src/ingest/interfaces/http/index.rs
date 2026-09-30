@@ -6,7 +6,11 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Json;
 
 use crate::access::application::authorization::{AuthContext, Role};
-use crate::api::{enforce_storage_writable, enforce_write_fence, ApiErr, AppState};
+use crate::app::http::{
+    api_err::ApiErr,
+    app_state::AppState,
+    guards::{enforce_storage_writable, enforce_write_fence},
+};
 use crate::shared_kernel::types::document::{
     IndexItem, IndexRequest, IndexResponse, MAX_INDEX_BATCH_SIZE,
 };

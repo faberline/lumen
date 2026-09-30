@@ -142,7 +142,8 @@ async fn raft_full_local_admission_refuses_before_append_or_apply() {
     assert!(after_release.is_none());
     let error = initial.unwrap().unwrap().unwrap_err();
     let is_capacity = error.downcast_ref::<PendingChangeCapacity>().is_some();
-    let response = axum::response::IntoResponse::into_response(crate::api::ApiErr::from(error));
+    let response =
+        axum::response::IntoResponse::into_response(crate::app::http::api_err::ApiErr::from(error));
     assert!(is_capacity);
     assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "1");

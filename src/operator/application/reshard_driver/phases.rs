@@ -137,7 +137,7 @@ pub(super) async fn advance_splitting(
 /// converged snapshot of those buckets — closing the gap where a write
 /// lands on a source shard after the last migration-copy read but before
 /// that bucket's eviction and is silently dropped. See
-/// [`crate::api::WriteFence`] for why a crashed driver can never leave it
+/// [`crate::app::http::write_fence::WriteFence`] for why a crashed driver can never leave it
 /// armed permanently.
 ///
 /// The fence is cleared immediately on every exit path *except*

@@ -82,7 +82,7 @@
 //! reported in status") rather than a repeat-until-converged loop: arming the
 //! fence *before* the tick's migration pass means that single pass is already
 //! a complete snapshot of every fenced bucket, because no write can land on
-//! them while it runs. [`crate::api::WriteFence`] (`POST
+//! them while it runs. [`crate::app::http::write_fence::WriteFence`] (`POST
 //! /admin/reshard:fence`) is the serving-side seam; a fenced write gets `503
 //! bucket_write_paused` rather than being silently dropped or racing the map
 //! flip. The fence is armed on every **source** shard (the live owners until
@@ -230,7 +230,7 @@ const MAX_EXTERNAL_IDS_PER_BATCH: usize = 2000;
 /// however many source shards a split touches, then evict + checkpoint) while
 /// still bounded; the fence is a crash-safety backstop the *serving* pod
 /// enforces independent of the driver's own liveness, see
-/// [`crate::api::WriteFence`]. Re-armed fresh every tick that needs one, so a
+/// [`crate::app::http::write_fence::WriteFence`]. Re-armed fresh every tick that needs one, so a
 /// healthy, slow-but-progressing driver never races its own TTL.
 const WRITE_FENCE_TTL_SECS: u64 = 120;
 

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use axum::extract::{Extension, Path, State};
 
 use crate::access::application::authorization::AuthContext;
-use crate::api::AppState;
+use crate::app::http::app_state::AppState;
 use crate::index::application::engine::Engine;
 use crate::index::interfaces::http::stats::stats;
 use crate::shared_kernel::types::schema::CreateCollectionRequest;

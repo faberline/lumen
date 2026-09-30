@@ -6,7 +6,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Json;
 
 use crate::access::application::authorization::{AuthContext, Role};
-use crate::api::{read_consistency_from, ApiErr, AppState};
+use crate::app::http::{api_err::ApiErr, app_state::AppState, guards::read_consistency_from};
 use crate::shared_kernel::types::search::{DuplicatesRequest, DuplicatesResponse};
 
 #[utoipa::path(

@@ -8,8 +8,10 @@ use axum::response::Json;
 use futures::StreamExt;
 
 use crate::access::application::authorization::{AuthContext, Role};
-use crate::api::{
-    batch_search_storage_error, enforce_read_consistency, read_consistency_from, ApiErr, AppState,
+use crate::app::http::{
+    api_err::{batch_search_storage_error, ApiErr},
+    app_state::AppState,
+    guards::{enforce_read_consistency, read_consistency_from},
 };
 use crate::index::interfaces::http::search::run_local_search;
 use crate::index::interfaces::http::AUTHORIZATION_CONCURRENCY;

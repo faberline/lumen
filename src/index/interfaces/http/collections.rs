@@ -9,7 +9,7 @@ use futures::{StreamExt, TryStreamExt};
 use serde::Deserialize;
 
 use crate::access::application::authorization::{AuthContext, Role};
-use crate::api::{enforce_storage_writable, ApiErr, AppState};
+use crate::app::http::{api_err::ApiErr, app_state::AppState, guards::enforce_storage_writable};
 use crate::index::application::engine::collections::DropOutcome;
 use crate::index::interfaces::http::AUTHORIZATION_CONCURRENCY;
 use crate::shared_kernel::types::schema::{CreateCollectionRequest, CreateCollectionResponse};

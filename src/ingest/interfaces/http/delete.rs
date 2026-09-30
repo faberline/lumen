@@ -8,8 +8,10 @@ use axum::response::Json;
 use serde::Deserialize;
 
 use crate::access::application::authorization::{AuthContext, Role};
-use crate::api::{
-    enforce_collection_write_fence, enforce_storage_writable, enforce_write_fence, ApiErr, AppState,
+use crate::app::http::{
+    api_err::ApiErr,
+    app_state::AppState,
+    guards::{enforce_collection_write_fence, enforce_storage_writable, enforce_write_fence},
 };
 use crate::shared_kernel::types::document::{
     validate_batch_unindex_docs_request, BatchUnindexDocsRequest,

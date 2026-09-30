@@ -7,7 +7,7 @@ use axum::extract::{Extension, Path, State};
 use axum::response::Json;
 
 use crate::access::application::authorization::{AuthContext, Role};
-use crate::api::{ApiErr, AppState};
+use crate::app::http::{api_err::ApiErr, app_state::AppState};
 use crate::shared_kernel::types::stats::StatsResponse;
 
 #[utoipa::path(

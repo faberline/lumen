@@ -5,6 +5,7 @@
 //! new paths.
 
 pub mod aof;
+pub mod api;
 pub mod auth;
 #[cfg(feature = "backup")]
 pub mod backup;

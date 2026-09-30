@@ -10,7 +10,7 @@
 use serde_json::{json, Value};
 
 /// The full OpenAPI 3.2 document as pretty JSON (every route + schema,
-/// including the #1297 `QUERY` twins injected by `crate::api::openapi`).
+/// including the #1297 `QUERY` twins injected by `crate::app::http::openapi::openapi`).
 pub fn openapi_json() -> String {
     serde_json::to_string_pretty(&openapi_value()).expect("OpenApi value serializes to JSON")
 }
@@ -20,7 +20,7 @@ pub fn openapi_yaml() -> String {
     serde_yaml::to_string(&openapi_value()).expect("OpenApi value serializes to YAML")
 }
 
-/// `crate::api::openapi()` as a JSON [`Value`] stamped as OpenAPI 3.2 (#1298,
+/// `crate::app::http::openapi::openapi()` as a JSON [`Value`] stamped as OpenAPI 3.2 (#1298,
 /// epic #1296): utoipa 4.2.3's `OpenApiVersion` enum predates OpenAPI 3.2 and
 /// only knows how to serialize the literal `"3.0.3"`, so the typed
 /// `utoipa::openapi::OpenApi` — and the live `GET /openapi.json` route that
@@ -29,9 +29,10 @@ pub fn openapi_yaml() -> String {
 /// `clients/openapi.json` contract file regenerated from it) is not bound by
 /// that typed field, so it stamps the real document version here; the
 /// `query`/`x-post-twin` operations are unaffected either way since they are
-/// injected upstream in `crate::api::openapi`.
+/// injected upstream in `crate::app::http::openapi::openapi`.
 fn openapi_value() -> Value {
-    let mut v = serde_json::to_value(crate::api::openapi()).expect("OpenApi serializes to JSON");
+    let mut v = serde_json::to_value(crate::app::http::openapi::openapi())
+        .expect("OpenApi serializes to JSON");
     if let Value::Object(map) = &mut v {
         map.insert("openapi".to_string(), Value::String("3.2.0".to_string()));
     }
@@ -41,7 +42,7 @@ fn openapi_value() -> Value {
 /// Just the component schemas (the request/response data types) as pretty JSON
 /// — the JSON-Schema view an agent uses to build/validate request bodies.
 pub fn json_schema_json() -> String {
-    let api = crate::api::openapi();
+    let api = crate::app::http::openapi::openapi();
     // #2871 retired the bearer/identity registry, so `operationalSchemas` no
     // longer carries a `TokenRegistry` entry: nothing reads that file, and a
     // published schema for it would read as a supported deployment shape.

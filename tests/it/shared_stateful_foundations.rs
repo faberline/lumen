@@ -33,7 +33,7 @@ const LUMEN_AUTH: &str = concat!(
     include_str!("../../src/access/infrastructure/lumen_verifier.rs"),
     include_str!("../../src/access/interfaces/http.rs"),
 );
-const LUMEN_API: &str = include_str!("../../src/api.rs");
+const LUMEN_API: &str = include_str!("../../src/app/http/router.rs");
 const LUMEN_OPERATOR: &str = concat!(
     include_str!("../../src/operator/application/render.rs"),
     include_str!("../../src/operator/application/render/identity.rs"),

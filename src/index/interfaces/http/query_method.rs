@@ -15,7 +15,7 @@ use axum::http::{Method, StatusCode};
 use axum::response::{IntoResponse, Json};
 
 use crate::access::application::authorization::AuthContext;
-use crate::api::AppState;
+use crate::app::http::app_state::AppState;
 use crate::index::interfaces::http::batch_search::batch_search_core;
 use crate::index::interfaces::http::search::search_core;
 use crate::shared_kernel::types::search::{BatchSearchRequest, SearchRequest};

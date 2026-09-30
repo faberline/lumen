@@ -49,7 +49,7 @@ pub(super) async fn evict_shard(
 /// ordinary writes reach, and wait for the response before this shard is
 /// considered safe to restart.
 ///
-/// A 200 response alone is not proof of durability: [`crate::api`]'s
+/// A 200 response alone is not proof of durability: [`crate::persistence::interfaces::http::checkpoint`]'s
 /// `admin_checkpoint` handler returns `200 {"persisted": false}` — not an
 /// error status — when the shard has no durable store configured (the
 /// vacuous, RAM-only [`crate::persistence::application::ports::checkpoint_sink::NoopCheckpoint`] sink; see that type's
