@@ -59,10 +59,10 @@ fn insert_after_first_from(source: &str, instruction: &str) -> String {
 const DURABLE_BEGIN: &str = "  # DURABLE-CONTRACT-BEGIN\n";
 const DURABLE_END: &str = "  # DURABLE-CONTRACT-END\n";
 const DURABLE_BLOCK_SHA256: &str =
-    "7ae73039416ce9c7860e7dbd285b29bd15838dfd307f5b05d4ebd22454788e40";
+    "7981fef4e6560767fc49e7651ba7ca69104241a6c870a2b4982f5698165ac118";
 const CANDIDATE_ROOT_REGEX: &str = "^ghcr\\.io/faberline/lumen@sha256:[0-9a-f]{64}$";
 const OLD_IMAGE: &str =
-    "ghcr.io/faberline/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d";
+    "ghcr.io/chrischeng-c4/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d";
 const DATA_MOUNT: &str = "--mount \"type=volume,src=$VOLUME,dst=/var/lib/lumen/data\"";
 const REJECT_DATA_MOUNT: &str =
     "--mount \"type=volume,src=$REJECT_VOLUME,dst=/var/lib/lumen/data\"";
