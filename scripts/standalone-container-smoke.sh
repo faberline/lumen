@@ -24,7 +24,7 @@ if [[ "$MODE" == "durable" ]]; then
     echo "ERROR: LUMEN_STANDALONE_DURABLE_IMAGE must be an exact GHCR root digest" >&2
     exit 1
   }
-  OLD_IMAGE="ghcr.io/faberline/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d"
+  OLD_IMAGE="ghcr.io/chrischeng-c4/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d"
   ID_SUFFIX="$(date +%s)_$$_${RANDOM}"
   VOLUME="lumen-smoke-durable-${ID_SUFFIX}"
   REJECT_VOLUME="lumen-smoke-durable-reject-${ID_SUFFIX}"
