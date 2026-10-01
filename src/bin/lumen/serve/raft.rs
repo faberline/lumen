@@ -46,10 +46,18 @@ async fn finish_raft_listener_shutdown(
     deadline: server_lifecycle::ShutdownDeadline,
     shutdown_result: Result<()>,
 ) -> Result<()> {
-    close_raft_peer_listener_within(peer_server, deadline).await;
     match action {
-        crate::shutdown::PeerListenerAction::CloseAfterReport => shutdown_result,
+        crate::shutdown::PeerListenerAction::CloseAfterReport => {
+            close_raft_peer_listener_within(peer_server, deadline).await;
+            shutdown_result
+        }
         crate::shutdown::PeerListenerAction::AbortAfterReport => {
+            // Request cancellation without extending the shared deadline.
+            peer_server.task.abort();
+            tracing::info!(
+                event = "raft_peer_listener_aborted",
+                message = "raft_peer_listener_aborted"
+            );
             shutdown_result.context("raft shutdown is incomplete")
         }
     }
