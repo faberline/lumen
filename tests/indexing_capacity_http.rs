@@ -962,6 +962,365 @@ mod capacity_http_contract {
         (entered_rx, SyncRelease(Some(release_tx)))
     }
 
+    mod release_before_admission_wait_contract {
+        //! The diagnostic refusal is synchronous. Drop a competing public
+        //! Engine at that event, after Full and before the admission loop can
+        //! sample its wake epoch. The target's real SyncFile stays held, so
+        //! checkpoint publication cannot consume its pending request revision.
+
+        use super::*;
+        use futures::FutureExt;
+        use tracing::field::{Field, Visit};
+        use tracing::{Event, Subscriber};
+        use tracing_subscriber::layer::Context;
+        use tracing_subscriber::prelude::*;
+        use tracing_subscriber::Layer;
+
+        const CHILD_CASE: &str = "local-http-capacity-release-before-wait";
+        const TEST_NAME: &str = "capacity_http_contract::release_before_admission_wait_contract::released_capacity_before_wait_resumes_same_checkpoint_revision_once";
+        const RESUME_TIMEOUT: Duration = Duration::from_secs(5);
+
+        #[derive(Default)]
+        struct TraceFields(BTreeMap<String, Value>);
+
+        impl Visit for TraceFields {
+            fn record_u64(&mut self, field: &Field, value: u64) {
+                self.0.insert(field.name().to_owned(), value.into());
+            }
+
+            fn record_bool(&mut self, field: &Field, value: bool) {
+                self.0.insert(field.name().to_owned(), value.into());
+            }
+
+            fn record_str(&mut self, field: &Field, value: &str) {
+                self.0.insert(field.name().to_owned(), value.into());
+            }
+
+            fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+                self.0
+                    .insert(field.name().to_owned(), format!("{value:?}").into());
+            }
+        }
+
+        impl TraceFields {
+            fn number(&self, name: &str) -> u64 {
+                self.0[name]
+                    .as_u64()
+                    .unwrap_or_else(|| panic!("refusal scheduling field {name} must be numeric"))
+            }
+
+            fn flag(&self, name: &str) -> bool {
+                self.0[name]
+                    .as_bool()
+                    .unwrap_or_else(|| panic!("refusal scheduling field {name} must be boolean"))
+            }
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        struct RefusalRelease {
+            revision: u64,
+            present: bool,
+            requested: u64,
+            used: u64,
+            hard_limit: u64,
+            pending_after_release: u64,
+            wal_at_refusal: u64,
+            applied_at_refusal: u64,
+        }
+
+        struct RefusalSchedule {
+            competitor: Option<Engine>,
+            release: Option<RefusalRelease>,
+            relay_revisions: Vec<(u64, u64, bool)>,
+            relay_terminals: usize,
+        }
+
+        struct ReleaseAtRefusal {
+            engine: Arc<Engine>,
+            writer: Arc<WriteCoordinator>,
+            wal: Arc<MemWal>,
+            schedule: Arc<Mutex<RefusalSchedule>>,
+        }
+
+        impl<S: Subscriber> Layer<S> for ReleaseAtRefusal {
+            fn on_event(&self, event: &Event<'_>, _: Context<'_, S>) {
+                let mut fields = TraceFields::default();
+                event.record(&mut fields);
+                match fields.0.get("event").and_then(Value::as_str) {
+                    Some("segment_capacity_admission_refusal") => {
+                        let competitor = self
+                            .schedule
+                            .lock()
+                            .expect("refusal schedule mutex")
+                            .competitor
+                            .take();
+                        let Some(competitor) = competitor else {
+                            return;
+                        };
+                        // MemWal's public head query is immediately ready. No
+                        // asynchronous work or capacity change occurs here.
+                        let wal_at_refusal = self
+                            .wal
+                            .latest_seq()
+                            .now_or_never()
+                            .expect("MemWal head query must be ready at the refusal")
+                            .expect("read MemWal head at the refusal");
+                        let applied_at_refusal = self.writer.applied_seq();
+                        drop(competitor);
+                        let pending_after_release = metric_u64(
+                            &self.engine.metrics().render(),
+                            "lumen_pending_change_total_bytes",
+                        );
+                        self.schedule
+                            .lock()
+                            .expect("refusal schedule mutex")
+                            .release = Some(RefusalRelease {
+                            revision: fields.number("capacity_request_revision"),
+                            present: fields.flag("capacity_request_present"),
+                            requested: fields.number("requested_bytes"),
+                            used: fields.number("used_bytes"),
+                            hard_limit: fields.number("hard_limit_bytes"),
+                            pending_after_release,
+                            wal_at_refusal,
+                            applied_at_refusal,
+                        });
+                    }
+                    Some("segment_capacity_relay_diagnostic") => {
+                        let mut schedule = self.schedule.lock().expect("refusal schedule mutex");
+                        match fields.0.get("relay_phase").and_then(Value::as_str) {
+                            Some("relay_started") => schedule.relay_revisions.push((
+                                fields.number("request_revision"),
+                                fields.number("capacity_request_revision"),
+                                fields.flag("capacity_request_pending"),
+                            )),
+                            Some("terminal") => schedule.relay_terminals += 1,
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        async fn released_capacity_before_wait_body() {
+            std::env::set_var("LUMEN_PERF_DIAGNOSTIC", "1");
+            let fixture = capacity_fixture(true);
+            // Public direct writes create real checkpointable work without
+            // earlier WAL sources. Later source staging therefore cannot
+            // supply an extra wake that hides this ordering defect.
+            fixture
+                .checkpoint
+                .engine
+                .create_collection(
+                    CAPACITY_COLLECTION,
+                    serde_json::from_value(json!({
+                        "fields": { "kw": { "type": "keyword" } }
+                    }))
+                    .expect("target capacity schema"),
+                )
+                .expect("create direct target collection");
+            fixture
+                .checkpoint
+                .engine
+                .index(
+                    CAPACITY_COLLECTION,
+                    serde_json::from_value(capacity_index_request(0))
+                        .expect("direct target capacity seed"),
+                )
+                .expect("seed direct target checkpoint work");
+            let (entered_rx, mut checkpoint_release) = held_local_checkpoint(&fixture);
+            let mut checkpoint_task = tokio::spawn({
+                let checkpoint = fixture.checkpoint.clone();
+                async move { CheckpointSink::checkpoint_now(checkpoint.as_ref()).await }
+            });
+            tokio::task::spawn_blocking(move || entered_rx.recv_timeout(REQUEST_TIMEOUT))
+                .await
+                .expect("release-before-wait checkpoint readiness task")
+                .expect("target checkpoint must reach its real SyncFile hold");
+
+            let competitor = Engine::new();
+            competitor
+                .create_collection(
+                    CAPACITY_COLLECTION,
+                    serde_json::from_value(json!({
+                        "fields": { "kw": { "type": "keyword" } }
+                    }))
+                    .expect("competing capacity schema"),
+                )
+                .expect("create competing public Engine collection");
+            let mut previous =
+                public_pending_budget(&fixture.server, "before competing Engine fill").await;
+            let mut filled = false;
+            for ordinal in 0..MAX_LARGE_VALUE_COUNT {
+                competitor
+                    .index(
+                        CAPACITY_COLLECTION,
+                        serde_json::from_value(capacity_index_request(ordinal))
+                            .expect("competing public Engine capacity row"),
+                    )
+                    .expect("fill only with accepted competing Engine writes");
+                let current =
+                    public_pending_budget(&fixture.server, "after competing Engine fill").await;
+                let retained_price = current
+                    .total
+                    .checked_sub(previous.total)
+                    .expect("competing Engine fill must increase retained bytes");
+                let next_local_floor = retained_price + 4 * LARGE_KEYWORD_VALUE_BYTES as u64;
+                if current.total + next_local_floor > PENDING_HARD_LIMIT_BYTES as u64 {
+                    filled = true;
+                    break;
+                }
+                previous = current;
+            }
+            assert!(
+                filled,
+                "competing Engine must reach the public Full boundary"
+            );
+            let wal_before = fixture.wal.latest_seq().await.expect("target WAL baseline");
+            let applied_before = fixture.writer.applied_seq();
+            assert_eq!(wal_before, 0, "direct target seed must not publish WAL");
+            let completed_before = public_checkpoint_counter(
+                &fixture.server,
+                "lumen_segment_checkpoint_completed_total",
+            )
+            .await;
+            let schedule = Arc::new(Mutex::new(RefusalSchedule {
+                competitor: Some(competitor),
+                release: None,
+                relay_revisions: Vec::new(),
+                relay_terminals: 0,
+            }));
+            tracing::subscriber::set_global_default(tracing_subscriber::registry().with(
+                ReleaseAtRefusal {
+                    engine: fixture.checkpoint.engine.clone(),
+                    writer: fixture.writer.clone(),
+                    wal: fixture.wal.clone(),
+                    schedule: schedule.clone(),
+                },
+            ))
+            .expect("install isolated refusal scheduling subscriber");
+
+            let result = tokio::time::timeout(
+                RESUME_TIMEOUT,
+                fixture
+                    .server
+                    .post(&format!("/collections/{CAPACITY_COLLECTION}/index"))
+                    .json(&capacity_index_request(1)),
+            )
+            .await;
+            let refusal = schedule
+                .lock()
+                .expect("refusal schedule mutex")
+                .release
+                .expect("the HTTP request must enter the exact refusal scheduling hook");
+            eprintln!("controlled release-before-wait refusal: {refusal:?}");
+            assert!(refusal.present && refusal.revision > 0);
+            assert_eq!(refusal.hard_limit, PENDING_HARD_LIMIT_BYTES as u64);
+            assert!(refusal.used + refusal.requested > refusal.hard_limit);
+            assert!(refusal.pending_after_release < refusal.used);
+            assert!(
+                refusal.pending_after_release + refusal.requested <= refusal.hard_limit,
+                "dropping the competing Engine must free enough bytes for this exact request",
+            );
+            assert_eq!(
+                refusal.wal_at_refusal, wal_before,
+                "Full must not publish WAL"
+            );
+            assert_eq!(
+                refusal.applied_at_refusal, applied_before,
+                "Full must not apply"
+            );
+            tokio::time::timeout(RESUME_TIMEOUT, async {
+                while schedule
+                    .lock()
+                    .expect("refusal schedule mutex")
+                    .relay_revisions
+                    .is_empty()
+                {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            })
+            .await
+            .expect("the real checkpoint relay must observe the pending request revision");
+            {
+                let schedule = schedule.lock().expect("refusal schedule mutex");
+                assert_eq!(
+                    schedule.relay_revisions,
+                    vec![(refusal.revision, refusal.revision, true)],
+                    "the held checkpoint must keep the same request revision live",
+                );
+                assert_eq!(
+                    schedule.relay_terminals, 0,
+                    "held checkpoint cannot consume relief"
+                );
+            }
+            assert_eq!(
+                public_checkpoint_counter(
+                    &fixture.server,
+                    "lumen_segment_checkpoint_completed_total"
+                )
+                .await,
+                completed_before,
+                "SyncFile must remain held through the resumed HTTP request",
+            );
+            if result.is_err() {
+                assert_eq!(fixture.wal.latest_seq().await.unwrap(), wal_before);
+                assert_eq!(fixture.writer.applied_seq(), applied_before);
+            }
+            assert!(
+                result.is_ok(),
+                "released pending capacity must resume HTTP admission within 5s while checkpoint request revision {} stays pending",
+                refusal.revision,
+            );
+            let response = result.expect("prompt admission after controlled capacity release");
+            response.assert_status_ok();
+            assert_eq!(response.json::<Value>()["indexed"], 1);
+            assert_eq!(fixture.wal.latest_seq().await.unwrap(), wal_before + 1);
+            assert_eq!(fixture.writer.applied_seq(), applied_before + 1);
+            assert_eq!(
+                capacity_term_ids(&fixture.server, &capacity_value(1)).await,
+                vec![capacity_external_id(1)],
+                "the resumed HTTP request must be visible exactly once",
+            );
+
+            checkpoint_release.release();
+            assert!(tokio::time::timeout(REQUEST_TIMEOUT, &mut checkpoint_task)
+                .await
+                .expect("held target checkpoint completion deadline")
+                .expect("held target checkpoint task")
+                .expect("held target checkpoint result"));
+            assert!(tokio::time::timeout(
+                REQUEST_TIMEOUT,
+                CheckpointSink::checkpoint_now(fixture.checkpoint.as_ref())
+            )
+            .await
+            .expect("resumed record checkpoint deadline")
+            .expect("publish resumed record checkpoint"));
+            let cold = fixture
+                .store
+                .load_current_generation()
+                .expect("cold-open controlled release CURRENT")
+                .expect("controlled release CURRENT exists");
+            let cold_server = TestServer::new(router(AppState::open(cold.engine)))
+                .expect("cold controlled release HTTP server");
+            assert_eq!(
+                capacity_term_ids(&cold_server, &capacity_value(1)).await,
+                vec![capacity_external_id(1)],
+                "cold reopen must contain the resumed record exactly once",
+            );
+            assert_eq!(fixture.wal.latest_seq().await.unwrap(), wal_before + 1);
+        }
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn released_capacity_before_wait_resumes_same_checkpoint_revision_once() {
+            if capacity_child_enters(CHILD_CASE) {
+                released_capacity_before_wait_body().await;
+            } else {
+                run_isolated_capacity_case(CHILD_CASE, TEST_NAME).await;
+            }
+        }
+    }
+
     async fn two_local_full_requests_wait_for_one_checkpoint_then_commit_once_body() {
         let (fixture, first_ordinal, mut release) = local_full_fixture().await;
         let second_ordinal = first_ordinal + 1;
