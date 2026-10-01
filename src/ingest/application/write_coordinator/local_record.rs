@@ -183,6 +183,9 @@ impl WriteCoordinator {
     ) -> Result<Option<LocalRecordReservation>> {
         let wake = self.engine.checkpoint_wake();
         loop {
+            // Observe before admission so a release during this attempt
+            // retries even when its checkpoint revision remains pending.
+            let observed = wake.epoch();
             let (result, revision) = self.try_admit_local_record_once(entry);
             match result {
                 Ok(reservation) => return Ok(reservation),
@@ -193,9 +196,8 @@ impl WriteCoordinator {
                     if tokio::time::Instant::now() >= admission_deadline {
                         return Err(self.finalize_prepublication_error(error));
                     }
-                    // Observe after this request's hint. If publication
-                    // already consumed the revision, retry without sleeping.
-                    let observed = wake.epoch();
+                    // If publication already consumed the revision, retry
+                    // without sleeping.
                     if self
                         .engine
                         .capacity_owner_state()

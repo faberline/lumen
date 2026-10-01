@@ -15,6 +15,191 @@ use crate::ingest::infrastructure::wal::mem_wal::MemWal;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
 
+#[tokio::test]
+async fn local_admission_observes_capacity_released_before_wait_at_same_revision() {
+    use std::sync::{mpsc, Mutex};
+    use std::time::Duration;
+
+    use storage_durable::{CommitStep, FailureInjector, FailurePoint};
+    use tracing::field::{Field, Visit};
+    use tracing::{Event, Subscriber};
+    use tracing_subscriber::layer::Context;
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::Layer;
+
+    use crate::ingest::application::write_coordinator::tests::admitted_index_entry;
+    use crate::ingest::domain::change_budget::Reservation;
+    use crate::persistence::application::ports::checkpoint_sink::CheckpointSink;
+    use crate::persistence::application::segment_checkpoint_sink::{
+        EngineWatermarkSink, SegmentCheckpointSink,
+    };
+    use crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCapture;
+    use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
+
+    struct HoldSync {
+        entered: Mutex<Option<mpsc::Sender<()>>>,
+        release: Mutex<mpsc::Receiver<()>>,
+    }
+
+    impl FailureInjector for HoldSync {
+        fn check(&self, point: &FailurePoint) -> std::io::Result<()> {
+            if point.step == CommitStep::SyncFile {
+                if let Some(entered) = self.entered.lock().unwrap().take() {
+                    entered.send(()).unwrap();
+                    self.release.lock().unwrap().recv().unwrap();
+                }
+            }
+            Ok(())
+        }
+    }
+
+    struct Release(Option<mpsc::Sender<()>>);
+
+    impl Drop for Release {
+        fn drop(&mut self) {
+            if let Some(sender) = self.0.take() {
+                let _ = sender.send(());
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct RefusalFields(serde_json::Map<String, serde_json::Value>);
+
+    impl Visit for RefusalFields {
+        fn record_u64(&mut self, field: &Field, value: u64) {
+            self.0.insert(field.name().into(), value.into());
+        }
+
+        fn record_bool(&mut self, field: &Field, value: bool) {
+            self.0.insert(field.name().into(), value.into());
+        }
+
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.0.insert(field.name().into(), value.into());
+        }
+
+        fn record_debug(&mut self, _: &Field, _: &dyn std::fmt::Debug) {}
+    }
+
+    struct ReleaseAtRefusal {
+        budget: ChangeBudget,
+        held: Mutex<Option<Reservation>>,
+        observed: Arc<Mutex<Option<(RefusalFields, usize)>>>,
+    }
+
+    impl<S: Subscriber> Layer<S> for ReleaseAtRefusal {
+        fn on_event(&self, event: &Event<'_>, _: Context<'_, S>) {
+            let mut fields = RefusalFields::default();
+            event.record(&mut fields);
+            if fields.0.get("event").and_then(serde_json::Value::as_str)
+                != Some("segment_capacity_admission_refusal")
+            {
+                return;
+            }
+            let held = self.held.lock().unwrap().take();
+            if held.is_some() {
+                // The real refusal has returned Full. Release synchronously
+                // before the admission loop can register its asynchronous wait.
+                drop(held);
+                *self.observed.lock().unwrap() = Some((fields, self.budget.snapshot().total));
+            }
+        }
+    }
+
+    const LIMIT: usize = 1024 * 1024;
+    let budget = ChangeBudget::with_hard_limit(LIMIT);
+    let engine = Arc::new(Engine::with_change_budget(budget.clone()));
+    engine.create_collection("u", keyword_schema()).unwrap();
+    let wal = Arc::new(MemWal::new());
+    let coord = WriteCoordinator::start(wal.clone(), engine.clone());
+    let capture = DiagnosticCapture::new();
+    coord.set_diagnostic_capture(capture.token());
+
+    // Hold the real save after capture. Its owner remains registered and
+    // cannot publish or consume the checkpoint request during admission.
+    let dir = tempfile::tempdir().unwrap();
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let release = Release(Some(release_tx));
+    let sink = Arc::new(SegmentCheckpointSink {
+        engine: engine.clone(),
+        store: Arc::new(
+            SegmentRdbStore::new_with_failure_injector(
+                dir.path(),
+                Arc::new(HoldSync {
+                    entered: Mutex::new(Some(entered_tx)),
+                    release: Mutex::new(release_rx),
+                }),
+            )
+            .unwrap(),
+        ),
+        writer: Arc::new(EngineWatermarkSink::new(engine.clone())),
+        aof: None,
+    });
+    let checkpoint = tokio::spawn(async move { sink.checkpoint_now().await });
+    tokio::task::spawn_blocking(move || entered_rx.recv_timeout(Duration::from_secs(5)))
+        .await
+        .unwrap()
+        .expect("checkpoint must reach the real SyncFile hold");
+    let revision = engine.request_pending_checkpoint_revision().unwrap();
+    let filler = budget
+        .owner()
+        .try_reserve(LIMIT - budget.snapshot().total)
+        .unwrap();
+    let observed = Arc::new(Mutex::new(None));
+    let subscriber = tracing_subscriber::registry().with(ReleaseAtRefusal {
+        budget: budget.clone(),
+        held: Mutex::new(Some(filler)),
+        observed: observed.clone(),
+    });
+    let subscriber_guard = tracing::subscriber::set_default(subscriber);
+    let entry = admitted_index_entry();
+    let admitted = coord
+        .admit_local_record_with_relief(
+            &entry,
+            tokio::time::Instant::now() + Duration::from_millis(250),
+        )
+        .await;
+    drop(subscriber_guard);
+
+    let (refusal, pending_after_release) = observed.lock().unwrap().take().unwrap();
+    assert_eq!(refusal.0["capacity_request_revision"], revision);
+    assert_eq!(refusal.0["capacity_request_present"], true);
+    assert_eq!(refusal.0["hard_limit_bytes"], LIMIT);
+    let used = refusal.0["used_bytes"].as_u64().unwrap() as usize;
+    let requested = refusal.0["requested_bytes"].as_u64().unwrap() as usize;
+    assert!(used + requested > LIMIT, "the first attempt must be Full");
+    assert!(pending_after_release < used);
+    assert!(pending_after_release + requested <= LIMIT);
+    assert_eq!(
+        engine
+            .capacity_owner_state()
+            .unwrap()
+            .checkpoint_request_revision,
+        Some(revision),
+        "capacity release must leave the same checkpoint request pending"
+    );
+    assert_eq!(wal.latest_seq().await.unwrap(), 0);
+    assert_eq!(coord.applied_seq(), 0);
+    assert_eq!(engine.stats("u").unwrap().documents_indexed, 0);
+    assert!(budget.high_water_bytes() <= LIMIT);
+
+    // Join the held checkpoint before checking the admission outcome. This
+    // also keeps the failing regression's cleanup bounded and complete.
+    drop(release);
+    assert!(tokio::time::timeout(Duration::from_secs(5), checkpoint)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap());
+    assert!(
+        admitted.is_ok(),
+        "capacity released before waiting must admit at the same pending revision: {:?}",
+        admitted.err()
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn capacity_relief_stages_applied_sources_pinned_by_a_slow_subscriber() {
     check_slow_subscriber_capacity_relief(true).await;
