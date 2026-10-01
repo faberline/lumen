@@ -63,7 +63,7 @@ index-text = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
 # Lumen-owned HA: writes replicated through the shared raft-core engine (behind
 # the `raft-wal` feature). Peer RPCs ride the same h2c transport.
 raft-core = { git = "https://github.com/faberline/core", tag = "v0.4.13", optional = true }
-# Non-optional (#1002): `src/config.rs`/`src/raft.rs` delegate the StatefulSet
+# Non-optional (#1002): `src/app/config.rs`/`src/replication/domain/cluster_state.rs` delegate the StatefulSet
 # shard/replica/voter math + peer-DNS/`LUMEN_PEERS` override parsing to
 # `raft_runtime::cluster` unconditionally (those modules compile with no
 # feature), so the actual raft engine and lumen's serving-side topology
@@ -101,7 +101,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde_path_to_error = "0.1"
 rustc-hash = "2.1"
-# Types only — `ServerConfig` / `ClientConfig` appear in `tls.rs`'s signatures.
+# Types only — `ServerConfig` / `ClientConfig` appear in
+# `access/infrastructure/tls.rs`'s signatures.
 # Every builder, PEM loader, and client verifier lives in `libs/peer-tls`
 # (#2890 R6), which is why there is no `rustls-pemfile` here to parse anything
 # locally.
@@ -247,6 +248,9 @@ harness = false
 [[test]]
 name = "body_limit_configurable"
 required-features = ["operator"]
+
+[lints.clippy]
+mod_module_files = "deny"
 
 [profile.release]
 opt-level = 3

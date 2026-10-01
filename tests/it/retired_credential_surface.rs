@@ -84,13 +84,13 @@ struct Inventory {
 // Symbol markers use their retired_symbols() indexes. The source therefore
 // contains no literal retired symbol and cannot match itself.
 const EXPECTED_ROWS: &str = r#"
-P|src/bin/lumen.rs|5|// shared module (`select_token`, `cr_@5@`, `secret_data_bytes`)
-P|src/operator/fleet.rs|4|json!({ "@4@": "lumen-tokens" }),
-P|src/operator/fleet.rs|6|json!({ "@6@": ["https://lumen.example.com"] }),
-P|src/operator/mod.rs|4,6|for retired in ["@6@", "identities", "@4@"] {
-P|src/operator/mod.rs|4,8|assert!(!yaml.contains("@8@"), "{yaml}");
-P|src/spec.rs|4|The CRD configures **no** credential source. `spec.@4@`,
-P|src/spec.rs|6|`spec.identities` and `spec.@6@` are gone (#2872): a Lumen CR
+P|src/app/spec/llm_auth.rs|4|The CRD configures **no** credential source. `spec.@4@`,
+P|src/app/spec/llm_auth.rs|6|`spec.identities` and `spec.@6@` are gone (#2872): a Lumen CR
+P|src/bin/lumen/query/tests.rs|5|// shared module (`select_token`, `cr_@5@`, `secret_data_bytes`)
+P|src/operator/domain/lumen_fleet/tests.rs|4|json!({ "@4@": "lumen-tokens" }),
+P|src/operator/domain/lumen_fleet/tests.rs|6|json!({ "@6@": ["https://lumen.example.com"] }),
+P|src/operator/infrastructure/crd_manifest/tests.rs|4,6|for retired in ["@6@", "identities", "@4@"] {
+P|src/operator/infrastructure/crd_manifest/tests.rs|4,8|assert!(!yaml.contains("@8@"), "{yaml}");
 E|tests/it/cli_convention.rs|4|"@4@",
 E|tests/it/cli_convention.rs|4,8|"@8@",
 E|tests/it/cli_convention.rs|6|"@6@",

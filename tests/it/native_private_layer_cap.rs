@@ -30,13 +30,13 @@
 //!   checkpoint and cold open. `:215-292` and `:922-937` isolate each real
 //!   fixture so a retained worker cannot alter the other case. These assertions
 //!   exercise direct native delivery
-//!   at `src/coordinator/committed_scalar.rs:16-86`, private scalar
-//!   attachment at `src/storage/committed_index_apply.rs:436-505`,
-//!   and checkpoint publication at `src/segment_checkpoint.rs:220-268`.
+//!   at `src/ingest/application/write_coordinator/committed_scalar.rs`, private scalar
+//!   attachment at `src/index/application/apply/committed_index_apply/`,
+//!   and checkpoint publication at `src/persistence/application/segment_checkpoint_sink/`.
 //! - Security: this cap coordination adds no caller-controlled parser, path,
 //!   identity, or authorization decision in
-//!   `src/coordinator/committed_scalar.rs:16-86` or
-//!   `src/segment_checkpoint.rs:128-190`. The existing typed WAL
+//!   `src/ingest/application/write_coordinator/committed_scalar.rs` or
+//!   `src/persistence/application/segment_checkpoint_sink/`. The existing typed WAL
 //!   input boundary remains fail-closed in
 //!   `tests/it/raft_oversized_committed_apply.rs:453-484`. The existing
 //!   process-written checkpoint/AOF recovery boundary remains fail-closed in

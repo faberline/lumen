@@ -3,7 +3,7 @@
   "waivers": [
     {
       "rule": "RS201",
-      "reason": "Reviewed unsafe blocks only: read-only mmap of the columnar segment tier (segment.rs, // SAFETY-documented, crc/bounds-checked), rustls mTLS wiring (tls.rs), and Rust-2024 std::env::set_var/remove_var inside #[cfg(test)] helpers (auth.rs/config.rs/raft.rs) guarded by a process-wide lock. No undocumented unsafe in lumen."
+      "reason": "Reviewed unsafe blocks only: read-only mmap of the columnar segment tier (persistence/infrastructure/segment/segment_reader.rs, // SAFETY-documented, crc/bounds-checked), rustls mTLS wiring (access/infrastructure/tls.rs), and Rust-2024 std::env::set_var/remove_var inside #[cfg(test)] helpers (access/application/auth_config/tests.rs, config.rs, raft.rs) guarded by a process-wide lock. No undocumented unsafe in lumen."
     },
     {
       "rule": "K8003",

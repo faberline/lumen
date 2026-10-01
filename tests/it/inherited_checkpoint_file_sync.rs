@@ -33,7 +33,7 @@
 //!   `:832-914` drives four public deltas through one background merge, then
 //!   requires the unchanged field hard link, live exact search, and cold
 //!   recovery. It covers `libs/storage-durable/src/generation.rs:375-405,
-//!   663-709` and `src/segment_background_merge.rs:711-779`.
+//!   663-709` and `src/persistence/application/background_merge/`.
 //! - Security: the only boundary this change reaches is the process-written
 //!   staged generation and its `CURRENT` pointer at
 //!   `libs/storage-durable/src/generation.rs:375-405,773-813`. The fresh-file

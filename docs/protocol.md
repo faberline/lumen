@@ -18,7 +18,7 @@ keep current behavior separate from the Search v2 target.
 | QUERY and POST twins, read-consistency header, and routed response behavior | This protocol guide and current OpenAPI | Run `lumen spec`, then use `lumen llm --topic local-search` or `select-query`. |
 | Current and target schema, write, durability, rebuild, and activation meaning | [Indexing guide](indexing.md) | Read the current and Search v2 subsections separately. |
 | Source ownership, current query navigation, and target query, result, facet, metric, and limit meaning | [Querying guide](querying.md) | Run `lumen llm --topic querying --format json`. |
-| Source-database adapter boundary | [Architecture](../ARCHITECTURE.md#source-data-flow) | Run `lumen llm --topic integrate-source-db`. |
+| Source-database adapter boundary | [Architecture](architecture.md#source-data-flow) | Run `lumen llm --topic integrate-source-db`. |
 | Current wire contract to Search v2 activation | [Search v2 migration](migration-search-v2.md) | Follow the compatibility table before changing a caller. |
 | Generated source, target languages, connection inputs, and language-specific limits | [Generated-client guide](../clients/README.md) | Run `lumen spec gen --lang <language> --out <dir>` for `ts`, `py`, or `rust`. |
 | Connection profiles, request resilience, workload projection, and source helpers | [Client integration guide](client-integration.md) | Separate current manual work from the planned generated-client behavior. |

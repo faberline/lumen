@@ -1,7 +1,7 @@
 //! Ownership boundary: lumen delegates trace initialization and peer transport
 //! to the shared service libraries, and keeps no local duplicate of either.
 //!
-//! Asserted against the text of `src/bin/lumen.rs`, which this file embeds.
+//! Asserted against the text of `src/bin/lumen/`, which this file embeds.
 //! That is deliberate. A duplicate tracer is not a behavioural failure — both
 //! pipelines emit spans and every runtime assertion stays green — so the only
 //! observation point that can see it is the wiring itself.
@@ -23,11 +23,60 @@
 //! - `lumen-claim-long-running-shared-foundations` — Lumen delegates tracing, peer
 //!   transport, and completed shared stateful roots to the reusable service libraries.
 // HANDWRITE-BEGIN gap="missing-generator:unit-test:c90bbb42" tracker="#1646" reason="Lock Lumen's ownership boundary: shared OTLP tracing and shared reloadable peer transport, with no local duplicate tracer. generator gap: missing-generator:lumen-foundation-ownership-test (#1646)."
-const LUMEN_BIN: &str = include_str!("../../src/bin/lumen.rs");
+/// The `lumen` binary: every file under `src/bin/lumen/`.
+const LUMEN_BIN: &str = concat!(
+    include_str!("../../src/bin/lumen/backup.rs"),
+    include_str!("../../src/bin/lumen/cli.rs"),
+    include_str!("../../src/bin/lumen/cli/client.rs"),
+    include_str!("../../src/bin/lumen/cli/k8s.rs"),
+    include_str!("../../src/bin/lumen/cli/serve.rs"),
+    include_str!("../../src/bin/lumen/cli/spec.rs"),
+    include_str!("../../src/bin/lumen/cli/standalone.rs"),
+    include_str!("../../src/bin/lumen/connect.rs"),
+    include_str!("../../src/bin/lumen/connect/proxy.rs"),
+    include_str!("../../src/bin/lumen/dockerfile.rs"),
+    include_str!("../../src/bin/lumen/issue.rs"),
+    include_str!("../../src/bin/lumen/k8s.rs"),
+    include_str!("../../src/bin/lumen/k8s/access.rs"),
+    include_str!("../../src/bin/lumen/k8s/fleet.rs"),
+    include_str!("../../src/bin/lumen/k8s/fleet/tests.rs"),
+    include_str!("../../src/bin/lumen/k8s/render.rs"),
+    include_str!("../../src/bin/lumen/main.rs"),
+    include_str!("../../src/bin/lumen/query.rs"),
+    include_str!("../../src/bin/lumen/query/tests.rs"),
+    include_str!("../../src/bin/lumen/serve.rs"),
+    include_str!("../../src/bin/lumen/serve/bootstrap.rs"),
+    include_str!("../../src/bin/lumen/serve/bootstrap/tests.rs"),
+    include_str!("../../src/bin/lumen/serve/raft.rs"),
+    include_str!("../../src/bin/lumen/serve/raft/tests.rs"),
+    include_str!("../../src/bin/lumen/serve/restore.rs"),
+    include_str!("../../src/bin/lumen/serve/restore/tests.rs"),
+    include_str!("../../src/bin/lumen/serve/telemetry.rs"),
+    include_str!("../../src/bin/lumen/shutdown.rs"),
+    include_str!("../../src/bin/lumen/spec.rs"),
+    include_str!("../../src/bin/lumen/standalone.rs"),
+    include_str!("../../src/bin/lumen/standalone/gke.rs"),
+    include_str!("../../src/bin/lumen/standalone/gke/manifest.rs"),
+    include_str!("../../src/bin/lumen/standalone/gke/validate.rs"),
+);
 const LUMEN_MANIFEST: &str = include_str!("../../Cargo.toml");
-const LUMEN_AUTH: &str = include_str!("../../src/auth.rs");
-const LUMEN_API: &str = include_str!("../../src/api.rs");
-const LUMEN_OPERATOR: &str = include_str!("../../src/operator/render.rs");
+const LUMEN_AUTH: &str = concat!(
+    include_str!("../../src/access/domain/identity.rs"),
+    include_str!("../../src/access/application/authorization.rs"),
+    include_str!("../../src/access/application/auth_config.rs"),
+    include_str!("../../src/access/application/control_plane_token.rs"),
+    include_str!("../../src/access/infrastructure/lumen_verifier.rs"),
+    include_str!("../../src/access/interfaces/http.rs"),
+);
+const LUMEN_API: &str = include_str!("../../src/app/http/router.rs");
+const LUMEN_OPERATOR: &str = concat!(
+    include_str!("../../src/operator/application/render.rs"),
+    include_str!("../../src/operator/application/render/identity.rs"),
+    include_str!("../../src/operator/application/render/backup.rs"),
+    include_str!("../../src/operator/application/render/serving_statefulset.rs"),
+    include_str!("../../src/operator/application/render/serving_config.rs"),
+    include_str!("../../src/operator/application/render/monitoring.rs"),
+);
 const LUMEN_RIG_ADAPTER: &str = include_str!("rig_stateful_adapter.rs");
 
 #[test]

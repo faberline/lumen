@@ -19,13 +19,13 @@
 //!   and :591-626 require all rows, a strict AOF suffix after the checkpoint,
 //!   the later update and delete, a final checkpoint, and cold reopen. These
 //!   assertions
-//!   cover src/aof.rs:248-377 and
-//!   src/segment_rdb.rs:489-506,939-960.
+//!   cover src/persistence/infrastructure/aof/ and
+//!   src/persistence/infrastructure/segment_rdb_store/.
 //! - Security: aof_oversized_committed_apply.rs:445-448,469-503 feeds a CRC-valid,
 //!   complete AOF frame whose fast LWAL payload is truncated. It requires the
 //!   replay to refuse the frame, leave its indexed value absent, and save only
 //!   the prior watermark. It covers persisted bytes at
-//!   src/aof.rs:266-325.
+//!   src/persistence/infrastructure/aof/.
 //! - Performance: docs/indexing.md:264-272 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   aof_oversized_committed_apply.rs:415-422, called at :529-534, :545-550,

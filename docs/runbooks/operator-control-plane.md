@@ -112,7 +112,7 @@ rather than historical.
 
 | Event `note` contains | Cause | Action |
 |---|---|---|
-| `is forbidden` / `cannot create` | Missing RBAC for a kind the operator renders | Reconcile `k8s/operator/rbac.yaml` against the kinds in `src/operator/render.rs`; a newly rendered kind needs a new grant |
+| `is forbidden` / `cannot create` | Missing RBAC for a kind the operator renders | Reconcile `k8s/operator/rbac.yaml` against the kinds in `src/operator/application/render/`; a newly rendered kind needs a new grant |
 | `no matches for kind "ServiceMonitor"` / `"PrometheusRule"` | `spec.observability: true` on a cluster with no prometheus-operator CRDs | Install the CRDs, or set `spec.observability: false` on the CR |
 | `the object has been modified` | Optimistic-concurrency conflict | Self-clearing; if it persists, something else is writing the same object — look for a second operator or a GitOps controller fighting over it |
 | `connection refused` / `context deadline exceeded` | Apiserver unreachable or throttling | Check apiserver health and the operator's client-side rate limits |

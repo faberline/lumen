@@ -18,7 +18,7 @@
 //!   publication, while `CURRENT`, both AOF frames, and cold replay remain
 //!   correct at :581-627. The healthy retry removes only covered frames and
 //!   retains the later one at :634-669. These assertions cover
-//!   `src/segment_checkpoint.rs:174-189` and
+//!   `src/persistence/application/segment_checkpoint_sink/` and
 //!   `libs/storage-durable/src/framed_log.rs:234-276`.
 //! - Security: the compact-temp pathname is a process-read filesystem boundary.
 //!   The directory obstacle is an input that trim must refuse without deleting
@@ -39,7 +39,7 @@
 //! # Root negative controls
 //!
 //! 1. Move the existing AOF trim block in
-//!    `src/segment_checkpoint.rs` before `save_with_sequence`.
+//!    `src/persistence/application/segment_checkpoint_sink/` before `save_with_sequence`.
 //!    The exact-byte AOF assertion at :472-475 must fail after the injected
 //!    pre-publication `SyncFile` error.
 //! 2. In `libs/storage-durable/src/framed_log.rs`, make compact-temp open

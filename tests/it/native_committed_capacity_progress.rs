@@ -27,15 +27,15 @@
 //!   a caller checkpoint. `:624-714` requires the retained source's exact AOF
 //!   wire, one applied watermark, an independent maintenance checkpoint, both
 //!   live rows, and final cold state. These assertions cover
-//!   `src/coordinator.rs:449-488`,
-//!   `src/coordinator.rs:554-710`, and
-//!   `src/segment_capacity.rs:410-443`.
-//! - Security: the changed wait at `src/coordinator.rs:461-488`
+//!   `src/ingest/application/write_coordinator/`,
+//!   `src/ingest/application/write_coordinator/`, and
+//!   `src/persistence/application/capacity/`.
+//! - Security: the changed wait at `src/ingest/application/write_coordinator/`
 //!   receives a typed `WalDelivery::Deferred` from
-//!   `src/wal.rs:1060-1092`; it does not accept a new raw byte,
+//!   `src/ingest/infrastructure/wal/`; it does not accept a new raw byte,
 //!   path, or authorization input. A future fallback uses the existing
 //!   temporary-spill filesystem boundary in
-//!   `src/segment_checkpoint.rs:345-386`. That collision boundary
+//!   `src/persistence/application/segment_checkpoint_sink/`. That collision boundary
 //!   remains covered by
 //!   `tests/it/aof_standalone_replay_capacity_progress.rs:573-580` and
 //!   `:749-755`, which pre-creates a predictable path and requires its
@@ -51,7 +51,7 @@
 //! # Root negative control
 //!
 //! Remove the native generic capacity-owner ensure before the Full wait in
-//! `src/coordinator.rs:461-488`. The behavior assertion at
+//! `src/ingest/application/write_coordinator/`. The behavior assertion at
 //! `:574-577` must fail after its cleanup checkpoint proves that the valid
 //! committed source stayed retained until caller-driven capacity release.
 //! Restore changed production bytes by SHA-256 before another gate.

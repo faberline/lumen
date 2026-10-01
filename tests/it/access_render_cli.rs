@@ -18,7 +18,7 @@
 //! is the GKE proof recorded on the issue. It needs an API server; these need
 //! only the binary.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::Value;
@@ -252,31 +252,54 @@ fn the_instance_admin_grant_is_the_admin_resource_at_one_verb() {
 /// look like a misconfigured cluster. Pin the fact, not the consequence.
 #[test]
 fn every_admin_endpoint_still_checks_the_admin_role() {
-    let api = std::fs::read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src")
-            .join("api.rs"),
-    )
-    .expect("read src/api.rs");
+    // The HTTP handlers live under each context's `interfaces/http`.
+    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut handlers = Vec::new();
+    for context in std::fs::read_dir(&src).expect("read src").flatten() {
+        collect_rs(
+            &context.path().join("interfaces").join("http"),
+            &mut handlers,
+        );
+    }
+    handlers.sort();
     let call = "ensure_admin(";
     let mut sites = 0;
-    let mut from = 0;
-    while let Some(offset) = api[from..].find(call) {
-        let start = from + offset + call.len();
-        assert!(
-            api[start..].starts_with("Role::Admin)"),
-            "src/api.rs checks the admin surface at a role other than `Role::Admin`; \
-             `--instance-admin` renders only the verb `Role::Admin` maps to, so that \
-             endpoint would be denied:\n{}",
-            &api[start..start + 40.min(api.len() - start)]
-        );
-        sites += 1;
-        from = start;
+    for path in &handlers {
+        let api = std::fs::read_to_string(path).expect("read a handler file");
+        let mut from = 0;
+        while let Some(offset) = api[from..].find(call) {
+            let start = from + offset + call.len();
+            assert!(
+                api[start..].starts_with("Role::Admin)"),
+                "{} checks the admin surface at a role other than `Role::Admin`; \
+                 `--instance-admin` renders only the verb `Role::Admin` maps to, so that \
+                 endpoint would be denied:\n{}",
+                path.display(),
+                &api[start..start + 40.min(api.len() - start)]
+            );
+            sites += 1;
+            from = start;
+        }
     }
     assert!(
         sites >= 8,
         "expected the admin surface to have several endpoints, found {sites}"
     );
+}
+
+/// Every `.rs` file under `dir`, recursively; none when `dir` does not exist.
+fn collect_rs(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rs(&path, out);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            out.push(path);
+        }
+    }
 }
 
 /// AC4: the two bindings carry different subject kinds, and neither carries

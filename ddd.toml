@@ -1,0 +1,1382 @@
+# Lumen's bounded contexts and layers, checked by the workspace's
+# rust-arch contract (scripts/meta/rust_arch_contract.py). The [policy] table
+# is copied verbatim from the canonical policy.toml; everything after it is
+# Lumen's own. See docs/architecture.md for what each context owns.
+schema = 1
+
+# Report only while the DDD split (P1) is in progress.
+[migration]
+enforce = false
+
+[policy]
+version = 1
+size_warn = 400
+size_error = 1000
+root_md = [
+  "README.md",
+  "CONTRIBUTING.md",
+  "LICENSE.md",
+  "CHANGELOG.md",
+  "SECURITY.md",
+  "CODE_OF_CONDUCT.md",
+  "CLAUDE.md",
+  "AGENTS.md",
+  # Temporary: the current project docs contract requires these at the root.
+  "STATUS.md",
+  "ROADMAP.md",
+]
+docs_required = [
+  "docs/README.md",
+  "docs/architecture.md",
+  "docs/glossary.md",
+  "docs/domain/",
+  "docs/adr/",
+  "docs/operations/",
+]
+layers = ["domain", "application", "infrastructure", "interfaces"]
+# The layer held to the [policy.domain] purity rules and kept free of other contexts.
+domain_layer = "domain"
+# Layers another context may use. A context without any of them exposes its whole public API.
+public_layers = ["application"]
+# <ctx>/domain/events(.rs|/) is the only domain module other contexts may use.
+domain_events = "events"
+# A tests/<name>.rs binary may stand alone only when it is the crate's single test
+# target, contains one of these markers, or its leading //! block carries
+# `//! isolation: <reason>`. Everything else lives in tests/it/.
+test_isolation_markers = ["set_var(", "remove_var(", "#[global_allocator]"]
+# tests/<dir>/ names holding .rs data (fixtures, trybuild cases), not test targets.
+test_data_dirs = ["fixtures", "compile_fail", "ui"]
+# false: one crate may hold several contexts (B3/B4 still guard each boundary).
+# true: B1 requires every crate to belong to exactly one context.
+one_context_per_crate = false
+
+# Layers each layer may use inside one context. The shared kernel is usable by
+# every layer; assembly code (lib.rs, main.rs, src/bin) is unrestricted. A
+# multi-file binary is src/bin/<name>/main.rs plus sibling modules: B6 keeps
+# the entry file thin and does not apply to those modules.
+[policy.layer_deps]
+domain = []
+application = ["domain"]
+infrastructure = ["domain"]
+interfaces = ["application"]
+
+[policy.domain]
+# Applies to every domain layer, and to the shared kernel when shared_kernel_pure.
+allowed_crates = [
+  "std",
+  "core",
+  "alloc",
+  "thiserror",
+  "serde",
+  "serde_json",
+  "chrono",
+  "time",
+  "uuid",
+  "sha2",
+  "hex",
+  "regex",
+  "bytes",
+]
+denied_paths = [
+  "std::fs",
+  "std::net",
+  "std::process",
+  "std::env",
+  "std::os",
+  "std::io::stdin",
+  "std::io::stdout",
+  "std::io::stderr",
+  "std::thread::spawn",
+  "std::thread::sleep",
+  "std::time::SystemTime::now",
+  "std::time::Instant::now",
+  "chrono::Utc::now",
+  "chrono::Local::now",
+  "chrono::offset::Utc::now",
+  "chrono::offset::Local::now",
+  "time::OffsetDateTime::now_utc",
+  "time::OffsetDateTime::now_local",
+  "time::Instant::now",
+  "uuid::Uuid::now_v7",
+  "uuid::Uuid::new_v4",
+]
+denied_macros = ["println", "print", "eprintln", "eprint", "dbg"]
+shared_kernel_pure = true
+
+[policy.naming]
+crates_dir = "crates"
+domain_crate = "{repo}-{context}-domain"
+context_crate = "{repo}-{context}"
+shared_kernel_crate = "{repo}-shared-kernel"
+
+# Module layout (no mod.rs) is enforced by clippy, not by this checker.
+[policy.lints.clippy]
+mod_module_files = "deny"
+
+# The vocabulary every context shares: the public API's wire types, the
+# committed-mutation log entry, and the apply/capture barrier.
+[shared_kernel]
+path = "src/shared_kernel"
+
+# Code that may use every context. `app` is the composition root (D1);
+# `compat` keeps the module paths from before the split alive until outside
+# callers move to the new ones (D3).
+[assembly]
+modules = ["src/app", "src/compat"]
+
+[[contexts]]
+name = "access"
+depends_on = []
+[contexts.layers]
+domain = "src/access/domain"
+application = "src/access/application"
+infrastructure = "src/access/infrastructure"
+interfaces = "src/access/interfaces"
+
+[[contexts]]
+name = "operator"
+depends_on = ["access", "sharding"]
+[contexts.layers]
+domain = "src/operator/domain"
+application = "src/operator/application"
+infrastructure = "src/operator/infrastructure"
+
+[[contexts]]
+name = "sharding"
+depends_on = ["access", "index", "ingest"]
+[contexts.layers]
+domain = "src/sharding/domain"
+application = "src/sharding/application"
+infrastructure = "src/sharding/infrastructure"
+interfaces = "src/sharding/interfaces"
+
+[[contexts]]
+name = "replication"
+depends_on = ["index", "ingest", "persistence"]
+[contexts.layers]
+domain = "src/replication/domain"
+application = "src/replication/application"
+
+[[contexts]]
+name = "ingest"
+depends_on = ["access"]
+[contexts.layers]
+domain = "src/ingest/domain"
+application = "src/ingest/application"
+infrastructure = "src/ingest/infrastructure"
+interfaces = "src/ingest/interfaces"
+
+[[contexts]]
+name = "persistence"
+depends_on = ["access", "index", "ingest"]
+[contexts.layers]
+domain = "src/persistence/domain"
+application = "src/persistence/application"
+infrastructure = "src/persistence/infrastructure"
+interfaces = "src/persistence/interfaces"
+
+[[contexts]]
+name = "index"
+depends_on = ["access"]
+[contexts.layers]
+domain = "src/index/domain"
+application = "src/index/application"
+infrastructure = "src/index/infrastructure"
+interfaces = "src/index/interfaces"
+
+# Layer-direction breaks the P1 split moves as-is (D2); P2 replaces each with a
+# port the owning layer defines.
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/access/infrastructure/lumen_verifier.rs"]
+subject = "infrastructure->application"
+reason = "LumenVerifier implements service_auth::AsyncVerifier with Principal = AuthContext and is built from AuthConfig, both application types. P2: an application-side verifier port that the adapter implements."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/access/interfaces/http.rs"]
+subject = "interfaces->infrastructure"
+reason = "auth_middleware is service_auth::async_auth_middleware instantiated at LumenVerifier, so the middleware names the adapter type. P2: instantiate it at the application-side verifier port instead."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/sharding/interfaces/http/reshard.rs"]
+subject = "interfaces->domain"
+reason = "The reshard verbs take the sharding domain's wire formats as their bodies (a ReshardBatch, a ReshardPruneChunk), cut /admin/backup:scoped's subset with snapshot_bucket_subset, and build the VirtualBucketShardMap /admin/reshard:evict hands the engine, as they did in api.rs. P2: a sharding application service owns the apply, prune, scoped export and evict use cases over the domain, and the verbs call it."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/operator/infrastructure/kube_hpa_control.rs",
+  "src/operator/infrastructure/kube_auth_delegator_control.rs",
+  "src/operator/infrastructure/kube_cluster_control.rs",
+]
+subject = "infrastructure->application"
+reason = "Each Kube*Control adapter implements a control trait the application layer defines next to its only caller (HpaControl, AuthDelegatorControl, ClusterControl); kube_cluster_control also reuses reconcile's Prometheus text parser. P2: the traits move to the operator domain and the parser to the adapter."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/operator/application/fleet_reconcile.rs",
+  "src/operator/application/reconcile/loops.rs",
+  "src/operator/application/reconcile/managed_service.rs",
+  "src/operator/application/reshard_driver/driver_loop.rs",
+]
+subject = "application->infrastructure"
+reason = "The leader-gated loops build their own Lease election and Kube*Control adapters, and ManagedService::apply builds KubeAuthDelegatorControl from the client it is handed. P2: the composition root builds the adapters and passes them in."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/operator/application/render/identity.rs"]
+subject = "access.domain"
+reason = "control_plane_token() mounts the projected token at access's AUDIENCE, the value the verifier checks. P2: access exposes the control-plane token's audience through its application layer, next to CONTROL_PLANE_TOKEN_MOUNT."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/operator/application/reshard_driver/catch_up_fenced.rs",
+  "src/operator/application/reshard_driver/checkpoint.rs",
+  "src/operator/application/reshard_driver/fence.rs",
+  "src/operator/application/reshard_driver/migration.rs",
+  "src/operator/application/reshard_driver/oversize.rs",
+  "src/operator/application/reshard_driver/phases.rs",
+  "src/operator/application/reshard_driver/transfer.rs",
+  "src/operator/application/reshard_driver/trigger.rs",
+]
+subject = "sharding.domain"
+reason = "The reshard driver plans and sizes each split with sharding's domain primitives: VirtualBucketShardMap, bucket_moves, snapshot_reshard_batches, snapshot_reshard_prune_chunks, ReshardBatch, ReshardPruneChunk and ADMIN_ROUTE_BODY_LIMIT_BYTES. P2: sharding's application layer exposes the split-planning API the driver calls."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/operator/domain/lumen_spec/topology.rs"]
+subject = "sharding.domain"
+reason = "The CRD's shardMap.virtualBucketCount default is sharding's DEFAULT_VIRTUAL_BUCKET_COUNT, so the operator never renders a map the data plane reads differently. P2: the constant moves to the shared kernel."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/sharding/infrastructure/routed_router/scatter.rs"]
+subject = "infrastructure->application"
+reason = "scatter_search merges the local and forwarded pages with search_fanout's merge_shard_search_responses and search_request_offset, the merge EngineShardSearch uses in-process, so both rank a scattered search the same way. P2: the merge moves to the sharding domain and both callers use it there."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/sharding/infrastructure/routed_router/backend.rs"]
+subject = "infrastructure->application"
+reason = "RoutedRouter implements RoutedBackend, the port the HTTP handlers consult before the local backends. The port lives in sharding's application layer because every method takes the inbound HeaderMap and drop_collection returns index's DropOutcome, neither of which the domain may name. P2: the port moves to the sharding domain once the forwarded request context is a domain value and the drop outcome is ingest's (see the ingest write-port exception below)."
+
+# The Lumen and LumenFleet custom resources are the operator's domain model,
+# and their Rust types are also the CRD schema (E1). P2 splits the schema into
+# DTOs with a mapper; until then the domain names the crates the schema needs.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/operator/domain/lumen_spec.rs",
+  "src/operator/domain/lumen_fleet.rs",
+]
+subject = "kube"
+reason = "E1: #[derive(CustomResource)] on Lumen and LumenFleet. P2: CRD DTOs outside the domain."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/operator/domain/lumen_spec.rs",
+  "src/operator/domain/lumen_spec/serving.rs",
+  "src/operator/domain/lumen_spec/status.rs",
+  "src/operator/domain/lumen_spec/topology.rs",
+  "src/operator/domain/lumen_fleet.rs",
+]
+subject = "schemars"
+reason = "E1: #[derive(JsonSchema)] on the CRD spec and status types, plus LumenFleet's hand-written preserve-unknown-fields schema. P2: CRD DTOs outside the domain."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/operator/domain/lumen_spec/serving.rs"]
+subject = "service_backup"
+reason = "E1: ServingBackupSpec flattens the shared ScheduledBackupPolicy into the CRD, so spec.serving.backup's schema is the shared one. P2: the DTO keeps the flatten and the domain gets its own policy type."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/operator/domain/lumen_spec/status.rs"]
+subject = "service_k8s"
+reason = "E1: LumenStatus.conditions is the shared metav1.Condition type every service's status projects to. P2: the DTO keeps the shared type and the domain gets its own condition facts."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/operator/domain/lumen_fleet/plan.rs"]
+subject = "serde_path_to_error"
+reason = "plan() deserializes the merged per-namespace spec through serde_path_to_error so a rejection names the offending field. P2: the deserialization moves with the CRD DTOs."
+
+# The sharding domain moved as-is (D2): its map constructors and reshard
+# primitives report errors through anyhow, and the routing hash is CRC-32.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/sharding/domain/bucket_move.rs",
+  "src/sharding/domain/merge_delta.rs",
+  "src/sharding/domain/prune_chunk.rs",
+  "src/sharding/domain/reshard_batch.rs",
+  "src/sharding/domain/snapshot_subset.rs",
+  "src/sharding/domain/virtual_bucket_shard_map.rs",
+]
+subject = "anyhow"
+reason = "The map constructors and the reshard primitives return anyhow::Result, which app::http, index::application::engine and operator::application::reshard_driver propagate with ?. P2: a sharding domain error type (thiserror) that the callers convert."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/sharding/domain/virtual_bucket_shard_map.rs"]
+subject = "crc32fast"
+reason = "route_hash is CRC-32 over the collection id and the routing key. Every stored document's bucket depends on it, so the algorithm is part of the routing contract and cannot change. P2: decide whether the domain may use crc32fast (pure, no I/O) or takes the hash from the shared kernel."
+
+# The replication domain moved as-is (D2): it wraps raft_runtime's canonical
+# cluster shapes for OpenAPI, and its constructors report errors through anyhow.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/replication/domain/cluster_state_view.rs",
+  "src/replication/domain/peer_addr.rs",
+  "src/replication/domain/raft_role.rs",
+]
+subject = "utoipa"
+reason = "E1: #[derive(ToSchema)] on ClusterStateView, PeerAddr and RaftRole, the /debug/cluster response that clients/openapi.json publishes. These wrappers exist so raft_runtime's shared types need not derive ToSchema. P2: OpenAPI DTOs outside the domain."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/replication/domain/cluster_state.rs",
+  "src/replication/domain/cluster_state_view.rs",
+  "src/replication/domain/peer_addr.rs",
+  "src/replication/domain/raft_role.rs",
+]
+subject = "raft_runtime"
+reason = "ReadConsistency is raft_runtime's, re-exported; RaftRole, PeerAddr and ClusterStateView convert from raft_runtime's canonical shapes; RaftGroup::from_config takes peer ordinals and the LUMEN_PEERS override from raft_runtime::cluster, so the peers it lists match the ones the raft-wal wiring dials. P2: the conversions and the LUMEN_PEERS read move to an infrastructure adapter, and the domain decides whether raft_runtime's pure cluster types count as a shared kernel."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/replication/domain/cluster_state.rs",
+  "src/replication/domain/peer_addr.rs",
+]
+subject = "anyhow"
+reason = "ClusterState::new and RaftGroup::from_config return anyhow::Result, which the bin's --wal raft setup wraps with .context() and propagates. P2: a replication domain error type (thiserror) that the callers convert."
+
+# The shared kernel moved as-is (D2): the wire types carry their OpenAPI schema
+# and report a malformed vector field through anyhow, and the capture barrier
+# times how long it is held.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/shared_kernel/types/api_error.rs",
+  "src/shared_kernel/types/document.rs",
+  "src/shared_kernel/types/query.rs",
+  "src/shared_kernel/types/schema.rs",
+  "src/shared_kernel/types/search.rs",
+  "src/shared_kernel/types/stats.rs",
+]
+subject = "utoipa"
+reason = "E1: #[derive(ToSchema)] on the public HTTP API's request and response types, which clients/openapi.json publishes. The engine uses the same types as its domain vocabulary. P2: OpenAPI DTOs outside the kernel, with mappers; their serde is also the RDB, AOF and WAL CBOR format, so the wire bytes must stay identical."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/shared_kernel/types/schema.rs"]
+subject = "anyhow"
+reason = "FieldSpec::vector_spec returns anyhow::Result, which storage.rs and segment_rdb.rs propagate with ?. P2: a kernel error type (thiserror) that the callers convert."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/shared_kernel/capture_barrier.rs"]
+subject = "std::time::Instant::now"
+reason = "E4: CaptureBarrier times how long each apply record and each capture holds it (HoldTiming); only its own tests read the timing today. P2: a Clock port, as for the index context's clock reads."
+
+# The ingest domain moved as-is (D2): the change budget wakes its async waiters
+# through tokio and bounds its blocking wait with the clock.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/ingest/domain/change_budget.rs",
+  "src/ingest/domain/change_budget/budget.rs",
+  "src/ingest/domain/change_budget/budget_wake.rs",
+]
+subject = "tokio"
+reason = "BudgetWake keeps a tokio::sync::Notify beside its Condvar, so the async checkpoint driver and async admissions wait for a budget change without holding a blocking thread; wait_for_change_async bounds that wait with tokio::time::timeout. P2: a wake port the domain signals, with the Condvar and the Notify behind it in infrastructure."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/ingest/domain/change_budget/budget_wake.rs"]
+subject = "std::time::Instant::now"
+reason = "E4: wait_for_change_timeout turns its timeout into a deadline and re-reads the clock after each spurious Condvar wake. P2: a Clock port, or the wait moves to infrastructure with the wake port."
+
+# WalLog, the log seam writes publish through, moved to the ingest domain as-is
+# (D2); its signature still names the runtime types it was written against.
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/ingest/domain/wal_log.rs"]
+subject = "anyhow"
+reason = "WalLog's methods return anyhow::Result, the error type MemWal, the raft write sink and the apply loop already share. P2: a WAL error type in the domain that the backends map into, or the error type moves with the port."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/ingest/domain/wal_log.rs"]
+subject = "async_trait"
+reason = "WalLog is an async trait held as Arc<dyn WalLog> (SharedWal), so its methods are boxed with #[async_trait] to stay object-safe. P2: decided with where WalLog lives (see the domain->infrastructure exception below)."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/ingest/domain/wal_log.rs"]
+subject = "futures"
+reason = "WalStream and WalAdmissionStream are boxed futures::Stream subscriptions, and subscribe_admitted's default maps the resident stream with StreamExt. P2: the stream types move with WalLog (see the domain->infrastructure exception below)."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/ingest/domain/wal_log.rs"]
+subject = "domain->infrastructure"
+reason = "Only WalLog's signature references the delivery types: WalAdmissionStream yields WalDelivery and stage_source returns WalSourceRelease. They stay in infrastructure beside MemWal because WalSourceRecord holds MemWal's private slot and WalDelivery hands out mmap payloads. P2 chooses between a delivery handle trait the domain defines and infrastructure implements, or moving WalLog to ingest/application/ports."
+
+# Durable staging stays in ingest/infrastructure; three of its types still
+# appear in domain signatures.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/ingest/domain/change_admission.rs",
+  "src/ingest/domain/change_admission/tests.rs",
+  "src/ingest/domain/change_budget.rs",
+  "src/ingest/domain/change_budget/reservation.rs",
+]
+subject = "domain->infrastructure"
+reason = "SourceIdentity is carried by RamCharge and Reservation::commit_ram, and change_admission's staging bridge stages into a StageStore and holds the DurableStage it returns. SourceIdentity and SourceKind stay in infrastructure beside the marker encoding because SourceIdentity::new and SourceKind::decode return io::Result and the marker reads their private fields. P2: change that error type, move SourceIdentity and SourceKind into the ingest domain, and have the staging bridge depend on a stage-store port the domain defines."
+
+# The write coordinator moved to ingest/application as-is; it still holds and
+# parses WAL types that stay in infrastructure.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/ingest/application/write_coordinator.rs",
+  "src/ingest/application/write_coordinator/committed_scalar.rs",
+]
+subject = "application->infrastructure"
+reason = "PendingApply and MappedApply hold the WalDelivery the log handed the apply loop, and the committed scalar path parses the pinned payload with FastIndexScanner before it applies. Both stay in ingest/infrastructure/wal beside MemWal (see the wal_log exception above). P2: the delivery handle trait decided there, and scanning behind a port the application layer defines."
+
+# Replication's raft state machine admits and frames records with ingest's own
+# domain and WAL code. Now that ingest has an application layer, those uses
+# cross into layers other contexts may not use.
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/replication/application/engine_sm.rs",
+  "src/replication/application/engine_sm/state_machine.rs",
+  "src/replication/application/engine_sm/write_sink.rs",
+]
+subject = "ingest.domain"
+reason = "EngineSm admits each raft command against the change budget (it matches AdmissionError::Full and sizes against HARD_LIMIT), maps a refusal before publication to PendingChangeCapacity, and RaftWriteSink wraps each entry in a WalRecord before it proposes it. P2: ingest's application layer exposes the admission and record API both write paths call."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/replication/application/engine_sm.rs",
+  "src/replication/application/engine_sm/state_machine.rs",
+]
+subject = "ingest.infrastructure"
+reason = "EngineSm bounds a raft command's decode workspace with wire_cost::scan_workspace_bytes and applies a retained oversized fast-Index command through FastIndexScanner, the same bound and scanner the WAL path uses. P2: ingest's application layer exposes both."
+
+# The save gate is compiled twice: once as the checkpoint store's child and
+# once under the capacity worker, which must take the same gate type.
+
+[[exceptions]]
+rule = "B1"
+paths = [
+  "src/persistence/application/capacity.rs",
+  "src/persistence/infrastructure/segment_rdb_store.rs",
+]
+subject = "#[path]"
+reason = "segment_rdb_store.rs's mod save_gate and capacity.rs's mod publication_gate both read src/persistence/infrastructure/segment_save_gate.rs with #[path], so SaveGate and SavePermit are defined in both places (D7, E14). P2: the two become one module both sides share, and both #[path] lines go."
+
+# The background merge moved to persistence/application as-is. It still
+# extends SegmentRdbStore and drives the store's staging helpers, and the
+# store, in turn, holds the merge scheduler and asks it for merges.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/application/background_merge.rs",
+  "src/persistence/application/background_merge/link.rs",
+  "src/persistence/application/background_merge/publish.rs",
+]
+subject = "application->infrastructure"
+reason = "The merge requests are methods on SegmentRdbStore, a Job carries the store, and merge_one stages, validates and publishes a generation with the store's manifest, layout and compaction helpers. request_merge enqueues on the worker queue in merge_worker. P2: the application layer defines a generation-store port the store implements, and the worker queue sits behind it."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/infrastructure/merge_worker.rs",
+  "src/persistence/infrastructure/segment_rdb_store.rs",
+  "src/persistence/infrastructure/segment_rdb_store/diagnostic.rs",
+  "src/persistence/infrastructure/segment_rdb_store/save.rs",
+  "src/persistence/infrastructure/segment_rdb_store/save_attempt.rs",
+]
+subject = "infrastructure->application"
+reason = "SegmentRdbStore holds its root's RootWork scheduler, a save waits on it for capacity (CapacityWait) and asks needs_merge before it requests a merge, and the merge worker runs merge_one on each Job it dequeues. The statics stay in infrastructure (E17). P2: the scheduler state becomes the port's implementation detail and the worker calls the application through that port."
+
+# The capacity worker and the durable restore moved to persistence/application
+# as-is. Both hold a SegmentRdbStore, and the store and the AOF replay, in
+# turn, hold the worker's publication fence, frozen window and fallback.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/application/capacity.rs",
+  "src/persistence/application/restore.rs",
+]
+subject = "application->infrastructure"
+reason = "A capacity Fallback keeps the SegmentRdbStore its checkpoint sink writes to (the configured store, or a temporary spill store) alive for the owner's lifetime, and append_limit reserves against composed_segment's MAX_INCREMENTAL_LAYERS. SegmentRestoreSink saves the restored engine into its SegmentRdbStore, reloads the current generation and prunes old ones. P2: the application layer defines a generation-store port the store implements (see the background merge exception above)."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/infrastructure/aof/replay.rs",
+  "src/persistence/infrastructure/segment_rdb_store.rs",
+  "src/persistence/infrastructure/segment_rdb_store/open.rs",
+]
+subject = "infrastructure->application"
+reason = "The store publishes CURRENT only through the capacity worker's PublicationFence, which with_publication_fence installs, and a pending frozen checkpoint holds a FrozenWindow so capacity keeps a catalog slot for its delta. AOF replay ensures a capacity Fallback before any admission can wait, so a replay blocked on change-budget capacity has a worker to checkpoint and merge. P2: the fence and window move to persistence's domain, and replay takes a capacity-owner port the application layer implements."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/application/capacity/worker.rs"]
+subject = "ingest.domain"
+reason = "The budget relay sleeps on the change budget's BudgetWake and turns each capacity wait it observes into checkpoint or merge work on the owner's endpoint. P2: ingest's application layer exposes the budget wake, as it will the budget snapshot the checkpoint diagnostic reads."
+
+# The segment checkpoint sink moved to persistence/application as-is, and its
+# periodic schedule to persistence/domain. The sink and its driver still hold
+# the store, the checkpoint diagnostic and the process state infrastructure
+# keeps, and both the sink and the schedule read ingest's change budget.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/persistence/application/segment_checkpoint_sink.rs",
+  "src/persistence/application/segment_checkpoint_sink/driver.rs",
+  "src/persistence/application/segment_checkpoint_sink/hnsw_cache.rs",
+  "src/persistence/application/segment_checkpoint_sink/pending_spill.rs",
+]
+subject = "application->infrastructure"
+reason = "SegmentCheckpointSink checkpoints into, prunes and writes the HNSW graph caches of the SegmentRdbStore it holds, and a manual or periodic attempt numbers its CheckpointDiagnosticContext from NEXT_CHECKPOINT_ATTEMPT_ID (the driver's tests pass a DiagnosticCaptureToken). The HNSW cache seal records and checks its marker in HNSW_CACHE_SEALS, and PendingChangeSpill opens a SegmentRdbStore over a SpillDirectory it keeps alive. The statics stay in infrastructure (E17). P2: the generation-store port the background merge exception names, with the diagnostic context and the process state behind it."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/persistence/application/segment_checkpoint_sink/driver.rs",
+  "src/persistence/application/segment_checkpoint_sink/pending_spill.rs",
+]
+subject = "ingest.domain"
+reason = "The periodic driver's waiter sleeps on the change budget's BudgetWake, its task samples the budget's Snapshot and passes the owner's OwnerCapacityState to the schedule, and PendingChangeSpill starts its driver on ChangeBudget::process_shared(). P2: ingest's application layer exposes the budget, its wake and its snapshot, as the capacity worker exception above needs."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/persistence/domain/checkpoint_schedule.rs"]
+subject = "tokio"
+reason = "The schedule's clock is tokio::time::Instant, so the driver sleeps until next_deadline with tokio::time::sleep_until. P2: the schedule takes std::time::Instant and the driver converts at the sleep."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/domain/checkpoint_schedule.rs"]
+subject = "ingest.domain"
+reason = "The schedule selects and re-arms from the change budget's Snapshot and OwnerCapacityState and compares them against CHECKPOINT_TRIGGER. P2: the schedule takes its own value with the counters it reads and the trigger, which the driver fills from the budget."
+
+# ingest and persistence depend on each other (E16). depends_on declares
+# persistence -> ingest; the coordinator's use of the checkpoint diagnostic, of
+# the AOF writer and of the capacity fallback is the other direction.
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/ingest/application/write_coordinator/capacity.rs"]
+subject = "persistence.infrastructure"
+reason = "The coordinator's capacity refusal records a numeric event in the checkpoint diagnostic trace (checkpoint_diagnostic_enabled, send_numeric_event, DiagnosticCaptureToken) so one trace shows both sides of a capacity wait. P2: ingest defines a capacity-trace port the persistence diagnostic implements, which breaks the cycle."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/ingest/application/write_coordinator.rs"]
+subject = "persistence.infrastructure"
+reason = "SharedAof is the coordinator's handle on the AofWriter: the apply loop appends each applied record to it, the AOF sync task fsyncs it, and the checkpoint snapshotter truncates the prefix a checkpoint covers. P2: ingest defines a durable-log port (append, sync, truncate_through) the AOF writer implements, which breaks the cycle."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/ingest/application/write_coordinator.rs",
+  "src/ingest/application/write_coordinator/capacity.rs",
+  "src/ingest/application/write_coordinator/committed_scalar.rs",
+]
+subject = "persistence.application"
+reason = "The coordinator keeps a capacity Fallback in layer_capacity_owner and ensures it before the apply loop or the committed scalar path waits on layer capacity, so a coordinator without a configured checkpoint owner still has a worker to checkpoint and merge. P2: ingest defines a capacity-owner port the persistence capacity worker implements, which breaks the cycle."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/infrastructure/segment_rdb_store/diagnostic.rs"]
+subject = "ingest.domain"
+reason = "The checkpoint diagnostic trace records the change budget's Snapshot when the scheduler selects a checkpoint. P2: ingest's application layer exposes the budget snapshot, or the trace takes the few counters it prints."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/persistence/infrastructure/aof/aof_writer.rs",
+  "src/persistence/infrastructure/aof/frame.rs",
+  "src/persistence/infrastructure/aof/replay.rs",
+]
+subject = "ingest.domain"
+reason = "An AOF frame's payload is an encoded WalRecord, and replay admits each frame against the change budget (it compares against HARD_LIMIT and matches AdmissionError::Full) before it decodes the record. P2: ingest's application layer exposes the record codec and the admission API the AOF, like EngineSm, calls."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/infrastructure/aof/replay.rs"]
+subject = "ingest.infrastructure"
+reason = "Replay bounds a frame's decode workspace with wire_cost::scan_workspace_bound and decoded_peak_bound and applies a large fast-Index frame through FastIndexScanner, the same bounds and scanner the WAL path uses. P2: ingest's application layer exposes both."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/replication/application/engine_sm.rs",
+  "src/replication/application/engine_sm/state_machine.rs",
+]
+subject = "persistence.infrastructure"
+reason = "EngineSm holds the SegmentRdbStore it checkpoints into, builds and restores Raft snapshots through the store's raft_capture and raft_archive (write_archive, the LSEGRAFT MAGIC sniff), and hands a SegmentRaftPreparation between the two phases. Without a segment store it writes the Raft snapshot as an encoded RdbSnapshot, and it decodes a legacy RdbSnapshot on restore. P2: persistence's application layer exposes snapshot capture and restore."
+
+# The RDB repository trait moved to persistence/domain (E8); the snapshot it
+# saves and loads stays in infrastructure beside LocalFsRdbStore.
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/persistence/domain/rdb_store.rs"]
+subject = "anyhow"
+reason = "RdbStore's methods return anyhow::Result, the error type LocalFsRdbStore and its callers in the lumen binary already use. P2: the error type is decided with EngineSnapshotRepository (see the domain->infrastructure exception below)."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/persistence/domain/rdb_store.rs"]
+subject = "async_trait"
+reason = "RdbStore's save, load_latest and prune are async and declared with #[async_trait], so an object-store adapter can sit behind the trait as a boxed object. P2: decided with EngineSnapshotRepository (see the domain->infrastructure exception below)."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/persistence/domain/rdb_store.rs"]
+subject = "domain->infrastructure"
+reason = "Only RdbStore's signature references RdbSnapshot, which stays in infrastructure beside LocalFsRdbStore because it wraps the storage SnapshotV1 and owns the on-disk encode and decode. P2: RdbStore, SegmentRdbStore and the AOF become one EngineSnapshotRepository in the domain, with a snapshot type the domain owns (E8)."
+
+# The analyzers moved to index/domain/analysis as-is. tokenize is still the thin
+# adapter over index_text, and ingest's change-record cost still prices a text
+# value with index's n-gram bounds and stream (E16: index and ingest depend on
+# each other).
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/analysis/tokenize.rs"]
+subject = "index_text"
+reason = "tokenize maps the schema Analyzer onto index_text's and delegates to it: index_text is the core crate that owns the whitespace, Jieba and n-gram tokenizers and the default n-gram bounds. P2: a tokenizer port in the index domain that an index_text adapter in index/infrastructure implements."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/ingest/domain/change_record_cost/ngram_distinct_table.rs",
+  "src/ingest/domain/change_record_cost/text_representation.rs",
+]
+subject = "index.domain"
+reason = "The change-record cost prices a text value by the terms its analyzer will emit: it bounds with tokenize's DEFAULT_NGRAM_MIN and DEFAULT_NGRAM_MAX, and counts a default-ngram value's distinct terms by streaming it through ngram_stream. P2: the default n-gram bounds and stream move to the shared kernel, which both ingest's pricing and index's analysis read."
+
+# The vector backends moved to index/domain/vector as-is. They still return
+# anyhow, drive hnsw_rs, rayon and roaring directly, read the clock and an env
+# var, log, keep their graph cache in index/infrastructure, and hold persistence's
+# segment reader and writer for their checkpoint layers.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/vector.rs",
+  "src/index/domain/vector/flat_cpu_index.rs",
+  "src/index/domain/vector/flat_cpu_index/backend.rs",
+  "src/index/domain/vector/hnsw_cpu_index.rs",
+  "src/index/domain/vector/hnsw_cpu_index/backend.rs",
+  "src/index/domain/vector/vector_store.rs",
+]
+subject = "anyhow"
+reason = "VectorIndex's methods, the backends' constructors and VectorStore::put return anyhow::Result, which storage.rs, the checkpoint sink and graph_cache propagate with ?. P2: an index domain error type (thiserror) that the callers convert."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/vector/hnsw_cpu_index.rs"]
+subject = "hnsw_rs"
+reason = "HnswBackend holds one hnsw_rs::Hnsw per metric, the graph HnswCpuIndex searches, and graph_cache dumps and reloads that same graph. P2: an ANN graph port in the index domain (insert, search) that an hnsw_rs adapter in index/infrastructure implements."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/vector/flat_cpu_index.rs",
+  "src/index/domain/vector/flat_cpu_index/backend.rs",
+]
+subject = "roaring"
+reason = "FlatVecs keeps the checkpoint rows that are absent, removed or replaced in a RoaringBitmap (tomb), built when a base or compacted base is installed. P2 decides whether roaring joins the domain's crates, since the storage postings that move in 8c are RoaringBitmaps too, or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/vector/flat_cpu_index/backend.rs"]
+subject = "rayon"
+reason = "The flat backend's search_knn_filtered scores its rows in parallel with rayon's par_iter. P2: the parallel scan runs on an executor port the index domain defines and infrastructure implements, or rayon is allowed as a pure compute crate."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/vector/hnsw_cpu_index.rs"]
+subject = "std::env"
+reason = "hnsw_search_ef reads LUMEN_HNSW_EF for the default search beam width. P2: the value comes from config through the app composition root (D1) and the backend takes it at construction."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/vector/hnsw_cpu_index.rs",
+  "src/index/domain/vector/hnsw_cpu_index/backend.rs",
+]
+subject = "std::time::Instant::now"
+reason = "E4: the HNSW backend times its graph-cache restore and rebuild (HnswRestoreTiming), a sealed segment's graph rebuild, and each add and remove's write-lock wait and hold, which the committed apply publishes. P2: a Clock port, as for the index context's other clock reads."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/vector/hnsw_cpu_index.rs"]
+subject = "tracing"
+reason = "E3: restore_with_graph_cache_timed logs whether the optional graph cache loaded or was ignored, and open_from_segment logs the start and end of a graph rebuild so an operator can tell recovery from a hung node. P2: the backend returns these as events the caller logs, or takes an observer."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/domain/vector/hnsw_cpu_index.rs",
+  "src/index/domain/vector/hnsw_cpu_index/backend.rs",
+]
+subject = "domain->infrastructure"
+reason = "HnswBackend::Cached holds graph_cache's OwnedGraph, restore_with_graph_cache_timed loads through graph_cache's load_timed and records its LoadTiming, and save_graph_cache calls graph_cache::save. The cache is file IO (manifest, payload hashes, the hnsw_rs dump), so it stays in infrastructure. P2: a graph-cache port in the index domain (load, save and an opaque cached graph) that graph_cache implements, handed to the backend at construction."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/domain/vector.rs",
+  "src/index/domain/vector/flat_cpu_index.rs",
+  "src/index/domain/vector/flat_cpu_index/backend.rs",
+  "src/index/domain/vector/hnsw_cpu_index.rs",
+  "src/index/domain/vector/hnsw_cpu_index/backend.rs",
+]
+subject = "persistence.infrastructure"
+reason = "VectorIndex's checkpoint methods take and return Arc<SegmentReader>, the mmap reader of a sealed vector segment: the flat backend serves rows from its base and delta readers, both backends seal with write_vector_segment and reopen with SegmentReader::open, and HnswCpuIndex::open_from_segment rebuilds from one. P2: a vector-segment port in the index domain (row reads and a sealed writer) that the persistence segment implements."
+
+# The storage building blocks moved to index/domain as-is: the fast hash maps,
+# StorageError, SortableF64 and its range helpers, the Interner, the posting
+# lists and TokProbe. They still use rustc_hash, anyhow and roaring directly,
+# and persistence's text segment writer and sharding's fan-out still reach into
+# them (E16: persistence and index depend on each other).
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/fast_hash.rs",
+  "src/index/domain/interner.rs",
+]
+subject = "rustc_hash"
+reason = "FastHashMap and FastHashSet alias rustc_hash's FxHashMap and FxHashSet, the maps every field index keys by token or value, and the Interner buckets external ids by an FxHasher hash. P2 decides whether rustc_hash joins the domain's crates as a pure hashing crate, or the aliases wrap std's HashMap with a hasher type the domain defines."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/sortable_f64.rs"]
+subject = "anyhow"
+reason = "SortableF64::new rejects NaN with anyhow's bail!, and its callers in storage.rs and the committed scalar files propagate that with ? or map it to an InvalidNumber error. P2: a thiserror variant in the index domain error type (with VectorIndex's, see the vector exception above) that the callers convert."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/tok_probe.rs"]
+subject = "roaring"
+reason = "TokProbe borrows the text index's tombstone RoaringBitmap and skips the tombstoned docids while it streams a token's postings. P2: decided with the flat backend's tomb (see the vector roaring exception above), either roaring joins the domain's crates or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/infrastructure/segment/text_writer.rs"]
+subject = "index.domain"
+reason = "write_text_segment takes the text index's live BTreeMap<String, Postings> and delta-encodes each token's docids and tfs into the posting block. P2: a text-segment writer port in the index domain that takes the token postings as plain docid and tf slices, implemented by the persistence segment, as the vector-segment port above."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/sharding/application/search_fanout.rs",
+  "src/sharding/infrastructure/routed_router/scatter.rs",
+]
+subject = "index.domain"
+reason = "The fan-out rejects a bad offset or cursor with StorageError::InvalidPagination, the error the local search returns for the same request, and the scatter treats a shard's StorageError::CollectionNotFound as a missing collection rather than a shard failure. P2: the pagination and not-found errors move to a shared kernel error that index's StorageError and sharding's fan-out both use."
+
+# The value field indexes moved to index/domain as-is: TextIndex, KeywordIndex,
+# NumberIndex and SetIndex, with their query, term, range and sorted-walk
+# splits. They still keep their postings and tombstones in roaring bitmaps,
+# return anyhow from the sorted-walk callbacks, and hold persistence's composed
+# segment reader as their sealed base (E16: persistence and index depend on
+# each other).
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/keyword_index.rs",
+  "src/index/domain/number_index.rs",
+  "src/index/domain/number_index/range.rs",
+  "src/index/domain/number_index/sorted.rs",
+  "src/index/domain/set_index.rs",
+  "src/index/domain/text_index.rs",
+]
+subject = "roaring"
+reason = "The keyword, number and set indexes keep each term's, value's and element's docids in a RoaringBitmap, the number index caches its keyword-range bitmaps, and every field index tracks the sealed base docs it has hidden in a tombstone RoaringBitmap, which TokProbe borrows. P2: decided with TokProbe's tombstones and the flat backend's tomb (see the roaring exceptions above), either roaring joins the domain's crates or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/keyword_index.rs",
+  "src/index/domain/number_index/sorted.rs",
+]
+subject = "anyhow"
+reason = "KeywordIndex::visit_sorted_posting_buckets and NumberIndex::sorted_walk_segment take a visitor that returns anyhow::Result and pass its error up with ?, and sorted_walk_segment and range_page_segment also pass up the errors of the composed reader's number-key cursor, which are anyhow too. P2: an index domain error type (with VectorIndex's and SortableF64's, see the anyhow exceptions above) that the visitors and the segment reader port return."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/domain/keyword_index.rs",
+  "src/index/domain/number_index.rs",
+  "src/index/domain/number_index/sorted.rs",
+  "src/index/domain/set_index.rs",
+  "src/index/domain/text_index.rs",
+  "src/index/domain/text_index/query.rs",
+  "src/index/domain/text_index/terms.rs",
+]
+subject = "persistence.infrastructure"
+reason = "Each field index holds its sealed base as an Arc<ComposedSegmentReader>, the composed reader over the field's segment chain, and reads terms, values, members and postings through it; text_index/query also decodes a token's posting with TextPostingAt and walks it with SortedIdCursor. P2: a sealed-segment reader port in the index domain (term, value and posting reads) that the persistence composed segment implements, as the vector-segment port above."
+
+# The per-field index enum moved to index/domain as-is, with the hash field
+# index, the per-doc field coverage and the text row's token set. FieldIndex's
+# snapshot, seal and reopen build and hide docs with roaring bitmaps, return
+# anyhow, and write and reopen the field's segment through persistence's
+# segment writers, SegmentReader and composed reader (E16: persistence and
+# index depend on each other).
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/field_index/open.rs",
+  "src/index/domain/field_index/seal.rs",
+  "src/index/domain/field_index/snapshot.rs",
+  "src/index/domain/hash_index.rs",
+]
+subject = "roaring"
+reason = "HashIndex tracks the sealed base docs it has hidden in a tombstone RoaringBitmap, like the other field indexes; FieldIndex's snapshot restore, seal and reopen gather the keyword terms and set elements into RoaringBitmaps and reset each index's tombstones. P2: decided with the value indexes' postings and tombstones (see the roaring exceptions above), either roaring joins the domain's crates or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/field_index.rs",
+  "src/index/domain/field_index/open.rs",
+  "src/index/domain/field_index/seal.rs",
+  "src/index/domain/field_index/snapshot.rs",
+  "src/index/domain/hash_index.rs",
+]
+subject = "anyhow"
+reason = "FieldIndex::from_spec and open_from_segment reject a vector field with no sub-spec with anyhow!, the snapshot conversion reports a torn text segment or staged dictionary the same way, the seal and reopen pass up the segment writers' and SegmentReader::open's anyhow errors, and parse_hash rejects a value that is not a 64-bit hex string. P2: an index domain error type (with VectorIndex's, SortableF64's and the sorted walks', see the anyhow exceptions above) that the segment ports return."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/token_set.rs"]
+subject = "smallvec"
+reason = "TokenSet keeps a text row's first eight distinct tokens inline in a SmallVec<[String; 8]> before it promotes them to a hash set, so a short row allocates no set. P2: either smallvec joins the domain's crates as a pure container crate, or TokenSet keeps the inline tokens in a fixed array of its own."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/domain/field_index/open.rs",
+  "src/index/domain/field_index/seal.rs",
+  "src/index/domain/hash_index.rs",
+]
+subject = "persistence.infrastructure"
+reason = "HashIndex holds its sealed base as an Arc<ComposedSegmentReader>, like the other field indexes. FieldIndex's seal writes each scalar field through the persistence segment's number, hash, keyword and set writers, and the seal and reopen open the written file with SegmentReader::open and wrap it in ComposedSegmentReader::from_base. P2: the sealed-segment reader port above, plus a scalar-segment writer port in the index domain that the persistence segment implements, as the vector-segment port."
+
+# The collection entity moved to index/domain as-is, with the schema and value
+# checks and the record RAM bound. Collection returns anyhow, reads the clock
+# for its request-id window and the recovery profile, creates its seal
+# directory, holds ingest's ChangeJournal and journals each write against the
+# change budget's RetainedCharge, and seals and reopens through persistence's
+# segment writers and readers (E16: persistence and index depend on each other).
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/collection.rs",
+  "src/index/domain/collection/checkpoint.rs",
+  "src/index/domain/collection/segments.rs",
+  "src/index/domain/collection/snapshot.rs",
+  "src/index/domain/schema_validation.rs",
+]
+subject = "anyhow"
+reason = "Collection::new, check_live (a StorageError::Gone converted with into), the dirty tracking and checkpoint_value, the snapshot conversion, and the seal and reopen return anyhow::Result, passing up FieldIndex's, the segment writers' and SegmentReader::open's anyhow errors; validate_schema bails on a bad field spec, and validate_value on a value its field cannot hold. The Engine propagates them with ?. P2: an index domain error type (with FieldIndex's, see the anyhow exceptions above) that the segment ports return and the Engine maps at the application boundary."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/collection.rs",
+  "src/index/domain/collection/segments.rs",
+]
+subject = "std::time::Instant::now"
+reason = "E4: check_request_id stamps each request id it admits and gc_requests expires them after IDEMPOTENCY_TTL, and the segment reopen times each vector field's open and each field's coverage rebuild for the RecoveryProfile. P2: a Clock port, as for the index context's other clock reads, with the request-id window taking its now from the caller."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/collection/segments.rs"]
+subject = "std::fs"
+reason = "seal_to_segments_with_layout creates the seal directory, and its fields subdirectory for the encoded layout, with std::fs::create_dir_all before it writes the segments. P2: the scalar-segment writer port below creates its own directory, and the seal and reopen move behind it to infrastructure."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/domain/collection.rs",
+  "src/index/domain/collection/checkpoint.rs",
+  "src/index/domain/collection/segments.rs",
+  "src/index/domain/collection/snapshot.rs",
+]
+subject = "ingest.domain"
+reason = "Collection holds a ChangeJournal<CheckpointValue> of the rows written since its last checkpoint, which new, from_snapshot and open_from_segments_with_vectors start empty, and mark_field_dirty_charged journals each row against the change budget's RetainedCharge. P2: the journal and its charge sit behind an ingest application port the Engine passes in, or move to shared_kernel if both contexts own them."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/index/domain/collection/segments.rs"]
+subject = "persistence.infrastructure"
+reason = "The seal writes the collection's external-id column and each vector field's row-id sidecar with eid_writer::write_eid_segment, and the reopen reads them back with SegmentReader::open and maps a field's loaded base rows with ComposedSegmentReader::from_mapped_base. P2: the sealed-segment reader port and the scalar-segment writer port above, with an external-id column in each."
+
+# Query evaluation moved to index/domain/query as-is: the general evaluator, the
+# leaf clauses, the BM25 match paths and their rank cache, the AND planner, the
+# sort planners and the page cursor. The clauses still evaluate to roaring
+# bitmaps and return anyhow, and the page cursor still encodes its token with
+# base64.
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/query/clause.rs",
+  "src/index/domain/query/eval.rs",
+  "src/index/domain/query/filter_page.rs",
+  "src/index/domain/query/knn.rs",
+  "src/index/domain/query/plan.rs",
+  "src/index/domain/query/predicate.rs",
+  "src/index/domain/query/prepared_match.rs",
+  "src/index/domain/query/range.rs",
+  "src/index/domain/query/range_conjunction.rs",
+  "src/index/domain/query/selectivity.rs",
+  "src/index/domain/query/sort.rs",
+  "src/index/domain/query/sort_missing.rs",
+  "src/index/domain/query/sort_plan.rs",
+  "src/index/domain/query/terms.rs",
+  "src/index/domain/query/text_match.rs",
+  "src/index/domain/query/topk.rs",
+]
+subject = "anyhow"
+reason = "The clause evaluators, planners and sort checks return anyhow::Result: they bail on a clause whose field type cannot answer it (a term or range on the wrong field type, a match off a text field, exists on a text, vector or hash field) and on a node the planner cannot check per doc, convert StorageError's unknown field and unsupported sort with into, and pass up the field indexes', VectorIndex's and SortableF64's anyhow errors with ?. P2: an index domain error type (with FieldIndex's and Collection's, see the anyhow exceptions above) with a variant per rejected clause."
+
+[[exceptions]]
+rule = "B2"
+paths = [
+  "src/index/domain/query.rs",
+  "src/index/domain/query/clause.rs",
+  "src/index/domain/query/eval.rs",
+  "src/index/domain/query/filter_page.rs",
+  "src/index/domain/query/knn.rs",
+  "src/index/domain/query/plan.rs",
+  "src/index/domain/query/prepared_match.rs",
+  "src/index/domain/query/range.rs",
+  "src/index/domain/query/range_conjunction.rs",
+  "src/index/domain/query/selectivity.rs",
+  "src/index/domain/query/sort_missing.rs",
+  "src/index/domain/query/sort_plan.rs",
+  "src/index/domain/query/terms.rs",
+  "src/index/domain/query/topk.rs",
+  "src/index/domain/query/zip_cursor.rs",
+]
+subject = "roaring"
+reason = "Each leaf clause evaluates to the field index's RoaringBitmap of matching docids, the AND planner intersects filters into a candidate RoaringBitmap, kNN filters its search by an allowed-docs bitmap, and the match paths skip the text index's tombstone RoaringBitmap. P2: decided with the value indexes' postings and tombstones (see the roaring exceptions above), either roaring joins the domain's crates or a row-set type in the domain wraps it."
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/query/page_cursor.rs"]
+subject = "base64"
+reason = "The page cursor is a JSON position (an offset, a sort keyset or a score keyset) encoded as an opaque base64 STANDARD_NO_PAD token, which parse_page_cursor decodes. P2: either base64 joins the domain's crates as a pure encoding crate, or the domain keeps the PageCursor position and the token codec moves to the search interface."
+
+# The Engine moved to index/application as-is, split by use case, with the
+# checkpoint capture, the frozen checkpoint, the live deltas and the recovery
+# profile, and EngineState moved to index/domain. The Engine still takes
+# ingest's change budget and journal, runs the checkpoint protocol on
+# persistence's segment files and applies sharding's reshard formats, and
+# ingest's write path still calls it directly.
+
+[[exceptions]]
+rule = "B2"
+paths = ["src/index/domain/engine_state.rs"]
+subject = "anyhow"
+reason = "EngineState::allocate_collection_generation reports an exhausted generation counter with anyhow!, which the Engine's create, truncate, checkpoint, reopen, restore and reshard paths propagate with ?. P2: a variant of the index domain error type (with Collection's, see the anyhow exceptions above)."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/domain/collection.rs",
+  "src/index/domain/collection/checkpoint.rs",
+]
+subject = "domain->application"
+reason = "Collection journals its dirty rows as a ChangeJournal<CheckpointValue>, and checkpoint_value reads a row back as one. CheckpointValue moved with the checkpoint capture, which freezes the journal, and a file-backed scalar row holds persistence's SegmentReader. P2: CheckpointValue moves to the index domain beside the Collection, its file-backed row read through the sealed-segment reader port (see the persistence.infrastructure exceptions above)."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/index/domain/collection/segments.rs"]
+subject = "domain->application"
+reason = "open_from_segments_with_vectors records each vector field's open and each field's coverage rebuild in the RecoveryProfile the Engine's reopen passes down. P2: the reopen reports those timings to a recovery observer the index domain defines and RecoveryProfile implements."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/checkpoint_capture.rs",
+  "src/index/application/engine/checkpoint_flush.rs",
+  "src/index/application/engine/cost.rs",
+  "src/index/application/engine/delete.rs",
+  "src/index/application/engine/index.rs",
+  "src/index/application/engine/raft_dispatch.rs",
+  "src/index/application/engine/replace.rs",
+  "src/index/application/engine/replace/one_doc.rs",
+]
+subject = "ingest.domain"
+reason = "The index, replace and delete paths and the Raft dispatch take the change budget's RetainedCharge for the record they apply, the checkpoint capture holds each collection's frozen journal as FrozenChanges and the flush shares captured values as SharedValue, and the cost context implements change_record_cost's CostContext and prices an entry with estimate_record_or_retain and estimate_record_exact_default_ngram. P2: with the Collection's journal (see the ingest.domain exception above), the budget, journal and pricing sit behind ingest application ports the Engine is given."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/index/application/engine.rs"]
+subject = "persistence.application"
+reason = "The Engine holds persistence's capacity Registry as layer_maintenance: the committed apply reads its append limit and maintenance owner before it adds an incremental scalar layer, and the capacity worker reads the owner back through the Engine. P2: a layer-maintenance port in the index application layer that the capacity registry implements and the composition root passes in."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/checkpoint_capture.rs",
+  "src/index/application/engine.rs",
+  "src/index/application/engine/checkpoint_delta.rs",
+  "src/index/application/engine/checkpoint_freeze.rs",
+  "src/index/application/frozen_checkpoint.rs",
+  "src/index/application/live_base.rs",
+  "src/index/application/live_delta.rs",
+]
+subject = "persistence.infrastructure"
+reason = "The checkpoint protocol runs on persistence's segment files: the capture pins delta and base SegmentReaders and the composed segment's scalar cut, publication and replacement, recovery attaches a delta SegmentReader, the frozen checkpoint writes the external-id and vector sidecars with eid_writer and vector_writer and reopens them with SegmentReader::open, the live base and deltas install ComposedSegmentReaders, and the Engine keeps the segment store's CheckpointRootGuards until its readers drop. P2: the sealed-segment reader and segment writer ports in the index domain (see the persistence.infrastructure exceptions above), and a checkpoint-root lease the segment store hands the Engine as an opaque guard."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/engine/reshard_apply.rs",
+  "src/index/application/engine/reshard_prune.rs",
+]
+subject = "sharding.domain"
+reason = "The reshard verbs apply sharding's wire formats: apply_reshard_batch merges a batch with merge_snapshot_delta under its ReshardBatchReplaceScope and checks the scope against a balanced VirtualBucketShardMap, evict_not_owned drops the documents a newer VirtualBucketShardMap assigns elsewhere, and the prune accumulates ReshardPruneChunks. P2: the reshard batch, replace scope, prune chunk and bucket map move to the shared kernel, which sharding and index both read."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/ingest/application/write_coordinator.rs",
+  "src/ingest/application/write_coordinator/apply_loop.rs",
+  "src/ingest/application/write_coordinator/local_record.rs",
+  "src/ingest/application/write_coordinator/submit.rs",
+  "src/ingest/infrastructure/wal/delivery.rs",
+  "src/ingest/infrastructure/wal_source_stage.rs",
+]
+subject = "index.application"
+reason = "The write coordinator holds the shard's Arc<Engine>: its apply loop reserves, admits and applies each committed record on it and hands each waiter the ApplyOutcome, and a local submit sizes its record with Engine::record_owned_bytes; WAL delivery sizes records the same way, and the source stage bounds a decode with Engine::record_decode_peak. The Engine uses ingest's change budget and journal (see the ingest.domain exceptions above), so ingest does not list index in depends_on. P2: ingest's application layer defines an apply port (size, admit and apply a committed record) that the Engine implements and the composition root passes in, which removes the cycle."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/ingest/application/ports/write_backend.rs"]
+subject = "index.application"
+reason = "WriteBackend::drop_collection returns index's DropOutcome, which the handler turns into its status, and LocalWriteBackend unwraps the ApplyOutcome the write sink hands back for each entry it submits (ApplyOutcome::Dropped carries the DropOutcome). P2: the apply port above defines the apply outcome, with the drop outcome, as ingest's own types, which the Engine returns."
+
+# The committed apply path moved to index/application/apply as-is: the
+# fast-Index and replacement planners, their apply adapters, the borrowed Text
+# apply and the record dispatch boundary. It reads a retained record in place
+# with ingest's WAL scanners, reserves and prices against ingest's change
+# budget, and stages scalar rows on persistence's composed segments.
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/apply/committed_index_apply.rs",
+  "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/apply/committed_index_plan.rs",
+  "src/index/application/apply/committed_index_plan/pass.rs",
+  "src/index/application/apply/committed_replace_apply.rs",
+  "src/index/application/apply/committed_replace_plan.rs",
+  "src/index/application/apply/committed_replace_plan/pass.rs",
+  "src/index/application/apply/committed_replace_plan/source_value.rs",
+  "src/index/application/apply/committed_replace_view.rs",
+  "src/index/application/apply/committed_text_apply.rs",
+]
+subject = "ingest.infrastructure"
+reason = "The committed apply reads a retained record's wire image without decoding it: the fast-Index planners, the field and Text apply and the replace view walk it with FastIndexScanner and borrow its FastIndexValues and FastStringLists, and a replacement is scanned with BorrowedReplaceScanner and staged in a BorrowedReplaceSpool, whose BorrowedReplaceSpoolDoc is the planner's ReplaceDocDescriptor. P2: ingest's application layer exposes the borrowed scanners and spool, as it does for EngineSm and replay (see the ingest.infrastructure exceptions above)."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/apply/committed_index_apply.rs",
+  "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/apply/committed_replace_apply.rs",
+  "src/index/application/apply/committed_text_apply.rs",
+  "src/index/application/apply/record_apply.rs",
+]
+subject = "ingest.domain"
+reason = "The field and replacement apply wait for record RAM when the change budget refuses with AdmissionError::Full, the field apply replaces a vector cell's charged journal row and holds the old change_journal::Row until the apply lease ends, the Text apply prices its record with RecordEstimate, and a direct record apply maps a capacity refusal before publication to PendingChangeCapacity. P2: with the Engine's (see the ingest.domain exceptions above), the budget, journal and pricing sit behind ingest application ports the Engine is given."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/apply/committed_index_apply.rs",
+  "src/index/application/apply/committed_index_apply/fields.rs",
+]
+subject = "persistence.infrastructure"
+reason = "The field apply stages a scalar field's winning rows as a private delta over its ComposedSegmentReader (with_private_delta, or from_private_empty_base when the field has no segment yet) and keeps the before and after readers in its FieldPlan until publication. P2: the sealed-segment reader port in the index domain (see the persistence.infrastructure exceptions above)."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/index/application/apply/committed_index_apply/fields.rs"]
+subject = "persistence.application"
+reason = "Before it adds an incremental scalar layer, the field apply compares the composed segment's layer count with layer_maintenance's append limit and names the capacity Work, Checkpoint or Merge, that the maintenance owner must finish first. P2: the layer-maintenance port the Engine is given (see the persistence.application exception above) takes the work kind as its own type."
+
+# Record admission and Text preparation moved to index/application as-is:
+# the Engine's record reservation, pricing, capacity and admitted-record
+# steps, the record charge journal, and the owned and borrowed Text staging
+# before the apply lease. They reserve, price and retain against ingest's
+# change budget, read a borrowed record with ingest's FastIndexScanner, and
+# ingest's pending-capacity error reads their RecordAdmissionError back.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/application/text_preparation.rs",
+  "src/index/application/text_preparation/staging.rs",
+]
+subject = "application->infrastructure"
+reason = "Text preparation stages each value with staged_text_row's StagedTextRow::stage_charged, growing its reservation by each StageAllocation (reader or workspace bytes) the stage asks for, keeps the StagedTextRows it prepared for the apply, and caps a long token's source bound at large_text_row's LARGE_TOKEN_SOURCE_BYTES. With the jieba feature, a Jieba Text value's preparation bound adds jieba_disk_route's ROUTE_CACHE_BYTES, the dictionary route cache the disk-backed segmenter keeps while it stages the value. P2: staging goes through the staged-row port (see the application->infrastructure exception below), and the tokenizer port in the index domain (see the index_text exception above) reports its route cache bytes, which jieba_disk_route implements."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/admission.rs",
+  "src/index/application/admission/admitted_record.rs",
+  "src/index/application/admission/capacity.rs",
+  "src/index/application/admission/engine_admission.rs",
+  "src/index/application/admission/pricing.rs",
+  "src/index/application/admission/record_charges.rs",
+  "src/index/application/admission/record_reservation.rs",
+  "src/index/application/text_preparation/staging.rs",
+]
+subject = "ingest.domain"
+reason = "Admission reserves each record against the change budget: EngineChanges holds the ChangeBudget and its Owner, a RecordReservation wraps a budget Reservation and reports AdmissionError, SourceRetention and HARD_LIMIT, the record charge journal keeps each applied record's RetainedCharge until a checkpoint freezes it with the budget's FrozenBatch, the capacity helpers expose the owner's capacity state and BudgetWake, pricing uses RecordEstimate and the default n-gram cost workspace, a context-dependent price reports NormalizeError, and Text staging prices with estimate_record_prepared_text. P2: with the Engine's (see the ingest.domain exceptions above), the budget, journal and pricing sit behind ingest application ports the Engine is given."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/application/text_preparation.rs",
+  "src/index/application/text_preparation/borrowed.rs",
+]
+subject = "ingest.infrastructure"
+reason = "Borrowed Text preparation walks a retained record in place with FastIndexScanner and stages each FastIndexValue's Text before the apply lease, and the metadata bounds the committed apply reserves are read from the same scanner. P2: ingest's application layer exposes the borrowed scanner, as it does for the committed apply (see the ingest.infrastructure exception above)."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/index/application/text_preparation/staging.rs"]
+subject = "persistence.infrastructure"
+reason = "Staging a Text row retries with a larger workspace when text_row_stage refuses with RequiredTextRowWorkspace, whose required_bytes the reservation grows to. P2: the segment writer port in the index domain (see the persistence.infrastructure exceptions above) reports the workspace a row needs as an error type the index domain defines."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/ingest/domain/change_admission.rs"]
+subject = "index.application"
+reason = "PendingChangeCapacity::from_record_prepublication maps the Engine's RecordAdmissionError, a Capacity or Overflow refusal before publication, to the pending-capacity error the write coordinator and EngineSm return. The Engine uses ingest's change budget (see the ingest.domain exceptions above), so ingest does not list index in depends_on. P2: the apply port ingest defines (see the index.application exception above) reports admission refusals with its own error type, which the Engine's adapter maps RecordAdmissionError onto."
+
+# The index's file-backed rows moved to index/infrastructure as-is: the Text
+# and Vector rows staged before apply, the scalar files prepared from a
+# committed record, and the checkpoint projections that write the journal's
+# rows as segments. The index domain and application hold the staged rows
+# and call the projections, the projections read the journal's
+# CheckpointValue, and every row is a persistence segment. field_deltas.rs
+# called the projections through storage.rs, which the checker did not see.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/application/apply.rs",
+  "src/index/application/apply/committed_index_apply.rs",
+  "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/checkpoint_capture.rs",
+]
+subject = "application->infrastructure"
+reason = "The committed apply works on rows it staged before the apply lease: apply_value takes a prepared StagedTextRow, the index plan keeps each planned Text cell's StagedTextRow and each vector's raw and canonical StagedVectorRow, and the field apply stages a vector with StagedVectorRow::stage, bounds its reader metadata, and prepares a scalar field's winning rows with committed_scalar_files::prepare_validated_fields. CheckpointValue's StagedText and StagedVector variants journal the staged rows until a checkpoint writes them. P2: a staged-row port in the index domain (a Text row's terms, postings and document length, a Vector row's aligned slice, and the scalar file's reader) that index/infrastructure implements, handed to the Engine at construction."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/domain/field_index/seal.rs",
+  "src/index/domain/text_index.rs",
+  "src/index/domain/text_index/terms.rs",
+]
+subject = "domain->infrastructure"
+reason = "TextIndex keeps each prepared row's StagedTextRow in staged_rows until the next checkpoint and folds their terms and postings into its reads, its term count falls back to text_projection::live_term_count when a staged row cannot list its terms, and the field seal writes a Text field's live postings with text_projection::write_live. P2: TextIndex holds its staged rows as the staged-row port (see the application->infrastructure exception above), and the seal and term count go through the text-segment writer port (see the index.domain exception on text_writer above)."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/infrastructure/checkpoint_projection/scalar_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection/rows.rs",
+  "src/index/infrastructure/committed_scalar_files.rs",
+]
+subject = "infrastructure->application"
+reason = "The checkpoint projections read each journal row as the checkpoint capture's CheckpointValue (an owned value, a StagedText or StagedVector row, or a file-backed scalar row), and committed_scalar_files refuses an unvalidated field with more items than the Engine's MAX_INDEX_ITEMS. P2: CheckpointValue moves to the index domain beside the Collection (see the domain->application exception above), and MAX_INDEX_ITEMS becomes an index domain limit the Engine and the scalar files share."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/infrastructure/checkpoint_projection/scalar_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/scalar_projection/merge.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection/rows.rs",
+  "src/index/infrastructure/committed_scalar_files.rs",
+  "src/index/infrastructure/committed_scalar_files/selected.rs",
+  "src/index/infrastructure/staging/large_text_row.rs",
+  "src/index/infrastructure/staging/large_text_row/one_row.rs",
+  "src/index/infrastructure/staging/staged_text_row.rs",
+]
+subject = "persistence.infrastructure"
+reason = "Every file-backed row is a persistence segment: the checkpoint projections and the committed scalar files lend their rows to the segment stream writers (the keyword, number, set and Text projections, with ScalarProjectionScratch) and read staged dictionaries and postings through SegmentReader, a staged Text row is a one-row segment text_row_stage writes (the long-token path through write_text_projection) and SegmentReader maps, and the scalar files open their private output with SegmentReader::open_owned_stage. P2: the segment writer and sealed-segment reader ports in the index domain (see the persistence.infrastructure exceptions above), which the persistence segment implements and index/infrastructure is handed."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/infrastructure/checkpoint_projection/scalar_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection.rs",
+  "src/index/infrastructure/checkpoint_projection/text_projection/rows.rs",
+]
+subject = "ingest.domain"
+reason = "write_checkpoint_rows takes the checkpoint's rows as the change journal's SharedValue<CheckpointValue>, the values the capture froze and the flush shares. P2: with the Collection's journal (see the ingest.domain exceptions above), the journal's value handle sits behind an ingest application port or moves to shared_kernel."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/index/infrastructure/committed_scalar_files.rs",
+  "src/index/infrastructure/committed_scalar_files/selected.rs",
+]
+subject = "ingest.infrastructure"
+reason = "The committed scalar files read a field's winning items in place from the retained record with FastIndexScanner and lend its FastIndexItems and FastIndexValues to the segment writer, so no field is decoded. P2: ingest's application layer exposes the borrowed scanner, as it does for the committed apply (see the ingest.infrastructure exceptions above)."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/persistence/infrastructure/segment_rdb_store/field_deltas.rs"]
+subject = "index.infrastructure"
+reason = "A Keyword, Number or Set field delta is written from the checkpoint rows with scalar_projection::write_checkpoint_rows and a Text delta with text_projection::write_checkpoint_rows, so a staged row is copied from its reader rather than rehydrated. Both were storage.rs re-exports (write_scalar_checkpoint_rows, write_text_checkpoint_rows) until this move. P2: the checkpoint sink writes a delta through a checkpoint-projection port the index domain defines, which index/infrastructure implements and the Engine hands the sink."
+
+# storage.rs's last production code moved to index/infrastructure as-is: the
+# checkpoint directory helpers (checkpoint_fs), the snapshot document's wire
+# types (snapshot_v1), and the background reclaimer for collections a truncate
+# detached, with its process-wide registry (collection_retirement, E17). The
+# Engine and the Collection write and read the checkpoint directory and the
+# snapshot document themselves, persistence stores both, and sharding and the
+# operator carry the snapshot document between shards. They named these
+# through storage.rs, which the checker did not see.
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/application/engine/checkpoint_flush.rs",
+  "src/index/application/engine/checkpoint_freeze.rs",
+  "src/index/application/engine/checkpoint_origins.rs",
+  "src/index/application/engine/reopen.rs",
+  "src/index/application/frozen_checkpoint.rs",
+]
+subject = "application->infrastructure"
+reason = "The checkpoint protocol lays out the checkpoint directory itself: the flush and the frozen checkpoint write each collection under its collection_dir_name, hard-link an unchanged collection's origin with hard_link_checkpoint_tree, and write the CheckpointSchema sidecar (CHECKPOINT_SCHEMA_FILE, with its CheckpointLayout) after checkpoint_write_boundary; the freeze and the origin binding record a collection's lineage and origin under the same directory name, and the reopen reads each sidecar back and decodes the collection's name with collection_name_from_dir. P2: a checkpoint-directory port in the index domain (the sidecar, the field layout and the collection directory names) that checkpoint_fs implements, handed to the Engine at construction."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/application/engine/reshard_apply.rs",
+  "src/index/application/engine/reshard_prune.rs",
+  "src/index/application/engine/restore.rs",
+]
+subject = "application->infrastructure"
+reason = "The Engine's snapshot, restore and reshard verbs speak the snapshot document: snapshot builds a SnapshotV1 stamped with SNAPSHOT_VERSION and restore refuses any version it does not know, apply_reshard_batch checks and merges a batch's SnapshotV1 delta, and the prune applies an empty one. P2: the snapshot document becomes a published language in shared_kernel (the versioned wire types index, persistence, sharding and the operator exchange), and snapshot_v1 keeps only its encoding."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/index/application/engine/delete.rs"]
+subject = "application->infrastructure"
+reason = "docs:truncate hands the detached Collection to the process-wide retirement worker (collection_retirement_worker, retire_collection_with), which reclaims it off the apply thread; truncate_docs_with_retirement takes the CollectionRetirementWorker so a test can pass an unavailable one. P2: a retirement port in the index application layer (retire a detached Collection) that collection_retirement implements and the composition root injects into the Engine."
+
+[[exceptions]]
+rule = "B3"
+paths = [
+  "src/index/domain/collection/snapshot.rs",
+  "src/index/domain/field_index/snapshot.rs",
+]
+subject = "domain->infrastructure"
+reason = "Collection::to_snapshot and from_snapshot map a collection to and from the snapshot document's CollectionSnapshot, and each FieldIndex to and from its FieldIndexSnapshot, writing the LegacyInvertedIndex placeholder a v1 reader expects. P2: the snapshot document moves to shared_kernel (see the application->infrastructure exception on reshard_apply above), or the mapping moves to snapshot_v1 over the domain's accessors."
+
+[[exceptions]]
+rule = "B3"
+paths = ["src/index/domain/collection/segments.rs"]
+subject = "domain->infrastructure"
+reason = "seal_to_segments_with_layout writes each field's segments under the CheckpointLayout's field stem (Legacy or Encoded), and open_from_segments_with_vectors reads them back with the layout the sidecar names. P2: the layout is a value of the checkpoint-directory port in the index domain (see the application->infrastructure exception on checkpoint_flush above)."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/sharding/domain/merge_delta.rs",
+  "src/sharding/domain/prune_chunk.rs",
+  "src/sharding/domain/reshard_batch.rs",
+  "src/sharding/domain/snapshot_subset.rs",
+  "src/sharding/interfaces/http/reshard.rs",
+]
+subject = "index.infrastructure"
+reason = "The reshard formats are cut from and merged into the snapshot document: snapshot_subset takes a bucket's documents out of a SnapshotV1's CollectionSnapshots and FieldIndexSnapshots, a ReshardBatch carries the subset, merge_snapshot_delta merges a delta's collections and field indexes into the base, a prune chunk is planned against a SnapshotV1, and /admin/backup:scoped answers with the subset as a SnapshotV1. P2: the snapshot document becomes a published language in shared_kernel (see the index application->infrastructure exception on reshard_apply above), which sharding reads without depending on index."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/sharding/infrastructure/routed_router.rs"]
+subject = "index.infrastructure"
+reason = "RoutedRouter runs its local search legs on BlockingSearchExecutor, the index's bounded bridge to blocking threads, so a routed pod's legs and its HTTP handlers draw on the one process-wide permit pool rather than each router adding its own. P2: the executor becomes an index application port (run a blocking search under the shared bound) that index/infrastructure implements and the composition root passes to both the app state and the router."
+
+[[exceptions]]
+rule = "B4"
+paths = ["src/operator/application/reshard_driver/transfer.rs"]
+subject = "index.infrastructure"
+reason = "The reshard driver fetches a source shard's scoped backup from /admin/backup:scoped and decodes the response as a SnapshotV1 before it cuts the batches. P2: the snapshot document in shared_kernel (see the sharding.domain exception above)."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/persistence/application/ports/restore_sink.rs",
+  "src/persistence/application/restore.rs",
+  "src/persistence/infrastructure/rdb.rs",
+  "src/persistence/interfaces/http/backup.rs",
+]
+subject = "index.infrastructure"
+reason = "The RDB file is an encoded RdbSnapshot, a SnapshotV1 with the WAL sequence it is current as of, /admin/backup answers with the engine's SnapshotV1, and RestoreSink and the restore sinks that implement it take the SnapshotV1 that /admin/restore decoded. P2: EngineSnapshotRepository (see the domain->infrastructure exception on rdb_store above), with the snapshot document in shared_kernel."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "src/persistence/infrastructure/segment_rdb_store/catalog.rs",
+  "src/persistence/infrastructure/segment_rdb_store/compaction.rs",
+  "src/persistence/infrastructure/segment_rdb_store/flat_layout.rs",
+  "src/persistence/infrastructure/segment_rdb_store/generation_validation.rs",
+]
+subject = "index.infrastructure"
+reason = "The segment store walks the checkpoint directory the Engine wrote: the catalog decodes each collection directory's name with collection_name_from_dir, and compaction, the flat layout and the generation validation read a collection's sidecar with CheckpointLayout::from_sidecar to find a field's segment stem. P2: the checkpoint-directory port in the index domain (see the index application->infrastructure exception on checkpoint_flush above) names the layout and the directories, and persistence reads them through index's application layer."

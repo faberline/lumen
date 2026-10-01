@@ -8,7 +8,9 @@
 //! # Facets
 //!
 //! - Behavior: the test asserts live Raft status, exact live and restarted queries, a published `LSEGRAFT` magic/version/index, and the recovered index. It runs under `cargo test -p lumen --features raft-wal --test it -- raft_shutdown_failover:: raft_segment_snapshot_archive:: raft_segment_snapshot_archive_wiring::` after the README gate is extended.
-//! - Security: `src/bin/lumen.rs` only selects the existing segment-aware archive reader and drives its existing periodic caller. The self-written archive boundary remains covered by `raft_segment_snapshot_archive`; this fixture uses a private temporary mTLS CA.
+//! - Security: `src/bin/lumen/serve.rs` only selects the existing segment-aware archive reader and
+//! drives its existing periodic caller. The self-written archive boundary remains covered by
+//! `raft_segment_snapshot_archive`; this fixture uses a private temporary mTLS CA.
 //! - Performance: the approved #4246 30-minute matrix in `tests/it/perf_gate.rs` is the performance oracle. This local restart contract adds no timing assertion; `WATCHDOG` only bounds fixture cleanup.
 #![cfg(feature = "raft-wal")]
 

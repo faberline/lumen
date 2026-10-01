@@ -805,8 +805,8 @@ fi
 # multi-shard mode the router rejects it outright with `501
 # duplicates_not_routed` -- duplicate detection filters by `min_group_size`
 # on one shard, before any cross-shard merge could happen, so answering it
-# across shards would be answering it wrong (src/spec.rs:788,
-# src/api.rs:1990). Asserting "at least one duplicate group"
+# across shards would be answering it wrong (src/app/spec/llm_deployment.rs,
+# src/index/interfaces/http/duplicates.rs). Asserting "at least one duplicate group"
 # against a 2-shard cluster therefore demands the product break its own
 # documented contract, and `curl -fsS` turned that into a bare `curl: (22)`
 # with no step name attached. Assert the refusal itself instead; the single

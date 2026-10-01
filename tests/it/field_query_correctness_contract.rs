@@ -673,7 +673,7 @@ async fn v2_current_refuses_keyword_delta_duplicate_stable_local_rows() {
 //   equality show sparse work and hard-link reuse. The approved stage6 release
 //   workload, rather than this case, measures checkpoint and merge time.
 //
-// Source premise read only: src/segment_rdb.rs:1296-1304 currently
+// Source premise read only: src/persistence/infrastructure/segment_rdb_store/ currently
 // emits base-only catalog refs, and :1373-1380 rejects layers. These cases must
 // be red until the scalar layered writer and reader land.
 

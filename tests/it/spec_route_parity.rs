@@ -1,11 +1,11 @@
 //! Router ↔ spec parity gate (#2482 regression class).
 //!
-//! `src/api.rs`'s axum router (`router_with_admission`'s
-//! `.route(...)` literals) and its utoipa-derived `ApiDoc` `paths(...)` list
+//! `src/app/http/router.rs`'s axum router (`router_with_admission`'s
+//! `.route(...)` literals) and the utoipa-derived `ApiDoc` `paths(...)` list
 //! are two hand-maintained registrations — nothing but code review stops a
 //! route from being served without ever being spec-documented, or the two
 //! copies of a path string drifting apart. This test extracts every
-//! `.route("<path>", <methods>)` literal from `api.rs` (balanced-paren scan
+//! `.route("<path>", <methods>)` literal from `router.rs` (balanced-paren scan
 //! + method tokens + ident-prefix rejection, mirroring
 //! `apps/tape/e2e/spec_route_parity.rs`) and diffs the (method, path) set
 //! against `lumen::spec::openapi_json()`'s `paths` object in both
@@ -26,8 +26,8 @@
 //!   omits them and this extractor does not inject them either.
 //! - The two `QUERY` twins (`QUERY /collections`, `QUERY
 //!   /collections/{collection_id}`, epic #1296 R1) are injected into the
-//!   spec by `crate::api::inject_query_twins` as a documented POST-twin;
-//!   axum has no native `Method::QUERY` combinator yet
+//!   spec by `crate::app::http::openapi::inject_query_twins` as a
+//!   documented POST-twin; axum has no native `Method::QUERY` combinator yet
 //!   (tokio-rs/axum#3799), so there is no `.route()` literal to match
 //!   against — the extractor's method whitelist below simply never emits a
 //!   `QUERY` entry, so no explicit exclusion is needed on the router side.
@@ -39,10 +39,10 @@
 
 use std::collections::BTreeSet;
 
-const API_RS: &str = include_str!("../../src/api.rs");
+const API_RS: &str = include_str!("../../src/app/http/router.rs");
 
 /// Extract `(METHOD, path)` pairs from every `.route(` invocation in
-/// `api.rs`. Handles multi-line calls by balanced-paren scanning and reads
+/// `router.rs`. Handles multi-line calls by balanced-paren scanning and reads
 /// method-router builder names (`get(`/`post(`/`put(`/`delete(`/`patch(`)
 /// inside the call's argument text. `.options(`/`.head(`/`.fallback(` are
 /// deliberately not scanned for: those combinators exist only for the
@@ -53,7 +53,7 @@ fn router_routes_from_source() -> BTreeSet<(String, String)> {
     let mut rest = API_RS;
     while let Some(idx) = rest.find(".route(") {
         rest = &rest[idx + ".route(".len()..];
-        // Balanced-paren scan for the call's argument text. `api.rs` route
+        // Balanced-paren scan for the call's argument text. `router.rs` route
         // args carry no string literals containing parens, so a plain
         // depth counter is sufficient here.
         let mut depth = 1usize;
@@ -156,7 +156,7 @@ fn served_routes_and_spec_inventory_match_exactly() {
 }
 
 /// The extractor itself must keep seeing the full router surface: if a
-/// refactor moves route registration out of `api.rs` string literals, this
+/// refactor moves route registration out of `router.rs` string literals, this
 /// floor forces the parity gate to be updated rather than silently
 /// comparing an empty set.
 #[test]

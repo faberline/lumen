@@ -26,12 +26,12 @@
 //!   requires the exact source watermark, prior local value, AOF value,
 //!   maintenance checkpoint, final checkpoint, cold open, and covered-suffix
 //!   skip. These assertions
-//!   cover src/aof.rs:333-357 and
-//!   src/segment_capacity.rs:312-348.
+//!   cover src/persistence/infrastructure/aof/ and
+//!   src/persistence/application/capacity/.
 //! - Security: :571-579 pre-creates the predictable first temporary spill
 //!   directory name and :747-753 requires its sentinel to remain unchanged
 //!   after fallback maintenance. This closes the filesystem collision boundary
-//!   introduced by src/segment_checkpoint.rs:349-386. The unchanged
+//!   introduced by src/persistence/application/segment_checkpoint_sink/. The unchanged
 //!   AOF format boundary remains covered by
 //!   tests/it/aof_oversized_committed_replace.rs:797-868, which refuses a
 //!   CRC-valid corrupt generic ReplaceDocs frame before rows or watermark
@@ -47,7 +47,7 @@
 //! # Root negative control
 //!
 //! Remove the generic replay capacity-owner ensure call before either Full wait
-//! in src/aof.rs:333-357. The child assertion at :660-665 must fail
+//! in src/persistence/infrastructure/aof/. The child assertion at :660-665 must fail
 //! after its cleanup checkpoint proves that the valid committed record had been
 //! waiting. Restore every changed production file by SHA-256 before another
 //! gate.

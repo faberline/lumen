@@ -8,15 +8,15 @@
 //!   at `:327-375` makes a legal default-feature Jieba fallback write, keeps
 //!   its valid prefix after a later invalid field, and requires the fallback
 //!   bigrams and their BM25 score bits to agree live and after cold reopen.
-//!   Change points are `src/storage/text_preparation.rs:80-184`,
-//!   `src/storage/staged_text_row.rs:40-186`, and
-//!   `src/tokenize.rs:7-27`.
+//!   Change points are `src/index/application/text_preparation/`,
+//!   `src/index/infrastructure/staging/staged_text_row.rs`, and
+//!   `src/index/domain/analysis/tokenize.rs`.
 //! - Security: `:327-332` feeds a caller-controlled undeclared field after
 //!   the staged valid prefix and requires the closed `422 unknown_field`
 //!   response. `:315-320` also proves this test input stays below the existing
 //!   8 MiB HTTP body gate in `tests/it/http_body_limit_e2e.rs:68-122`.
 //!   The new fallback stage has no caller-supplied file path: its private
-//!   workspace is created by `src/storage/staged_text_row.rs:94-117`.
+//!   workspace is created by `src/index/infrastructure/staging/staged_text_row.rs`.
 //!   The private staged-file corruption boundary has no public e2e injection;
 //!   it remains a source-unit coverage gap for the changed fallback reader.
 //! - Performance: `ROADMAP.md:60-70` promises a 256 MiB total for
@@ -24,8 +24,8 @@
 //!   keep the public accounting within that limit. `:379-389` requires the
 //!   Engine-scoped staged-row counter delta for this exact oversized fallback
 //!   record, so a legacy direct-token path cannot satisfy the memory contract.
-//!   `src/change_record_cost.rs:114-125` and
-//!   `src/storage/record_admission.rs:284-289` choose the staged
+//!   `src/ingest/domain/change_record_cost/` and
+//!   `src/index/application/admission/` choose the staged
 //!   representation at that fixed limit.
 //!
 //! This ordinary case is not a latency or RSS benchmark. It pins the current

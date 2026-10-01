@@ -14,7 +14,7 @@ Read these sources in order for the part you change:
    sources, and gates.
 2. [STATUS.md](STATUS.md) for current support and limits.
 3. [ROADMAP.md](ROADMAP.md) for future outcomes and non-goals.
-4. [Architecture](ARCHITECTURE.md) for source-of-truth, caller, data-plane,
+4. [Architecture](docs/architecture.md) for source-of-truth, caller, data-plane,
    control-plane, and shared-library boundaries.
 5. [Indexing](docs/indexing.md) for schema, write, durability, rebuild, and
    activation semantics.
@@ -32,8 +32,8 @@ Read these sources in order for the part you change:
     workload projection, request mechanics, and source hydration helpers.
 12. `src/` and `tests/` for behavior and executable
    contracts.
-13. `src/operator/crd.rs` and
-   `src/operator/fleet.rs` for the generated Kubernetes API.
+13. `src/operator/domain/lumen_spec.rs` and
+   `src/operator/domain/lumen_fleet.rs` for the generated Kubernetes API.
 14. [Deployment](docs/deployment.md), [configuration](docs/configuration.md), and
    [authentication](docs/authentication.md) for maintained operating context.
 

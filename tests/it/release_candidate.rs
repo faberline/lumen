@@ -49,7 +49,7 @@ const ACTIONS: &[&str] = &[
 const WORKFLOW_BYTES_SHA256: &str =
     "42505e72fdb9f709dc2b2a68303aa9e0098b2e65a8e3de3707a5a89cd4328b95";
 const KIND_E2E_BYTES_SHA256: &str =
-    "600d98c971e6abba921b426f239ebfa066f4b01b2e179db7aa841b1f878aa38c";
+    "18dfa225f5d216e456ec6f190e50131c964890e1a0ba26665937b210508a7eb8";
 const RELEASE_PERF_GATE: &str = "cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --test-threads=1 --nocapture";
 const VERIFIER_BYTES_SHA256: &str =
     "e90b7a6b80138bcaec768a79f125fc845d08c036842e1304ede145a0d1342eec";

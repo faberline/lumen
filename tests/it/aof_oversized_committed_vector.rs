@@ -27,13 +27,13 @@
 //!   cold-opens a mixed Vector base; :927-1064 replays the valid >256 MiB AOF
 //!   suffix, checks raw Flat and HNSW/SQ state, checkpoints it, then applies a
 //!   versioned update and delete; :1127-1139 makes a stuck child red. These
-//!   assertions cover src/aof.rs:285-315, vector wire borrowing in
-//!   src/wal/fast_index_scanner.rs:230-246, and Vector storage in
-//!   src/vector_index.rs:383-431 and :687-850.
+//!   assertions cover src/persistence/infrastructure/aof/, vector wire borrowing in
+//!   src/ingest/infrastructure/wal/fast_index_scanner.rs, and Vector storage in
+//!   src/index/domain/vector/.
 //! - Security: aof_oversized_committed_vector.rs:825-854 corrupts one complete,
 //!   CRC-valid Vector/Keyword AOF frame after a valid prefix and requires an
 //!   error before its rows or watermark become visible. It covers the
-//!   process-written AOF byte boundary in src/aof.rs:279-315.
+//!   process-written AOF byte boundary in src/persistence/infrastructure/aof/.
 //! - Performance: docs/indexing.md:264-276 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   aof_oversized_committed_vector.rs:707-725 reads public pending total and

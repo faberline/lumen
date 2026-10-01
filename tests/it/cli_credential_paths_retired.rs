@@ -118,6 +118,15 @@ fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
 }
 
+/// The `lumen` binary's source: every file under `src/bin/lumen/`, in path
+/// order.
+fn lumen_bin() -> String {
+    let mut files = Vec::new();
+    collect(&lumen_dir().join("src/bin/lumen"), &mut files);
+    files.sort();
+    files.iter().map(|file| read(file)).collect()
+}
+
 /// AC1: no credential environment variable, no Google instance-identity
 /// endpoint, and no Application Default Credentials handoff anywhere in the
 /// surface `apps/lumen` ships.
@@ -179,7 +188,7 @@ fn no_credential_env_var_or_google_identity_source_ships_in_lumen() {
 /// change the pinned call form — both visible in review, neither silent.
 #[test]
 fn the_cli_binary_can_only_attach_a_credential_it_minted() {
-    let body = read(&lumen_dir().join("src/bin/lumen.rs"));
+    let body = lumen_bin();
 
     // The discovery paths. Each of these found a credential somebody else had
     // stored; none may come back under any name.
@@ -193,7 +202,7 @@ fn the_cli_binary_can_only_attach_a_credential_it_minted() {
     for f in &forbidden {
         assert!(
             !body.contains(f.as_str()),
-            "#2873 AC1: `src/bin/lumen.rs` still contains `{f}` — the CLI must have no way to \
+            "#2873 AC1: `src/bin/lumen/` still contains `{f}` — the CLI must have no way to \
              find a request credential it did not mint"
         );
     }
@@ -209,7 +218,7 @@ fn the_cli_binary_can_only_attach_a_credential_it_minted() {
         sites += 1;
         assert!(
             body[at..].starts_with(&legal),
-            "#2878 AC1: `src/bin/lumen.rs` attaches a credential at byte {at} in a form other \
+            "#2878 AC1: `src/bin/lumen/` attaches a credential in a form other \
              than `{legal}`; the only value the CLI may send is the one it minted through \
              TokenRequest:\n{}",
             body[at..].lines().next().unwrap_or_default()
@@ -218,7 +227,7 @@ fn the_cli_binary_can_only_attach_a_credential_it_minted() {
     }
     assert!(
         sites > 0,
-        "#2878 AC1: `src/bin/lumen.rs` no longer attaches a minted credential at all — if the \
+        "#2878 AC1: `src/bin/lumen/` no longer attaches a minted credential at all — if the \
          TokenRequest path was removed, this gate and #2878's tests should go with it rather \
          than passing vacuously"
     );
@@ -229,7 +238,7 @@ fn the_cli_binary_can_only_attach_a_credential_it_minted() {
     let flag = needle(&["client_", "sa: Option<String>"]);
     let decl = body
         .find(&flag)
-        .unwrap_or_else(|| panic!("#2878 R3: `src/bin/lumen.rs` declares no `{flag}` field"));
+        .unwrap_or_else(|| panic!("#2878 R3: `src/bin/lumen/` declares no `{flag}` field"));
     // The doc comment above the flag is prose with em dashes in it, so a fixed
     // byte offset can land inside a character; walk forward to a boundary.
     let mut start = decl.saturating_sub(400);

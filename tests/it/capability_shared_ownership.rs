@@ -16,10 +16,61 @@ use std::collections::BTreeSet;
 const AW_TOML: &str = include_str!("../../aw.toml");
 const README: &str = include_str!("../../README.md");
 const CARGO_TOML: &str = include_str!("../../Cargo.toml");
-const CLI: &str = include_str!("../../src/bin/lumen.rs");
-const API: &str = include_str!("../../src/api.rs");
-const AUTH: &str = include_str!("../../src/auth.rs");
-const OPERATOR_RENDER: &str = include_str!("../../src/operator/render.rs");
+/// The `lumen` binary: every file under `src/bin/lumen/`.
+const CLI: &str = concat!(
+    include_str!("../../src/bin/lumen/backup.rs"),
+    include_str!("../../src/bin/lumen/cli.rs"),
+    include_str!("../../src/bin/lumen/cli/client.rs"),
+    include_str!("../../src/bin/lumen/cli/k8s.rs"),
+    include_str!("../../src/bin/lumen/cli/serve.rs"),
+    include_str!("../../src/bin/lumen/cli/spec.rs"),
+    include_str!("../../src/bin/lumen/cli/standalone.rs"),
+    include_str!("../../src/bin/lumen/connect.rs"),
+    include_str!("../../src/bin/lumen/connect/proxy.rs"),
+    include_str!("../../src/bin/lumen/dockerfile.rs"),
+    include_str!("../../src/bin/lumen/issue.rs"),
+    include_str!("../../src/bin/lumen/k8s.rs"),
+    include_str!("../../src/bin/lumen/k8s/access.rs"),
+    include_str!("../../src/bin/lumen/k8s/fleet.rs"),
+    include_str!("../../src/bin/lumen/k8s/fleet/tests.rs"),
+    include_str!("../../src/bin/lumen/k8s/render.rs"),
+    include_str!("../../src/bin/lumen/main.rs"),
+    include_str!("../../src/bin/lumen/query.rs"),
+    include_str!("../../src/bin/lumen/query/tests.rs"),
+    include_str!("../../src/bin/lumen/serve.rs"),
+    include_str!("../../src/bin/lumen/serve/bootstrap.rs"),
+    include_str!("../../src/bin/lumen/serve/bootstrap/tests.rs"),
+    include_str!("../../src/bin/lumen/serve/raft.rs"),
+    include_str!("../../src/bin/lumen/serve/raft/tests.rs"),
+    include_str!("../../src/bin/lumen/serve/restore.rs"),
+    include_str!("../../src/bin/lumen/serve/restore/tests.rs"),
+    include_str!("../../src/bin/lumen/serve/telemetry.rs"),
+    include_str!("../../src/bin/lumen/shutdown.rs"),
+    include_str!("../../src/bin/lumen/spec.rs"),
+    include_str!("../../src/bin/lumen/standalone.rs"),
+    include_str!("../../src/bin/lumen/standalone/gke.rs"),
+    include_str!("../../src/bin/lumen/standalone/gke/manifest.rs"),
+    include_str!("../../src/bin/lumen/standalone/gke/validate.rs"),
+);
+const API: &str = include_str!("../../src/app/http/router.rs");
+/// The auth adapter: every non-test file of the `access` context except TLS.
+const AUTH: &str = concat!(
+    include_str!("../../src/access/domain/identity.rs"),
+    include_str!("../../src/access/application/authorization.rs"),
+    include_str!("../../src/access/application/auth_config.rs"),
+    include_str!("../../src/access/application/control_plane_token.rs"),
+    include_str!("../../src/access/infrastructure/lumen_verifier.rs"),
+    include_str!("../../src/access/interfaces/http.rs"),
+);
+/// The operator's renderer: every non-test file of `operator::application::render`.
+const OPERATOR_RENDER: &str = concat!(
+    include_str!("../../src/operator/application/render.rs"),
+    include_str!("../../src/operator/application/render/identity.rs"),
+    include_str!("../../src/operator/application/render/backup.rs"),
+    include_str!("../../src/operator/application/render/serving_statefulset.rs"),
+    include_str!("../../src/operator/application/render/serving_config.rs"),
+    include_str!("../../src/operator/application/render/monitoring.rs"),
+);
 
 const CAPABILITY_CONTRACT: &[(&str, &str)] = &[
     ("Indexing", "indexing"),

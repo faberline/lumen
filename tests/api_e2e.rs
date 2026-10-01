@@ -1745,7 +1745,7 @@ async fn live_openapi_uses_the_canonical_offline_bytes() {
 // ---------------------------------------------------------------------------
 
 /// `http::Method` has no `QUERY` constant yet; construct it the same way
-/// `src/api.rs`'s interim dispatch does.
+/// `src/index/interfaces/http/query_method.rs`'s interim dispatch does.
 fn query_method() -> axum::http::Method {
     axum::http::Method::from_bytes(b"QUERY").expect("QUERY is a valid method token")
 }
@@ -2333,7 +2333,7 @@ async fn first_write_after_checkpoint_restore_completes_and_is_searchable() {
 /// #2516: ENOSPC degraded read-only mode, proven at the HTTP layer.
 ///
 /// `coordinator::tests::aof_enospc_returns_storage_full_error_and_marks_degraded`
-/// (src/coordinator.rs) already proves a REAL `AofWriter::append` ENOSPC is
+/// (src/ingest/application/write_coordinator/) already proves a REAL `AofWriter::append` ENOSPC is
 /// classified into `StorageFullError` and flips `Metrics::storage_degraded`
 /// through the actual apply loop — that fault-injection seam lives behind
 /// `#[cfg(test)]` on the lib crate and isn't visible to this separate

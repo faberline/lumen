@@ -11,7 +11,7 @@ mod first_compaction_contract {
     //!   writes a real base and four real sparse checkpoints through SegmentRdbStore.
     //!   It requires layer reduction, then checks current live and cold searches
     //!   plus a retained first generation.
-    //! - Security: src/segment_rdb.rs:543 reads the local generation
+    //! - Security: src/persistence/infrastructure/segment_rdb_store/ reads the local generation
     //!   bytes on cold open. Existing index_durable_oracle refusal cases beginning
     //!   at tests/it/indexing_durable_oracle.rs:970 feed malformed catalog
     //!   bytes and preserve CURRENT. This compaction case uses the same reader for
@@ -449,7 +449,7 @@ mod full_compaction_contract {
     //!   threshold, one job folds one adjacent delta pair, the base stays
     //!   untouched, and the retained pre-compaction generation still holds the
     //!   replaced layers' bytes.
-    //! - Security: `src/segment_rdb.rs:450-480` writes and validates
+    //! - Security: `src/persistence/infrastructure/segment_rdb_store/` writes and validates
     //!   the staged catalog before publication. The existing malformed-CURRENT
     //!   refusals at `tests/it/indexing_durable_oracle.rs:970-1018` cover
     //!   the same persisted catalog trust boundary and assert that CURRENT is not
@@ -1962,7 +1962,8 @@ mod full_compaction_contract {
         //!
         //! - Behavior: `indexing_durable_oracle.rs:7713` requires the other checkpoint
         //!   while encoding is paused; `:7728` and `:7771` retain the fifth Keyword layer.
-        //! - Security: `src/segment_rdb.rs:66-73` is a test-only observer seam.
+        //! - Security: `src/persistence/infrastructure/segment_rdb_store/` is a test-only observer
+        //!   seam.
         //!   `indexing_durable_oracle.rs:7740` and `:7760` require CURRENT and cold reopen
         //!   to retain the later collection reference, without a new input boundary.
         //! - Performance: `indexing_durable_oracle.rs:7713` measures the approved bounded
@@ -2326,7 +2327,8 @@ mod full_compaction_contract {
         //!   requires prune and a second public store opener to preserve the worker's source
         //!   and staging until the selected merge publishes.
         //! - Security: these cases exercise the process-owned generation root through
-        //!   `src/segment_background_merge.rs` and `src/segment_rdb.rs`.
+        //!   `src/persistence/application/background_merge/` and
+        //!   `src/persistence/infrastructure/segment_rdb_store/`.
         //!   They do not add caller-controlled bytes, paths, or identifiers. Existing malformed
         //!   CURRENT refusal cases in the parent target keep the file-input boundary covered.
         //!   The prune case asserts that a second opener cannot mistake an active worker staging
@@ -3028,11 +3030,12 @@ mod full_compaction_contract {
             //! - Behavior: `indexing_durable_oracle.rs:8667`, `:8671`, `:8710`, and
             //!   `:8723` require a durable restore to activate its candidate before the
             //!   paused old merge releases, then retain that candidate live and cold.
-            //!   Change points: `src/segment_restore.rs:154-289` and
-            //!   `src/segment_background_merge.rs:449-552`.
+            //!   Change points: `src/persistence/application/restore.rs` and
+            //!   `src/persistence/application/background_merge/`.
             //! - Security: `indexing_durable_oracle.rs:8694` and `:8723` require the
             //!   process-written `CURRENT` input to remain on the restore candidate after
-            //!   stale-worker release. Boundary: `src/segment_rdb.rs:635-676`.
+            //!   stale-worker release. Boundary:
+            //!   `src/persistence/infrastructure/segment_rdb_store/`.
             //! - Performance: `ROADMAP.md:73-78` promises one background
             //!   merge that rechecks segment input and collection epoch before publication.
             //!   `indexing_durable_oracle.rs:8694` asserts that structural promise; the
@@ -3275,11 +3278,12 @@ mod full_compaction_contract {
             //!
             //! - Behavior: `indexing_durable_oracle.rs:8860`, `:8883`, `:8891`, and
             //!   `:8900` require the failed fifth cut to retry before the sixth live
-            //!   mutation is captured. Change points: `src/segment_rdb.rs:459-513`
-            //!   and `src/segment_background_merge.rs:447-501`.
+            //!   mutation is captured. Change points:
+            //!   `src/persistence/infrastructure/segment_rdb_store/`
+            //!   and `src/persistence/application/background_merge/`.
             //! - Security: `indexing_durable_oracle.rs:8864`, `:8875`, and `:8891` keep
             //!   process-written `CURRENT` and its predecessor from making frozen input
-            //!   stale. Boundary: `src/segment_rdb.rs:637-676`.
+            //!   stale. Boundary: `src/persistence/infrastructure/segment_rdb_store/`.
             //! - Performance: `ROADMAP.md:52-55` promises that a
             //!   pre-publication failure retains frozen changes; `:73-78` requires merge
             //!   input revalidation. `indexing_durable_oracle.rs:8875` asserts both
@@ -4754,7 +4758,7 @@ mod full_compaction_contract {
         //!   corrupts the persisted mapped-base local-row descriptor and checksum.
         //!   It requires `load_current_generation` to refuse each input and leave
         //!   CURRENT unchanged. This covers the changed file-read boundary in
-        //!   `src/segment_rdb.rs:1625-1795`.
+        //!   `src/persistence/infrastructure/segment_rdb_store/`.
         //! - Performance: the user-approved #4246 plan requires a compaction
         //!   request at four deltas and base replacement only when measured delta
         //!   bytes meet or exceed the complete base. These cases assert both

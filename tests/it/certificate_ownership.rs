@@ -49,7 +49,7 @@ fn rust_files(dir: &Path) -> Vec<PathBuf> {
 
 #[test]
 fn lumen_owns_certificate_profiles_and_nothing_else() {
-    let lumen_cert = repo_root().join("src/operator/certificate.rs");
+    let lumen_cert = repo_root().join("src/operator/application/certificate.rs");
     assert!(
         lumen_cert.is_file(),
         "expected Lumen's certificate profiles at {}",
@@ -92,7 +92,7 @@ fn lumen_owns_certificate_profiles_and_nothing_else() {
     for (needle, why) in forbidden {
         assert!(
             !source.contains(needle),
-            "src/operator/certificate.rs mentions `{needle}`: {why}"
+            "src/operator/application/certificate.rs mentions `{needle}`: {why}"
         );
     }
 }
@@ -101,7 +101,7 @@ fn lumen_owns_certificate_profiles_and_nothing_else() {
 fn no_other_lumen_source_file_implements_a_certificate_lifecycle() {
     let root = repo_root();
     let lumen_src = root.join("src");
-    let profiles = root.join("src/operator/certificate.rs");
+    let profiles = root.join("src/operator/application/certificate.rs");
 
     // These names are how a lifecycle gets built, whatever the file is called.
     let lifecycle_markers = [

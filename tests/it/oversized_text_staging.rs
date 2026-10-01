@@ -17,7 +17,8 @@
 //!   file proves its own bodies stay below it at `:343-347` and `:529-533`.
 //!   It sends a caller-controlled unknown field after valid prepared rows
 //!   and requires the closed `422 unknown_field` outcome at `:539-544`.
-//!   The staged-run file boundary is closed by `src/text_row_stage.rs:954-965`,
+//!   The staged-run file boundary is closed by
+//!   `src/persistence/infrastructure/segment/text_row_stage.rs`,
 //!   which rejects a truncated prefix read from the workspace at `:165-172`
 //!   and `:287-332`.
 //! - Performance: `ROADMAP.md:60-70` promises a 256 MiB total
@@ -26,7 +27,7 @@
 //!   publication (`:383-384`). It requires engine-scoped Text staging
 //!   counters at `:400-414`, so this request cannot be credited to another
 //!   test's process-wide peak; `:73-80` serializes shared gauge reads. The gauge source is
-//!   `src/metrics.rs:422-428` and `:715-742`.
+//!   `src/app/observability/metrics.rs`.
 //!
 //! The fixture is intentionally not a 30-minute benchmark. It checks the
 //! current per-record pending-memory limit and the actual staging path. The

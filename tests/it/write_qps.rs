@@ -1154,7 +1154,7 @@ mod committed_publish_cancellation {
     //! - Security: `tests/it/write_qps.rs:1313`, `:1321`, and
     //!   `:1337` cover the `WalLog` trust boundary. A cancelled caller must
     //!   not make the recovery fence honour a record the WAL already accepted.
-    //!   This is the fail-closed path in `src/coordinator.rs:555-577`.
+    //!   This is the fail-closed path in `src/ingest/application/write_coordinator/`.
     //! - Performance: gap carried by the separate capacity case. The current
     //!   promise is `ROADMAP.md:60-70`; this case's 150 ms waits are
     //!   test bounds, not a product latency budget. That capacity case needs the
@@ -1372,12 +1372,12 @@ mod local_oversized_record_capacity {
     //! - Behavior: write_qps.rs:1583, :1589, :1594, :1599, :1604, :1609,
     //!   :1625, :1626, :1631, and :1636 require a valid oversized local index request
     //!   to return the capacity refusal, leave state unchanged, and then accept
-    //!   a small request. Change points: src/coordinator.rs:776-800
-    //!   and src/api.rs:3170-3178.
+    //!   a small request. Change points: src/ingest/application/write_coordinator/
+    //!   and src/app/http/api_err.rs.
     //! - Security: write_qps.rs:1583, :1599, :1604, and :1609 keep the
     //!   caller-controlled 100 MiB Keyword body outside WAL and the collection.
-    //!   The closed HTTP input boundary is src/coordinator.rs:776-800
-    //!   through src/api.rs:3170-3178.
+    //!   The closed HTTP input boundary is src/ingest/application/write_coordinator/
+    //!   through src/app/http/api_err.rs.
     //! - Performance: docs/indexing.md:264-270 promises the 256 MiB
     //!   pending budget and its pre-submit 429 response. write_qps.rs:1516 and
     //!   :1522 measure a real body below its child-only HTTP allowance and above
