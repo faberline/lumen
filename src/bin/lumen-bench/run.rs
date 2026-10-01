@@ -1,103 +1,20 @@
-// CODEGEN-BEGIN
-//! In-process latency gate for the two query shapes lumen is measured on.
-//!
-//! **`status=pass` on the output line is a literal.** `print_report` hard-codes
-//! it, and a report is only printed after the cell has already passed, so the
-//! field carries no information. The exit code is the verdict -- a failing cell
-//! `bail!`s and prints nothing at all.
-//!
-//! And only one cell is actually gated. `summarize` stamps `budget_us` into every
-//! report from the same `SORTED_PAGE_BUDGET_US` constant, but only
-//! `sorted_page_deep` compares its p99 against it. A `cell=bool_filter` line
-//! showing `budget_us=5000` is reporting a constant nothing enforced; that cell
-//! fails only if a query returns no hits.
-//!
-//! What `sorted_page_deep` measures is the **deep** pages, not the walk. It walks
-//! from page 0 to `(documents / 2) / page_size` following the cursor, and samples
-//! only the last `--queries` of those pages, so the cheap early pages are
-//! excluded from the percentile by design. `--queries` caps what is measured, not
-//! what is walked. Percentiles are nearest-rank over the sorted samples, which
-//! means that with fewer than about fifty samples p99 is simply the maximum and
-//! the budget check becomes a max check.
-//!
-//! `--tiers` is accepted and never read (`let _tiers`); it exists so the vat
-//! runner specs can pass it.
-//!
-//! The corpus is synthetic and entirely in-process -- `Engine::new()`, no server
-//! and no persistence. `age` is `i % 1_000_000`, so for any corpus below a
-//! million documents every sort key is distinct and the sorted walk never pays
-//! for ties; `city` is `"taipei"` on every third document. Indexing is batched at
-//! `MAX_INDEX_ITEMS / 2` because each document contributes two index items, one
-//! per field.
+//! The bench cells: `run` runs each cell `--types` names against a synthetic
+//! in-process corpus.
+
 use std::collections::BTreeMap;
 use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand};
 use lumen::storage::{Engine, MAX_INDEX_ITEMS};
 use lumen::types::{
     CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest, QueryNode,
     RangeBound, RangeQuery, SearchRequest, SortMissing, SortOrder, SortSpec, TermQuery,
 };
 
-const DEFAULT_DOCUMENTS: usize = 20_000;
-const DEFAULT_PAGE_SIZE: u32 = 100;
-const DEFAULT_QUERIES: usize = 200;
-const SORTED_PAGE_BUDGET_US: u128 = 5_000;
+use crate::cli::{parse_types, RunArgs};
+use crate::report::{print_report, summarize, BenchReport, SORTED_PAGE_BUDGET_US};
 
-#[derive(Parser)]
-#[command(name = "lumen-bench", version, about = "Lumen local benchmark runner")]
-struct Cli {
-    #[command(subcommand)]
-    command: Command,
-}
-
-#[derive(Subcommand)]
-enum Command {
-    /// Run one or more benchmark cells.
-    Run(RunArgs),
-}
-
-#[derive(Parser)]
-struct RunArgs {
-    /// Comma-separated cell list. Supported: sorted_page_deep, bool_filter.
-    #[arg(long, default_value = "sorted_page_deep")]
-    types: String,
-    /// Compatibility knob used by vat runner specs; accepted but not interpreted yet.
-    #[arg(long, default_value = "s")]
-    tiers: String,
-    /// Query/page sample cap. For sorted_page_deep this caps measured pages near depth.
-    #[arg(long, default_value_t = DEFAULT_QUERIES)]
-    queries: usize,
-    /// Number of documents in the synthetic corpus.
-    #[arg(long, default_value_t = DEFAULT_DOCUMENTS)]
-    documents: usize,
-    /// Page size for sorted cursor walks.
-    #[arg(long, default_value_t = DEFAULT_PAGE_SIZE)]
-    page_size: u32,
-}
-
-#[derive(Debug)]
-struct BenchReport {
-    cell: &'static str,
-    documents: usize,
-    pages_walked: usize,
-    measured_pages: usize,
-    p50_us: u128,
-    p99_us: u128,
-    min_us: u128,
-    max_us: u128,
-    budget_us: u128,
-}
-
-fn main() -> Result<()> {
-    let cli = Cli::parse();
-    match cli.command {
-        Command::Run(args) => run(args),
-    }
-}
-
-fn run(args: RunArgs) -> Result<()> {
+pub(super) fn run(args: RunArgs) -> Result<()> {
     if args.documents == 0 {
         bail!("--documents must be > 0");
     }
@@ -113,41 +30,6 @@ fn run(args: RunArgs) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn parse_types(raw: &str) -> Result<Vec<&'static str>> {
-    let mut cells = Vec::new();
-    for token in raw.split(',') {
-        let cell = token.trim();
-        if cell.is_empty() {
-            continue;
-        }
-        let known = match cell {
-            "sorted_page_deep" => "sorted_page_deep",
-            "bool_filter" => "bool_filter",
-            other => bail!("unknown bench cell `{other}`; supported: sorted_page_deep,bool_filter"),
-        };
-        cells.push(known);
-    }
-    if cells.is_empty() {
-        bail!("--types did not name any bench cells");
-    }
-    Ok(cells)
-}
-
-fn print_report(report: BenchReport) {
-    println!(
-        "cell={} documents={} pages_walked={} measured_pages={} min_us={} p50_us={} p99_us={} max_us={} budget_us={} status=pass",
-        report.cell,
-        report.documents,
-        report.pages_walked,
-        report.measured_pages,
-        report.min_us,
-        report.p50_us,
-        report.p99_us,
-        report.max_us,
-        report.budget_us
-    );
 }
 
 fn run_sorted_page_deep(args: &RunArgs) -> Result<BenchReport> {
@@ -229,30 +111,6 @@ fn run_bool_filter(args: &RunArgs) -> Result<BenchReport> {
     Ok(summarize("bool_filter", args.documents, reps, samples))
 }
 
-fn summarize(
-    cell: &'static str,
-    documents: usize,
-    pages_walked: usize,
-    mut samples: Vec<u128>,
-) -> BenchReport {
-    samples.sort_unstable();
-    let percentile = |q: f64| -> u128 {
-        let idx = (((samples.len() - 1) as f64) * q).round() as usize;
-        samples[idx]
-    };
-    BenchReport {
-        cell,
-        documents,
-        pages_walked,
-        measured_pages: samples.len(),
-        min_us: samples[0],
-        p50_us: percentile(0.50),
-        p99_us: percentile(0.99),
-        max_us: *samples.last().expect("non-empty samples"),
-        budget_us: SORTED_PAGE_BUDGET_US,
-    }
-}
-
 fn sorted_page_request(limit: u32) -> SearchRequest {
     SearchRequest {
         query: QueryNode::Range(RangeQuery {
@@ -326,4 +184,3 @@ fn spec(field_type: FieldType) -> FieldSpec {
         quantize: None,
     }
 }
-// CODEGEN-END
