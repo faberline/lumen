@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 use anyhow::{bail, Result};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard};
 
+use crate::app::observability::write_phase::WritePhase;
 use crate::index::application::admission::record_reservation::{
     RecordReservation, RecordTransientReservation,
 };
@@ -172,13 +173,30 @@ impl WriteCoordinator {
         let admission_started_at = std::time::Instant::now();
         let submit_deadline = tokio::time::Instant::now() + SUBMIT_TIMEOUT;
         let admission_deadline = submit_deadline - LOCAL_CAPACITY_APPLY_RESERVE;
+        let mut diagnostic = WritePhase::begin(
+            kind,
+            #[cfg(test)]
+            self.diagnostic_capture
+                .lock()
+                .ok()
+                .and_then(|token| *token)
+                .is_some(),
+        );
         let reservation = self
             .admit_local_record_with_relief(&entry, admission_deadline)
-            .await?;
+            .await
+            .map_err(|error| {
+                diagnostic.admission_end(Some(&error));
+                diagnostic.prepublication_error(&error);
+                error
+            })?;
         if tokio::time::Instant::now() >= admission_deadline {
-            return Err(anyhow::Error::new(SubmitStalled(
+            let error = anyhow::Error::new(SubmitStalled(
                 "local admission used the submit deadline before WAL publication".into(),
-            )));
+            ));
+            diagnostic.admission_end(Some(&error));
+            diagnostic.prepublication_error(&error);
+            return Err(error);
         }
         // Keep the shared permit through publish AND local apply. An exclusive
         // restore fence can therefore observe one exact applied/WAL boundary:
@@ -191,7 +209,18 @@ impl WriteCoordinator {
                     anyhow::Error::new(SubmitStalled(
                         "mutation permit was unavailable before the submit deadline".into(),
                     ))
-                })??;
+                })
+                .map_err(|error| {
+                    diagnostic.admission_end(Some(&error));
+                    diagnostic.prepublication_error(&error);
+                    error
+                })?
+                .map_err(|error| {
+                    diagnostic.admission_end(Some(&error));
+                    diagnostic.prepublication_error(&error);
+                    error
+                })?;
+        diagnostic.admission_end(None);
         self.engine.metrics().observe_coordinator_stage(
             kind,
             crate::app::observability::metrics::labels::CoordinatorStage::AdmissionToMutationGate,
@@ -201,8 +230,13 @@ impl WriteCoordinator {
         let publisher = self
             .self_weak
             .upgrade()
-            .ok_or_else(|| anyhow::anyhow!("write coordinator stopped before publish"))?;
+            .ok_or_else(|| anyhow::anyhow!("write coordinator stopped before publish"))
+            .map_err(|error| {
+                diagnostic.prepublication_error(&error);
+                error
+            })?;
         let wal = self.wal.clone();
+        let publication = diagnostic.publication_begin();
         tokio::spawn(async move {
             // This task owns the shared permit from before WAL publication. A
             // caller may cancel after the WAL accepts its record, but it cannot
@@ -218,6 +252,7 @@ impl WriteCoordinator {
                 let mut ledger = publisher.local_reservations.lock().await;
                 match wal.publish(WalRecord::new(entry)).await {
                     Ok(seq) => {
+                        publication.sequence_returned(seq);
                         if ledger.insert(seq, reservation).is_some() {
                             Err(anyhow::anyhow!(
                                 "duplicate local reservation for sequence {seq}"
@@ -233,29 +268,45 @@ impl WriteCoordinator {
                 }
             } else {
                 match wal.publish(WalRecord::new(entry)).await {
-                    Ok(seq) => publisher
-                        .register_waiter(seq, mutation_permit)
-                        .map(|receiver| (seq, receiver)),
+                    Ok(seq) => {
+                        publication.sequence_returned(seq);
+                        publisher
+                            .register_waiter(seq, mutation_permit)
+                            .map(|receiver| (seq, receiver))
+                    }
                     Err(error) => Err(error),
                 }
             };
+            publication.end(result.is_ok());
             let _ = published_tx.send(result);
         });
         let (seq, rx) = match published_rx.await {
             Ok(Ok(pair)) => pair,
-            Ok(Err(error)) => return Err(error),
+            Ok(Err(error)) => {
+                diagnostic.publication_error(false);
+                return Err(error);
+            }
             Err(_) => {
+                diagnostic.publication_error(true);
                 return Err(anyhow::anyhow!(
                     "publish task stopped before registering a waiter"
                 ));
             }
         };
+        diagnostic.apply_wait_begin();
         match tokio::time::timeout_at(submit_deadline, rx).await {
-            Ok(Ok(outcome)) => outcome,
-            Ok(Err(_)) => Err(anyhow::anyhow!(
-                "apply loop stopped before sequence {seq} was applied"
-            )),
+            Ok(Ok(outcome)) => {
+                diagnostic.outcome(&outcome);
+                outcome
+            }
+            Ok(Err(_)) => {
+                diagnostic.receiver_closed();
+                Err(anyhow::anyhow!(
+                    "apply loop stopped before sequence {seq} was applied"
+                ))
+            }
             Err(_) => {
+                diagnostic.timeout();
                 // The waiter entry may still be sitting in `completions.waiters`
                 // (a very-late `complete`/`complete_stale` will just find no live
                 // receiver and drop the result) — nothing to clean up here beyond
