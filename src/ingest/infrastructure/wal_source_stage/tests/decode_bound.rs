@@ -6,7 +6,7 @@ use crate::shared_kernel::types::document::{
     FieldValue, IndexItem, IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
 };
 
-// Append to wal_source_stage.rs tests. These cases intentionally use tightly
+// These cases intentionally use tightly
 // sized source vectors so any decoder growth is visible in the final estimate.
 fn tight<T>(mut values: Vec<T>) -> Vec<T> {
     values.shrink_to_fit();

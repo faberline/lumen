@@ -25,7 +25,7 @@
 //! - **Complete** (idle): [`should_start_split`] gates on a crossed
 //!   threshold (`status.reshard.blockingConditions` already carries
 //!   `prepareThresholdCrossed` / `urgentThresholdCrossed`, computed by
-//!   [`super::crd::LumenSpec::reshard_status_with_usage`]), `maxShardBytes`
+//!   [`LumenSpec::reshard_status_with_usage`]), `maxShardBytes`
 //!   set (R3 safety rail — recommendation-only otherwise), single-member
 //!   (`replicasPerShard <= 1`; see below), and no `maxShards` ceiling
 //!   reached. On a match: compute the target map, patch `shardCount` and
@@ -95,7 +95,8 @@
 //!
 //! ## Migration durability (#1389)
 //!
-//! `Engine::apply_reshard_batch`/`evict_not_owned` (`storage.rs`, #1380)
+//! `Engine::apply_reshard_batch`/`evict_not_owned` (`index::application::engine::reshard_apply`,
+//! #1380)
 //! mutate engine state directly rather than through `WriteCoordinator`/the
 //! AOF, so — unlike ordinary writes — their durability is not implied by the
 //! engine's normal write path; with #1387's embedded persistence it was
@@ -114,10 +115,10 @@
 //! (`Index`/`ReplaceDocs`/etc); it would also need new apply-loop branches
 //! and idempotency semantics distinct from every existing `RaftLogEntry`
 //! variant, whose apply methods mutate exactly one collection deterministically
-//! rather than merge a whole delta. (b) reuses `segment_rdb.rs`'s
+//! rather than merge a whole delta. (b) reuses `SegmentRdbStore`'s
 //! `SegmentRdbStore::save` verbatim — the exact call the periodic snapshotter
 //! already makes, just invoked synchronously on demand via a new
-//! `POST /admin/checkpoint` admin verb ([`crate::persistence::application::ports::checkpoint_sink::CheckpointSink`]) — no
+//! `POST /admin/checkpoint` admin verb ([`CheckpointSink`]) — no
 //! new WAL record shape, no new apply-loop branch, no new idempotency
 //! reasoning: `save` already re-seals the *entire* current engine state
 //! (including whatever `:apply`/`:evict` already mutated) atomically
@@ -140,7 +141,7 @@
 //! `checkpoint_shard` (#1396 R3) also now requires the response body to
 //! report `persisted == true`; a `200 {"persisted": false}` — the vacuous
 //! "no durable store configured" response `admin_checkpoint` returns for
-//! [`crate::persistence::application::ports::checkpoint_sink::NoopCheckpoint`] deployments — is treated as a failed
+//! [`NoopCheckpoint`] deployments — is treated as a failed
 //! checkpoint, not a satisfied durability gate.
 //!
 //! ## Scope rail: single-member only
@@ -154,18 +155,18 @@
 //! every existing ordinal (`ordinal < shardCount`), so growing by exactly
 //! one is pod-ordinal-stable: every existing pod keeps its shard/PVC
 //! identity and exactly one new pod (ordinal == old `shardCount`) becomes
-//! the new shard — see [`super::crd::LumenSpec::storage_pod_count`].
+//! the new shard — see [`LumenSpec::storage_pod_count`].
 //!
 //! ## Live query routing consumes `spec.shardMap` (#1384)
 //!
 //! [`super::render::render`] writes `shardMap.{version,assignments}` into the
 //! serving ConfigMap, `serving_env` maps `SHARD_MAP_VERSION`/
 //! `VIRTUAL_BUCKET_COUNT`/`SHARD_MAP_ASSIGNMENTS` onto container env, and
-//! `src/bin/lumen.rs`'s `serve()` builds its `EngineShardSearch` via
+//! `src/bin/lumen/serve.rs`'s `serve()` builds its `EngineShardSearch` via
 //! `EngineShardSearch::new_with_shard_map` fed by
-//! `crate::sharding::infrastructure::shard_map_env::shard_map_from_env`, so a pod started after this driver's
-//! cutover routes queries by the minimal-move target map computed by
-//! [`crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap::split_one_shard`] rather than the
+//! `crate::sharding::infrastructure::shard_map_env::shard_map_from_env`, so a pod
+//! started after this driver's cutover routes queries by the minimal-move target map computed by
+//! [`VirtualBucketShardMap::split_one_shard`] rather than the
 //! balanced default. [`trigger_rolling_restart`] is driven in the same
 //! cutover tick that patches `spec.shardMap` so every serving pod picks up
 //! the new map without manual intervention: it patches the serving
@@ -174,11 +175,21 @@
 //! into a rolling recreation of every pod against the already-updated
 //! ConfigMap — no separate watch/poll loop is needed.
 //!
-//! [`super::crd::LumenSpec::reshard_status_with_usage`]: crate::operator::domain::lumen_spec::LumenSpec::reshard_status_with_usage
-//! [`run_migration_pass`]: crate::operator::application::reshard_driver::migration::run_migration_pass
-//! [`checkpoint_shards`]: crate::operator::application::reshard_driver::checkpoint::checkpoint_shards
-//! [`advance_catching_up_fenced`]: crate::operator::application::reshard_driver::catch_up_fenced::advance_catching_up_fenced
-//! [`super::crd::LumenSpec::storage_pod_count`]: crate::operator::domain::lumen_spec::LumenSpec::storage_pod_count
+//! [`LumenSpec::reshard_status_with_usage`]:
+//!   crate::operator::domain::lumen_spec::LumenSpec::reshard_status_with_usage
+//! [`run_migration_pass`]:
+//!   crate::operator::application::reshard_driver::migration::run_migration_pass
+//! [`checkpoint_shards`]:
+//!   crate::operator::application::reshard_driver::checkpoint::checkpoint_shards
+//! [`advance_catching_up_fenced`]:
+//!   crate::operator::application::reshard_driver::catch_up_fenced::advance_catching_up_fenced
+//! [`LumenSpec::storage_pod_count`]:
+//!   crate::operator::domain::lumen_spec::LumenSpec::storage_pod_count
+//!
+//! [`CheckpointSink`]: crate::persistence::application::ports::checkpoint_sink::CheckpointSink
+//! [`NoopCheckpoint`]: crate::persistence::application::ports::checkpoint_sink::NoopCheckpoint
+//! [`VirtualBucketShardMap::split_one_shard`]:
+//!   crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap::split_one_shard
 
 pub(crate) mod catch_up_fenced;
 pub(crate) mod checkpoint;
@@ -215,13 +226,16 @@ const DRIVER_POLL_INTERVAL: Duration = Duration::from_secs(20);
 /// independently-leader-gated loops (which may pick different leaders) never
 /// contend on one Lease object.
 ///
-/// [`spawn_reshard_driver_loop`]: crate::operator::application::reshard_driver::driver_loop::spawn_reshard_driver_loop
+/// [`spawn_reshard_driver_loop`]:
+///   crate::operator::application::reshard_driver::driver_loop::spawn_reshard_driver_loop
 const DRIVER_LEASE_NAME: &str = "lumen-reshard-driver";
 
 /// Upper bound on external_ids carried per `POST /admin/reshard:apply` call,
-/// matching the batching contract [`crate::sharding::domain::reshard_batch::snapshot_reshard_batches`]
+/// matching the batching contract [`snapshot_reshard_batches`]
 /// already documents (checkpoint after every batch, not after one full-shard
 /// copy).
+///
+/// [`snapshot_reshard_batches`]: crate::sharding::domain::reshard_batch::snapshot_reshard_batches
 const MAX_EXTERNAL_IDS_PER_BATCH: usize = 2000;
 
 /// TTL for the write-pause fence [`advance_catching_up`] arms over still-moving

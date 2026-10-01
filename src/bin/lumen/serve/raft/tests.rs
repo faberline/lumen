@@ -45,7 +45,7 @@ async fn abort_after_report_closes_peer_normally_before_deadline() {
 /// shared `ClusterState` from its pre-poller bootstrap value to
 /// `RaftRole::Leader` — driven by the real raft engine's own
 /// `is_leader`/`leader` results, not a manually-set role. This is the
-/// same seam `enforce_read_consistency` (#1310, `src/api.rs`) reads via
+/// same seam `enforce_read_consistency` (#1310, `src/app/http/guards.rs`) reads via
 /// `AppState.cluster`; the live 3-node localhost cluster in this WI's
 /// report additionally proves the HTTP-facing accept/reject behavior
 /// end-to-end.
@@ -100,7 +100,7 @@ async fn cluster_state_poller_converges_role_to_live_election_result() {
     assert_eq!(cluster.role(), RaftRole::Follower, "bootstrap sanity check");
 
     // #2475: a fresh `Engine`'s `lumen_raft_leader_known` starts
-    // unpublished (sentinel `raft_shard`, see `metrics.rs`) until this
+    // unpublished (sentinel `raft_shard`, see `src/app/observability/metrics.rs`) until this
     // poller ticks; asserted below alongside role convergence.
     let poller_engine = Arc::new(Engine::new());
     assert!(

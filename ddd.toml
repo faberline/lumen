@@ -322,7 +322,7 @@ paths = [
   "src/sharding/domain/virtual_bucket_shard_map.rs",
 ]
 subject = "anyhow"
-reason = "The map constructors and the reshard primitives return anyhow::Result, which api.rs, storage.rs and the reshard driver propagate with ?. P2: a sharding domain error type (thiserror) that the callers convert."
+reason = "The map constructors and the reshard primitives return anyhow::Result, which app::http, index::application::engine and operator::application::reshard_driver propagate with ?. P2: a sharding domain error type (thiserror) that the callers convert."
 
 [[exceptions]]
 rule = "B2"

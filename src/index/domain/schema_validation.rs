@@ -59,7 +59,8 @@ pub(in crate::index) fn value_kind(v: &FieldValue) -> &'static str {
     }
 }
 
-/// Non-mutating type-check mirroring `apply_value`'s match arms, used by
+/// Non-mutating type-check mirroring `apply_value`'s match arms in
+/// `src/index/application/apply.rs`, used by
 /// `replace_one_doc` to validate every field of a `docs:replace` item
 /// *before* any mutation happens (see `replace_one_doc` for why that
 /// ordering matters). Kept in sync with `apply_value`'s arms by hand: any

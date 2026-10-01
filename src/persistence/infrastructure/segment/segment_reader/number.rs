@@ -154,7 +154,7 @@ impl SegmentReader {
             // Phase 2m: OR the CACHED per-value posting (resident `Arc` on a warm
             // hit) — the in-window values' bitmaps are exactly what the in-RAM
             // `values.range` walk held. Tombstone subtraction stays in
-            // `storage.rs` AFTER the union, so the result is byte-identical.
+            // the Number index AFTER the union, so the result is byte-identical.
             if let Some(p) = self.cached_number_postings_at(i as u32) {
                 acc |= p.as_ref();
             }
@@ -164,7 +164,7 @@ impl SegmentReader {
 
     /// The number of distinct sorted values plus a per-index cached-posting
     /// accessor are the two primitives the SORT-via-sorted-index walk
-    /// (`storage.rs::try_plan`) drives from: it iterates index `0..distinct`
+    /// (`src/index/domain/query/plan.rs`) drives from: it iterates index `0..distinct`
     /// (ascending) or in reverse (descending), reading each value's `SortableF64`
     /// bits ([`Self::number_sorted_bits_at`]) and its cache-resident posting
     /// ([`Self::number_sorted_postings_at`]) IN value order — the disk analogue of
@@ -179,8 +179,8 @@ impl SegmentReader {
     }
 
     /// The cache-resident posting at sorted-value index `i` (Phase 2m) — the
-    /// public-to-`storage.rs` name for [`Self::cached_number_postings_at`]. The
-    /// posting is the RAW immutable stream; `storage.rs` applies the tombstone via
+    /// public-to-index name for [`Self::cached_number_postings_at`]. The
+    /// posting is the RAW immutable stream; the Number index applies the tombstone via
     /// the per-doc predicate path during the sort walk, so the order + membership
     /// are byte-identical to the in-RAM walk.
     pub fn number_sorted_postings_at(

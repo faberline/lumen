@@ -1,11 +1,11 @@
 //! Cross-pod shard routing for operator/k8s serving pods (#1398 R1-R3).
 //!
-//! [`RoutedRouter`] is the sole implementation of [`crate::sharding::application::ports::routed_backend::RoutedBackend`]:
-//! it consults the delivered [`crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap`] and
+//! [`RoutedRouter`] is the sole implementation of [`RoutedBackend`]:
+//! it consults the delivered [`VirtualBucketShardMap`] and
 //! either answers locally (this pod owns the target bucket) or forwards to
 //! the owning shard's pod over the same h2c client stack every other
 //! cross-pod call in this codebase uses (`libs/transport-h2c`, see
-//! `service_k8s::reshard_driver`'s admin forwarding for the established
+//! `operator::application::reshard_driver`'s admin forwarding for the established
 //! `reqwest`-over-headless-DNS idiom this module follows). A routing-key-less
 //! search scatters to every shard (local direct call + one forward per
 //! remote shard) and merges through the same
@@ -43,7 +43,7 @@
 //! only a doc comment: the responding pod compares the sender's declared
 //! `x-lumen-map-version` against its own live map on every scattered
 //! sub-request and, on a mismatch, increments
-//! `lumen_scatter_map_version_mismatches_total` (`src/metrics.rs`) and logs
+//! `lumen_scatter_map_version_mismatches_total` (`src/app/observability/metrics.rs`) and logs
 //! a `tracing::warn!` — non-fatal, so a spike there is a signal for
 //! operators to correlate with an in-flight rollout, not an outage. A
 //! forward carries the
@@ -56,7 +56,11 @@
 //! can reach this code path already links it transitively via `operator`'s
 //! `backup` feature (`dep:reqwest`), so gating here adds no new dependency
 //! edge, it only keeps `reqwest::*` out of the unconditionally-compiled
-//! `api.rs`.
+//! `app::http`.
+//!
+//! [`RoutedBackend`]: crate::sharding::application::ports::routed_backend::RoutedBackend
+//! [`VirtualBucketShardMap`]:
+//!   crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap
 
 pub(crate) mod backend;
 pub(crate) mod forward;
@@ -92,7 +96,7 @@ const MAP_VERSION_HEADER: &str = "x-lumen-map-version";
 const READ_CONSISTENCY_HEADER: &str = "x-read-consistency";
 
 /// Connections per remote shard's h2c pool — small and fixed, matching
-/// `service_k8s::reshard_driver`'s admin client sizing; forwarding is bounded
+/// `operator::application::reshard_driver`'s admin client sizing; forwarding is bounded
 /// one-hop request/response, not a bulk data-mover.
 const REMOTE_POOL_CONNECTIONS: usize = 2;
 
@@ -304,9 +308,12 @@ fn drop_outcome_from_status(status: reqwest::StatusCode, force: bool) -> Result<
 
 /// #2496: merge two shards' [`DropOutcome`]s with the same
 /// `Physical > Marked > AlreadyMarked > NotFound` precedence
-/// [`crate::sharding::application::engine_shard_write::EngineShardWrite::drop_collection`] uses in-process —
+/// [`EngineShardWrite::drop_collection`] uses in-process —
 /// "the strongest thing any shard actually did" wins, so a caller never
 /// sees a weaker outcome than what happened.
+///
+/// [`EngineShardWrite::drop_collection`]:
+///   crate::sharding::application::engine_shard_write::EngineShardWrite::drop_collection
 fn merge_drop_outcomes(a: DropOutcome, b: DropOutcome) -> DropOutcome {
     match (a, b) {
         (DropOutcome::Physical, _) | (_, DropOutcome::Physical) => DropOutcome::Physical,

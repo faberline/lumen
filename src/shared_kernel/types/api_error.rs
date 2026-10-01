@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 // ---------------------------------------------------------------------------
 
 // The runtime `{error, message}` envelope this shape describes now lives in
-// `service_http::ErrorEnvelope` (`src/api.rs`'s `ApiErr` renders it); this
+// `service_http::ErrorEnvelope` (`src/app/http/api_err.rs`'s `ApiErr` renders it); this
 // struct stays a distinct local definition purely to keep the OpenAPI schema
 // name (`ApiError`) and its doc-comment-derived `description` byte-identical
 // — `#[derive(ToSchema)]` fixes both at the type's own definition site, so

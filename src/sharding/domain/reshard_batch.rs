@@ -19,7 +19,7 @@ use crate::sharding::domain::snapshot_subset::{
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 
 /// The hard body-size limit `POST /admin/reshard:apply` (and every other
-/// admin route) enforces at the HTTP layer — `api.rs`'s
+/// admin route) enforces at the HTTP layer — `app::http::router`'s
 /// `DefaultBodyLimit::max(..)` is built from this exact constant (#1444 R2),
 /// so the two can never drift apart: a batch this crate computes as
 /// "under the limit" is always actually under the limit the route enforces,

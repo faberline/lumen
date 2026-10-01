@@ -15,15 +15,15 @@
 //!   its committed sequence. :446-591 and :792-897 require every field's query
 //!   semantics, Text BM25 and average document length against an independent
 //!   small reference, strict suffix replay, checkpoints, cold open, and no
-//!   revival after update/delete. They cover src/aof.rs:294-311,
-//!   src/storage/committed_index_apply.rs:166-233,
-//!   src/storage/committed_text_apply.rs:12-27, and
-//!   src/storage/text_preparation.rs:124-158.
+//!   revival after update/delete. They cover src/persistence/infrastructure/aof/,
+//!   src/index/application/apply/committed_index_apply/,
+//!   src/index/application/apply/committed_text_apply.rs, and
+//!   src/index/application/text_preparation/.
 //! - Security: aof_oversized_committed_mixed.rs:698-767 corrupts one byte in a
 //!   complete, CRC-valid mixed frame which `AofWriter` first wrote. Its
 //!   assertions at :729-765 require refusal, no query-visible row, and only the valid
 //!   predecessor watermark after cold open. It covers the persisted-byte input
-//!   boundary at src/aof.rs:274-387.
+//!   boundary at src/persistence/infrastructure/aof/.
 //! - Performance: docs/indexing.md:264-272 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   aof_oversized_committed_mixed.rs:633-650, called at :793-798, :809-814,

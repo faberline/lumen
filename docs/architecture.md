@@ -6,9 +6,18 @@ This document explains how Lumen fits between a caller and its source data. It
 also separates runtime traffic from management work and separates three
 deployment choices that are easy to confuse.
 
-Use the [README](README.md) for the product workflow. Use
-[STATUS.md](STATUS.md) for current support. Use
-[ROADMAP.md](ROADMAP.md) for future outcomes.
+Use the [README](../README.md) for the product workflow. Use
+[STATUS.md](../STATUS.md) for current support. Use
+[ROADMAP.md](../ROADMAP.md) for future outcomes.
+
+## Source layout
+
+Lumen stays in one Cargo crate.
+The [domain guide](domain/README.md) maps source modules to their owners.
+`src/app` connects those modules into the running service.
+`src/compat` keeps the public Rust module paths used by existing callers.
+The [layout decision](adr/0001-ddd-context-layout.md) records the P1 boundary.
+[ddd.toml](../ddd.toml) records the layers and remaining exceptions.
 
 ## Source-data flow
 
@@ -35,10 +44,10 @@ typed errors, safe retry, idempotency input, and ordered-result helpers. The
 caller still owns its source transaction and delivery policy. Lumen accepts raw
 vectors and perceptual hashes. It does not execute an embedding model.
 
-The [indexing guide](docs/indexing.md) owns schema, write, durability, and
-rebuild semantics. The [querying guide](docs/querying.md) owns selection,
+The [indexing guide](indexing.md) owns schema, write, durability, and
+rebuild semantics. The [querying guide](querying.md) owns selection,
 scoring, results, facets, limits, and hydration. The
-[Search v2 migration guide](docs/migration-search-v2.md) owns the version boundary.
+[Search v2 migration guide](migration-search-v2.md) owns the version boundary.
 
 ## Runtime planes
 
@@ -106,7 +115,7 @@ One shard with one replica can use persistent storage, but it is not highly
 available. More shards with one replica add capacity without replica failure
 tolerance. The production HA target uses three voters for each shard across
 three zones. Two replicas remain a compatibility shape, not a production HA
-baseline. The [GKE guide](docs/gke.md) owns these support tiers and placement
+baseline. The [GKE guide](gke.md) owns these support tiers and placement
 rules.
 
 ## Source responsibilities
@@ -135,13 +144,13 @@ StatefulSet `volumeClaimTemplates`. Local and Compose use auth-off; Standalone
 GKE uses in-cluster authentication. Standalone GKE does not adopt Managed or
 Fleet runtimes and does not expand the contract to HA.
 
-The [protocol guide](docs/protocol.md) is an index over these sources. It is not
+The [protocol guide](protocol.md) is an index over these sources. It is not
 a new protocol implementation or a second copy of the route contract. The
-[generated-client guide](clients/README.md) describes how the current OpenAPI
+[generated-client guide](../clients/README.md) describes how the current OpenAPI
 projection appears in each target language. The
-[client integration guide](docs/client-integration.md) owns connection
+[client integration guide](client-integration.md) owns connection
 profiles, workload projection, request mechanics, and source integration. The
-[GKE guide](docs/gke.md) owns the first production environment profile.
+[GKE guide](gke.md) owns the first production environment profile.
 
 ## Authentication boundary
 
@@ -167,7 +176,7 @@ least-privilege model.
 
 Kubernetes RBAC is authoritative. Fleet can converge the grants that it owns.
 It cannot prevent a cluster administrator from creating another valid grant.
-See the [authentication guide](docs/authentication.md) for the complete current
+See the [authentication guide](authentication.md) for the complete current
 and planned contracts.
 
 ## Managed reconciliation
@@ -212,4 +221,4 @@ peer identity, and reshard blockers.
 A storage-full runtime can continue to search while it refuses writes. The
 current API does not expose complete `Writable`, `ReplicationReady`,
 `ConfigReady`, `CapacityReady`, and `Degraded` dimensions. The
-[roadmap](ROADMAP.md#fleet-production-convergence) records that separation.
+[roadmap](../ROADMAP.md#fleet-production-convergence) records that separation.

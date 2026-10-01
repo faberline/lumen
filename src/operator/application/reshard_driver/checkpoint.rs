@@ -49,10 +49,10 @@ pub(super) async fn evict_shard(
 /// ordinary writes reach, and wait for the response before this shard is
 /// considered safe to restart.
 ///
-/// A 200 response alone is not proof of durability: [`crate::persistence::interfaces::http::checkpoint`]'s
+/// A 200 response alone is not proof of durability: [`checkpoint`]'s
 /// `admin_checkpoint` handler returns `200 {"persisted": false}` — not an
 /// error status — when the shard has no durable store configured (the
-/// vacuous, RAM-only [`crate::persistence::application::ports::checkpoint_sink::NoopCheckpoint`] sink; see that type's
+/// vacuous, RAM-only [`NoopCheckpoint`] sink; see that type's
 /// docs), which is exactly the "checkpoint looked like it worked but nothing
 /// was actually made durable" gap #1396's review confirmed (a bare
 /// `is_success()` check treated that response as a satisfied gate). This
@@ -63,6 +63,9 @@ pub(super) async fn evict_shard(
 /// proceeds over undurable data.
 ///
 /// [`DriveOutcome::Blocked`]: crate::operator::application::reshard_driver::DriveOutcome::Blocked
+///
+/// [`checkpoint`]: crate::persistence::interfaces::http::checkpoint
+/// [`NoopCheckpoint`]: crate::persistence::application::ports::checkpoint_sink::NoopCheckpoint
 pub(super) async fn checkpoint_shard(
     http: &reqwest::Client,
     base_url: &str,
@@ -117,7 +120,8 @@ pub(super) async fn checkpoint_shard(
 /// covers the moment this loop starts, not however long the loop itself
 /// takes.
 ///
-/// [`advance_catching_up`]: crate::operator::application::reshard_driver::phases::advance_catching_up
+/// [`advance_catching_up`]:
+///   crate::operator::application::reshard_driver::phases::advance_catching_up
 pub(super) async fn checkpoint_shards(
     control: &dyn ClusterControl,
     http: &reqwest::Client,

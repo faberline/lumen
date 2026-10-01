@@ -26,14 +26,14 @@
 //!   require all 32 documents, complete Keyword bytes for rows 0, 16, and 31,
 //!   Number and Hash values for every row, omitted-field deletion, version LWW,
 //!   stale suppression, delete behavior, checkpoints, and cold reopen. These
-//!   cover `src/raft_sm.rs:223-302`,
-//!   `src/storage.rs:5536-5807`, and
-//!   `src/segment_rdb.rs:513-520`.
+//!   cover `src/replication/application/engine_sm/`,
+//!   `src/index/application/apply/committed_replace_apply.rs`, and
+//!   `src/persistence/infrastructure/segment_rdb_store/`.
 //! - Security: `raft_oversized_committed_replace.rs:953-964` feeds the same
 //!   externally supplied generic-CBOR Raft command with an invalid root byte to
 //!   `EngineSm::apply`, then requires refusal, no watermark advance, and no
 //!   data mutation. It covers the peer-byte boundary at
-//!   `src/raft_sm.rs:223-302`. The child owns no caller-selected
+//!   `src/replication/application/engine_sm/`. The child owns no caller-selected
 //!   path; its only temporary paths are parent-created at `:967-992`.
 //! - Performance: `docs/indexing.md:264-276` says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
@@ -47,7 +47,7 @@
 //!
 //! After the borrowed committed ReplaceDocs path exists, bypass
 //! `try_apply_committed_replace_with_capacity_owner` in
-//! `src/raft_sm.rs` before it handles a foreign command. The
+//! `src/replication/application/engine_sm/` before it handles a foreign command. The
 //! behavior assertion at `:875-886` must fail because the valid committed
 //! command is refused or its watermark does not advance. Restore every source
 //! byte by SHA-256. Never lower the 32-document fixture or its actual >256 MiB

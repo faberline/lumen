@@ -523,7 +523,7 @@ mod published_checkpoint_overlay_release {
     //! - Behavior: `tests/it/indexing_durable_oracle.rs:5338` asserts
     //!   public IDs; `:5522` compares live/cold snapshots; calls at `:5540`,
     //!   `:5544`, `:5552`, and `:5556` cover both checkpoint layers.
-    //! - Security: `src/segment_rdb.rs:500` starts the persisted
+    //! - Security: `src/persistence/infrastructure/segment_rdb_store/` starts the persisted
     //!   generation read; `:2543` and `:2569` mutate LocalRows; `:1138` and
     //!   `:1145` assert refusal and unchanged `CURRENT`. This release-only
     //!   path adds no caller-controlled byte, path, or identifier input.
@@ -920,9 +920,9 @@ mod first_sparse_checkpoint_contract {
     //!   indexing_durable_oracle.rs:11854-12024 create one fresh seven-field
     //!   collection, asserts each zero-row base and first sparse delta, writes
     //!   during real checkpoint file I/O, and checks live and cold results. It
-    //!   covers the first-capture changes in src/storage.rs:13668-13691
-    //!   and src/segment_rdb.rs:540-604.
-    //! - Security: src/segment_rdb.rs:1910-2070 validates the
+    //!   covers the first-capture changes in src/index/application/engine/checkpoint_freeze.rs
+    //!   and src/persistence/infrastructure/segment_rdb_store/.
+    //! - Security: src/persistence/infrastructure/segment_rdb_store/ validates the
     //!   persisted catalog and local-row bytes this path reads. Existing
     //!   v2_current_refuses_keyword_delta_local_rows_count_mismatch and
     //!   v2_current_refuses_keyword_delta_duplicate_stable_local_rows at

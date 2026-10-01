@@ -30,7 +30,7 @@ use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 /// process that armed it is still alive, so expiry is enforced even if the
 /// driver never comes back. The reshard driver re-arms a fresh deadline
 /// every tick it needs one, so a healthy, slow-but-progressing driver never
-/// races its own TTL; see `reshard_driver::WRITE_FENCE_TTL`.
+/// races its own TTL; see `operator::application::reshard_driver::WRITE_FENCE_TTL_SECS`.
 #[derive(Clone, Default)]
 pub struct WriteFence {
     state: Arc<Mutex<Option<FenceState>>>,
@@ -96,7 +96,7 @@ impl WriteFence {
             .is_some_and(|fence| Instant::now() < fence.deadline && !fence.buckets.is_empty())
     }
 
-    /// Poison-proof lock acquisition (#1443 R3), matching `segment_rdb.rs`'s
+    /// Poison-proof lock acquisition (#1443 R3), matching `SegmentRdbStore`'s
     /// `save_lock` precedent: a panic anywhere else in the process while
     /// holding this lock must never turn into a permanent write outage on
     /// this pod by propagating a poisoned-mutex panic into every later

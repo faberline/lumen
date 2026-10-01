@@ -154,7 +154,7 @@ fn is_local_collection_not_found(err: &anyhow::Error) -> bool {
 /// True when `err` is a forwarded shard's 404 — the remote half of
 /// `scatter_search`'s per-shard not-found tolerance (#2489). `404` is used
 /// exclusively for `StorageError::CollectionNotFound` in `ApiErr`'s mapping
-/// (`api.rs`'s `impl From<anyhow::Error> for ApiErr`), so the forwarded
+/// (`app::http::api_err`'s `impl From<anyhow::Error> for ApiErr`), so the forwarded
 /// status code alone is an unambiguous signal without re-parsing the
 /// remote's error message.
 fn is_forwarded_collection_not_found(err: &anyhow::Error) -> bool {

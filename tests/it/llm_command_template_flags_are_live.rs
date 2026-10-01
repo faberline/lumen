@@ -1,7 +1,7 @@
 //! DX contract `command_template` fact-freshness gate (#2494).
 //!
-//! `src/dx.rs` renders the `lumen llm` task-navigation protocol
-//! from the hand-authored `src/dx-contract.yaml`, which it
+//! `src/app/spec/dx.rs` renders the `lumen llm` task-navigation protocol
+//! from the hand-authored `src/app/spec/dx-contract.yaml`, which it
 //! `include_str!`s. Fully-bound
 //! `command` steps are already executed against the live binary by
 //! `tests/it/cli_convention.rs`'s

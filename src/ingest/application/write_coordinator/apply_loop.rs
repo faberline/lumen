@@ -10,6 +10,7 @@ use raft_runtime::OutcomeWindow;
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex as AsyncMutex;
 
+use crate::app::observability::metrics::labels::{apply_item_count, ApplyKind, CoordinatorStage};
 use crate::index::application::admission::record_reservation::{
     RecordReservation, RecordTransientReservation,
 };
@@ -341,10 +342,10 @@ impl WriteCoordinator {
                                         return false;
                                     }
                                 };
-                                let apply_kind = crate::app::observability::metrics::labels::ApplyKind::from_entry(&rec.entry);
+                                let apply_kind = ApplyKind::from_entry(&rec.entry);
                                 eng.metrics().observe_coordinator_stage(
                                     apply_kind,
-                                    crate::app::observability::metrics::labels::CoordinatorStage::PublishToApplyStart,
+                                    CoordinatorStage::PublishToApplyStart,
                                     pending.enqueued_at.elapsed(),
                                 );
                                 let version = rec.version;
@@ -470,9 +471,9 @@ impl WriteCoordinator {
                                             let prepared_entry =
                                                 guard.entry().expect("unapplied prepared entry");
                                             let apply_kind =
-                                                crate::app::observability::metrics::labels::ApplyKind::from_entry(prepared_entry);
+                                                ApplyKind::from_entry(prepared_entry);
                                             let apply_items =
-                                                crate::app::observability::metrics::labels::apply_item_count(prepared_entry);
+                                                apply_item_count(prepared_entry);
                                             let outcome = eng.apply_prepared_raft_entry(&mut guard);
                                             eng.metrics().observe_coordinator_apply(
                                                 apply_kind,
@@ -557,7 +558,7 @@ impl WriteCoordinator {
                                     .advance_sequence(seq);
                                 eng.metrics().observe_coordinator_stage(
                                     apply_kind,
-                                    crate::app::observability::metrics::labels::CoordinatorStage::ApplyToWaiter,
+                                    CoordinatorStage::ApplyToWaiter,
                                     apply_started_at.elapsed(),
                                 );
                                 // Release both halves before publishing the applied watermark.

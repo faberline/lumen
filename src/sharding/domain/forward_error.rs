@@ -5,8 +5,8 @@
 
 /// One-hop shard-forward failure — the owning shard was unreachable (pod
 /// down/rolling) or its response could not be decoded. Raised via `anyhow`
-/// by `routing_remote::RoutedRouter` so `ApiErr`'s classification stays
-/// centralized here rather than duplicated in the `operator`-gated module;
+/// by `sharding::infrastructure::routed_router::RoutedRouter`, with
+/// centralized classification in `app::http::api_err::ApiErr`;
 /// R2 requires this to surface as a clear, distinctly-kinded retryable
 /// error, never a silent local answer.
 #[derive(Debug)]

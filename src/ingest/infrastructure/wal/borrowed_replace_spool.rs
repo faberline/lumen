@@ -160,7 +160,6 @@ fn write_string(out: &mut dyn Write, value: &str) -> Result<()> {
     Ok(())
 }
 
-// Append inside `wal::borrowed_replace_spool` after registering the scanner.
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;

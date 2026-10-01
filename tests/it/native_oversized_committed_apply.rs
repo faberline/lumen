@@ -22,11 +22,11 @@
 //!   sequence within the bounded cleanup watchdog. :250-287 and :436-504
 //!   require every item, real AOF replay, an on-demand checkpoint, a real
 //!   post-checkpoint AOF suffix, and cold reopen to retain the committed head.
-//!   It covers src/coordinator.rs:382-479,
-//!   src/aof.rs:266-387, and
-//!   src/segment_checkpoint.rs:220-268.
-//! - Security: the new foreign delivery at src/coordinator.rs:382-475
-//!   receives a typed WalDelivery from src/wal.rs:677-699; this
+//!   It covers src/ingest/application/write_coordinator/,
+//!   src/persistence/infrastructure/aof/, and
+//!   src/persistence/application/segment_checkpoint_sink/.
+//! - Security: the new foreign delivery at src/ingest/application/write_coordinator/
+//!   receives a typed WalDelivery from src/ingest/infrastructure/wal/; this
 //!   contract adds no byte parser, path, or authorization input. The persisted
 //!   AOF byte boundary remains covered by
 //!   tests/it/aof_oversized_committed_apply.rs:445-503, which feeds a
@@ -42,9 +42,9 @@
 //! # Root negative controls
 //!
 //! - Keep the oversized foreign-delivery restart/refusal branch in
-//!   src/coordinator.rs:456-479. The behavior assertion at :359
+//!   src/ingest/application/write_coordinator/. The behavior assertion at :359
 //!   must fail because the committed watermark stays at the schema sequence.
-//! - Remove the post-apply AOF append in src/coordinator.rs:605-614.
+//! - Remove the post-apply AOF append in src/ingest/application/write_coordinator/.
 //!   The pre-checkpoint real-AOF replay assertion at :441-455 must fail.
 //! - Do not change the fixture threshold or an assertion to create either red.
 //!

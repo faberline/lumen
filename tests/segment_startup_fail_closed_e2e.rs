@@ -16,9 +16,9 @@
 //!   `:577`, `:584`, and `:589` establish the complete CRC-valid frames, bad
 //!   middle payload, and valid successor. `:923` invokes refusal assertions at
 //!   `:360`, `:364`, `:368`, and `:373`; `:939` requires replay error and `:943`
-//!   requires only sequence 1. This covers recovery in `src/aof.rs:226-243`,
-//!   `src/aof.rs:259-274`, and
-//!   `src/bin/lumen.rs:3609-3636`.
+//!   requires only sequence 1. This covers recovery in `src/persistence/infrastructure/aof/`,
+//!   `src/persistence/infrastructure/aof/`, and
+//!   `src/bin/lumen/serve.rs`.
 //! - Security: `tests/segment_startup_fail_closed_e2e.rs:928`
 //!   preserves the valid baseline, while `:364`, `:368`, `:373`, and `:933`
 //!   reject a file-controlled complete, CRC-valid, undecodable middle frame

@@ -21,12 +21,12 @@
 //!   include 12 bytes while a live Hash row is materialized and zero after each
 //!   cold mmap reopen. :1049-1084 makes a stuck or failed baseline red without
 //!   leaving a child alive. These assertions cover
-//!   src/aof.rs:274-315 and the borrowed Hash planning and
-//!   attachment path in src/storage/committed_index_apply.rs:251-322,753-771.
+//!   src/persistence/infrastructure/aof/ and the borrowed Hash planning and
+//!   attachment path in src/index/application/apply/committed_index_apply/.
 //! - Security: aof_oversized_committed_hash.rs:752-789 writes a complete,
 //!   CRC-valid but format-corrupt Hash AOF frame and requires refusal before
 //!   its watermark or row becomes visible. It covers the persisted-byte
-//!   boundary at src/aof.rs:285-315. The Hash grammar itself is not
+//!   boundary at src/persistence/infrastructure/aof/. The Hash grammar itself is not
 //!   widened: existing tests/it/hash_hamming.rs:163-179 rejects invalid
 //!   hex at the public Hash input boundary.
 //! - Performance: docs/indexing.md:264-276 says, verbatim,

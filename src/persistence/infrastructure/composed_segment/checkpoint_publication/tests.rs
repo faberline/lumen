@@ -173,10 +173,6 @@ fn empty_cut_keeps_a_first_private_composition_created_after_capture() {
         .is_err());
 }
 
-// Append inside `#[cfg(test)] mod tests` in
-// `src/composed_segment/checkpoint_publication.rs`.
-// It uses that module's existing `keyword` helper and imports.
-
 #[test]
 fn private_delta_layers_cap_at_sixteen_and_refusal_keeps_prior_view_readable() {
     let dir = tempfile::tempdir().unwrap();

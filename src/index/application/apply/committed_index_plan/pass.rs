@@ -287,7 +287,7 @@ fn finish(
 
 /// Keep this body in lockstep with the scalar arms of `apply_value`.  It uses
 /// borrowed terms.  `Set` scans the next lexical distinct member on each pass,
-/// as `committed_scalar_files::Selected::set_row` does, so it owns no member
+/// as `committed_scalar_files`'s `Selected::set_row` does, so it owns no member
 /// set while planning.
 fn borrowed_apply_cost(
     kind: FieldType,

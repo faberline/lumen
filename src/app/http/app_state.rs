@@ -31,7 +31,8 @@ pub struct AppState {
     pub(crate) search_executor: BlockingSearchExecutor,
     /// Writes go through a [`WriteSink`]: the WAL-seam coordinator for
     /// embedded, or the raft host for `--wal raft`. Reads use
-    /// `engine` directly. See `coordinator` / `wal` / `raft_sm`.
+    /// `engine` directly. See `ingest::application::write_coordinator`,
+    /// `ingest::infrastructure::wal` and `replication::application::engine_sm`.
     pub writer: Arc<dyn WriteSink>,
     /// Write/mutation backend. Defaults to the local coordinator; sharded
     /// serving can replace it with a document-router that fans out writes
@@ -54,7 +55,7 @@ pub struct AppState {
     /// `None` for every deployment shape except the routed one (`SHARD_COUNT`
     /// > 1, `replicasPerShard <= 1`, no `--search-shard-segment-dirs`) — see
     /// [`RoutedBackend`]. The server binary wires a real
-    /// `routing_remote::RoutedRouter` via [`Self::with_routed`]; tests and
+    /// `sharding::infrastructure::routed_router::RoutedRouter` via [`Self::with_routed`]; tests and
     /// every other deployment shape leave this `None`.
     pub routed: Option<Arc<dyn RoutedBackend>>,
 }

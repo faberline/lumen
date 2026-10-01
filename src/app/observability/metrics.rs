@@ -13,7 +13,7 @@
 //! `Gauge` deref to the underlying `AtomicU64`, so this module's pub API
 //! — field names, method names, and `render()`'s byte output — is
 //! unchanged for callers, including the `otel` feature's direct
-//! `field.load(Ordering::Relaxed)` reads in `src/bin/lumen.rs`.
+//! `field.load(Ordering::Relaxed)` reads in `src/bin/lumen/serve.rs`.
 
 pub(crate) mod apply_telemetry;
 mod histogram;
@@ -90,7 +90,7 @@ pub struct Metrics {
     /// milliseconds, read once in [`Metrics::new`] (server startup)
     /// rather than per `observe_search` call — mirrors `LUMEN_HNSW_EF`'s
     /// read-once-at-construction convention (`hnsw_search_ef` in
-    /// `src/vector_index.rs`) instead of adding env-var lock traffic to
+    /// `src/index/domain/vector/hnsw_cpu_index.rs`) instead of adding env-var lock traffic to
     /// the search hot path. Not published as its own series;
     /// `lumen_slow_queries_total`'s HELP text documents the env var for
     /// operators reading `/metrics` directly.
@@ -120,13 +120,13 @@ pub struct Metrics {
     /// where the responding pod's live shard-map version differed from the
     /// scattering pod's own declared version. Signal for a mixed-map
     /// rolling-restart window landing a scatter search mid-flight;
-    /// non-fatal by design (see `routing_remote.rs`'s scatter exemption
+    /// non-fatal by design (see `sharding::infrastructure::routed_router`'s scatter exemption
     /// doc — availability over completeness). `0` outside routed
     /// deployments.
     pub scatter_map_version_mismatches_total: Counter,
     /// #2475: this pod's raft shard index, or the `NOT_RAFT` sentinel until
     /// its raft election-state poller (`spawn_cluster_state_poller` in
-    /// `src/bin/lumen.rs`) has ticked at least once. `render()` reads the
+    /// `src/bin/lumen/serve.rs`) has ticked at least once. `render()` reads the
     /// sentinel to omit `lumen_raft_leader_known` entirely for
     /// standalone/non-raft deployments — publishing a permanently-`0`
     /// series there would be indistinguishable from a genuinely stuck
@@ -153,7 +153,7 @@ pub struct Metrics {
     /// checkpoint save, or raft log append — hit
     /// `io::ErrorKind::StorageFull`), `0` otherwise. Sticky: stays `1`
     /// until the periodic re-probe (`LUMEN_STORAGE_FULL_REPROBE_SECS`, see
-    /// `src/bin/lumen.rs`) confirms the data dir accepts a write again, or
+    /// `src/bin/lumen/serve.rs`) confirms the data dir accepts a write again, or
     /// the process restarts. `crate::app::http::guards::enforce_storage_writable` reads
     /// this to fast-fail mutating endpoints without touching the durable
     /// path; `render::prometheus_rule`'s `LumenStorageDegraded` alert reads

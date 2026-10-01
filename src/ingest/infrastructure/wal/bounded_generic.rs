@@ -1,5 +1,5 @@
-// Intended new file: src/wal/bounded_generic.rs
-//
+//! Bounded decoding of the generic wire representation.
+
 // This module deliberately owns the generic wire representation.  The public
 // RaftLogEntry and FieldValue types remain unchanged.  In particular, the
 // FieldValue visitor receives owned strings from serde and moves them into the

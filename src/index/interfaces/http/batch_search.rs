@@ -20,6 +20,8 @@ use crate::shared_kernel::types::search::{
 };
 
 #[cfg(doc)]
+use crate::access::application::authorization::AuthErr;
+#[cfg(doc)]
 use crate::index::interfaces::http::query_method::collections_query_dispatch;
 
 /// msearch-style batch search: N independent `(collection, SearchRequest)`

@@ -7,7 +7,7 @@
 //! shard leader before being applied.
 //!
 //! The contract for external consumers is `GET /openapi.json`,
-//! generated at runtime from this module.
+//! generated at runtime from `app::http::openapi::ApiDoc`.
 
 use std::sync::Arc;
 

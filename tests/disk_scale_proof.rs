@@ -31,7 +31,7 @@
 //!     the mmap (faults > 0). The fraction does not grow with N → O(working-set +
 //!     identity), not O(forward payload). THIS is the end-to-end bounded-RSS proof.
 //!   * PART 2 (asserted GREEN as of Phase 2k-1): the flat-cpu Vector path now BOUNDS
-//!     RAM too. `FlatCpuIndex::open_from_segment` (src/vector_index.rs) NO LONGER
+//!     RAM too. `FlatCpuIndex::open_from_segment` (src/index/domain/vector/) NO LONGER
 //!     re-stores every vector into the in-RAM `VectorStore` on reopen — the base
 //!     vectors live ONLY on the mmap (demand-paged via the composed base-segment +
 //!     live-tail + tombstone model), so the reopen+query delta is a small bounded
@@ -761,7 +761,7 @@ fn scale_proof_reopen_rss_is_bounded() {
 
     // =====================================================================
     // PART 2 — THE FLAT-CPU VECTOR PATH IS NOW BOUNDED (Phase 2k-1). Before this
-    // phase `FlatCpuIndex::open_from_segment` (src/vector_index.rs) called
+    // phase `FlatCpuIndex::open_from_segment` (src/index/domain/vector/) called
     // `store.put` for every row on reopen, re-materializing the whole O(N*dim)
     // vector buffer in the in-RAM `VectorStore` even though the mmap segment was
     // also attached — so the reopened delta GREW ~1.5x when dim doubled (the

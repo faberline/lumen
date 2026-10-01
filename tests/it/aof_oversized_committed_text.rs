@@ -16,14 +16,14 @@
 //!   :372-486 and :673-764 require all marker IDs, small-word queries,
 //!   document lengths, BM25 scores, a malformed covered prefix, AOF suffixes,
 //!   checkpoints, and cold open.
-//!   They cover src/aof.rs:266-411,
-//!   src/storage/committed_index_apply.rs:166-217, and
-//!   src/storage/record_admission.rs:404-545.
+//!   They cover src/persistence/infrastructure/aof/,
+//!   src/index/application/apply/committed_index_apply/, and
+//!   src/index/application/admission/.
 //! - Security: aof_oversized_committed_text.rs:525-641 corrupts a complete,
 //!   CRC-valid Text AOF frame that `AofWriter` first wrote. Its assertions at
 //!   :608-640 require replay to refuse the bad frame, leave its value absent,
 //!   and persist only the valid predecessor watermark. It covers the persisted
-//!   byte boundary in src/aof.rs:266-387.
+//!   byte boundary in src/persistence/infrastructure/aof/.
 //! - Performance: docs/indexing.md:264-272 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   aof_oversized_committed_text.rs:506-523, called at :666-671, :683-688,
@@ -35,7 +35,7 @@
 //! # Root negative controls
 //!
 //! - After a Text route exists, change it to return `PlanResult::Unsupported`
-//!   in src/storage/committed_index_plan.rs:319-330. The behavior
+//!   in src/index/application/apply/committed_index_plan.rs. The behavior
 //!   assertion at :651 must fail at the owned-decode reservation for the Text
 //!   frame.
 //! - Remove the borrowed Text replay route once it exists. The same replay

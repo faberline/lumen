@@ -51,7 +51,7 @@ pub(super) fn cache_key(lumen: &Lumen) -> String {
 }
 
 /// Parse one gauge's value out of Prometheus text exposition (see
-/// `crate::app::observability::metrics::Registry::render`, e.g. `"lumen_storage_bytes 2048\n"`).
+/// `crate::app::observability::metrics::Metrics::render`, e.g. `"lumen_storage_bytes 2048\n"`).
 /// Ignores comment (`#`) and blank lines; returns `None` if `metric` is not
 /// present or its value does not parse. `pub(crate)` (#1467 R5) so
 /// `reshard_driver::KubeClusterControl::serving_pods_report_map_version` can

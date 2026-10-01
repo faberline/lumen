@@ -18,22 +18,17 @@ use crate::cli::client::{QueryDuplicatesArgs, QuerySearchArgs, QueryTarget};
 use crate::cli::client::{QueryCollectionsCommand, QueryCommand};
 
 // ---------------------------------------------------------------------------
-// `lumen connect` / `lumen query` (#1321) — thin adapter over
-// `cli_std::connect` (#1376): the `kubectl port-forward` process lifecycle
-// (`ChildGuard`, `free_local_port`, `wait_for_local_port_ready`) lives in
-// `libs/cli-std/src/connect.rs`, reusable by any k8s-native service CLI.
-// This file keeps only its own flag surface (`ConnectArgs`/`QueryTarget`) and
-// the `Lumen` CRD-name lookup convention (`"lumen"` passed as
-// `resource_kind`).
+// `lumen query` builds HTTP requests from the flags in `cli::client`.
+// `connect.rs` owns the Kubernetes lookup and shared port-forward adapter.
 //
 // #2873 cut the credential half away entirely. The shared module's resolver
 // chain — kubectl-get the Secret named by the CR, base64-decode the registry
 // key inside it, pick an entry whose role covers the request — is still there
 // for the services that have not migrated, but lumen no longer calls any of
 // it: the registry it decoded stopped existing in #2871, and the CR field
-// naming the Secret stopped existing in #2872. What remains here is a
-// port-forward, and nothing that reads, derives, prints, or passes on a
-// credential.
+// naming the Secret stopped existing in #2872. The connect adapter only
+// forwards a port. These query helpers read an explicit URL and never read,
+// derive, print, or pass on a credential.
 // ---------------------------------------------------------------------------
 
 // The body-builder / URL-resolution helpers below are exercised directly by

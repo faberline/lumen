@@ -11,8 +11,6 @@ use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem};
 use crate::shared_kernel::types::schema::{Analyzer, CreateCollectionRequest, FieldType};
 
-// Append inside `#[cfg(test)] mod borrowed_tests` in
-// src/storage/text_preparation.rs.
 // This adds an analyzer-selecting helper; existing test helpers stay unchanged.
 
 fn engine_with_analyzer(analyzer: Analyzer) -> Engine {
@@ -112,7 +110,6 @@ fn borrowed_dictionary_jieba_requires_route_cache_before_staging() {
     );
 }
 
-// Append inside `borrowed_tests` after the implementation candidate.
 #[test]
 fn lowercase_pre_stage_bound_is_limited_to_the_largest_token() {
     let input = "İ ".repeat(4096);
@@ -127,8 +124,6 @@ fn lowercase_pre_stage_bound_is_limited_to_the_largest_token() {
     );
 }
 
-// Append inside `#[cfg(test)] mod borrowed_tests` in
-// src/storage/text_preparation.rs.
 //
 // The expected charge uses only the reservation baseline and the stage receipt.
 // It deliberately does not duplicate any large-row helper workspace formula.

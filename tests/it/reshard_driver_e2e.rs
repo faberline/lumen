@@ -109,7 +109,7 @@ fn spin_up_shard() -> Shard {
 
 /// #1389 AC2: a [`CheckpointSink`] test double whose success/failure is
 /// controlled from outside — stands in for a real `SegmentCheckpointSink`
-/// (`src/bin/lumen.rs`) hitting a transient disk error, without needing an
+/// (`src/bin/lumen/serve.rs`) hitting a transient disk error, without needing an
 /// actual segment store on disk. Counts calls so a test can assert the
 /// driver actually invoked `/admin/checkpoint` per touched shard, not just
 /// that it happened to succeed.

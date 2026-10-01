@@ -23,13 +23,13 @@
 //!   callback to finish before a caller checkpoint and retain
 //!   its source bytes. Assertions at `:560-596` require one committed
 //!   watermark, maintenance, both rows, and a final cold open at that watermark.
-//!   They cover `src/raft_sm.rs:107-160` and `:223-302`, plus
-//!   `src/segment_capacity.rs:410-443`.
+//!   They cover `src/replication/application/engine_sm/`, plus
+//!   `src/persistence/application/capacity/`.
 //! - Security: assertions at `:604-617` corrupt the external peer command
 //!   after the valid result and require the generic decoder to refuse it without
 //!   moving the Raft watermark or changing indexed rows. They cover the same
-//!   `src/raft_sm.rs:107-160` byte boundary and
-//!   `src/wal.rs:256-267` `WalRecord::decode` input validation. The capacity
+//!   `src/replication/application/engine_sm/` byte boundary and
+//!   `src/ingest/infrastructure/wal/` `WalRecord::decode` input validation. The capacity
 //!   owner only adds maintenance before a wait; it does not widen the accepted
 //!   peer format.
 //! - Performance: `docs/indexing.md:264-276` says, verbatim,
@@ -42,7 +42,7 @@
 //! # Root negative control
 //!
 //! Remove the generic capacity-owner ensure before a Full wait in
-//! `src/raft_sm.rs:107-160`. The behavior assertion at `:433-436`
+//! `src/replication/application/engine_sm/`. The behavior assertion at `:433-436`
 //! must fail after its bounded cleanup checkpoint proves that the valid retained
 //! peer command had been waiting for caller-driven progress. Restore every
 //! changed production file by SHA-256 before another gate.

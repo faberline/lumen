@@ -31,12 +31,12 @@
 //!   foreground checkpoints selected a real one-field background merge before
 //!   the same pointer hold is armed. Lines 1094-1165 require that merge's cold
 //!   cut, its retained AOF suffix, and the final cold cut. These assertions
-//!   exercise src/segment_rdb.rs:839-885,
-//!   src/segment_background_merge.rs:677-810, and the actual
+//!   exercise src/persistence/infrastructure/segment_rdb_store/,
+//!   src/persistence/application/background_merge/, and the actual
 //!   pointer calls at libs/storage-durable/src/generation.rs:1135-1194.
 //! - Security: this change changes only the timing of process-written CURRENT
-//!   publication in src/segment_rdb.rs:839-885 and
-//!   src/segment_background_merge.rs:769-810. It opens no new
+//!   publication in src/persistence/infrastructure/segment_rdb_store/ and
+//!   src/persistence/application/background_merge/. It opens no new
 //!   caller path, parser, identifier, or disk-input boundary. The cold/AOF
 //!   checks at current_publication_apply_barrier.rs:1094-1165 refuse a
 //!   publication that loses the later committed record. The existing durable
@@ -55,7 +55,7 @@
 //! # Root negative control
 //!
 //! After the repair, retain the original CaptureLease through the merge
-//! pointer calls in src/segment_background_merge.rs:769-790
+//! pointer calls in src/persistence/application/background_merge/
 //! instead of converting it to the short publication pin. The assertions at
 //! current_publication_apply_barrier.rs:1076-1086 must fail because the
 //! merge-interleaved HTTP write cannot report success before release. Restore

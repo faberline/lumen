@@ -120,7 +120,7 @@ pub(super) fn serving_env(lumen: &Lumen) -> Vec<Value> {
     // all data despite the volume being durable. `replicasPerShard > 1` pods
     // run raft (already PVC-backed via `LUMEN_RAFT_DATA_DIR`) and are
     // unaffected by this block. `--persistence=segment` (not the CBOR
-    // default) is deliberate: it activates the local AOF (`src/aof.rs`)
+    // default) is deliberate: it activates the local AOF (`src/persistence/infrastructure/aof/`)
     // alongside the periodic segment checkpoint, giving `everysec`-fsync
     // crash durability (~1s RPO bound) instead of only surviving cleanly
     // between `LUMEN_SNAPSHOT_SECS` (default 300s) CBOR snapshots.

@@ -3,7 +3,7 @@
 //! These assert the *order* and relative magnitude of scores, not
 //! just membership — so a mutated BM25 / score-combination operator
 //! (e.g. `+`→`-`, `/`→`*`, `cmp(a,b)`→`cmp(b,a)`) makes at least one
-//! of them fail. Membership-only tests above cannot catch those.
+//! of them fail. Membership-only tests in the sibling modules cannot catch those.
 
 use std::collections::BTreeMap;
 

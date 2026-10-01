@@ -20,7 +20,7 @@ pub const MERGE_STEP_COUNT: usize = 10;
 /// instead of leaving that to a guess about a job that took seconds.
 ///
 /// Ordering is the order the steps run inside
-/// `crate::segment_background_merge::SegmentRdbStore::merge_one`, and
+/// `persistence::application::background_merge::publish` (`SegmentRdbStore::merge_one`), and
 /// [`MergeStep::Total`] spans the whole job so
 /// `Total - sum(others)` is the unattributed remainder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

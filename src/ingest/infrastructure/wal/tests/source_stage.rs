@@ -13,16 +13,6 @@ use crate::ingest::infrastructure::wal_source_stage::WalSourceStager;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::FieldValue;
 
-// Append inside `src/wal.rs`'s existing `#[cfg(test)] mod tests`.
-// The injected-fault test needs this test-only helper in `wal_source_stage.rs`:
-//
-// #[cfg(test)] pub(crate) fn for_mem_wal_with_injector(
-//     injector: Arc<dyn StageFailureInjector>,
-// ) -> io::Result<Self>
-//
-// It must create the normal private directory and StageStore::with_injector;
-// do not expose it outside cfg(test).
-
 #[tokio::test]
 async fn admitted_locator_observes_exact_record_after_its_source_is_staged() {
     let wal = MemWal::new();

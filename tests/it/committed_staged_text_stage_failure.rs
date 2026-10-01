@@ -32,15 +32,15 @@
 //!   sequence exists. :681-748 requires a failed local result, old watermark,
 //!   no Text row, no new CURRENT generation, retained source bytes, and valid
 //!   replay after restoring the private path. It covers
-//!   src/coordinator.rs:80-120 and :599-605,
-//!   src/storage/record_admission.rs:546-621, and
-//!   src/storage/staged_text_row.rs:174-206.
+//!   src/ingest/application/write_coordinator/,
+//!   src/index/application/admission/, and
+//!   src/index/infrastructure/staging/staged_text_row.rs.
 //! - Security: :665-679 gives the environment-derived private stage root a
 //!   regular file rather than a directory after the record is committed. The
 //!   closed assertions at :681-740 require no acknowledgement, state,
 //!   watermark, or CURRENT publication from that unusable filesystem input;
 //!   :522-547 requires the real retained WAL bytes to remain intact. It covers
-//!   the process I/O boundary at src/storage/staged_text_row.rs:174-206.
+//!   the process I/O boundary at src/index/infrastructure/staging/staged_text_row.rs.
 //! - Performance: docs/indexing.md:264-276 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   :435-454, called after failed delivery at :734-739 and after retained-source
@@ -52,7 +52,7 @@
 //! # Root negative control
 //!
 //! After the repair exists, restore the legacy PreparedLocalRecord Fallback
-//! branch at src/coordinator.rs:599-605. The behavior assertion at
+//! branch at src/ingest/application/write_coordinator/. The behavior assertion at
 //! :690 must fail because the stage-directory I/O error becomes a successful,
 //! uncharged normal apply. Restore the corrected production SHA before another
 //! gate. Do not alter the input size or expectation to manufacture this red.

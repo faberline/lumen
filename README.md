@@ -422,7 +422,7 @@ contract. Each source below states its direct contribution.
 |---|---|
 | [STATUS.md](STATUS.md) | Current support boundaries and evidence |
 | [ROADMAP.md](ROADMAP.md) | Future outcomes and explicit non-goals |
-| [Architecture](ARCHITECTURE.md) | Runtime planes, ownership axes, and source responsibilities |
+| [Architecture](docs/architecture.md) | Runtime planes, ownership axes, and source responsibilities |
 | [Deployment](docs/deployment.md) | Standalone and Managed installation paths |
 | [Configuration](docs/configuration.md) | Setting precedence and change activation |
 | [Authentication](docs/authentication.md) | Current KSA flow and planned Managed access contract |

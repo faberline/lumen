@@ -45,7 +45,7 @@ pub struct ReshardBatchReplaceScope {
 ///
 /// #1467 R2 ordering contract: the sender
 /// (`run_migration_pass_impl`/`snapshot_reshard_prune_chunks` in
-/// `src/operator/reshard_driver.rs`) always emits every chunk for one
+/// `src/operator/application/reshard_driver/`) always emits every chunk for one
 /// `(bucket, collection_id, total_chunks)` key strictly in `chunk_index`
 /// order (`0..total_chunks`, awaited sequentially, one HTTP round trip per
 /// chunk) within a single migration pass, and never starts a second pass

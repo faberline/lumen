@@ -20,7 +20,6 @@ use crate::shared_kernel::types::{
     schema::{CreateCollectionRequest, FieldSpec, FieldType},
 };
 
-// Draft bytes for src/raft_sm.rs's existing `#[cfg(test)] mod tests`.
 // The host status is observed through its public router after apply cleanup.
 
 const TEST_LIMIT: Duration = Duration::from_secs(2);

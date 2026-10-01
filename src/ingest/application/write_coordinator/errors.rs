@@ -6,7 +6,8 @@
 /// loop's redelivery-dedup guard skipped the waiter's sequence (already
 /// at/below `applied`), or the wait exceeded
 /// [`SUBMIT_TIMEOUT`](super::SUBMIT_TIMEOUT). Both are transient/retryable,
-/// never a client input error — `src/api.rs`'s `From<anyhow::Error> for ApiErr` downcasts
+/// never a client input error — `src/app/http/api_err.rs`'s `From<anyhow::Error> for ApiErr`
+/// downcasts
 /// this to a `503` instead of falling through to the generic `400`
 /// default, so a stranded write is loud (a 5xx) rather than silent (an
 /// infinite hang, the original defect) or misleading (a 4xx).
@@ -24,7 +25,7 @@ impl std::error::Error for SubmitStalled {}
 /// A durable write path (local AOF append/flush/sync, a segment/RDB
 /// checkpoint save, or — under the `raft-wal` feature — a raft log append)
 /// hit `io::ErrorKind::StorageFull` (ENOSPC) or a wrapped equivalent (#2516).
-/// Reported as a distinct, stable error so `src/api.rs`'s
+/// Reported as a distinct, stable error so `src/app/http/api_err.rs`'s
 /// `From<anyhow::Error> for ApiErr` maps it to `507 Insufficient Storage`
 /// with the machine-readable `storage_full` code instead of falling through
 /// to the generic `400` default. Every origin that produces one MUST first

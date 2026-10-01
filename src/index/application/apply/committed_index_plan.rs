@@ -2,7 +2,7 @@
 //!
 //! The plan keeps Keyword, Number, Set, Text, Hash, and Vector in one action ledger.
 //! Text bytes are filled after its borrowed rows are staged outside state and
-//! apply locks. `storage.rs` supplies the read-only `PlanView` adapter while
+//! apply locks. `committed_index_apply.rs` supplies the read-only `PlanView` adapter while
 //! holding its state read lock; attachment remains in the committed adapter.
 //!
 //! A plan owns identifiers and small metadata only.  Every `ordinal` points

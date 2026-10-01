@@ -149,7 +149,7 @@ fn help_ships_standard_issue_group_not_report_issue() {
 /// - Security: the assertions at `:101`, `:169`, `:183`, and `:197` feed
 ///   untrusted command-line values into `serve` and require refusal before it
 ///   can create a listener or contact a broker. They cover the retired input fields at
-///   `src/bin/lumen.rs:1117-1127`.
+///   `src/bin/lumen/cli.rs`.
 /// - Performance: those parse-only refusals reach no request, scan, startup,
 ///   or build path. They make no timing claim. The existing durable performance
 ///   gate remains the measurement for write execution.

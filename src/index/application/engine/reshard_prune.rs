@@ -35,7 +35,7 @@ const PRUNE_ACCUM_MAX_AGE_TICKS: u64 = 4096;
 /// with [`StorageError::InvalidPruneChunk`] outright rather than accepted
 /// into the accumulator, since a chunk count this large could never
 /// plausibly complete from the sender's own chunking (`chunk_ids_by_bytes`
-/// in `src/reshard.rs` targets far fewer, larger chunks).
+/// in `src/sharding/domain/reshard_batch.rs` targets far fewer, larger chunks).
 const PRUNE_ACCUM_MAX_TOTAL_CHUNKS: u32 = 4096;
 
 #[derive(Debug, Default)]
@@ -93,7 +93,7 @@ impl Engine {
     /// keep set.
     ///
     /// #1467 R2 (stale-partial reset): the sender (`run_migration_pass_impl`
-    /// in `src/operator/reshard_driver.rs`) always emits chunks
+    /// in `src/operator/application/reshard_driver/`) always emits chunks
     /// `0..total_chunks` for one key strictly in order, back-to-back within
     /// a single migration pass, and never starts a second pass for the same
     /// `(bucket, collection_id)` before the first either completes or the

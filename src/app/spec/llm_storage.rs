@@ -264,7 +264,7 @@ full-engine restore:
   can land inside and silently lose (target: the whole batch; source: the
   eviction, i.e. `documents_indexed` reverting upward). The reshard phase
   driver (`advance_catching_up`,
-  `src/operator/reshard_driver.rs`) calls this on every shard touched by a
+  `src/operator/application/reshard_driver/`) calls this on every shard touched by a
   split — every old shard plus the new one — and awaits success on all of
   them before patching `spec.shardMap` and triggering the cutover rolling
   restart, so a batch or eviction is only ever counted "migrated" once it

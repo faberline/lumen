@@ -105,7 +105,7 @@ impl Metrics {
 /// #2519: `LUMEN_SLOW_QUERY_MS` (milliseconds) if set and parseable to a
 /// `u64`, else [`DEFAULT_SLOW_QUERY_THRESHOLD_MS`]. Read once at
 /// `Metrics::new()` construction — mirrors `hnsw_search_ef`'s
-/// read-once-per-construction convention in `src/vector_index.rs`.
+/// read-once-per-construction convention in `src/index/domain/vector/hnsw_cpu_index.rs`.
 pub(super) fn slow_query_threshold_ms_from_env() -> u64 {
     std::env::var("LUMEN_SLOW_QUERY_MS")
         .ok()

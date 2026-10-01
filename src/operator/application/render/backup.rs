@@ -27,7 +27,7 @@ pub(super) fn backup_service_account(cx: &RenderCtx<'_>) -> Value {
 /// The optional backup CronJob (#808): rendered only when
 /// `spec.serving.backup` is set. Lumen already produces a consistent
 /// point-in-time snapshot over HTTP (`GET /admin/backup`, see
-/// `src/api.rs`); this CronJob adds nothing new to the
+/// `src/persistence/interfaces/http/backup.rs`); this CronJob adds nothing new to the
 /// WAL/snapshot path, it only *schedules and transports* that existing
 /// endpoint's bytes to a destination via `lumen backup`
 /// (`libs/service-backup`). The shared [`service_k8s::render::cron_job`] helper

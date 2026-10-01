@@ -36,10 +36,10 @@
 //!   makes the scratch-presence assertion the direct cleanup oracle, then
 //!   requires checkpoint completion, cleanup, live exact search, and cold
 //!   CURRENT recovery. It
-//!   covers `src/segment_background_merge.rs:391-429,611-624` and
-//!   `src/segment_rdb.rs:540-565,775-859`.
+//!   covers `src/persistence/application/background_merge/` and
+//!   `src/persistence/infrastructure/segment_rdb_store/`.
 //! - Security: this change only serializes deletion of the process-created
-//!   scratch path at `src/segment_background_merge.rs:615-623`; it
+//!   scratch path at `src/persistence/application/background_merge/`; it
 //!   does not accept a new caller path or relax root validation. Existing
 //!   `tests/segment_startup_fail_closed_e2e.rs:798-811,816-842,1119-1148`
 //!   keeps symlink, unknown-root, and unpointed-generation inputs fail closed
@@ -56,7 +56,7 @@
 //!
 //! After the repair, move the repaired merge scratch `remove_dir_all` and
 //! unpin work back outside the root save gate at
-//! `src/segment_background_merge.rs:615-623`. The behavior
+//! `src/persistence/application/background_merge/`. The behavior
 //! scratch-presence assertion at `:465` must fail because cleanup completes while the held
 //! checkpoint still owns the save interval. Restore the corrected production
 //! SHA before another gate. Do not weaken the observer order or replace the

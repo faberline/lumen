@@ -844,7 +844,7 @@ fn prometheus_rule_covers_backup_failure_and_crash_looping() {
 
 /// #2475: raft-leader-absent, reshard-stalled, PVC-near-full, and
 /// auth-registry-reload-failing each bind to a real metric name published
-/// by this binary (`src/metrics.rs`) or the kubelet, not a synthesized one.
+/// by this binary (`src/app/observability/metrics.rs`) or the kubelet, not a synthesized one.
 #[test]
 fn prometheus_rule_covers_raft_reshard_pvc_and_auth_failure_modes() {
     let l = lumen("lumen", prod_spec());
@@ -893,7 +893,7 @@ fn prometheus_rule_covers_raft_reshard_pvc_and_auth_failure_modes() {
 }
 
 /// #2519: the slow-query alert binds to `lumen_slow_queries_total`
-/// (`src/metrics.rs`'s `Metrics::observe_search`, gated on
+/// (`src/app/observability/metrics/search.rs`'s `Metrics::observe_search`, gated on
 /// `LUMEN_SLOW_QUERY_MS`), carries a `for: 10m` sustained-rate window per
 /// the issue's acceptance criteria, and gets the same summary/runbook
 /// annotation shape as every other alert in this rule group.
@@ -918,8 +918,9 @@ fn prometheus_rule_covers_slow_queries() {
 }
 
 /// #2516: the storage-degraded alert binds to `lumen_storage_degraded`
-/// (`src/metrics.rs`'s `Metrics::mark_storage_degraded`, flipped by
-/// `src/coordinator.rs`/`src/bin/lumen.rs`/`src/raft_sm.rs` on a real
+/// (`src/app/observability/metrics/observe.rs`'s `Metrics::mark_storage_degraded`, flipped by
+/// `src/ingest/application/write_coordinator/`/`src/bin/lumen/serve.rs`/`src/replication/application/engine_sm/`
+/// on a real
 /// ENOSPC), pages at `critical` (writes are actively failing, not just
 /// nearing capacity like `LumenPvcNearFull`), and its runbook cross-references
 /// both `LumenPvcNearFull` (the early warning this alert follows) and

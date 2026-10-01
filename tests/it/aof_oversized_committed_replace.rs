@@ -25,14 +25,14 @@
 //!   Hash values for all 32 rows, full-replacement deletion of `obsolete`,
 //!   document-version LWW, strict suffix replay, incremental checkpoints, and
 //!   cold reopen. They cover
-//!   src/types.rs:699-737, src/log_entry.rs:18-39,
-//!   src/aof.rs:285-389, src/wal.rs:218-249,
-//!   src/wal/bounded_generic.rs:43-82, and
-//!   src/storage.rs:5536-5807.
+//!   src/shared_kernel/types/, src/shared_kernel/log_entry.rs,
+//!   src/persistence/infrastructure/aof/, src/ingest/infrastructure/wal/,
+//!   src/ingest/infrastructure/wal/bounded_generic.rs, and
+//!   src/index/application/apply/committed_replace_apply.rs.
 //! - Security: aof_oversized_committed_replace.rs:797-868 mutates one byte of
 //!   an AofWriter-written oversized frame, recomputes its CRC, and requires
 //!   refusal before its documents or watermark are published. This exercises
-//!   the persisted-byte boundary in src/aof.rs:285-389.
+//!   the persisted-byte boundary in src/persistence/infrastructure/aof/.
 //! - Performance: docs/indexing.md:264-276 says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."
 //!   aof_oversized_committed_replace.rs:773-792 reads public pending total and
@@ -43,7 +43,7 @@
 //! # Root negative control
 //!
 //! After borrowed ReplaceDocs replay exists, bypass its mapped ReplaceDocs
-//! dispatch before generic decode in `src/aof.rs`. The assertion at
+//! dispatch before generic decode in `src/persistence/infrastructure/aof/`. The assertion at
 //! :934 must fail with the current owned-decode refusal or child cleanup
 //! watchdog. Restore each changed source file by SHA-256. Never lower the
 //! 32-document fixture or its >256 MiB payload assertion.

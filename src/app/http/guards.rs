@@ -55,7 +55,7 @@ pub(crate) fn read_consistency_from(headers: &HeaderMap) -> ReadConsistency {
 ///   sentinel (`u64::MAX`) — `RaftHost` doesn't expose a peer-timing RPC
 ///   today, so `Bounded` on a non-leader replica always rejects rather than
 ///   report a fabricated lag figure (see `spawn_cluster_state_poller` in
-///   `src/bin/lumen.rs`, #1349).
+///   `src/bin/lumen/serve/raft.rs`, #1349).
 pub(crate) fn enforce_read_consistency(
     state: &AppState,
     consistency: ReadConsistency,
@@ -126,7 +126,7 @@ pub(crate) fn enforce_read_consistency(
 /// inside the sub-window between that read and the same pass's eviction
 /// uncovered — fencing DELETE like every other write closes it fully, at
 /// the ordinary cost (a retryable 503) of any write to a fenced bucket. See
-/// the module's #1396 R2 write-fence doc on [`WriteFence`].
+/// the #1396 R2 write-fence module doc in `app::http::write_fence`.
 pub(crate) fn enforce_write_fence(
     state: &AppState,
     collection_id: &str,

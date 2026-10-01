@@ -27,7 +27,7 @@
 //!   requires a cold `CURRENT(C)` plus strict AOF replay to recover all three
 //!   distinct IDs at :721-774. This is the black-box oracle for moving only
 //!   the stable covered-prefix copy and its first temp `sync_all` out of
-//!   `src/segment_checkpoint.rs:180-187`'s current `SharedAof`
+//!   `src/persistence/application/segment_checkpoint_sink/`'s current `SharedAof`
 //!   critical section.
 //! - Security: the changed reader consumes the process-written AOF file.  The
 //!   exact suffix and cold replay assertions at :715-774 reject a publication
@@ -47,7 +47,7 @@
 //! # Root negative control
 //!
 //! Restore the current one-phase call in
-//! `src/segment_checkpoint.rs:180-187`, so `SharedAof` remains
+//! `src/persistence/application/segment_checkpoint_sink/`, so `SharedAof` remains
 //! locked while `FramedLogWriter` performs the initial compaction-temp sync.
 //! The exact pre-release assertion at :688-692 must fail because `U` reaches
 //! the WAL but cannot persist and acknowledge until the initial temp sync

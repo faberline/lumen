@@ -17,15 +17,15 @@
 //!   assertions `:196-209` require a 1,000-item,
 //!   270 KiB-per-Keyword fast Index record already retained by Raft to publish
 //!   every exact Keyword, advance its Raft index, checkpoint, and cold reopen.
-//!   This covers committed apply at `src/raft_sm.rs:104-158` and
+//!   This covers committed apply at `src/replication/application/engine_sm/` and
 //!   `:221-249`, with retained-store replay at
 //!   `libs/raft-runtime/src/host.rs:568-584`.
 //! - Security: `tests/it/raft_oversized_committed_apply.rs:459-480`
 //!   feeds a truncated caller/peer-controlled `LWAL` fast Index into the
 //!   committed `EngineSm::apply` callback and requires refusal, no document,
 //!   and the old watermark. It covers the fast-record byte boundary at
-//!   `src/wal.rs:320-419` as reached by
-//!   `src/raft_sm.rs:221-249`. It runs after the behavior oracle,
+//!   `src/ingest/infrastructure/wal/` as reached by
+//!   `src/replication/application/engine_sm/`. It runs after the behavior oracle,
 //!   so the current red remains the oversized committed-record behavior red.
 //! - Performance: `docs/indexing.md:264-272` says, verbatim,
 //!   "Pending active, frozen, and reserved changes have a 256 MiB budget."

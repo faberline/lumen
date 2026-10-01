@@ -22,12 +22,12 @@
 //!   checkpoint, and cold reopen. aof_recovered_catalog_layer_cap.rs:627-660
 //!   turns a retained baseline loop into the red without leaving a live child.
 //!   These assertions cover
-//!   src/aof.rs:266-315,
-//!   src/storage/committed_index_apply.rs:288-309, and
-//!   src/segment_capacity.rs:261-274.
-//! - Security: src/segment_capacity.rs:261-274 only drives
+//!   src/persistence/infrastructure/aof/,
+//!   src/index/application/apply/committed_index_apply/, and
+//!   src/persistence/application/capacity/.
+//! - Security: src/persistence/application/capacity/ only drives
 //!   checkpoint and merge work after established Engine state. The changed AOF
-//!   path at src/aof.rs:266-315 passes persisted bytes through its
+//!   path at src/persistence/infrastructure/aof/ passes persisted bytes through its
 //!   existing frame validation. The existing closed-input case in
 //!   tests/it/aof_oversized_committed_apply.rs:445-503 feeds a complete,
 //!   CRC-valid truncated fast payload and requires refusal before its
@@ -48,7 +48,7 @@
 //!
 //! After the empty temporary-root fallback is implemented, remove its
 //! merge-without-CURRENT checkpoint branch in
-//! src/segment_capacity.rs:261-274. The isolated-child behavior
+//! src/persistence/application/capacity/. The isolated-child behavior
 //! assertion below must fail because a catalog-only 16-layer AOF suffix cannot
 //! make capacity progress. Restore the source hash before any other gate.
 //!

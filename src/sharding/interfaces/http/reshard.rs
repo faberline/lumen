@@ -9,6 +9,9 @@
 
 use std::collections::BTreeSet;
 
+#[cfg(doc)]
+use crate::sharding::domain::prune_chunk::ReshardPruneChunk;
+
 use anyhow::Result;
 use axum::extract::{Extension, State};
 use axum::response::Json;

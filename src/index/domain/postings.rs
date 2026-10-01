@@ -108,11 +108,6 @@ impl Postings {
     }
 }
 
-/// A token's postings resolved for BM25 scoring, from EITHER the live in-RAM
-/// `Postings` (borrowed, zero-copy) or a sealed Text segment's decoded posting
-/// block (owned `Vec`s; text tf is STORED — Phase 2e-B). Both variants expose
-/// the identical `(docids, tfs)` u32 streams in the SAME ascending-docid order,
-/// so the BM25 score expression is fed bit-identical inputs on both paths.
 /// A token's active posting resolved for a SMALL candidate set only (#4246):
 /// the exact composed `df` plus the `(docid, tf)` pairs of those candidates the
 /// token covers, ascending. Built by [`TextIndex::tok_postings_at`] without
@@ -127,6 +122,11 @@ pub(in crate::index) struct SparsePosting {
     pub(super) tfs: Vec<u32>,
 }
 
+/// A token's postings resolved for BM25 scoring, from EITHER the live in-RAM
+/// `Postings` (borrowed, zero-copy) or a sealed Text segment's decoded posting
+/// block (owned `Vec`s; text tf is STORED — Phase 2e-B). Both variants expose
+/// the identical `(docids, tfs)` u32 streams in the SAME ascending-docid order,
+/// so the BM25 score expression is fed bit-identical inputs on both paths.
 pub(in crate::index) enum TokPostings<'a> {
     Live(&'a Postings),
     /// The candidate-only projection of the active posting (#4246). `df()` is

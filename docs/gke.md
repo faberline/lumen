@@ -298,7 +298,7 @@ row for the regional profile.
 ## Supporting documents
 
 - [Lumen README](../README.md)
-- [Architecture](../ARCHITECTURE.md)
+- [Architecture](architecture.md)
 - [Current support](../STATUS.md)
 - [Future outcomes and non-goals](../ROADMAP.md)
 - [Deployment](deployment.md)

@@ -6,7 +6,7 @@ use crate::index::domain::query::rank::{
 use crate::index::domain::text_index::TextIndex;
 
 // A small xorshift PRNG, dependency-free and deterministic (the same
-// recipe `tok_probe_tests` uses).
+// recipe in `src/index/domain/tok_probe/tests.rs`).
 pub(in crate::index::domain::query) struct Rng(pub(crate) u64);
 
 impl Rng {

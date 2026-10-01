@@ -7,12 +7,14 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 /// Forces a synchronous, awaited durability checkpoint of the live engine
-/// state (#1389). The reshard driver's cutover (`service_k8s::reshard_driver::
-/// advance_catching_up`) calls `POST /admin/checkpoint` — which routes here —
+/// state (#1389). The reshard driver's `advance_catching_up` cutover
+/// (`operator::application::reshard_driver::phases`) calls
+/// `POST /admin/checkpoint` — which routes here —
 /// on every shard it just migrated data into or evicted data from, and waits
 /// for the response before flipping `spec.shardMap` and triggering the
 /// cutover rolling restart. `Engine::apply_reshard_batch`/`evict_not_owned`
-/// (`storage.rs`, #1380) mutate engine state directly rather than through
+/// in `index::application::engine::reshard_apply` (#1380) mutate engine
+/// state directly rather than through
 /// `WriteCoordinator`/the AOF, so — unlike ordinary writes — their durability
 /// is not implied by `applied_seq()`; this seam is what makes it durable
 /// on-demand instead of only on the next periodic `LUMEN_SNAPSHOT_SECS` tick.
@@ -64,7 +66,7 @@ impl HnswCacheDurability {
 }
 
 /// Process-local receipt for an optional HNSW recovery cache publication.
-/// The wire handler below emits its intentionally fixed JSON shape.
+/// `persistence::interfaces::http::checkpoint` emits its fixed JSON shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HnswCacheSealReceipt {
     pub cache_fields: usize,

@@ -21,28 +21,30 @@ pub(super) fn service_monitor(cx: &RenderCtx<'_>) -> Value {
 
 // #2475: alerts are added here only when the metric an `expr` reads is
 // actually published today. `LumenRaftLeaderAbsent` reads this pod's
-// self-scraped `lumen_raft_leader_known` gauge (`src/metrics.rs`, wired in
-// `src/bin/lumen.rs`). `LumenPvcNearFull` reads the kubelet's
+// self-scraped `lumen_raft_leader_known` gauge (`src/app/observability/metrics.rs`, wired in
+// `src/bin/lumen/serve.rs`). `LumenPvcNearFull` reads the kubelet's
 // `kubelet_volume_stats_*` series against the `raft-<name>-<ordinal>`
 // StatefulSet PVC name pattern (`volumeClaimTemplates` name is `raft`, see
 // `serving_statefulset`). `LumenStorageDegraded` (#2516) reads
 // `lumen_storage_degraded`, the self-scraped gauge a pod sets to `1` the
 // moment a durable write path (AOF append, segment/RDB checkpoint save, or
 // raft log append) actually hits ENOSPC and the pod enters sticky degraded
-// read-only mode (`Metrics::mark_storage_degraded`, `src/coordinator.rs` /
-// `src/bin/lumen.rs` / `src/raft_sm.rs`) — it is the "disk is now actually
+// read-only mode (`Metrics::mark_storage_degraded`, `src/ingest/application/write_coordinator/` /
+// `src/bin/lumen/serve.rs` / `src/replication/application/engine_sm/`) — it is the "disk is now
+// actually
 // full and writes are failing" companion to `LumenPvcNearFull`'s "disk is
 // nearly full" early warning. `LumenReshardWorkflowStalled` is a PARTIAL proxy:
 // the reshard driver's phase machine (`LumenStatus.reshard`, CR status) is
 // not published to Prometheus by any customresourcestate config this
 // operator ships, so this alert reads the driver's write-fence instead
-// (`lumen_reshard_fence_active`/`_armed_unixtime`, `src/api.rs`'s
+// (`lumen_reshard_fence_active`/`_armed_unixtime`, `src/sharding/interfaces/http/fence.rs`'s
 // `reshard_fence` handler) — it only catches a fence left armed past the
 // fenced final `CatchingUp` pass's expected duration, not an early stall in
 // `PrepareSplit`/`Splitting` (which never arms a fence at all). A full fix
 // needs either a customresourcestate config or a driver-side liveness gauge
 // and is out of this WI's scope. `LumenSlowQueries` (#2519) reads
-// `lumen_slow_queries_total` (`src/metrics.rs`'s `Metrics::observe_search`),
+// `lumen_slow_queries_total` (`src/app/observability/metrics/search.rs`'s
+// `Metrics::observe_search`),
 // incremented once per search whose latency meets or exceeds the
 // `LUMEN_SLOW_QUERY_MS` threshold (default 500ms).
 pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {

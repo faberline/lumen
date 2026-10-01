@@ -7,7 +7,7 @@
 //! `libs/raft-runtime` (#515/#524); `lumen serve --wal raft` keeps
 //! `ClusterState` current for the process lifetime by polling the same
 //! `RaftHost` the write path already drives (`spawn_cluster_state_poller` in
-//! `src/bin/lumen.rs`, #1349) — this module owns the DTOs and the
+//! `src/bin/lumen/serve/raft.rs`, #1349) — this module owns the DTOs and the
 //! interior-mutable update surface (`role`/`set_role`,
 //! `leader_index`/`set_leader_index`, `snapshot`), not the polling itself.
 //!
@@ -46,7 +46,7 @@ pub use raft_runtime::ReadConsistency;
 /// `replication_lag_ms` are updated in place from a background task that
 /// polls the raft engine's own election state (`RaftHost::is_leader`/
 /// `leader`) for the process lifetime — see `spawn_cluster_state_poller` in
-/// `src/bin/lumen.rs` (#1349). `group`'s peer addresses are immutable
+/// `src/bin/lumen/serve/raft.rs` (#1349). `group`'s peer addresses are immutable
 /// (derived once from static topology config); only role membership is
 /// live, computed in [`ClusterState::snapshot`] from `leader_index`.
 #[derive(Debug)]

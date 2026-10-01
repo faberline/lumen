@@ -4,8 +4,8 @@
 //!   :129, and :139 require legal large index requests to make progress
 //!   through CBOR and no-data-dir serving without a permanent capacity
 //!   refusal, retain the existing admin checkpoint response, and preserve a
-//!   real CBOR cold start. Change points: src/bin/lumen.rs:3518-3533
-//!   chooses CBOR/no-data-dir persistence and src/coordinator.rs
+//!   real CBOR cold start. Change points: src/bin/lumen/serve.rs
+//!   chooses CBOR/no-data-dir persistence and src/ingest/application/write_coordinator/
 //!   owns capacity before a submitted record applies.
 //! - Security: the changed request-capacity path accepts caller input after
 //!   the existing body-limit boundary. Every large request in

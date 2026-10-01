@@ -3,7 +3,7 @@
 //! (`element_postings` / `element_df`) must be byte-identical to the in-RAM
 //! `elements` index, AND after a seal the RAM index is DROPPED (the disk=all
 //! win) while queries keep serving entirely from the mmap segment. This is the
-//! Set analogue of `segment_keyword_inverted_diff_tests` and the keystone test
+//! Set analogue of `seal::tests::keyword_inverted` and the keystone test
 //! for Phase 2h-2 — it reuses the same query-time tombstone mechanism.
 
 use std::collections::{BTreeMap, BTreeSet};

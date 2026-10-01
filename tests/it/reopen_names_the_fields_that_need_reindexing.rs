@@ -8,7 +8,7 @@
 //! to the snapshot with an empty `forward`, and `FieldIndex::from_snapshot`
 //! restores it as an empty index. The `Keyword` arm rebuilds its inverted map
 //! from `forward` and therefore self-heals; the `Set` arm has nothing left to
-//! rebuild from. `storage.rs`'s own comment on that arm says as much and stops
+//! rebuild from. `src/index/domain/field_index/snapshot.rs` says as much on that arm and stops
 //! there: *"Nothing at this layer can invent the data back; finding which
 //! fields are in that state is a separate audit."* This file is that audit's
 //! oracle.
