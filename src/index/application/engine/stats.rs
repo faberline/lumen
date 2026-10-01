@@ -21,14 +21,14 @@ use crate::index::domain::field_index::FieldIndex;
 static STATS_THREAD: Mutex<Option<std::thread::ThreadId>> = Mutex::new(None);
 
 #[cfg(test)]
-pub(crate) fn reset_stats_thread() {
+pub(in crate::index) fn reset_stats_thread() {
     *STATS_THREAD.lock().expect("stats thread record") = None;
 }
 
 /// The thread the most recent `Engine::stats` call ran on, or `None` when no
 /// call has been recorded since the last reset.
 #[cfg(test)]
-pub(crate) fn last_stats_thread() -> Option<std::thread::ThreadId> {
+pub(in crate::index) fn last_stats_thread() -> Option<std::thread::ThreadId> {
     *STATS_THREAD.lock().expect("stats thread record")
 }
 

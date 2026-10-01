@@ -16,13 +16,13 @@
 //! `field.load(Ordering::Relaxed)` reads in `src/bin/lumen.rs`.
 
 pub(crate) mod apply_telemetry;
-pub(crate) mod histogram;
+mod histogram;
 pub(crate) mod labels;
-pub(crate) mod observe;
-pub(crate) mod process;
-pub(crate) mod render;
-pub(crate) mod search;
-pub(crate) mod segment_telemetry;
+mod observe;
+mod process;
+mod render;
+mod search;
+mod segment_telemetry;
 
 use metrics_prometheus::{Counter, Gauge};
 

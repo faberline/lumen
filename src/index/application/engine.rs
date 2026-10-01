@@ -23,7 +23,7 @@ mod restore;
 #[cfg(test)]
 mod seal;
 mod search;
-pub(crate) mod stats;
+pub(in crate::index) mod stats;
 #[cfg(test)]
 pub(in crate::index) mod tests;
 

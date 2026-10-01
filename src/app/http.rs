@@ -7,6 +7,6 @@ pub(crate) mod api_err;
 pub(crate) mod app_state;
 pub(crate) mod guards;
 pub(crate) mod openapi;
-pub(crate) mod probes;
+mod probes;
 pub(crate) mod router;
 pub(crate) mod write_fence;
