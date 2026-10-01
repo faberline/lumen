@@ -2294,7 +2294,8 @@ mod tests {
         // most-aligned vector to the query must rank first.
         let idx = HnswCpuIndex::new(spec(2, VectorMetric::Dot, None));
         idx.add("aligned", &[1.0, 0.0]).unwrap();
-        idx.add("diag", &[0.7071, 0.7071]).unwrap();
+        let diag = std::f32::consts::FRAC_1_SQRT_2;
+        idx.add("diag", &[diag, diag]).unwrap();
         idx.add("orthogonal", &[0.0, 1.0]).unwrap();
         let hits = idx.search_knn(&[1.0, 0.0], 3).unwrap();
         for w in hits.windows(2) {

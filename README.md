@@ -247,10 +247,10 @@ contract. Each source below states its direct contribution.
   - [`libs/raft-core`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-core/README.md) orders replicated writes.
   - [`libs/raft-runtime`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-runtime/README.md) hosts replication,
     snapshots, and the replicated log lifecycle.
-- Gate: `cargo test -p lumen --test api_e2e --test drop_field_e2e --test reindex_stream_e2e --test stats_metadata_e2e`
-- Gate: `cargo test -p lumen --test indexing_durable_oracle`
+- Gate: `cargo test -p lumen --test api_e2e` and `cargo test -p lumen --test it -- drop_field_e2e:: reindex_stream_e2e:: stats_metadata_e2e::`
+- Gate: `cargo test -p lumen --test it -- indexing_durable_oracle::`
 - Gate: `cargo test -p lumen --test perf_gate_vs_db`
-- Gate: `cargo test --release --locked -p lumen --test perf_gate -- --ignored --test-threads=1 --nocapture`
+- Gate: `cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --test-threads=1 --nocapture`
 
 ### Querying
 
@@ -262,8 +262,8 @@ contract. Each source below states its direct contribution.
     grouping, sorting, pagination, and read-consistency behavior. The
     [querying guide](docs/querying.md) owns source hydration and the Search v2
     query, result, facet, metric, and limit target.
-- Gate: `cargo test -p lumen --test api_e2e --test coverage_gaps_e2e --test prefix_query`
-- Gate: `cargo test -p lumen --test vector_e2e --test hash_hamming --test hybrid_rrf --test collapse_nested`
+- Gate: `cargo test -p lumen --test api_e2e` and `cargo test -p lumen --test it -- coverage_gaps_e2e:: prefix_query::`
+- Gate: `cargo test -p lumen --test it -- vector_e2e:: hash_hamming:: hybrid_rrf:: collapse_nested::`
 
 ### Kubernetes-native deployment
 
@@ -277,7 +277,7 @@ contract. Each source below states its direct contribution.
     reconciliation, leader election, workload, Service, and status mechanisms.
   - `external:kubernetes` stores desired state and runs the workload, network,
     lease, RBAC, and Secret contracts.
-- Gate: `cargo test -p lumen --features operator --test operator_render --test operator_backup_kubernetes_wiring`
+- Gate: `cargo test -p lumen --features operator --test it -- operator_render:: operator_backup_kubernetes_wiring::`
 - Gate: `scripts/kind-e2e.sh`
 - Gate: `acceptance/gcp/scripts/run.sh`
 
@@ -297,7 +297,7 @@ contract. Each source below states its direct contribution.
   - `external:kubernetes` stores the cluster-scoped Fleet and namespaced child
     resources, enforces RBAC, and runs the operator.
 - Gate: `cargo test -p lumen --features operator --lib`
-- Gate: `cargo test -p lumen --features operator --test operator_render`
+- Gate: `cargo test -p lumen --features operator --test it -- operator_render::`
 
 ### Security and access
 
@@ -324,8 +324,8 @@ contract. Each source below states its direct contribution.
   - `external:kubernetes` acts as the request identity and authorization
     authority and stores externally provisioned TLS Secrets.
 - Gate: `cargo test -p lumen -p service-auth -p service-k8s -p peer-tls`
-- Gate: `cargo test -p lumen --test auth_e2e --test authz_matrix_e2e --test serving_tls_rotation`
-- Gate: `cargo test -p lumen --features operator --test operator_render`
+- Gate: `cargo test -p lumen --test it -- auth_e2e:: authz_matrix_e2e:: serving_tls_rotation::`
+- Gate: `cargo test -p lumen --features operator --test it -- operator_render::`
 - Gate: `acceptance/gcp/scripts/verify-lumen-auth.sh`
 
 ### Scaling and availability
@@ -348,9 +348,9 @@ contract. Each source below states its direct contribution.
   - [`libs/storage-durable`](https://github.com/faberline/core/blob/v0.4.13/crates/storage-durable/README.md) provides
     durable state transitions at reshard and restart boundaries.
   - `external:kubernetes` runs the declared members and networking contracts.
-- Gate: `cargo test -p lumen --test reshard_admin_e2e --test reshard_driver_e2e --test routed_shard_e2e`
-- Gate: `cargo test -p lumen --test stability_lumen_claim_dynamic_multi_shard_replica_kind`
-- Gate: `cargo test -p lumen --features raft-wal --test raft_shutdown_failover --test raft_segment_snapshot_archive --test raft_segment_snapshot_archive_wiring --test raft_oversized_committed_apply`
+- Gate: `cargo test -p lumen --features operator --test it -- reshard_admin_e2e:: reshard_driver_e2e:: routed_shard_e2e::`
+- Gate: `cargo test -p lumen --test it -- stability_lumen_claim_dynamic_multi_shard_replica_kind::`
+- Gate: `cargo test -p lumen --features raft-wal --test it -- raft_shutdown_failover:: raft_segment_snapshot_archive:: raft_segment_snapshot_archive_wiring:: raft_oversized_committed_apply::`
 - Gate: `scripts/kind-e2e.sh`
 
 ### Durability and recovery
@@ -369,7 +369,7 @@ contract. Each source below states its direct contribution.
     writes inside a shard group.
   - [`libs/raft-runtime`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-runtime/README.md) installs replica
     snapshots and manages the replicated log lifecycle.
-- Gate: `cargo test -p lumen --test backup_restore_e2e --test indexing_durable_oracle`
+- Gate: `cargo test -p lumen --test it -- backup_restore_e2e:: indexing_durable_oracle::`
 - Gate: `acceptance/gcp/scripts/run.sh`
 
 ### Operations and observability
@@ -391,8 +391,8 @@ contract. Each source below states its direct contribution.
   - `external:kubernetes` stores status and events and runs probe contracts.
   - `external:prometheus-stack` consumes metrics and applies ServiceMonitor and
     alert-rule resources when that monitoring stack is installed.
-- Gate: `cargo test -p lumen --test api_e2e --test structured_stdout_traceparent`
-- Gate: `cargo test -p lumen --features operator --test operator_backup_kubernetes_wiring`
+- Gate: `cargo test -p lumen --test api_e2e` and `cargo test -p lumen --test it -- structured_stdout_traceparent::`
+- Gate: `cargo test -p lumen --features operator --test it -- operator_backup_kubernetes_wiring::`
 
 ### API, CLI, and agent integration
 
@@ -412,9 +412,9 @@ contract. Each source below states its direct contribution.
     typed clients from OpenAPI.
   - [`libs/cli-std`](https://github.com/faberline/core/blob/v0.4.13/crates/cli-std/README.md) provides shared CLI
     conventions, output, operational commands, and agent discovery.
-- Gate: `cargo test -p lumen --test spec_cli --test spec_route_parity --test api_e2e`
-- Gate: `cargo test -p lumen --test cli_convention --test spec_gen_e2e --test generated_clients_crud_e2e`
-- Gate: `cargo test -p lumen --features operator --test operator_render`
+- Gate: `cargo test -p lumen --test api_e2e` and `cargo test -p lumen --test it -- spec_cli:: spec_route_parity::`
+- Gate: `cargo test -p lumen --test it -- cli_convention:: spec_gen_e2e:: generated_clients_crud_e2e::`
+- Gate: `cargo test -p lumen --features operator --test it -- operator_render::`
 
 ## Supporting documents
 

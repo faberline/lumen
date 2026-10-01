@@ -2,7 +2,7 @@
 
 This page tracks lumen's scale posture across row count, read/search latency,
 paced qps, write qps, and disk footprint. The authoritative regression contract
-lives in `e2e/perf-baseline.json`; this document is the human
+lives in `tests/perf-baseline.json`; this document is the human
 handoff for what the current numbers mean.
 
 > **Status (2026-06-08 calibration):** the retained competitive calibration was
@@ -50,14 +50,14 @@ for perf evidence. A cold debug cache can still take minutes because dependencie
 must be checked once; the same target is about a second after the cache is warm:
 
 ```sh
-cargo check -p lumen --test api_e2e --test write_qps
+cargo check -p lumen --test api_e2e --test it
 cargo test -p lumen --test api_e2e index_can_use_injected_sharded_write_backend -- --nocapture
 ```
 
 Use release compile checks when a bench or optimized-only code path changes:
 
 ```sh
-cargo test --release -p lumen --test write_qps --no-run
+cargo test --release -p lumen --test it --no-run
 ```
 
 lumen-only disk scale bench:
@@ -163,10 +163,10 @@ routine runner Lumen-only.
 Local write-path trend (not a release gate):
 
 ```sh
-LUMEN_WRITE_MODES=embedded,sharded LUMEN_WRITE_WARMUP_S=0.1 LUMEN_WRITE_WINDOW_S=0.3 cargo test --release -p lumen --test write_qps write_qps_bench -- --ignored --nocapture
+LUMEN_WRITE_MODES=embedded,sharded LUMEN_WRITE_WARMUP_S=0.1 LUMEN_WRITE_WINDOW_S=0.3 cargo test --release -p lumen --test it write_qps::write_qps_bench -- --ignored --nocapture
 ```
 
-`e2e/write_qps.rs` also reports a local `sharded` lumen leg. It uses
+`tests/it/write_qps.rs` also reports a local `sharded` lumen leg. It uses
 `LUMEN_WRITE_SHARDS` (default 4) to route one HTTP `/index` request by
 `external_id` across independent `WriteCoordinator`/`Engine` shards. That row is
 for multi-core write-apply exploration. It does not set a throughput floor or

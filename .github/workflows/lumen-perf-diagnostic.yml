@@ -149,7 +149,7 @@ jobs:
         run: |
           set -euo pipefail
           set +e
-          cargo test --release --locked -p lumen --test perf_gate -- --ignored --exact durable_workload::approved_30_minute_durable_workload --test-threads=1 --nocapture 2>&1 | tee diagnostic/test-output.full.log
+          cargo test --release --locked -p lumen --test it -- --ignored --exact perf_gate::durable_workload::approved_30_minute_durable_workload --test-threads=1 --nocapture 2>&1 | tee diagnostic/test-output.full.log
           test_status=${PIPESTATUS[0]}
           set -e
           # Keep bounded pump rows and first-120-second index-1 stage/server

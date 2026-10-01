@@ -101,7 +101,7 @@ sync_lumen_release_image_pins "$CURRENT_VERSION" \
 
 cargo build --release --locked -p lumen --bin lumen --features release
 target/release/lumen spec --format openapi > clients/openapi.json
-cargo test -p lumen --test spec_cli openapi_committed_snapshot_matches_live_generation -- --exact
+cargo test -p lumen --test it spec_cli::openapi_committed_snapshot_matches_live_generation -- --exact
 install_lumen release
 
 echo "Local release preparation complete for lumen@${CURRENT_VERSION}."
