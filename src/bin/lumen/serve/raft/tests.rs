@@ -10,14 +10,20 @@ use crate::shutdown;
 
 #[cfg(feature = "raft-wal")]
 #[tokio::test]
-async fn abort_after_report_closes_peer_normally_before_deadline() {
+async fn abort_after_report_aborts_peer_without_graceful_close_before_deadline() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
     let (closed_tx, closed_rx) = tokio::sync::oneshot::channel();
     let task = tokio::spawn(async move {
-        shutdown_rx.await.expect("listener receives shutdown");
+        ready_tx.send(()).expect("listener readiness handshake");
+        // The real graceful listener also exits if this sender is dropped.
+        // Either completion must leave a marker; cancellation must not.
+        let _ = shutdown_rx.await;
         closed_tx.send(()).expect("record normal listener exit");
         Ok(())
     });
+    ready_rx.await.expect("listener is ready for shutdown");
+    let abort_handle = task.abort_handle();
     let peer_server = RaftPeerServer { shutdown_tx, task };
     let deadline =
         server_lifecycle::ShutdownDeadline::from_now(Duration::from_secs(1), Duration::ZERO)
@@ -31,9 +37,58 @@ async fn abort_after_report_closes_peer_normally_before_deadline() {
     )
     .await;
 
-    closed_rx.await.expect("listener must finish normally");
+    let graceful_exit = tokio::time::timeout_at(deadline.expires_at, closed_rx)
+        .await
+        .expect("aborted listener cleanup must finish within the positive deadline");
+    assert!(
+        tokio::time::Instant::now() < deadline.expires_at,
+        "the abort action must finish before timer expiry"
+    );
+    assert!(
+        graceful_exit.is_err(),
+        "abort action must cancel the listener without reaching its graceful-exit marker"
+    );
+    assert!(
+        abort_handle.is_finished(),
+        "aborted listener must be cleaned up"
+    );
     let error = result.expect_err("incomplete report remains an error");
     assert!(error.to_string().contains("raft shutdown is incomplete"));
+    assert_eq!(error.root_cause().to_string(), "incomplete report");
+}
+
+#[cfg(feature = "raft-wal")]
+#[tokio::test]
+async fn close_after_report_closes_peer_normally_before_deadline() {
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+    let (closed_tx, closed_rx) = tokio::sync::oneshot::channel();
+    let task = tokio::spawn(async move {
+        ready_tx.send(()).expect("listener readiness handshake");
+        shutdown_rx.await.expect("listener receives shutdown");
+        closed_tx.send(()).expect("record normal listener exit");
+        Ok(())
+    });
+    ready_rx.await.expect("listener is ready for shutdown");
+    let peer_server = RaftPeerServer { shutdown_tx, task };
+    let deadline =
+        server_lifecycle::ShutdownDeadline::from_now(Duration::from_secs(1), Duration::ZERO)
+            .unwrap();
+
+    finish_raft_listener_shutdown(
+        shutdown::PeerListenerAction::CloseAfterReport,
+        peer_server,
+        deadline,
+        Ok(()),
+    )
+    .await
+    .expect("a complete report preserves normal-close success");
+
+    closed_rx.await.expect("listener must finish normally");
+    assert!(
+        tokio::time::Instant::now() < deadline.expires_at,
+        "normal close must finish before the positive deadline"
+    );
 }
 
 // -----------------------------------------------------------------
