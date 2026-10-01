@@ -1084,7 +1084,7 @@ fn the_control_plane_paths_reach_for_no_other_credential() {
     collect_text_files(&lumen_root.join("src/operator"), &mut files);
     collect_text_files(&lumen_root.join("k8s/operator"), &mut files);
     files.push(lumen_root.join("src/persistence/application/backup.rs"));
-    files.push(lumen_root.join("src/bin/lumen.rs"));
+    collect_text_files(&lumen_root.join("src/bin/lumen"), &mut files);
     files.sort();
 
     for file in &files {

@@ -1,6 +1,6 @@
 //! Standalone deployment commands that do not require a running Lumen server.
 
-use super::{
+use crate::cli::standalone::{
     StandaloneArgs, StandaloneBackupArgs, StandaloneCmd, StandaloneComposeCmd,
     StandaloneComposePatchArgs, StandaloneRestoreArgs,
 };
@@ -19,7 +19,6 @@ const IMAGE: &str = "ghcr.io/faberline/lumen:0.6.1";
 const MANAGED_LABEL: &str = "com.axiom.lumen.managed";
 const MANAGED_LABEL_VALUE: &str = "com.axiom.lumen.managed=true";
 
-#[path = "standalone/gke.rs"]
 mod gke;
 
 pub(crate) async fn run(args: StandaloneArgs) -> Result<()> {
