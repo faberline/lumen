@@ -877,6 +877,22 @@ fn median_statistic_and_ignored_inventory() {
                 "workload_slots_are_absolute_for_independent_queries_and_paced_mutations",
                 false,
             ),
+            (
+                "diagnostic_seed_traceparent_is_valid_and_fresh_per_actual_send",
+                false,
+            ),
+            (
+                "diagnostic_seed_failure_record_matches_the_failed_send_and_is_bounded",
+                false,
+            ),
+            (
+                "diagnostic_seed_setup_timeout_attributes_only_an_active_send",
+                false,
+            ),
+            (
+                "ordinary_seed_does_no_identity_header_or_private_evidence_work",
+                false,
+            ),
         ]
     );
 
@@ -1120,6 +1136,148 @@ mod durable_workload {
         }
     }
 
+    #[derive(Clone, Copy, Debug)]
+    enum SeedClientStage {
+        Send,
+        ResponseJson,
+        ResponseCheck,
+    }
+
+    impl SeedClientStage {
+        fn label(self) -> &'static str {
+            match self {
+                Self::Send => "send",
+                Self::ResponseJson => "response_json",
+                Self::ResponseCheck => "response_check",
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum SeedFailureKind {
+        Transport,
+        Decode,
+        HttpStatus,
+        IndexedCount,
+        RequestDeadline,
+        SetupDeadline,
+    }
+
+    impl SeedFailureKind {
+        fn label(self) -> &'static str {
+            match self {
+                Self::Transport => "transport",
+                Self::Decode => "decode",
+                Self::HttpStatus => "http_status",
+                Self::IndexedCount => "indexed_count",
+                Self::RequestDeadline => "request_deadline",
+                Self::SetupDeadline => "setup_deadline",
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct SeedClientAttempt {
+        trace_id: u128,
+        stage: SeedClientStage,
+        status: Option<u16>,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct SeedReqwestFlags {
+        timeout: bool,
+        connect: bool,
+        request: bool,
+        body: bool,
+        decode: bool,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct SeedClientFailure {
+        attempt: SeedClientAttempt,
+        kind: SeedFailureKind,
+        reqwest: Option<SeedReqwestFlags>,
+    }
+
+    impl SeedClientFailure {
+        fn local(attempt: SeedClientAttempt, kind: SeedFailureKind) -> HarnessError {
+            HarnessError::DiagnosticSeedClientFailure(Self {
+                attempt,
+                kind,
+                reqwest: None,
+            })
+        }
+
+        fn json_bytes(&self) -> std::result::Result<Vec<u8>, String> {
+            let record = json!({
+                "schema": "lumen.perf-diagnostic-seed-client-failure.v1",
+                "operation": "seed_index",
+                "client_trace_id": format!("{:032x}", self.attempt.trace_id),
+                "client_stage": self.attempt.stage.label(),
+                "failure_kind": self.kind.label(),
+                "http_status": self.attempt.status,
+                "reqwest_timeout": self.reqwest.map(|flags| flags.timeout),
+                "reqwest_connect": self.reqwest.map(|flags| flags.connect),
+                "reqwest_request": self.reqwest.map(|flags| flags.request),
+                "reqwest_body": self.reqwest.map(|flags| flags.body),
+                "reqwest_decode": self.reqwest.map(|flags| flags.decode),
+                "write_outcome": "unknown",
+                "server_join": "not_evaluated",
+            });
+            let bytes = serde_json::to_vec(&record)
+                .map_err(|_| "cannot render diagnostic seed client failure".to_owned())?;
+            if bytes.len() > 1024 || !bytes.is_ascii() {
+                return Err(
+                    "diagnostic seed client failure exceeds its private record bound".to_owned(),
+                );
+            }
+            Ok(bytes)
+        }
+    }
+
+    fn seed_client_reqwest_error(
+        active: Option<SeedClientAttempt>,
+        kind: SeedFailureKind,
+        error: reqwest::Error,
+    ) -> HarnessError {
+        match active {
+            Some(attempt) => HarnessError::DiagnosticSeedClientFailure(SeedClientFailure {
+                attempt,
+                kind,
+                reqwest: Some(SeedReqwestFlags {
+                    timeout: error.is_timeout(),
+                    connect: error.is_connect(),
+                    request: error.is_request(),
+                    body: error.is_body(),
+                    decode: error.is_decode(),
+                }),
+            }),
+            None => HarnessError::request_failure(error),
+        }
+    }
+
+    fn new_seed_client_identity() -> Result<(u128, u64)> {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        use std::sync::OnceLock;
+
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        static MASK: OnceLock<u64> = OnceLock::new();
+        let sequence = NEXT
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+                next.checked_add(1)
+            })
+            .map_err(|_| {
+                HarnessError::DataInvariant(
+                    "diagnostic seed identity exhausted before send".to_owned(),
+                )
+            })?;
+        let mask = *MASK.get_or_init(rand::random::<u64>);
+        let high = rand::random::<u64>() | 1;
+        let trace_id = (u128::from(high) << 64) | u128::from(sequence ^ mask);
+        let parent_id = rand::random::<u64>() | 1;
+        Ok((trace_id, parent_id))
+    }
+
     #[derive(Debug)]
     enum HarnessError {
         MissingEnvironment(&'static str),
@@ -1134,6 +1292,7 @@ mod durable_workload {
         Startup(String),
         Http(String),
         RequestFailure(RequestFailure),
+        DiagnosticSeedClientFailure(SeedClientFailure),
         MissingRuntimeMetric(&'static str),
         DuplicateRuntimeMetric(&'static str),
         MetricParse {
@@ -1194,6 +1353,13 @@ mod durable_workload {
                         "HTTP workload request failed: {}",
                         detail.display
                     )
+                }
+                Self::DiagnosticSeedClientFailure(detail) => {
+                    if matches!(detail.kind, SeedFailureKind::SetupDeadline) {
+                        write!(formatter, "setup stage seed exceeded its absolute deadline; diagnostic seed client attempt; write outcome unknown")
+                    } else {
+                        write!(formatter, "diagnostic seed client attempt failed: stage={} kind={} status={:?}; write outcome unknown; server join not evaluated", detail.attempt.stage.label(), detail.kind.label(), detail.attempt.status)
+                    }
                 }
                 Self::MissingRuntimeMetric(name) => {
                     write!(formatter, "required runtime metric is absent: {name}")
@@ -1578,6 +1744,7 @@ mod durable_workload {
         image_reference: String,
         image_id: String,
         cleanup_armed: bool,
+        seed_diagnostic: bool,
         recovery_observation: Option<Duration>,
         // Shared across every `send_*` task the request pump spawns for
         // this server so a failed durable cell's evidence bundle can name
@@ -2256,6 +2423,11 @@ mod durable_workload {
                         evidence.write_text("failure.txt", &failure_report(error))?;
                         evidence.write_text("container.txt", container)?;
                         evidence.write_text("volume.txt", volume)?;
+                        if let HarnessError::DiagnosticSeedClientFailure(detail) = error {
+                            let bytes = detail.json_bytes()?;
+                            fs::write(evidence.path.join("seed-client-attempt-failure.json"), bytes)
+                                .map_err(|_| "cannot write diagnostic seed client failure".to_owned())?;
+                        }
                         return Ok(evidence);
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -3285,6 +3457,7 @@ mod durable_workload {
                     image_reference: image.clone(),
                     image_id,
                     cleanup_armed: true,
+                    seed_diagnostic: diagnostic,
                     recovery_observation,
                     request_error_journal: Arc::new(Mutex::new(RequestErrorJournal::default())),
                     interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
@@ -5654,7 +5827,28 @@ mod durable_workload {
         items: &[Value],
         setup_deadline: tokio::time::Instant,
     ) -> Result<()> {
+        seed_index_batch_with_identity_source(
+            server,
+            collection,
+            items,
+            setup_deadline,
+            new_seed_client_identity,
+        )
+        .await
+    }
+
+    async fn seed_index_batch_with_identity_source<F>(
+        server: &DockerLumen,
+        collection: &str,
+        items: &[Value],
+        setup_deadline: tokio::time::Instant,
+        mut identity_source: F,
+    ) -> Result<()>
+    where
+        F: FnMut() -> Result<(u128, u64)>,
+    {
         let body = json!({ "items": items });
+        let mut active = None;
         loop {
             check_setup_deadline(setup_deadline)?;
             // Only setup may honor an explicit one-second backpressure hint.
@@ -5662,13 +5856,34 @@ mod durable_workload {
             // every refusal or timeout in the ledger without a retry.
             let response = setup_step(setup_deadline, async {
                 tokio::time::timeout(REQUEST_TIMEOUT, async {
-                    let response = server
+                    let request = server
                         .client
                         .post(format!("{}/collections/{collection}/index", server.base))
-                        .json(&body)
-                        .send()
-                        .await
-                        .map_err(|error| HarnessError::request_failure(error))?;
+                        .json(&body);
+                    let request = if server.seed_diagnostic {
+                        let (trace_id, parent_id) = identity_source()?;
+                        if trace_id == 0 || parent_id == 0 {
+                            return Err(HarnessError::DataInvariant(
+                                "diagnostic seed identity is invalid before send".to_owned(),
+                            ));
+                        }
+                        let request = request.header(
+                            "traceparent",
+                            format!("00-{trace_id:032x}-{parent_id:016x}-00"),
+                        );
+                        // Invoking send names a client attempt, not remote receipt.
+                        active = Some(SeedClientAttempt {
+                            trace_id,
+                            stage: SeedClientStage::Send,
+                            status: None,
+                        });
+                        request
+                    } else {
+                        request
+                    };
+                    let response = request.send().await.map_err(|error| {
+                        seed_client_reqwest_error(active, SeedFailureKind::Transport, error)
+                    })?;
                     let status = response.status();
                     let retry_after_one = is_warmup_retry_after_one(
                         status,
@@ -5678,22 +5893,38 @@ mod durable_workload {
                             .and_then(|value| value.to_str().ok()),
                     );
                     if retry_after_one {
+                        active = None;
                         return Ok::<_, HarnessError>(None);
                     }
-                    let body = response
-                        .json::<Value>()
-                        .await
-                        .map_err(|error| HarnessError::request_failure(error))?;
+                    if let Some(attempt) = &mut active {
+                        attempt.status = Some(status.as_u16());
+                        attempt.stage = SeedClientStage::ResponseJson;
+                    }
+                    let body = response.json::<Value>().await.map_err(|error| {
+                        seed_client_reqwest_error(active, SeedFailureKind::Decode, error)
+                    })?;
+                    if let Some(attempt) = &mut active {
+                        attempt.stage = SeedClientStage::ResponseCheck;
+                    }
                     Ok(Some((status, body)))
                 })
                 .await
-                .map_err(|_| {
-                    HarnessError::Http(format!(
+                .map_err(|_| match active {
+                    Some(attempt) => {
+                        SeedClientFailure::local(attempt, SeedFailureKind::RequestDeadline)
+                    }
+                    None => HarnessError::Http(format!(
                         "seed index {collection} exceeded the five-second request deadline"
-                    ))
+                    )),
                 })?
             })
-            .await?;
+            .await
+            .map_err(|error| match (&error, active) {
+                (HarnessError::SetupTimeout { .. }, Some(attempt)) => {
+                    SeedClientFailure::local(attempt, SeedFailureKind::SetupDeadline)
+                }
+                _ => error,
+            })?;
             let Some((status, response_body)) = response else {
                 tokio::time::timeout_at(setup_deadline, tokio::time::sleep(Duration::from_secs(1)))
                     .await
@@ -5703,6 +5934,14 @@ mod durable_workload {
             if status.is_success() && response_body["indexed"].as_u64() == Some(items.len() as u64)
             {
                 return Ok(());
+            }
+            if let Some(attempt) = active {
+                let kind = if status.is_success() {
+                    SeedFailureKind::IndexedCount
+                } else {
+                    SeedFailureKind::HttpStatus
+                };
+                return Err(SeedClientFailure::local(attempt, kind));
             }
             return Err(HarnessError::Http(format!(
                 "seed index {collection} returned {status}: {response_body}"
@@ -7642,6 +7881,13 @@ mod durable_workload {
                 eprintln!("PERF_STAGE_TIMEOUT seed");
                 return Err(error);
             }
+            Err(error @ HarnessError::DiagnosticSeedClientFailure(SeedClientFailure {
+                kind: SeedFailureKind::SetupDeadline,
+                ..
+            })) => {
+                eprintln!("PERF_STAGE_TIMEOUT seed");
+                return Err(error);
+            }
             Err(error) => return Err(error),
         }
         eprintln!("PERF_STAGE_BEGIN seed_checkpoint");
@@ -8007,6 +8253,7 @@ mod durable_workload {
             image_reference: "fake-readback".to_owned(),
             image_id: "fake-readback".to_owned(),
             cleanup_armed: false,
+            seed_diagnostic: false,
             recovery_observation: None,
             request_error_journal: Arc::new(Mutex::new(RequestErrorJournal::default())),
             interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
@@ -8739,6 +8986,7 @@ mod durable_workload {
                 image_reference: "fake-setup".to_owned(),
                 image_id: "fake-setup".to_owned(),
                 cleanup_armed: false,
+                seed_diagnostic: false,
                 recovery_observation: None,
                 request_error_journal: Arc::new(Mutex::new(RequestErrorJournal::default())),
                 interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
@@ -9995,6 +10243,7 @@ mod durable_workload {
                 image_reference: "restart-test-image-reference".to_owned(),
                 image_id: "restart-test-image-id".to_owned(),
                 cleanup_armed: false,
+                seed_diagnostic: false,
                 recovery_observation: None,
                 request_error_journal: Arc::new(Mutex::new(RequestErrorJournal::default())),
                 interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
@@ -10051,6 +10300,7 @@ mod durable_workload {
                 image_reference: "restart-test-image-reference".to_owned(),
                 image_id: "restart-test-image-id".to_owned(),
                 cleanup_armed: false,
+                seed_diagnostic: false,
                 recovery_observation: None,
                 request_error_journal: Arc::new(Mutex::new(RequestErrorJournal::default())),
                 interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
@@ -10109,6 +10359,7 @@ mod durable_workload {
                 image_reference: "restart-test-image-reference".to_owned(),
                 image_id: "restart-test-image-id".to_owned(),
                 cleanup_armed: false,
+                seed_diagnostic: false,
                 recovery_observation: None,
                 request_error_journal: Arc::new(Mutex::new(RequestErrorJournal::default())),
                 interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
@@ -11576,6 +11827,446 @@ mod durable_workload {
             "each query offer must keep its independent absolute 100 ms slot"
         );
     }
+    // QA-FROZEN-DIAGNOSTIC-SEED-IDENTITY-BEGIN
+    const SEED_IDENTITY_TEST_SECRET: &str = "seed-body-auth-cookie-baggage-SECRET";
+    const SEED_IDENTITY_PRIVATE_FILE: &str = "seed-client-attempt-failure.json";
+
+    #[derive(Clone)]
+    enum SeedIdentityPeerReply {
+        Success,
+        Retry,
+        StatusFailure,
+        DecodeFailure,
+        Hold,
+    }
+
+    #[derive(Clone, Debug)]
+    struct SeedIdentityWire {
+        count: usize,
+        values: Vec<String>,
+    }
+
+    struct SeedIdentityPeerState {
+        replies: StdMutex<VecDeque<SeedIdentityPeerReply>>,
+        wire: StdMutex<Vec<SeedIdentityWire>>,
+        overflow: std::sync::atomic::AtomicBool,
+        received: tokio::sync::Notify,
+        release: tokio::sync::Notify,
+    }
+
+    struct SeedIdentityPeer {
+        base: String,
+        state: Arc<SeedIdentityPeerState>,
+        shutdown: tokio::sync::oneshot::Sender<()>,
+        task: tokio::task::JoinHandle<()>,
+    }
+
+    async fn seed_identity_peer_handler(
+        axum::extract::State(state): axum::extract::State<Arc<SeedIdentityPeerState>>,
+        headers: axum::http::HeaderMap,
+    ) -> axum::response::Response {
+        let all = headers.get_all("traceparent");
+        let observation = SeedIdentityWire {
+            count: all.iter().count(),
+            values: all
+                .iter()
+                .take(2)
+                .map(|value| {
+                    String::from_utf8_lossy(&value.as_bytes()[..value.as_bytes().len().min(56)])
+                        .into_owned()
+                })
+                .collect(),
+        };
+        {
+            let mut wire = state.wire.lock().unwrap();
+            if wire.len() < 4 {
+                wire.push(observation);
+            } else {
+                state
+                    .overflow
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        state.received.notify_one();
+        let reply = state.replies.lock().unwrap().pop_front();
+        let (status, body) = match reply {
+            Some(SeedIdentityPeerReply::Success) => (200, "{\"indexed\":1}".to_owned()),
+            Some(SeedIdentityPeerReply::Retry) => (429, "{}".to_owned()),
+            Some(SeedIdentityPeerReply::StatusFailure) => (
+                500,
+                json!({"indexed":0,"secret":SEED_IDENTITY_TEST_SECRET.repeat(128)}).to_string(),
+            ),
+            Some(SeedIdentityPeerReply::DecodeFailure) => (
+                200,
+                format!("invalid-json-{}", SEED_IDENTITY_TEST_SECRET.repeat(128)),
+            ),
+            Some(SeedIdentityPeerReply::Hold) => {
+                state.release.notified().await;
+                (200, "{\"indexed\":1}".to_owned())
+            }
+            None => {
+                state
+                    .overflow
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+                (500, "{}".to_owned())
+            }
+        };
+        let mut response = axum::response::Response::new(axum::body::Body::from(body));
+        *response.status_mut() = axum::http::StatusCode::from_u16(status).unwrap();
+        if status == 429 {
+            response.headers_mut().insert(
+                axum::http::header::RETRY_AFTER,
+                axum::http::HeaderValue::from_static("1"),
+            );
+        }
+        response
+    }
+
+    impl SeedIdentityPeer {
+        async fn start(replies: Vec<SeedIdentityPeerReply>) -> Self {
+            assert!(replies.len() <= 4);
+            let state = Arc::new(SeedIdentityPeerState {
+                replies: StdMutex::new(replies.into()),
+                wire: StdMutex::new(Vec::new()),
+                overflow: std::sync::atomic::AtomicBool::new(false),
+                received: tokio::sync::Notify::new(),
+                release: tokio::sync::Notify::new(),
+            });
+            let app = axum::Router::new()
+                .route(
+                    "/collections/perf-hot/index",
+                    axum::routing::post(seed_identity_peer_handler),
+                )
+                .with_state(state.clone());
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let base = format!("http://{}", listener.local_addr().unwrap());
+            let (shutdown, rx) = tokio::sync::oneshot::channel();
+            let task = tokio::spawn(async move {
+                axum::serve(listener, app)
+                    .with_graceful_shutdown(async {
+                        let _ = rx.await;
+                    })
+                    .await
+                    .unwrap();
+            });
+            Self {
+                base,
+                state,
+                shutdown,
+                task,
+            }
+        }
+
+        async fn finish(self) -> Vec<SeedIdentityWire> {
+            self.state.release.notify_one();
+            let _ = self.shutdown.send(());
+            let mut task = self.task;
+            let joined = tokio::time::timeout(Duration::from_secs(2), &mut task).await;
+            if joined.is_err() {
+                task.abort();
+                let _ = task.await;
+                panic!("seed identity fixture peer did not stop");
+            }
+            joined.unwrap().unwrap();
+            assert!(!self
+                .state
+                .overflow
+                .load(std::sync::atomic::Ordering::SeqCst));
+            assert!(
+                self.state.replies.lock().unwrap().is_empty(),
+                "all scripted responses must run"
+            );
+            self.state.wire.lock().unwrap().clone()
+        }
+    }
+
+    fn seed_identity_fixture(peer: &SeedIdentityPeer, diagnostic: bool) -> DockerLumen {
+        let mut headers = reqwest::header::HeaderMap::new();
+        for key in ["authorization", "cookie", "baggage"] {
+            headers.insert(
+                reqwest::header::HeaderName::from_static(key),
+                reqwest::header::HeaderValue::from_static(SEED_IDENTITY_TEST_SECRET),
+            );
+        }
+        DockerLumen {
+            container: "seed-identity-fixture".to_owned(),
+            volume: "seed-identity-fixture".to_owned(),
+            base: peer.base.clone(),
+            client: reqwest::Client::builder()
+                .default_headers(headers)
+                .timeout(REQUEST_TIMEOUT)
+                .build()
+                .unwrap(),
+            image_reference: "seed-identity-fixture".to_owned(),
+            image_id: "seed-identity-fixture".to_owned(),
+            cleanup_armed: false,
+            seed_diagnostic: diagnostic,
+            recovery_observation: None,
+            request_error_journal: Arc::new(Mutex::new(RequestErrorJournal::default())),
+            interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
+            restart_failure_trace: Arc::new(Mutex::new(None)),
+            readyz_readiness_trace: Arc::new(StdMutex::new(None)),
+        }
+    }
+
+    fn seed_identity_items() -> Vec<Value> {
+        vec![
+            json!({"external_id":SEED_IDENTITY_TEST_SECRET,"field":"tag","value":SEED_IDENTITY_TEST_SECRET}),
+        ]
+    }
+
+    fn seed_identity_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+    }
+
+    fn seed_identity_wire_trace(wire: &SeedIdentityWire) -> &str {
+        assert_eq!(
+            wire.count, 1,
+            "each diagnostic actual send must have exactly one traceparent"
+        );
+        assert_eq!(wire.values.len(), 1);
+        let header = &wire.values[0];
+        assert_eq!(header.len(), 55);
+        assert!(header.is_ascii());
+        let bytes = header.as_bytes();
+        assert_eq!([bytes[2], bytes[35], bytes[52]], [b'-'; 3]);
+        assert_eq!(&header[..2], "00");
+        assert_eq!(&header[53..], "00");
+        for range in [3..35, 36..52] {
+            let part = &bytes[range];
+            assert!(part
+                .iter()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte)));
+            assert!(part.iter().any(|byte| *byte != b'0'));
+        }
+        &header[3..35]
+    }
+
+    struct SeedIdentityEvidence {
+        private: Option<Vec<u8>>,
+        failure: String,
+        safe_error: String,
+    }
+
+    fn seed_identity_evidence(error: &HarnessError) -> SeedIdentityEvidence {
+        let root = tempfile::tempdir().unwrap();
+        let evidence =
+            FailureEvidenceDirectory::create_in(root.path(), "fixture", "fixture", error).unwrap();
+        SeedIdentityEvidence {
+            private: fs::read(evidence.path.join(SEED_IDENTITY_PRIVATE_FILE)).ok(),
+            failure: fs::read_to_string(evidence.path.join("failure.txt")).unwrap(),
+            safe_error: format!("{error:?}\n{error}"),
+        }
+    }
+
+    fn seed_identity_record(evidence: &SeedIdentityEvidence) -> Value {
+        let bytes = evidence
+            .private
+            .as_ref()
+            .expect("diagnostic active attempt needs its bounded private record");
+        assert!(bytes.len() <= 1024);
+        assert!(bytes.is_ascii());
+        let value: Value = serde_json::from_slice(bytes).unwrap();
+        let keys: BTreeSet<&str> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(
+            keys,
+            BTreeSet::from([
+                "schema",
+                "operation",
+                "client_trace_id",
+                "client_stage",
+                "failure_kind",
+                "http_status",
+                "reqwest_timeout",
+                "reqwest_connect",
+                "reqwest_request",
+                "reqwest_body",
+                "reqwest_decode",
+                "write_outcome",
+                "server_join",
+            ])
+        );
+        assert_eq!(
+            value["schema"],
+            "lumen.perf-diagnostic-seed-client-failure.v1"
+        );
+        assert_eq!(value["operation"], "seed_index");
+        assert_eq!(value["write_outcome"], "unknown");
+        assert_eq!(value["server_join"], "not_evaluated");
+        for text in [
+            String::from_utf8(bytes.clone()).unwrap(),
+            evidence.failure.clone(),
+            evidence.safe_error.clone(),
+        ] {
+            assert!(!text.contains(SEED_IDENTITY_TEST_SECRET));
+            for forbidden in [
+                "http://",
+                "/collections/",
+                "invalid-json-",
+                "source_chain",
+                "authorization",
+                "cookie",
+                "baggage",
+            ] {
+                assert!(
+                    !text.contains(forbidden),
+                    "diagnostic failure must omit raw request/error data"
+                );
+            }
+        }
+        value
+    }
+
+    #[test]
+    fn diagnostic_seed_traceparent_is_valid_and_fresh_per_actual_send() {
+        seed_identity_runtime().block_on(async {
+            let peer = SeedIdentityPeer::start(vec![
+                SeedIdentityPeerReply::Success,
+                SeedIdentityPeerReply::Retry,
+                SeedIdentityPeerReply::Success,
+            ])
+            .await;
+            let server = seed_identity_fixture(&peer, true);
+            let items = seed_identity_items();
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+            let first = seed_index_batch(&server, HOT_COLLECTION, &items, deadline).await;
+            let second = seed_index_batch(&server, HOT_COLLECTION, &items, deadline).await;
+            let wire = peer.finish().await;
+            println!(
+                "diagnostic seed stimulus: success, 429, retry success; actual sends={}",
+                wire.len()
+            );
+            first.unwrap();
+            second.unwrap();
+            assert_eq!(wire.len(), 3);
+            let traces: BTreeSet<_> = wire.iter().map(seed_identity_wire_trace).collect();
+            assert_eq!(
+                traces.len(),
+                3,
+                "each actual send including 429 retry needs a fresh trace"
+            );
+            assert!(server.request_error_journal.lock().await.records.is_empty());
+        });
+    }
+
+    #[test]
+    fn diagnostic_seed_failure_record_matches_the_failed_send_and_is_bounded() {
+        seed_identity_runtime().block_on(async {
+        let mut results = Vec::new();
+        for (reply, stage, kind, status) in [
+            (SeedIdentityPeerReply::StatusFailure, "response_check", "http_status", 500),
+            (SeedIdentityPeerReply::DecodeFailure, "response_json", "decode", 200),
+        ] {
+            let peer = SeedIdentityPeer::start(vec![SeedIdentityPeerReply::Retry, reply]).await;
+            let server = seed_identity_fixture(&peer, true);
+            let result = seed_index_batch(&server, HOT_COLLECTION, &seed_identity_items(), tokio::time::Instant::now() + Duration::from_secs(10)).await;
+            let wire = peer.finish().await;
+            let error = result.expect_err("scripted status/parser response must fail");
+            results.push((wire, seed_identity_evidence(&error), stage, kind, status));
+        }
+        println!("diagnostic seed stimuli: 429 then HTTP500 JSON; 429 then HTTP200 invalid JSON; both peers ended");
+        for (wire, evidence, stage, kind, status) in results {
+            assert_eq!(wire.len(), 2);
+            let first = seed_identity_wire_trace(&wire[0]);
+            let failed = seed_identity_wire_trace(&wire[1]);
+            assert_ne!(first, failed);
+            let record = seed_identity_record(&evidence);
+            assert_eq!(record["client_trace_id"], failed);
+            assert_ne!(record["client_trace_id"], first);
+            assert_eq!(record["client_stage"], stage);
+            assert_eq!(record["failure_kind"], kind);
+            assert_eq!(record["http_status"], status);
+            for key in ["reqwest_timeout", "reqwest_connect", "reqwest_request", "reqwest_body", "reqwest_decode"] {
+                if kind == "decode" { assert!(record[key].is_boolean()); } else { assert!(record[key].is_null()); }
+            }
+            if kind == "decode" { assert_eq!(record["reqwest_decode"], true); }
+        }
+    });
+    }
+
+    #[test]
+    fn diagnostic_seed_setup_timeout_attributes_only_an_active_send() {
+        seed_identity_runtime().block_on(async {
+        let active_peer = SeedIdentityPeer::start(vec![SeedIdentityPeerReply::Hold]).await;
+        let active_server = seed_identity_fixture(&active_peer, true);
+        let items = seed_identity_items();
+        let active_call = seed_index_batch(&active_server, HOT_COLLECTION, &items, tokio::time::Instant::now() + Duration::from_secs(2));
+        tokio::pin!(active_call);
+        let (active_result, receipt_observed) = tokio::select! {
+            _ = active_peer.state.received.notified() => (active_call.await, true),
+            result = &mut active_call => (result, false),
+        };
+        let active_wire = active_peer.finish().await;
+        let active_error = active_result.expect_err("held response must hit setup deadline");
+        let active_evidence = seed_identity_evidence(&active_error);
+
+        let retry_peer = SeedIdentityPeer::start(vec![SeedIdentityPeerReply::Retry]).await;
+        let retry_server = seed_identity_fixture(&retry_peer, true);
+        let retry_result = seed_index_batch(&retry_server, HOT_COLLECTION, &items, tokio::time::Instant::now() + Duration::from_millis(500)).await;
+        let retry_wire = retry_peer.finish().await;
+        let retry_error = retry_result.expect_err("one-second retry wait must hit setup deadline");
+        let retry_evidence = seed_identity_evidence(&retry_error);
+
+        let expired_peer = SeedIdentityPeer::start(vec![]).await;
+        let expired_server = seed_identity_fixture(&expired_peer, true);
+        let expired_result = seed_index_batch_with_identity_source(&expired_server, HOT_COLLECTION, &items, tokio::time::Instant::now() - Duration::from_secs(1), || panic!("expired pre-send must never invoke the identity source")).await;
+        let expired_wire = expired_peer.finish().await;
+        let expired_error = expired_result.expect_err("pre-send expiry must fail");
+        let expired_evidence = seed_identity_evidence(&expired_error);
+
+        println!("diagnostic seed deadline stimuli: active receipt_gate={receipt_observed}, sends={}; retry-wait sends={}; pre-send sends={}", active_wire.len(), retry_wire.len(), expired_wire.len());
+        assert!(receipt_observed, "active-send deadline stimulus requires the actual peer receipt gate");
+        assert_eq!(active_wire.len(), 1);
+        assert_eq!(retry_wire.len(), 1);
+        assert!(expired_wire.is_empty());
+        assert!(matches!(retry_error, HarnessError::SetupTimeout {stage:"seed"}));
+        assert!(matches!(expired_error, HarnessError::SetupTimeout {stage:"seed"}));
+        assert!(retry_evidence.private.is_none());
+        assert!(expired_evidence.private.is_none());
+        let record = seed_identity_record(&active_evidence);
+        assert_eq!(record["client_trace_id"], seed_identity_wire_trace(&active_wire[0]));
+        assert_eq!(record["client_stage"], "send");
+        assert_eq!(record["failure_kind"], "setup_deadline");
+        assert!(record["http_status"].is_null());
+        for key in ["reqwest_timeout", "reqwest_connect", "reqwest_request", "reqwest_body", "reqwest_decode"] { assert!(record[key].is_null()); }
+    });
+    }
+
+    #[test]
+    fn ordinary_seed_does_no_identity_header_or_private_evidence_work() {
+        seed_identity_runtime().block_on(async {
+        let peer = SeedIdentityPeer::start(vec![SeedIdentityPeerReply::Success, SeedIdentityPeerReply::StatusFailure, SeedIdentityPeerReply::Success]).await;
+        let server = seed_identity_fixture(&peer, false);
+        let items = seed_identity_items();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        let success = seed_index_batch(&server, HOT_COLLECTION, &items, deadline).await;
+        let failure = seed_index_batch(&server, HOT_COLLECTION, &items, deadline).await;
+        let injected = seed_index_batch_with_identity_source(&server, HOT_COLLECTION, &items, deadline, || panic!("ordinary mode must never invoke the identity source")).await;
+        let expired = seed_index_batch_with_identity_source(&server, HOT_COLLECTION, &items, tokio::time::Instant::now() - Duration::from_secs(1), || panic!("ordinary pre-send expiry must never invoke the identity source")).await;
+        let wire = peer.finish().await;
+        success.unwrap(); injected.unwrap();
+        let failure = failure.expect_err("ordinary HTTP500 stays an HTTP error");
+        let expired = expired.expect_err("ordinary pre-send expiry stays a setup timeout");
+        let evidence = seed_identity_evidence(&failure);
+        let expiry_evidence = seed_identity_evidence(&expired);
+        println!("ordinary seed stimuli: success, HTTP500, source-injected success, pre-send expiry; actual sends={}", wire.len());
+        assert_eq!(wire.len(), 3);
+        assert!(wire.iter().all(|row| row.count == 0 && row.values.is_empty()));
+        assert!(matches!(failure, HarnessError::Http(_)));
+        assert!(matches!(expired, HarnessError::SetupTimeout {stage:"seed"}));
+        assert!(evidence.private.is_none());
+        assert!(expiry_evidence.private.is_none());
+    });
+    }
+    // QA-FROZEN-DIAGNOSTIC-SEED-IDENTITY-END
 }
 // DURABLE-WORKLOAD-END
 // CODEGEN-END
