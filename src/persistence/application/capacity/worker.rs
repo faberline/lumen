@@ -350,3 +350,13 @@ pub(super) fn relay_cycle(
     }
     Ok(())
 }
+
+// Add this separate impl beside the existing BudgetRelay impl in worker.rs.
+// The field and all production start/stop/run/drop code stay unchanged.
+// The caller must retain this handle until it joins the stopped relay.
+#[cfg(test)]
+impl BudgetRelay {
+    pub(super) fn take_worker_for_test(&mut self) -> Option<std::thread::JoinHandle<()>> {
+        self.worker.take()
+    }
+}
