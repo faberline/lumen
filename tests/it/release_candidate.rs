@@ -1896,6 +1896,22 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
                         .into(),
                     false,
                 ),
+                (
+                    "diagnostic_seed_traceparent_is_valid_and_fresh_per_actual_send".into(),
+                    false,
+                ),
+                (
+                    "diagnostic_seed_failure_record_matches_the_failed_send_and_is_bounded".into(),
+                    false,
+                ),
+                (
+                    "diagnostic_seed_setup_timeout_attributes_only_an_active_send".into(),
+                    false,
+                ),
+                (
+                    "ordinary_seed_does_no_identity_header_or_private_evidence_work".into(),
+                    false,
+                ),
             ];
     let actual_inventory = perf_gate_inventory(source);
     require(actual_inventory == expected_inventory, "PERF_GATE")
@@ -3363,6 +3379,131 @@ fn cloud_free_gate_mutations_fail_without_hash_oracle() {
         "GATE_COMMANDS",
     );
 }
+
+// QA-FROZEN-CLIENT-SEED-INVENTORY-BEGIN
+fn client_seed_inventory_replace_actual_anchor(
+    source: &str,
+    anchor: &str,
+    replacement: &str,
+) -> String {
+    assert_ne!(anchor, replacement);
+    assert_eq!(source.match_indices(anchor).count(), 1, "actual source anchor");
+    let start = source.find(anchor).unwrap();
+    let end = start + anchor.len();
+    let mut changed = source.to_owned();
+    changed.replace_range(start..end, replacement);
+    assert_ne!(changed, source);
+    assert_eq!(&changed[..start], &source[..start]);
+    assert_eq!(
+        &changed[start..start + replacement.len()],
+        replacement,
+    );
+    assert_eq!(&changed[start + replacement.len()..], &source[end..]);
+    changed
+}
+
+#[test]
+fn client_seed_inventory_requires_each_approved_case_and_rejects_unapproved_cases() {
+    let source = perf_gate_source();
+    let inventory = perf_gate_inventory(&source);
+    let positive = validate_perf_gate_source(&source);
+    let mut negative_outcomes = Vec::new();
+    for identity in [
+        "diagnostic_seed_traceparent_is_valid_and_fresh_per_actual_send",
+        "diagnostic_seed_failure_record_matches_the_failed_send_and_is_bounded",
+        "diagnostic_seed_setup_timeout_attributes_only_an_active_send",
+        "ordinary_seed_does_no_identity_header_or_private_evidence_work",
+    ] {
+        let anchor = format!("    #[test]\n    fn {identity}() {{");
+        let function_anchor = format!("    fn {identity}() {{");
+        assert_eq!(source.match_indices(&function_anchor).count(), 1);
+        let positions: Vec<_> = inventory
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (name, _))| (name == identity).then_some(index))
+            .collect();
+        assert_eq!(positions.len(), 1, "one actual approved identity");
+        let position = positions[0];
+        assert!(!inventory[position].1, "approved case is nonignored");
+
+        let missing = client_seed_inventory_replace_actual_anchor(
+            &source,
+            &anchor,
+            &function_anchor,
+        );
+        let mut missing_inventory = inventory.clone();
+        missing_inventory.remove(position);
+
+        let renamed_identity = format!("renamed_{identity}");
+        let renamed_function_anchor = format!("    fn {renamed_identity}() {{");
+        assert_eq!(source.match_indices(&renamed_function_anchor).count(), 0);
+        let renamed = client_seed_inventory_replace_actual_anchor(
+            &source,
+            &anchor,
+            &format!("    #[test]\n{renamed_function_anchor}"),
+        );
+        let mut renamed_inventory = inventory.clone();
+        renamed_inventory[position].0 = renamed_identity;
+
+        let ignored = client_seed_inventory_replace_actual_anchor(
+            &source,
+            &anchor,
+            &format!("    #[test]\n    #[ignore]\n{function_anchor}"),
+        );
+        let mut ignored_inventory = inventory.clone();
+        ignored_inventory[position].1 = true;
+
+        for (mutation, fixture, expected_inventory) in [
+            ("missing_test_attribute", missing, missing_inventory),
+            ("renamed_function_identity", renamed, renamed_inventory),
+            ("changed_ignore_flag", ignored, ignored_inventory),
+        ] {
+            assert_eq!(
+                perf_gate_inventory(&fixture),
+                expected_inventory,
+                "exactly one intended inventory change: {identity}::{mutation}",
+            );
+            negative_outcomes.push((identity, mutation, validate_perf_gate_source(&fixture)));
+        }
+    }
+
+    let extra_identity = "unapproved_client_seed_inventory_case";
+    let extra_anchor = format!("    #[test]\n    fn {extra_identity}() {{");
+    assert_eq!(source.match_indices(&extra_anchor).count(), 0);
+    let module_end = "}\n// DURABLE-WORKLOAD-END\n// CODEGEN-END\n";
+    let extra = client_seed_inventory_replace_actual_anchor(
+        &source,
+        module_end,
+        &format!(
+            "\n{extra_anchor}\n        assert_eq!(REQUEST_TIMEOUT, Duration::from_secs(5));\n    }}\n{module_end}"
+        ),
+    );
+    let mut extra_inventory = inventory.clone();
+    extra_inventory.push((extra_identity.into(), false));
+    assert_eq!(
+        perf_gate_inventory(&extra),
+        extra_inventory,
+        "exactly one additional real synchronous test",
+    );
+    negative_outcomes.push((
+        extra_identity,
+        "one_additional_unapproved_synchronous_test",
+        validate_perf_gate_source(&extra),
+    ));
+
+    assert_eq!(negative_outcomes.len(), 13);
+    for (identity, mutation, outcome) in negative_outcomes {
+        assert_eq!(
+            outcome,
+            Err(Finding("PERF_GATE")),
+            "{identity}::{mutation} must fail closed",
+        );
+        println!("client seed inventory negative asserted: {identity}::{mutation} => {outcome:?}");
+    }
+    println!("client seed inventory: all 13 negative outcomes asserted; real source => {positive:?}");
+    assert_eq!(positive, Ok(()), "real frozen perf source must pass");
+}
+// QA-FROZEN-CLIENT-SEED-INVENTORY-END
 
 #[test]
 fn live_candidate_contract_is_fail_closed() {
