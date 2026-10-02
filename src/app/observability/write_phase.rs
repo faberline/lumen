@@ -94,6 +94,7 @@ struct Context {
     sequence_present: AtomicBool,
     sequence: AtomicU64,
     dispatch: tracing::Dispatch,
+    span: tracing::Span,
 }
 
 impl Context {
@@ -123,6 +124,7 @@ impl Context {
         tracing::dispatcher::with_default(&self.dispatch, || {
             tracing::info!(
                 target: "lumen_write_phase",
+                parent: &self.span,
                 event = "lumen_write_phase",
                 attempt_id = self.attempt_id,
                 kind = self.kind.label(),
@@ -207,6 +209,7 @@ impl WritePhase {
             sequence_present: AtomicBool::new(false),
             sequence: AtomicU64::new(0),
             dispatch: tracing::dispatcher::get_default(Clone::clone),
+            span: tracing::Span::current(),
         });
         context.emit(Phase::AdmissionBegin, ResultLabel::Started, Duration::ZERO);
         Self(Some(Caller {

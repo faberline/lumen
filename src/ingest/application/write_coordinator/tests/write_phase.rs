@@ -607,3 +607,293 @@ async fn write_phase_diagnostics_are_truthful_and_request_scoped() {
     }
     println!("checked 11 isolated attempts: at most six real events, safe fields only, no secret, and disabled ordinary writes");
 }
+
+#[derive(Clone, Default)]
+struct HttpPhaseWriter(Arc<Mutex<Vec<u8>>>);
+
+struct HttpPhaseWriterGuard(Arc<Mutex<Vec<u8>>>);
+
+impl std::io::Write for HttpPhaseWriterGuard {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'writer> tracing_subscriber::fmt::MakeWriter<'writer> for HttpPhaseWriter {
+    type Writer = HttpPhaseWriterGuard;
+
+    fn make_writer(&'writer self) -> Self::Writer {
+        HttpPhaseWriterGuard(self.0.clone())
+    }
+}
+
+impl HttpPhaseWriter {
+    fn records(&self) -> Vec<Value> {
+        let bytes = self.0.lock().unwrap().clone();
+        String::from_utf8(bytes)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| serde_json::from_str(line).expect("real formatter must emit JSON"))
+            .collect()
+    }
+
+    fn attempt(&self, attempt_id: u64) -> Vec<Value> {
+        self.records()
+            .into_iter()
+            .filter(|row| {
+                row["event"] == "lumen_write_phase"
+                    && row["attributes"]["attempt_id"] == attempt_id
+            })
+            .collect()
+    }
+}
+
+fn http_phase_capture() -> (Capture, HttpPhaseWriter) {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let changed = Arc::new(Notify::new());
+    let writer = HttpPhaseWriter::default();
+    let identity = service_observability::ServiceIdentity::new("lumen", "test").unwrap();
+    let formatter = tracing_subscriber::fmt::layer()
+        .with_ansi(false)
+        .with_writer(writer.clone())
+        .with_target(true)
+        .with_thread_ids(false)
+        .with_thread_names(false)
+        .with_line_number(false)
+        .json()
+        .with_current_span(true)
+        .event_format(service_observability::ServiceJsonFormatter::new(identity));
+    let dispatch = Dispatch::new(
+        tracing_subscriber::registry()
+            .with(CaptureLayer {
+                events: events.clone(),
+                changed: changed.clone(),
+            })
+            .with(formatter),
+    );
+    (
+        Capture {
+            events,
+            changed,
+            dispatch,
+        },
+        writer,
+    )
+}
+
+fn http_index_request(trace_id: &str) -> axum::http::Request<axum::body::Body> {
+    let RaftLogEntry::Index { req, .. } = secret_entry() else {
+        unreachable!();
+    };
+    let parent_span_id = rand::random::<u64>() | 1;
+    axum::http::Request::builder()
+        .method("POST")
+        .uri("/collections/u/index")
+        .header("content-type", "application/json")
+        .header(
+            "traceparent",
+            format!("00-{trace_id}-{parent_span_id:016x}-01"),
+        )
+        .header("cookie", SECRET)
+        .header("baggage", SECRET)
+        .body(axum::body::Body::from(serde_json::to_vec(&req).unwrap()))
+        .unwrap()
+}
+
+fn assert_http_phase_trace(rows: &[Value], trace_id: &str) {
+    assert!(
+        !rows.is_empty(),
+        "the actual request must emit write phases"
+    );
+    for row in rows {
+        assert_eq!(
+            row["trace_id"].as_str(),
+            Some(trace_id),
+            "actual HTTP write phase {} must retain its supplied request trace ID",
+            row["attributes"]["phase"]
+        );
+        assert!(!serde_json::to_string(row).unwrap().contains(SECRET));
+    }
+}
+
+#[tokio::test]
+async fn write_phase_keeps_http_trace_context_after_handoff_and_caller_drop() {
+    use tower::ServiceExt as _;
+
+    use crate::access::application::auth_config::AuthConfig;
+    use crate::app::http::{app_state::AppState, router::router};
+
+    assert_ne!(
+        std::env::var("LUMEN_PERF_DIAGNOSTIC").as_deref(),
+        Ok("1"),
+        "this proof uses only the existing local capture enable"
+    );
+    let (capture, json) = http_phase_capture();
+    let normal_trace_id = format!("{:032x}", rand::random::<u128>() | 1);
+    let cancelled_trace_id = format!("{:032x}", rand::random::<u128>() | 1);
+    assert_ne!(normal_trace_id, cancelled_trace_id);
+
+    let normal_wal =
+        ControlledWal::paused(ControlledWal::PAUSE_PUBLISH | ControlledWal::PAUSE_DELIVERY);
+    let (normal, normal_engine, normal_budget, _normal_enable) = setup(normal_wal.clone());
+    let normal_app = router(AppState::with_components(
+        normal_engine.clone(),
+        Arc::new(AuthConfig::open()),
+        normal.clone(),
+    ));
+    let normal_request = http_index_request(&normal_trace_id);
+    let normal_caller = tokio::spawn(
+        async move { normal_app.oneshot(normal_request).await }
+            .with_subscriber(capture.dispatch.clone()),
+    );
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        normal_wal.observed_publish.notified(),
+    )
+    .await
+    .expect("actual HTTP request must reach held publication");
+    let normal_id = capture.phase_after(0, "publication_begin").await;
+    let normal_held = capture.attempt(normal_id);
+    assert_eq!(phases(&normal_held), NORMAL_PHASES[..3]);
+    assert!(normal_held
+        .iter()
+        .all(|row| row["wal_sequence_present"] == false && row["wal_sequence"] == 0));
+    assert_http_phase_trace(&json.attempt(normal_id), &normal_trace_id);
+    assert!(normal_budget.snapshot().reserved > 0);
+
+    normal_wal.release_publish.notify_one();
+    assert_eq!(capture.phase_after(0, "apply_wait_begin").await, normal_id);
+    let normal_waiting = capture.attempt(normal_id);
+    assert_eq!(phases(&normal_waiting), NORMAL_PHASES[..5]);
+    assert_eq!(normal_waiting[3]["result"], "sequence_returned");
+    assert_eq!(normal_waiting[3]["wal_sequence_present"], true);
+    assert_eq!(normal_waiting[3]["wal_sequence"], 1);
+    assert_eq!(normal.applied_seq(), 0);
+    normal_wal.release_delivery.notify_one();
+    let response = tokio::time::timeout(Duration::from_secs(2), normal_caller)
+        .await
+        .expect("released actual HTTP request must complete")
+        .unwrap()
+        .unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let response_json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(response_json["indexed"], 1);
+    terminal(&capture, 0, NORMAL_PHASES, "applied", true);
+    assert_eq!(normal_engine.stats("u").unwrap().documents_indexed, 1);
+    assert_eq!(normal_budget.snapshot().reserved, 0);
+    let normal_json = json.attempt(normal_id);
+    assert_eq!(normal_json.len(), NORMAL_PHASES.len());
+    println!(
+        "normal supplied trace_id={normal_trace_id}; actual formatter phases={}",
+        serde_json::to_string(&normal_json).unwrap()
+    );
+
+    let cancel_cursor = capture.len();
+    let cancelled_wal =
+        ControlledWal::paused(ControlledWal::PAUSE_PUBLISH | ControlledWal::PAUSE_DELIVERY);
+    let (cancelled, cancelled_engine, cancelled_budget, _cancelled_enable) =
+        setup(cancelled_wal.clone());
+    let cancelled_app = router(AppState::with_components(
+        cancelled_engine.clone(),
+        Arc::new(AuthConfig::open()),
+        cancelled.clone(),
+    ));
+    let cancelled_request = http_index_request(&cancelled_trace_id);
+    let cancelled_caller = tokio::spawn(
+        async move { cancelled_app.oneshot(cancelled_request).await }
+            .with_subscriber(capture.dispatch.clone()),
+    );
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        cancelled_wal.observed_publish.notified(),
+    )
+    .await
+    .expect("second actual HTTP request must reach held publication");
+    let cancelled_id = capture
+        .phase_after(cancel_cursor, "publication_begin")
+        .await;
+    assert_ne!(normal_id, cancelled_id);
+    assert_eq!(phases(&capture.attempt(cancelled_id)), NORMAL_PHASES[..3]);
+    assert_http_phase_trace(&json.attempt(cancelled_id), &cancelled_trace_id);
+    assert_eq!(cancelled.applied_seq(), 0);
+    assert!(cancelled_budget.snapshot().reserved > 0);
+
+    // This cancels the held router future. It does not model a network disconnect.
+    cancelled_caller.abort();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), cancelled_caller)
+            .await
+            .unwrap()
+            .unwrap_err()
+            .is_cancelled()
+    );
+    terminal(
+        &capture,
+        cancel_cursor,
+        &[
+            "admission_begin",
+            "admission_end",
+            "publication_begin",
+            "caller_end",
+        ],
+        "detached_unknown",
+        false,
+    );
+    assert_eq!(cancelled_engine.stats("u").unwrap().documents_indexed, 0);
+    assert!(cancelled_budget.snapshot().reserved > 0);
+
+    cancelled_wal.release_publish.notify_one();
+    assert_eq!(
+        capture.phase_after(cancel_cursor, "publication_end").await,
+        cancelled_id
+    );
+    let cancelled_rows = capture.attempt(cancelled_id);
+    assert_eq!(
+        phases(&cancelled_rows),
+        [
+            "admission_begin",
+            "admission_end",
+            "publication_begin",
+            "caller_end",
+            "publication_end",
+        ]
+    );
+    let late = cancelled_rows.last().unwrap();
+    assert_eq!(late["result"], "sequence_returned");
+    assert_eq!(late["wal_sequence_present"], true);
+    assert_eq!(late["wal_sequence"], 1);
+    assert_eq!(cancelled.applied_seq(), 0);
+    assert!(cancelled_budget.snapshot().reserved > 0);
+    cancelled_wal.release_delivery.notify_one();
+    applied(&cancelled).await;
+    assert_eq!(cancelled_engine.stats("u").unwrap().documents_indexed, 1);
+    assert_eq!(cancelled_budget.snapshot().reserved, 0);
+    let cancelled_json = json.attempt(cancelled_id);
+    assert_eq!(cancelled_json.len(), 5);
+    println!(
+        "cancelled supplied trace_id={cancelled_trace_id}; actual formatter phases={}",
+        serde_json::to_string(&cancelled_json).unwrap()
+    );
+
+    // Check all final JSON events after both controlled flows have completed.
+    assert_http_phase_trace(&normal_json, &normal_trace_id);
+    assert_http_phase_trace(&cancelled_json, &cancelled_trace_id);
+    let access = json.records();
+    let normal_access = access
+        .iter()
+        .find(|row| {
+            row["attributes"]["target"] == "http.access" && row["trace_id"] == normal_trace_id
+        })
+        .expect("normal HTTP access log must retain the same supplied trace ID");
+    assert_eq!(normal_access["attributes"]["subject"], "anonymous");
+    println!("checked two fresh strict traceparents: normal HTTP completion, held router-future cancellation, unknown caller, and late exact WAL sequence 1");
+}
