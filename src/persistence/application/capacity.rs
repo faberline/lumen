@@ -174,6 +174,7 @@ impl Registry {
 pub(crate) struct Fallback {
     owner: Option<Owner>,
     relay: Option<BudgetRelay>,
+    endpoint: Option<Arc<Endpoint>>,
     _store: Option<Arc<SegmentRdbStore>>,
 }
 
@@ -183,7 +184,14 @@ impl Fallback {
         engine: &Arc<Engine>,
         configured: Option<Arc<SegmentRdbStore>>,
     ) -> Result<()> {
-        if slot.is_some() && engine.layer_maintenance.owner().is_some() {
+        let live_endpoint = engine.layer_maintenance.owner();
+        if slot.as_ref().is_some_and(|fallback| {
+            fallback
+                .endpoint
+                .as_ref()
+                .zip(live_endpoint.as_ref())
+                .is_some_and(|(bound, live)| Arc::ptr_eq(bound, live))
+        }) {
             // The caller already owns the relay for this live endpoint.  Do
             // not replace the slot: dropping its old fallback stops that
             // owner while its capacity waiters are still pending.
@@ -197,10 +205,11 @@ impl Fallback {
             // creates its caller-owned fallback.  Keep the owner as the sole
             // checkpoint writer, but attach the native relay to that same
             // endpoint so capacity waits can submit work to it.
-            let relay = BudgetRelay::start(engine.clone(), endpoint)?;
+            let relay = BudgetRelay::start(engine.clone(), endpoint.clone())?;
             *slot = Some(Self {
                 owner: None,
                 relay: Some(relay),
+                endpoint: Some(endpoint),
                 _store: configured,
             });
             return Ok(());
@@ -217,13 +226,15 @@ impl Fallback {
             aof: None,
         });
         let owner = Owner::start(sink, is_configured)?;
-        let relay = owner
+        let endpoint = owner.as_ref().map(Owner::endpoint);
+        let relay = endpoint
             .as_ref()
-            .map(|owner| BudgetRelay::start(engine.clone(), owner.endpoint()))
+            .map(|endpoint| BudgetRelay::start(engine.clone(), endpoint.clone()))
             .transpose()?;
         *slot = Some(Self {
             owner,
             relay,
+            endpoint,
             _store: Some(store),
         });
         Ok(())
