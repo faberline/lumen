@@ -14,7 +14,8 @@ use crate::index::application::admission::record_reservation::{
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
 use crate::ingest::application::write_coordinator::errors::SubmitStalled;
 use crate::ingest::application::write_coordinator::{
-    WriteCoordinator, LOCAL_CAPACITY_APPLY_RESERVE, SUBMIT_TIMEOUT, SUBMIT_TIMEOUT_SECS,
+    WriteCoordinator, LOCAL_CAPACITY_APPLY_RESERVE, LOCAL_CAPACITY_RELIEF_TIMEOUT, SUBMIT_TIMEOUT,
+    SUBMIT_TIMEOUT_SECS,
 };
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::wal_record::WalRecord;
@@ -162,7 +163,8 @@ impl WriteCoordinator {
 
     /// Publish `entry`, wait for local apply, and return its outcome.
     ///
-    /// Admission and local apply share [`SUBMIT_TIMEOUT`]. A stray sequence
+    /// Full capacity admission returns a retryable refusal inside the HTTP
+    /// request bound. Admitted work retains [`SUBMIT_TIMEOUT`]. A stray sequence
     /// mismatch or apply-loop stall surfaces as a retryable 5xx instead of
     /// retaining a server task without a deadline.
     pub async fn submit(&self, entry: RaftLogEntry) -> Result<ApplyOutcome> {
@@ -173,6 +175,8 @@ impl WriteCoordinator {
         let admission_started_at = std::time::Instant::now();
         let submit_deadline = tokio::time::Instant::now() + SUBMIT_TIMEOUT;
         let admission_deadline = submit_deadline - LOCAL_CAPACITY_APPLY_RESERVE;
+        let capacity_deadline =
+            admission_deadline.min(tokio::time::Instant::now() + LOCAL_CAPACITY_RELIEF_TIMEOUT);
         let mut diagnostic = WritePhase::begin(
             kind,
             #[cfg(test)]
@@ -183,7 +187,7 @@ impl WriteCoordinator {
                 .is_some(),
         );
         let reservation = self
-            .admit_local_record_with_relief(&entry, admission_deadline)
+            .admit_local_record_with_relief(&entry, capacity_deadline)
             .await
             .map_err(|error| {
                 diagnostic.admission_end(Some(&error));
