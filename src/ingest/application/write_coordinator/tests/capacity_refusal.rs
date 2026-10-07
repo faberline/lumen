@@ -323,3 +323,160 @@ async fn local_capacity_refusal_starts_checkpoint_owner_without_committed_waiter
         "a local refusal must create independent checkpoint maintenance"
     );
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn http_full_admission_returns_429_within_five_seconds_without_wal_publish() {
+    check_http_full_admission(false).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn http_full_admission_recovers_after_observed_refusal_before_five_seconds() {
+    check_http_full_admission(true).await;
+}
+
+async fn check_http_full_admission(release_after_refusal: bool) {
+    use crate::access::application::auth_config::AuthConfig;
+    use crate::app::http::{app_state::AppState, router::router};
+    use crate::persistence::application::capacity::worker::Owner;
+    use crate::persistence::application::segment_checkpoint_sink::{
+        EngineWatermarkSink, SegmentCheckpointSink,
+    };
+    use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
+    use std::time::{Duration, Instant};
+    use tower::ServiceExt as _;
+
+    const HARD_LIMIT: usize = 268_435_456;
+    let budget = ChangeBudget::new();
+    let engine = Arc::new(Engine::with_change_budget(budget.clone()));
+    let wal = Arc::new(MemWal::new());
+    let coord = WriteCoordinator::start(wal.clone(), engine.clone());
+    coord
+        .submit(RaftLogEntry::CreateCollection {
+            collection_id: "u".into(),
+            req: keyword_schema(),
+        })
+        .await
+        .unwrap();
+    coord.submit(admitted_index_entry()).await.unwrap();
+    assert_eq!(wal.latest_seq().await.unwrap(), 2);
+    assert_eq!(coord.applied_seq(), 2);
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(SegmentRdbStore::new(dir.path()).unwrap());
+    let sink = Arc::new(SegmentCheckpointSink {
+        engine: engine.clone(),
+        store,
+        writer: Arc::new(EngineWatermarkSink::new(engine.clone())),
+        aof: None,
+    });
+    let mut owner = Owner::start(sink, true).unwrap().unwrap();
+    // A real native checkpoint owner remains unable to capture until this
+    // apply interval is released. Admission must still answer the HTTP caller.
+    let mut apply_lease = Some(engine.capture_barrier.apply());
+    let filler_owner = budget.owner();
+    let mut filler = Some(
+        filler_owner
+            .try_reserve(HARD_LIMIT - budget.snapshot().total)
+            .unwrap(),
+    );
+    assert_eq!(budget.snapshot().total, HARD_LIMIT);
+    let app = router(AppState::with_components(
+        engine.clone(),
+        Arc::new(AuthConfig::open()),
+        coord.clone(),
+    ));
+    // Applied setup WAL sources can be staged during the wait. This request
+    // must remain larger than those tiny released sources, so it cannot
+    // become admitted merely because the relief scan stages the setup.
+    let req = IndexRequest {
+        items: vec![IndexItem {
+            external_id: "full-admission-request".into(),
+            field: "email".into(),
+            value: FieldValue::String("x".repeat(32 * 1024)),
+            version: None,
+        }],
+        request_id: None,
+    };
+    let request = axum::http::Request::builder()
+        .method("POST")
+        .uri("/collections/u/index")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(serde_json::to_vec(&req).unwrap()))
+        .unwrap();
+    let before = engine.metrics().segment_backpressure_total.get();
+    let started = Instant::now();
+    let mut recovery_observed_full = false;
+    let exchange = async {
+        if release_after_refusal {
+            let release = async {
+                let observed = tokio::time::timeout(Duration::from_secs(2), async {
+                    while engine
+                        .capacity_owner_state()
+                        .and_then(|state| state.checkpoint_request_revision)
+                        .is_none()
+                    {
+                        tokio::time::sleep(Duration::from_millis(1)).await;
+                    }
+                })
+                .await;
+                recovery_observed_full = observed.is_ok();
+                drop(apply_lease.take());
+                drop(filler.take());
+            };
+            let (response, ()) = tokio::join!(app.oneshot(request), release);
+            response
+        } else {
+            app.oneshot(request).await
+        }
+    };
+    let response = tokio::time::timeout(Duration::from_secs(5), exchange).await;
+    let elapsed = started.elapsed();
+    let observed_wal_head = wal.latest_seq().await.unwrap();
+    let observed_applied_head = coord.applied_seq();
+    println!(
+        "HTTP_ADMISSION_OBSERVATION wal_head={} applied_head={} elapsed_us={} client_bound_expired={}",
+        observed_wal_head, observed_applied_head, elapsed.as_micros(), response.is_err(),
+    );
+    // Release and join owned checkpoint work before any assertion can unwind.
+    drop(apply_lease.take());
+    drop(filler.take());
+    let joined = tokio::time::timeout(
+        Duration::from_secs(30),
+        tokio::task::spawn_blocking(move || owner.join()),
+    )
+    .await;
+    coord.layer_capacity_owner.lock().unwrap().take();
+    joined
+        .expect("owned checkpoint cleanup deadline")
+        .unwrap()
+        .unwrap();
+    let response = response
+        .expect("capacity refusal must beat the fixed five-second client bound")
+        .unwrap();
+    if release_after_refusal {
+        assert!(
+            recovery_observed_full,
+            "release requires an actual Full request revision"
+        );
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        assert_eq!(observed_wal_head, 3);
+        assert_eq!(observed_applied_head, 3);
+        assert_eq!(engine.stats("u").unwrap().documents_indexed, 2);
+        println!("HTTP200 before5s after observed Full and release; actual WAL/applied head3");
+    } else {
+        assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.headers().get("retry-after").unwrap(), "1");
+        assert_eq!(
+            observed_wal_head, 2,
+            "refusal must not publish a third WAL record"
+        );
+        assert_eq!(observed_applied_head, 2);
+        println!("HTTP429 Retry-After1 before5s; actual WAL/applied head2 unchanged");
+    }
+    assert!(elapsed < Duration::from_secs(5));
+    assert_eq!(
+        engine.metrics().segment_backpressure_total.get(),
+        before + u64::from(!release_after_refusal)
+    );
+    assert!(budget.high_water_bytes() <= HARD_LIMIT);
+}

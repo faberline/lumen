@@ -62,6 +62,10 @@ const SUBMIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(SUBMI
 // Admission must leave time for an already admitted record to publish and
 // apply inside the same 30-second submit deadline.
 const LOCAL_CAPACITY_APPLY_RESERVE: std::time::Duration = std::time::Duration::from_secs(1);
+// Return a full pre-publication admission refusal before the fixed five-second
+// HTTP request bound, leaving one second for the refusal response. Admitted
+// records retain the original submit and local-apply deadline.
+const LOCAL_CAPACITY_RELIEF_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(4);
 
 struct PendingApply {
     seq: u64,
