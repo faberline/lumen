@@ -78,18 +78,42 @@ impl SegmentRdbStore {
     /// Lumen-owned, but a wrong mount or an older unsupported layout must still
     /// fail loudly instead of being converted into a fresh empty store.
     pub(super) fn inventory_root(&self) -> Result<RootInventory> {
+        let entries = std::fs::read_dir(&self.root)
+            .with_context(|| format!("read checkpoint root {}", self.root.display()))?
+            .collect::<std::io::Result<Vec<_>>>()?;
+        self.inventory_root_from_entries(entries)
+    }
+
+    pub(super) fn inventory_root_from_entries(
+        &self,
+        mut entries: Vec<std::fs::DirEntry>,
+    ) -> Result<RootInventory> {
         let mut inventory = RootInventory::default();
         let mut children = Vec::new();
         let mut violations = Vec::new();
-        let mut entries = std::fs::read_dir(&self.root)
-            .with_context(|| format!("read checkpoint root {}", self.root.display()))?
-            .collect::<std::io::Result<Vec<_>>>()?;
         entries.sort_by_key(|entry| entry.file_name());
 
         for entry in entries {
             let path = entry.path();
-            let metadata = std::fs::symlink_metadata(&path)
-                .with_context(|| format!("inspect checkpoint root entry {}", path.display()))?;
+            let metadata = match std::fs::symlink_metadata(&path) {
+                Ok(metadata) => metadata,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::NotFound
+                        && entry.file_name() == AOF_COMPACT_TEMP_FILE
+                        && self.generations.read_current().is_ok() =>
+                {
+                    // AOF compaction atomically renames this temporary file
+                    // over the log. An established CURRENT remains authority
+                    // when the rename wins after directory enumeration. Cold
+                    // roots and all other missing entries still fail closed.
+                    continue;
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("inspect checkpoint root entry {}", path.display())
+                    });
+                }
+            };
             let kind = root_entry_kind(&metadata);
             let raw = match entry.file_name().into_string() {
                 Ok(raw) => raw,

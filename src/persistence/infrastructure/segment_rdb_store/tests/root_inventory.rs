@@ -361,3 +361,70 @@ fn unknown_root_symlink_fails_before_current_is_written() {
     assert!(!dir.path().join("CURRENT").exists());
     assert!(dir.path().join("foreign-layout").is_symlink());
 }
+
+#[test]
+fn compact_aof_rename_after_root_enumeration_does_not_fail_live_inventory() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SegmentRdbStore::new(dir.path()).unwrap();
+    let current = std::fs::read(dir.path().join(CURRENT_FILE)).unwrap();
+    let aof = dir.path().join(AOF_FILE);
+    let compact = dir.path().join(AOF_COMPACT_TEMP_FILE);
+    std::fs::write(&aof, b"original frames").unwrap();
+    std::fs::write(&compact, b"compacted frames").unwrap();
+    let entries = std::fs::read_dir(dir.path())
+        .unwrap()
+        .collect::<std::io::Result<Vec<_>>>()
+        .unwrap();
+    // The AOF writer atomically replaces the log after enumeration and before
+    // inventory reads child metadata, just as in the failed CI checkpoint.
+    std::fs::rename(&compact, &aof).unwrap();
+    store
+        .inventory_root_from_entries(entries)
+        .expect("live inventory must tolerate the completed AOF compaction rename");
+    assert_eq!(std::fs::read(&aof).unwrap(), b"compacted frames");
+    assert_eq!(
+        std::fs::read(dir.path().join(CURRENT_FILE)).unwrap(),
+        current
+    );
+}
+
+#[test]
+fn missing_compact_temp_before_current_authority_still_fails_inventory() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SegmentRdbStore::new(dir.path()).unwrap();
+    std::fs::remove_file(dir.path().join(CURRENT_FILE)).unwrap();
+    let aof = dir.path().join(AOF_FILE);
+    let compact = dir.path().join(AOF_COMPACT_TEMP_FILE);
+    std::fs::write(&aof, b"original frames").unwrap();
+    std::fs::write(&compact, b"compacted frames").unwrap();
+    let entries = std::fs::read_dir(dir.path())
+        .unwrap()
+        .collect::<std::io::Result<Vec<_>>>()
+        .unwrap();
+    std::fs::rename(&compact, &aof).unwrap();
+    let error = store.inventory_root_from_entries(entries).unwrap_err();
+    assert!(error.to_string().contains("inspect checkpoint root entry"));
+    assert!(error.to_string().contains(AOF_COMPACT_TEMP_FILE));
+    assert!(!dir.path().join(CURRENT_FILE).exists());
+    assert_eq!(std::fs::read(&aof).unwrap(), b"compacted frames");
+}
+
+#[test]
+fn missing_unknown_root_entry_still_fails_live_inventory() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SegmentRdbStore::new(dir.path()).unwrap();
+    let foreign = dir.path().join("foreign-layout");
+    std::fs::write(&foreign, b"unknown bytes").unwrap();
+    let entries = std::fs::read_dir(dir.path())
+        .unwrap()
+        .collect::<std::io::Result<Vec<_>>>()
+        .unwrap();
+    std::fs::remove_file(&foreign).unwrap();
+    let error = store.inventory_root_from_entries(entries).unwrap_err();
+    assert!(error.to_string().contains("inspect checkpoint root entry"));
+    assert!(error.to_string().contains("foreign-layout"));
+    assert_eq!(
+        std::fs::read(dir.path().join(CURRENT_FILE)).unwrap(),
+        b"empty\n"
+    );
+}
