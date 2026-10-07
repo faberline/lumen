@@ -81,13 +81,7 @@ impl SegmentRdbStore {
                                 &record.path.join(&local.path),
                                 local.count,
                             )?;
-                            let ids = (0..local.count)
-                                .map(|row| {
-                                    rows.external_id(row)
-                                        .map(str::to_owned)
-                                        .ok_or_else(|| anyhow!("mapped base row is missing"))
-                                })
-                                .collect::<Result<_>>()?;
+                            let ids = rows.into_external_ids();
                             mapped_bases
                                 .entry(collection.collection_id.clone())
                                 .or_default()
@@ -205,13 +199,7 @@ impl SegmentRdbStore {
                                         .cloned()
                                         .ok_or_else(|| anyhow!("delta field missing"))?,
                                 )?;
-                                let external_ids = (0..local.count)
-                                    .map(|row| {
-                                        ids.external_id(row)
-                                            .map(str::to_owned)
-                                            .ok_or_else(|| anyhow!("missing local row"))
-                                    })
-                                    .collect::<Result<Vec<_>>>()?;
+                                let external_ids = ids.into_external_ids();
                                 if spec.field_type == crate::shared_kernel::types::schema::FieldType::Vector
                                     && spec.vector_spec()?.is_some_and(|vector| {
                                         vector.backend != crate::shared_kernel::types::schema::VectorBackend::FlatCpu

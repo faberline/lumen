@@ -4,6 +4,8 @@
 //! marker lets skip.
 
 use std::collections::HashMap;
+#[cfg(test)]
+use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -17,12 +19,45 @@ use crate::persistence::infrastructure::checkpoint_process_state::{
     HnswCacheSealKey, HnswCacheSealMarker, HNSW_CACHE_SEALS,
 };
 
+#[cfg(test)]
+type BeforePublicationHook = Box<dyn FnOnce() + Send>;
+
+#[cfg(test)]
+static BEFORE_PUBLICATION_HOOKS: OnceLock<Mutex<HashMap<HnswCacheSealKey, BeforePublicationHook>>> =
+    OnceLock::new();
+
 impl SegmentCheckpointSink {
     fn hnsw_cache_seal_key(&self) -> HnswCacheSealKey {
         (
             Arc::as_ptr(&self.engine) as usize,
             Arc::as_ptr(&self.store) as usize,
         )
+    }
+
+    /// Test-only scheduling point before cache publication enters the store.
+    #[cfg(test)]
+    pub(super) fn set_before_cache_publication_hook(&self, hook: impl FnOnce() + Send + 'static) {
+        let previous = BEFORE_PUBLICATION_HOOKS
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap()
+            .insert(self.hnsw_cache_seal_key(), Box::new(hook));
+        assert!(
+            previous.is_none(),
+            "cache publication hook already installed"
+        );
+    }
+
+    #[cfg(test)]
+    fn run_before_cache_publication_hook(&self) {
+        let hook = BEFORE_PUBLICATION_HOOKS
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap()
+            .remove(&self.hnsw_cache_seal_key());
+        if let Some(hook) = hook {
+            hook();
+        }
     }
 
     fn current_hnsw_cache_seal(&self) -> bool {
@@ -89,9 +124,9 @@ impl SegmentCheckpointSink {
 
     /// Publish a planned-restart cache while ordinary writers and direct
     /// reshard mutations are held behind the existing exclusive writer gate.
-    /// A background checkpoint can still advance the capture stamp, so the
-    /// marker is recorded only when the one-lock stamps before and after cache
-    /// publication match exactly.
+    /// A checkpoint uses the same store gate. Read both stamps, publish the
+    /// cache and record its marker while that gate is held. The stamps must
+    /// still match exactly.
     pub async fn seal_hnsw_graph_cache(self: Arc<Self>) -> Result<HnswCacheSealReceipt> {
         let gate = self.writer.mutation_gate().ok_or_else(|| {
             anyhow::Error::new(HnswCacheSealUnavailable(
@@ -111,41 +146,49 @@ impl SegmentCheckpointSink {
                             "no live HNSW graph is available for the planned restart".to_string(),
                         )));
                     }
-                    let mut before = self.engine.capture_barrier.mutation_stamp();
-                    let durability = if let Some(aof) = &self.aof {
-                        aof.lock()
-                            .map_err(|_| anyhow::anyhow!("aof writer poisoned"))?
-                            .sync()?;
-                        HnswCacheDurability::AofSynced
-                    } else {
-                        // The fallback must commit a complete authoritative
-                        // checkpoint before exposing an optional graph cache.
+                    if self.aof.is_none() {
+                        // Commit the authoritative checkpoint before taking the
+                        // store gate that this fallback also needs.
                         self.checkpoint_sync(&self.store)?;
-                        // This checkpoint deliberately advances the barrier.
-                        // Begin the graph-publication comparison after its own
-                        // durable mutation has completed.
-                        before = self.engine.capture_barrier.mutation_stamp();
-                        HnswCacheDurability::CheckpointCommitted
-                    };
-                    let cache_fields = self.store.save_hnsw_graph_caches(&self.engine)?;
-                    if cache_fields == 0 {
-                        return Err(anyhow::Error::new(HnswCacheSealUnavailable(
-                            "no HNSW graph cache fields were published".to_string(),
-                        )));
                     }
-                    let after = self.engine.capture_barrier.mutation_stamp();
-                    if after != before {
-                        return Err(anyhow::Error::new(HnswCacheSealInvalidated(
-                            "live mutation stamp changed while HNSW cache sealing ran".to_string(),
-                        )));
-                    }
-                    self.record_hnsw_cache_seal(after)?;
-                    Ok(HnswCacheSealReceipt {
-                        cache_fields,
-                        durability,
-                        mutation_epoch: after.epoch,
-                        mutation_apply_revision: after.apply_revision,
-                    })
+                    #[cfg(test)]
+                    self.run_before_cache_publication_hook();
+                    self.store.save_hnsw_graph_caches_with(
+                        &self.engine,
+                        || {
+                            let before = self.engine.capture_barrier.mutation_stamp();
+                            let durability = if let Some(aof) = &self.aof {
+                                aof.lock()
+                                    .map_err(|_| anyhow::anyhow!("aof writer poisoned"))?
+                                    .sync()?;
+                                HnswCacheDurability::AofSynced
+                            } else {
+                                HnswCacheDurability::CheckpointCommitted
+                            };
+                            Ok((before, durability))
+                        },
+                        |(before, durability), cache_fields| {
+                            if cache_fields == 0 {
+                                return Err(anyhow::Error::new(HnswCacheSealUnavailable(
+                                    "no HNSW graph cache fields were published".to_string(),
+                                )));
+                            }
+                            let after = self.engine.capture_barrier.mutation_stamp();
+                            if after != before {
+                                return Err(anyhow::Error::new(HnswCacheSealInvalidated(
+                                    "live mutation stamp changed while HNSW cache sealing ran"
+                                        .to_string(),
+                                )));
+                            }
+                            self.record_hnsw_cache_seal(after)?;
+                            Ok(HnswCacheSealReceipt {
+                                cache_fields,
+                                durability,
+                                mutation_epoch: after.epoch,
+                                mutation_apply_revision: after.apply_revision,
+                            })
+                        },
+                    )
                 })();
                 let _ = send.send(result);
             })
