@@ -23,8 +23,21 @@ impl SegmentRdbStore {
     /// Optional acceleration only. The caller holds the mutation fence; the
     /// save gate keeps physical publication and cache IO serialized.
     pub(crate) fn save_hnsw_graph_caches(&self, engine: &Engine) -> Result<usize> {
+        self.save_hnsw_graph_caches_with(engine, || Ok(()), |(), fields| Ok(fields))
+    }
+
+    /// Keep caller preparation and completion in the same store operation as
+    /// cache IO. A checkpoint cannot advance the stamp between these steps.
+    pub(crate) fn save_hnsw_graph_caches_with<T, R>(
+        &self,
+        engine: &Engine,
+        prepare: impl FnOnce() -> Result<T>,
+        complete: impl FnOnce(T, usize) -> Result<R>,
+    ) -> Result<R> {
         let _guard = self.save_gate.lock_owned();
-        engine.save_hnsw_graph_caches(&self.root.join(HNSW_GRAPH_CACHE_DIR))
+        let prepared = prepare()?;
+        let fields = engine.save_hnsw_graph_caches(&self.root.join(HNSW_GRAPH_CACHE_DIR))?;
+        complete(prepared, fields)
     }
 
     pub(crate) fn has_hnsw_graph_cache(&self) -> bool {

@@ -287,3 +287,140 @@ async fn shutdown_cache_wait_for_inflight_writes_can_be_cancelled() {
         0
     );
 }
+
+#[tokio::test]
+async fn completed_checkpoint_before_cache_publication_keeps_seal_valid() {
+    let root = tempfile::tempdir().unwrap();
+    let engine = Arc::new(Engine::new());
+    let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
+    let tail = root.path().join("aof.log");
+    let aof = Arc::new(Mutex::new(AofWriter::open(&tail).unwrap()));
+    let writer =
+        crate::ingest::application::write_coordinator::WriteCoordinator::start_from_with_aof(
+            Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
+            engine.clone(),
+            0,
+            aof.clone(),
+        );
+    writer
+        .submit(RaftLogEntry::CreateCollection {
+            collection_id: "v".into(),
+            req: serde_json::from_value(serde_json::json!({
+                "fields": {"v": {"type": "vector", "dim": 3, "metric": "l2", "backend": "hnsw-cpu"}}
+            }))
+            .unwrap(),
+        })
+        .await
+        .unwrap();
+    writer
+        .submit(RaftLogEntry::Index {
+            collection_id: "v".into(),
+            req: serde_json::from_value(serde_json::json!({"items": [{
+                "external_id": "one", "field": "v", "value": [1.0, 2.0, 3.0]
+            }]}))
+            .unwrap(),
+        })
+        .await
+        .unwrap();
+    aof.lock().unwrap().sync().unwrap();
+    let durable_tail = std::fs::read(&tail).unwrap();
+    let sequence = writer.applied_seq();
+    let sink = Arc::new(SegmentCheckpointSink {
+        engine: engine.clone(),
+        store: store.clone(),
+        writer,
+        aof: Some(aof),
+    });
+    let observed = Arc::new(Mutex::new(None));
+    let observed_checkpoint = observed.clone();
+    let checkpoint_engine = engine.clone();
+    let checkpoint_store = store.clone();
+    sink.set_before_cache_publication_hook(move || {
+        let before = checkpoint_engine.capture_barrier.mutation_stamp();
+        std::thread::spawn(move || {
+            checkpoint_store.save(&checkpoint_engine, sequence).unwrap();
+            let after = checkpoint_engine.capture_barrier.mutation_stamp();
+            assert_eq!(before.epoch, after.epoch);
+            assert!(after.apply_revision > before.apply_revision);
+            *observed_checkpoint.lock().unwrap() = Some(after);
+        })
+        .join()
+        .unwrap();
+    });
+    let result = sink.clone().seal_hnsw_graph_cache().await;
+    if let Err(error) = &result {
+        assert!(
+            error
+                .downcast_ref::<crate::persistence::application::ports::checkpoint_sink::HnswCacheSealInvalidated>()
+                .is_none(),
+            "background checkpoint alone returned HnswCacheSealInvalidated: {error}"
+        );
+    }
+    let receipt = result.unwrap();
+    let after_checkpoint = observed.lock().unwrap().unwrap();
+    assert_eq!(receipt.cache_fields, 1);
+    assert_eq!(receipt.durability, HnswCacheDurability::AofSynced);
+    assert_eq!(receipt.mutation_epoch, after_checkpoint.epoch);
+    assert_eq!(
+        receipt.mutation_apply_revision,
+        after_checkpoint.apply_revision
+    );
+    assert!(sink.has_current_hnsw_cache_seal());
+    assert_eq!(sink.clone().save_shutdown_graph_cache().await.unwrap(), 0);
+    assert_eq!(std::fs::read(&tail).unwrap(), durable_tail);
+    let (cold, restored_sequence) = store.load_latest().unwrap().unwrap();
+    assert_eq!(restored_sequence, sequence);
+    assert!(cold.has_hnsw_graphs().unwrap());
+}
+
+#[tokio::test]
+async fn cache_seal_without_aof_commits_checkpoint_before_store_publication() {
+    let root = tempfile::tempdir().unwrap();
+    let engine = Arc::new(Engine::new());
+    let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
+    let writer = crate::ingest::application::write_coordinator::WriteCoordinator::start(
+        Arc::new(crate::ingest::infrastructure::wal::mem_wal::MemWal::new()),
+        engine.clone(),
+    );
+    writer
+        .submit(RaftLogEntry::CreateCollection {
+            collection_id: "v".into(),
+            req: serde_json::from_value(serde_json::json!({
+                "fields": {"v": {"type": "vector", "dim": 3, "metric": "l2", "backend": "hnsw-cpu"}}
+            }))
+            .unwrap(),
+        })
+        .await
+        .unwrap();
+    writer
+        .submit(RaftLogEntry::Index {
+            collection_id: "v".into(),
+            req: serde_json::from_value(serde_json::json!({"items": [{
+                "external_id": "one", "field": "v", "value": [1.0, 2.0, 3.0]
+            }]}))
+            .unwrap(),
+        })
+        .await
+        .unwrap();
+    let sequence = writer.applied_seq();
+    let sink = Arc::new(SegmentCheckpointSink {
+        engine,
+        store: store.clone(),
+        writer,
+        aof: None,
+    });
+    let receipt =
+        tokio::time::timeout(Duration::from_secs(5), sink.clone().seal_hnsw_graph_cache())
+            .await
+            .expect("the fallback checkpoint must not wait on its own store gate")
+            .unwrap();
+    assert_eq!(receipt.cache_fields, 1);
+    assert_eq!(receipt.durability, HnswCacheDurability::CheckpointCommitted);
+    assert!(sink.has_current_hnsw_cache_seal());
+    let current = std::fs::read(root.path().join("CURRENT")).unwrap();
+    assert_eq!(sink.save_shutdown_graph_cache().await.unwrap(), 0);
+    assert_eq!(std::fs::read(root.path().join("CURRENT")).unwrap(), current);
+    let (cold, restored_sequence) = store.load_latest().unwrap().unwrap();
+    assert_eq!(restored_sequence, sequence);
+    assert!(cold.has_hnsw_graphs().unwrap());
+}

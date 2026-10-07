@@ -10,6 +10,11 @@ use anyhow::{anyhow, bail, Context, Result};
 pub struct SparseLocalRows(Vec<String>);
 
 impl SparseLocalRows {
+    /// Returns the validated IDs without copying their strings.
+    pub(crate) fn into_external_ids(self) -> Vec<String> {
+        self.0
+    }
+
     pub fn external_id(&self, local_row: u32) -> Option<&str> {
         self.0.get(local_row as usize).map(String::as_str)
     }
