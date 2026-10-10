@@ -231,3 +231,205 @@ fn hnsw_1000_vectors_topk_returns_reasonable_neighbours() {
     let overlap = truth_top10.intersection(&hnsw_top10).count();
     assert!(overlap >= 4, "overlap with truth top-10 was {overlap}");
 }
+
+#[test]
+fn hnsw_cold_collection_reopen_does_not_scan_owned_vectors_for_coverage() {
+    use std::collections::BTreeMap;
+
+    use crate::index::domain::collection::Collection;
+    use crate::index::domain::field_index::FieldIndex;
+    use crate::shared_kernel::types::schema::{FieldSpec, FieldType, VectorBackend};
+
+    let schema = BTreeMap::from([(
+        "v".to_owned(),
+        FieldSpec {
+            field_type: FieldType::Vector,
+            analyzer: None,
+            multi: None,
+            dim: Some(3),
+            metric: Some(VectorMetric::L2),
+            backend: Some(VectorBackend::HnswCpu),
+            quantize: None,
+        },
+    )]);
+    let root = tempfile::tempdir().unwrap();
+    let mut original = Collection::new(schema.clone()).unwrap();
+    for (eid, vector) in [
+        ("one", [1.0, 0.0, 0.0]),
+        ("two", [0.0, 1.0, 0.0]),
+        ("three", [0.0, 0.0, 1.0]),
+    ] {
+        let id = original.interner.intern(eid);
+        let FieldIndex::Vector { idx, .. } = original.fields.get("v").unwrap() else {
+            panic!("the declared vector field must exist");
+        };
+        idx.add(eid, &vector).unwrap();
+        original
+            .eid_fields
+            .entry(id)
+            .or_default()
+            .insert("v".to_owned());
+    }
+    original.interner.intern("without-vector");
+    original.seal_to_segments(root.path(), 7).unwrap();
+    drop(original);
+
+    VECTOR_STORE_OWNED_SCANS.with(|scans| scans.set(0));
+    let reopened = Collection::open_from_segments(root.path(), schema, 1).unwrap();
+    let scans_after_reopen = VECTOR_STORE_OWNED_SCANS.with(|scans| scans.get());
+
+    for eid in ["one", "two", "three"] {
+        let id = reopened.interner.id(eid).unwrap();
+        assert!(reopened.eid_fields.get(&id).unwrap().contains("v"));
+    }
+    let absent = reopened.interner.id("without-vector").unwrap();
+    assert!(!reopened.eid_fields.contains_key(&absent));
+    let FieldIndex::Vector { idx, .. } = reopened.fields.get("v").unwrap() else {
+        panic!("the reopened vector field must exist");
+    };
+    let hits = idx
+        .search_knn_filtered(&[1.0, 0.0, 0.0], 1, &|_| true)
+        .unwrap();
+    assert_eq!(hits[0].0, "one");
+    assert_eq!(
+        scans_after_reopen, 0,
+        "cold field coverage must use persisted row IDs without an owned vector snapshot"
+    );
+}
+
+fn cold_vector_coverage_fixture(
+    backend: crate::shared_kernel::types::schema::VectorBackend,
+) -> (
+    tempfile::TempDir,
+    std::collections::BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec>,
+) {
+    use crate::persistence::infrastructure::segment::{eid_writer, vector_writer};
+    use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
+    let root = tempfile::tempdir().unwrap();
+    let eids = ["live", "missing", "retired"];
+    eid_writer::write_eid_segment(&root.path().join("_collection.lmeta.lseg"), 7, &eids).unwrap();
+    eid_writer::write_eid_segment(&root.path().join("v.eids.lseg"), 7, &eids).unwrap();
+    vector_writer::write_vector_segment(
+        &root.path().join("v.lseg"),
+        7,
+        3,
+        &[Some(&[1.0, 0.0, 0.0]), None, Some(&[0.0, 1.0, 0.0])],
+    )
+    .unwrap();
+    let schema = std::collections::BTreeMap::from([(
+        "v".to_owned(),
+        FieldSpec {
+            field_type: FieldType::Vector,
+            analyzer: None,
+            multi: None,
+            dim: Some(3),
+            metric: Some(VectorMetric::L2),
+            backend: Some(backend),
+            quantize: None,
+        },
+    )]);
+    (root, schema)
+}
+
+#[test]
+fn hnsw_cold_collection_vector_coverage_skips_absent_rows_and_keeps_deletes() {
+    use crate::index::domain::collection::Collection;
+    use crate::index::domain::field_index::FieldIndex;
+    use crate::index::infrastructure::checkpoint_fs::CheckpointLayout;
+    use crate::shared_kernel::types::schema::VectorBackend;
+    for (backend, deferred) in [
+        (VectorBackend::FlatCpu, false),
+        (VectorBackend::HnswCpu, true),
+    ] {
+        let (root, schema) = cold_vector_coverage_fixture(backend);
+        let mut reopened = Collection::open_from_segments_with_vectors(
+            root.path(),
+            schema.clone(),
+            1,
+            deferred,
+            CheckpointLayout::Legacy,
+            None,
+            None,
+        )
+        .unwrap();
+        let live = reopened.interner.id("live").unwrap();
+        let missing = reopened.interner.id("missing").unwrap();
+        let retired = reopened.interner.id("retired").unwrap();
+        assert!(reopened.eid_fields.get(&live).unwrap().contains("v"));
+        assert!(reopened.eid_fields.get(&retired).unwrap().contains("v"));
+        assert!(!reopened.eid_fields.contains_key(&missing));
+        reopened
+            .fields
+            .get_mut("v")
+            .unwrap()
+            .drop_eid(retired, "retired");
+        reopened.eid_fields.remove(&retired);
+        reopened.seal_to_segments(root.path(), 8).unwrap();
+        drop(reopened);
+        let reopened = Collection::open_from_segments_with_vectors(
+            root.path(),
+            schema,
+            1,
+            deferred,
+            CheckpointLayout::Legacy,
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(reopened.eid_fields.get(&live).unwrap().contains("v"));
+        assert!(!reopened.eid_fields.contains_key(&missing));
+        assert!(!reopened.eid_fields.contains_key(&retired));
+        let FieldIndex::Vector { idx, .. } = reopened.fields.get("v").unwrap() else {
+            panic!("reopened vector field must exist");
+        };
+        let hits = idx
+            .search_knn_filtered(&[1.0, 0.0, 0.0], 3, &|_| true)
+            .unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].0, "live");
+    }
+}
+
+#[test]
+fn hnsw_cold_collection_reopen_still_rejects_missing_vector_rows() {
+    use crate::index::domain::collection::Collection;
+    use crate::shared_kernel::types::schema::VectorBackend;
+    let (root, schema) = cold_vector_coverage_fixture(VectorBackend::HnswCpu);
+    let error = Collection::open_from_segments(root.path(), schema, 1)
+        .err()
+        .unwrap();
+    assert_eq!(
+        error.to_string(),
+        "vector segment is missing row 1 of 3 (eid `missing`)"
+    );
+}
+
+#[test]
+fn hnsw_cold_collection_flat_sidecar_mismatch_still_fails_closed() {
+    use crate::index::domain::collection::Collection;
+    use crate::index::infrastructure::checkpoint_fs::CheckpointLayout;
+    use crate::persistence::infrastructure::segment::eid_writer;
+    use crate::shared_kernel::types::schema::VectorBackend;
+    for (backend, deferred) in [
+        (VectorBackend::FlatCpu, false),
+        (VectorBackend::HnswCpu, true),
+    ] {
+        let (root, schema) = cold_vector_coverage_fixture(backend);
+        eid_writer::write_eid_segment(&root.path().join("v.eids.lseg"), 7, &["live"]).unwrap();
+        let error = Collection::open_from_segments_with_vectors(
+            root.path(),
+            schema,
+            1,
+            deferred,
+            CheckpointLayout::Legacy,
+            None,
+            None,
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            error.to_string(),
+            "vector sidecar row count does not match segment"
+        );
+    }
+}

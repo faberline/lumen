@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::RwLock;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 
@@ -16,6 +16,7 @@ use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::interner::Interner;
 use crate::index::infrastructure::checkpoint_fs::CheckpointLayout;
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
 
 #[cfg(test)]
@@ -207,13 +208,39 @@ impl Collection {
             let vector_started = recovery_profile
                 .filter(|profile| profile.enabled())
                 .and_then(|_| (spec.field_type == FieldType::Vector).then(Instant::now));
-            let mut fi = FieldIndex::open_from_segment(spec, dir, &stem, vec_row_eids, defer_hnsw)?;
+            let mut vector_coverage_elapsed = Duration::ZERO;
+            let mut record_vector_coverage =
+                |reader: &SegmentReader, row_eids: &[String], dim: usize| {
+                    let started = recovery_profile
+                        .filter(|profile| profile.enabled())
+                        .map(|_| Instant::now());
+                    for (row, eid) in row_eids.iter().enumerate() {
+                        // A sidecar ID alone does not prove that the vector is
+                        // present. Use the backend's mapped presence check.
+                        if reader.vector_at(row as u32, dim).is_some() {
+                            if let Some(id) = interner.id(eid) {
+                                eid_fields.entry(id).or_default().insert(name.clone());
+                            }
+                        }
+                    }
+                    if let Some(started) = started {
+                        vector_coverage_elapsed = started.elapsed();
+                    }
+                };
+            let mut fi = FieldIndex::open_from_segment_with_vector_coverage(
+                spec,
+                dir,
+                &stem,
+                vec_row_eids,
+                defer_hnsw,
+                Some(&mut record_vector_coverage),
+            )?;
             if let (Some(profile), Some(started)) = (recovery_profile, vector_started) {
                 profile.vector_opened(
                     spec.vector_spec()?
                         .expect("vector field has a spec")
                         .backend,
-                    started.elapsed(),
+                    started.elapsed().saturating_sub(vector_coverage_elapsed),
                 );
             }
             if let Some(rows) = mapped_rows.and_then(|fields| fields.get(name)) {
@@ -228,9 +255,13 @@ impl Collection {
             let coverage_started = recovery_profile
                 .filter(|profile| profile.enabled())
                 .map(|_| Instant::now());
-            record_field_coverage(&fi, name, &interner, &mut eid_fields);
+            record_field_coverage(&fi, name, &mut eid_fields);
             if let (Some(profile), Some(started)) = (recovery_profile, coverage_started) {
-                profile.coverage_rebuilt(started.elapsed());
+                profile.coverage_rebuilt(if spec.field_type == FieldType::Vector {
+                    vector_coverage_elapsed
+                } else {
+                    started.elapsed()
+                });
             }
             fields.insert(name.clone(), fi);
         }
@@ -289,7 +320,6 @@ fn map_loaded_base_rows(index: &mut FieldIndex, ids: Vec<u32>) -> Result<()> {
 fn record_field_coverage(
     fi: &FieldIndex,
     name: &str,
-    interner: &Interner,
     eid_fields: &mut FastHashMap<u32, FieldCoverage>,
 ) {
     match fi {
@@ -350,14 +380,8 @@ fn record_field_coverage(
                 eid_fields.entry(id).or_default().insert(name.to_string());
             }
         }
-        FieldIndex::Vector { idx, .. } => {
-            // Every stored vector row's eid wrote this field; resolve each row
-            // eid back to its docid through the rebuilt interner.
-            for (eid, _) in idx.dump_for_snapshot().into_iter().flat_map(|(v, _)| v) {
-                if let Some(id) = interner.id(&eid) {
-                    eid_fields.entry(id).or_default().insert(name.to_string());
-                }
-            }
-        }
+        // Vector coverage was recorded from borrowed row IDs and mapped
+        // presence during construction. No owned payload snapshot is needed.
+        FieldIndex::Vector { .. } => {}
     }
 }
