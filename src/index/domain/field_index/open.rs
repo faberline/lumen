@@ -19,7 +19,11 @@ use crate::index::domain::vector::flat_cpu_index::FlatCpuIndex;
 use crate::index::domain::vector::hnsw_cpu_index::HnswCpuIndex;
 use crate::index::domain::vector::VectorIndex;
 use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, FieldType};
+
+pub(in crate::index) type VectorCoverageRecorder<'a> =
+    &'a mut dyn FnMut(&SegmentReader, &[String], usize);
 
 #[cfg_attr(not(test), allow(dead_code))]
 impl FieldIndex {
@@ -35,6 +39,26 @@ impl FieldIndex {
         field_name: &str,
         vec_row_eids: Option<Vec<String>>,
         defer_hnsw: bool,
+    ) -> Result<FieldIndex> {
+        Self::open_from_segment_with_vector_coverage(
+            spec,
+            dir,
+            field_name,
+            vec_row_eids,
+            defer_hnsw,
+            None,
+        )
+    }
+
+    /// Supply borrowed vector row IDs and their mapped presence before the
+    /// backend takes ownership. Coverage does not need a vector snapshot.
+    pub(in crate::index) fn open_from_segment_with_vector_coverage(
+        spec: &FieldSpec,
+        dir: &std::path::Path,
+        field_name: &str,
+        vec_row_eids: Option<Vec<String>>,
+        defer_hnsw: bool,
+        coverage: Option<VectorCoverageRecorder<'_>>,
     ) -> Result<FieldIndex> {
         let path = dir.join(format!("{field_name}.lseg"));
         let reader = std::sync::Arc::new(
@@ -170,6 +194,9 @@ impl FieldIndex {
                 let row_eids = vec_row_eids.ok_or_else(|| {
                     anyhow!("vector field `{field_name}` reopen needs its row→eid mapping")
                 })?;
+                if let Some(record_coverage) = coverage {
+                    record_coverage(&reader, &row_eids, vs.dim as usize);
+                }
                 // Reopen with the backend the SCHEMA declares, not with
                 // whichever one is cheapest to rebuild. Every backend seals
                 // into the same columnar segment, so the segment does not
