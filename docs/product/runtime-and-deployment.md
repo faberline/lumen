@@ -10,42 +10,42 @@
 - Non-goals: Standalone high availability.
 - Neighbours: Topology owns quorum and placement; recovery owns data retention.
 
-## GKE regional production profile (Milestone #33)
+## GKE regional production profile (Milestone #9)
 
 - Problem: Zonal evidence does not prove a regional production profile.
 - Who: GKE production operators.
 - Promise: Lumen has an evidence-backed GKE Standard Regional profile.
-- Outcome: `gke-regional-production-profile`. Tracking: [Milestone #33](https://github.com/faberline/lumen/milestone/33).
+- Outcome: `gke-regional-production-profile`. Tracking: [Milestone #9](https://github.com/faberline/lumen/milestone/9).
 - Non-goals: Reusing zonal evidence as regional proof.
 - Open: Complete topology, disruption, backup, and recovery drills.
 - Neighbours: Regional migration and upgrade recovery.
 
-## GKE Autopilot certification (Milestone #127)
+## GKE Autopilot certification (Milestone #34)
 
 - Problem: Autopilot has different stateful constraints.
 - Who: GKE Autopilot operators.
 - Promise: Lumen has a separate evidence-backed Autopilot support tier.
-- Outcome: `gke-autopilot-certification`. Tracking: [Milestone #127](https://github.com/faberline/lumen/milestone/127).
+- Outcome: `gke-autopilot-certification`. Tracking: [Milestone #34](https://github.com/faberline/lumen/milestone/34).
 - Non-goals: Assuming Standard Regional certification applies unchanged.
 - Open: Define Autopilot topology and operational evidence.
 - Neighbours: GKE regional production profile.
 
-## Managed embedded data durability (Milestone #7)
+## Managed embedded data durability (Milestone #43)
 
 - Problem: A single-replica Managed runtime must retain its index and AOF on its PVC.
 - Who: Operators of one-replica Managed Lumen.
 - Promise: Managed embedded Raft data uses the exact child path on the retained PVC.
-- Status rows: `managed-embedded-data-durability`. Tracking: [Milestone #7](https://github.com/faberline/lumen/milestone/7).
+- Status rows: `managed-embedded-data-durability`. Tracking: [Milestone #43](https://github.com/faberline/lumen/milestone/43).
 - Limits today: This does not recover data that an earlier node-local runtime already lost.
 - Non-goals: Recovering data already lost from node-local storage.
 - Neighbours: Managed data retention and deterministic consensus conformance.
 
-## Search capability activation (Milestone #27)
+## Search capability activation (Milestone #14)
 
 - Problem: Managed mixed versions cannot safely enable a new search contract.
 - Who: Managed Lumen operators.
 - Promise: Managed Lumen activates a capability only after serving-member convergence and final compatibility version.
-- Outcome: `search-capability-activation`. Tracking: [Milestone #27](https://github.com/faberline/lumen/milestone/27).
+- Outcome: `search-capability-activation`. Tracking: [Milestone #14](https://github.com/faberline/lumen/milestone/14).
 - Non-goals: Version-aware routing around an incompatible member.
 - Open: Activate Search v2 at `lumen@0.37.0` after the required convergence evidence.
 - Neighbours: Search v2 migration and distributed search routing.
