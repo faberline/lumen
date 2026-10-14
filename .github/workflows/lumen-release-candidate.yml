@@ -591,6 +591,12 @@ jobs:
           echo '50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54  /tmp/kind' | sha256sum -c -
           chmod +x /tmp/kind
           sudo mv /tmp/kind /usr/local/bin/kind
+      - name: Log in to GHCR for kind node image pulls
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
       - name: Run prebuilt candidate kind e2e
         shell: bash
         run: |
@@ -601,6 +607,7 @@ jobs:
           LUMEN_E2E_EXPECTED_VERSION="${{ needs.identity.outputs.version }}" \
           LUMEN_E2E_EXPECTED_GIT_SHA="${short_sha:0:8}" \
           LUMEN_E2E_EXPECTED_RUNTIME_DIGEST="${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}" \
+          LUMEN_E2E_REGISTRY_CONFIG="$HOME/.docker/config.json" \
           scripts/kind-e2e.sh
 
   kind-arm64:
@@ -626,6 +633,12 @@ jobs:
           echo 'b92cd615e97585de8ddade28ed5cd7feb4248d717c233eea5b03c37298900f5d  /tmp/kind' | sha256sum -c -
           chmod +x /tmp/kind
           sudo mv /tmp/kind /usr/local/bin/kind
+      - name: Log in to GHCR for kind node image pulls
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
       - name: Run prebuilt candidate kind e2e
         shell: bash
         run: |
@@ -636,6 +649,7 @@ jobs:
           LUMEN_E2E_EXPECTED_VERSION="${{ needs.identity.outputs.version }}" \
           LUMEN_E2E_EXPECTED_GIT_SHA="${short_sha:0:8}" \
           LUMEN_E2E_EXPECTED_RUNTIME_DIGEST="${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}" \
+          LUMEN_E2E_REGISTRY_CONFIG="$HOME/.docker/config.json" \
           scripts/kind-e2e.sh
 
   result:
