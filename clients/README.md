@@ -140,8 +140,10 @@ The generator and current cross-language happy-path gates are:
 ```bash
 cargo test -p lumen --test it -- spec_gen_e2e::
 cargo test -p lumen --test it -- generated_clients_crud_e2e:: --nocapture
-cargo test -p openapi-codegen
 ```
+
+The `openapi-codegen` crate's own tests run in
+[faberline/core](https://github.com/faberline/core) CI.
 
 No current GitHub workflow runs a `clients-drift` job. The snapshot assertion is
 real, but CI enforcement is a future outcome.

@@ -71,7 +71,7 @@ validate_manifest() {
   actual_keys="$(jq -cer 'keys | sort' "$MANIFEST")" || fail "candidate manifest is not JSON"
   if jq -e 'has("jobs")' "$MANIFEST" >/dev/null; then
     expected_keys='["artifacts","candidate_tag","commit","image","jobs","pr","repository","run_attempt","run_id","run_url","sboms","schema","source_ref","tag","version","workflow_id","workflow_path","workflow_ref"]'
-    jq -e '.jobs == {identity:"success",build:"success",manifest:"success","ghcr-image-and-attest":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success",result:"success"}' "$MANIFEST" >/dev/null || fail "final candidate manifest does not bind all successful jobs"
+    jq -e '.jobs == {identity:"success",build:"success",manifest:"success","ghcr-image-and-attest":"success","gates-default":"success","gates-operator":"success","gates-raft-wal":"success","gates-release-features":"success","container-smoke":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","kind-amd64":"success","kind-arm64":"success",result:"success"}' "$MANIFEST" >/dev/null || fail "final candidate manifest does not bind all successful jobs"
   fi
   [[ "$actual_keys" == "$expected_keys" ]] || fail "candidate manifest keys changed: $actual_keys"
   targets="$(target_list | jq -Rsc 'split("\n") | map(select(length > 0))')"

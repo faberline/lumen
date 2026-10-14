@@ -21,8 +21,8 @@
 //!    regression.
 //!
 //! The third case is the one this campaign learned the hard way. Four separate
-//! gates in it (hazards 29, 30, 31 and 33 of `docs/td-ec-retirement.md`) were
-//! green because their scan was narrower than their declaration — an extension
+//! gates in it (hazards 29, 30, 31 and 33 of the retirement record, since
+//! deleted) were green because their scan was narrower than their declaration — an extension
 //! whitelist, a literal-prefix match, a `cargo build` that never compiled the
 //! target holding the break. So `the_sweep_is_not_vacuous` measures the
 //! instrument rather than the tree: every project root must resolve, every
@@ -54,12 +54,9 @@ const DESIGN_DIRS: [&str; 2] = ["tech-design", "external-contracts"];
 /// generated from.
 const POINTER: &str = "@spec";
 
-/// Files whose job is to name the retired mechanism. Both are asserted to exist,
+/// Files whose job is to name the retired mechanism. Each is asserted to exist,
 /// so renaming one fails this suite instead of silently widening the exemption.
-const EXEMPT: [&str; 2] = [
-    "docs/td-ec-retirement.md",
-    "tests/it/design_trees_stay_retired.rs",
-];
+const EXEMPT: [&str; 1] = ["tests/it/design_trees_stay_retired.rs"];
 
 /// Tracked files under the fifteen at the commit that introduced this file: 593;
 /// under the sixteen when `apps/tape` joined: 663.

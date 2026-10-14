@@ -41,14 +41,10 @@ The token file is reread for each request. Automatic KSA use is restricted to
 exact `.svc.cluster.local` URLs. Local, browser, and external clients do not
 read or send a KSA token. An explicit `Authorization` header always wins.
 
-The `lumen@0.4.29` release gate is a controller-run manual live GKE check. It
-must verify both this Standalone `in-cluster` path and the inherited Managed
-`required` path. The required continuity checks use a projected
-`lumen.axiom.dev` token for success, the same KSA's default token for `401`,
-and a projected unlisted KSA for `403`. The gate also verifies cleanup and a
-sanitized receipt. The gate is not claimed as passed here until the controller
-records that receipt. Cluster credentials, private inputs, and exact execution
-stay with the controller.
+The optional live [Standalone GKE acceptance](gke.md#release-claim) checks both
+this Standalone `in-cluster` path and the inherited Managed `required` path.
+`lumen@0.6.1` does not claim it. The [GKE guide](gke.md) owns its continuity
+checks, receipt, and verification.
 
 ### Managed
 
@@ -267,8 +263,8 @@ An in-cluster Standalone application uses the standard mounted token:
 | File | `/var/run/secrets/kubernetes.io/serviceaccount/token` |
 | Rotation owner | Kubelet |
 
-`lumen spec gen` composes the generic file-bearer provider from
-`libs/openapi-codegen` with this Lumen-owned path and host rule. Each generated
+`lumen spec gen` composes the generic file-bearer provider from the
+faberline/core `openapi-codegen` crate with this Lumen-owned path and host rule. Each generated
 TypeScript, Python, and Rust client reads the current file before it calls the
 transport. The client does not interpret the token as proof of identity.
 Server-side TokenReview is the canonical verifier for signature, expiry,
@@ -301,7 +297,7 @@ existing ServiceAccount. It does not create a namespace, KSA, client
 Deployment, or token Secret. See [client integration](client-integration.md).
 
 OpenAPI describes the bearer header only. It does not obtain the KSA token.
-`libs/openapi-codegen` owns the generic request-time provider hook. It does not
+The faberline/core `openapi-codegen` crate owns the generic request-time provider hook. It does not
 own the KSA path, audience, Fleet access policy, or Kubernetes RBAC.
 
 ## Human developer access
@@ -349,6 +345,10 @@ These migration warnings and 0.23.0 refusals are not implemented in the current
 source.
 
 ## Responsibility boundaries
+
+`apps/lumen` names this repository. `libs/<name>` names the
+[faberline/core](https://github.com/faberline/core) crate of that name at git
+tag `v0.4.13`.
 
 | Source | Responsibility |
 |---|---|

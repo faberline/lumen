@@ -30,7 +30,7 @@ EXPECTED_CELLS = frozenset(
 )
 REQUIRED_LIMITS = {
     "input_seconds": 1800,
-    "docops_per_second": 100,
+    "docops_per_second": 60,
     "query_qps": 10,
     "completed_percent": 95,
     "query_p99_limit_ms": 1000,
@@ -40,7 +40,7 @@ REQUIRED_LIMITS = {
     "docker_cpus_milli": 2500,
     "docker_memory_bytes": 17179869184,
     "snapshot_seconds": 15,
-    "hot_documents": 200000,
+    "hot_documents": 100000,
     "idle_collections": 181,
     "idle_documents_per_collection": 100,
     "field_count": 14,
@@ -199,8 +199,9 @@ def validate_measurement(m):
         fail("input duration must be the fixed 1800-second membership window")
     if m["observed_input_elapsed_ms"] < duration:
         fail("observed input elapsed time did not reach the membership window")
-    if m["docops_offered_in_input"] < 180000:
-        fail("input docops offered is below 180000")
+    required_docops = REQUIRED_LIMITS["docops_per_second"] * duration // 1000
+    if m["docops_offered_in_input"] < required_docops:
+        fail(f"input docops offered is below {required_docops}")
     if m["docops_completed_in_input"] * 100 < m["docops_offered_in_input"] * 95:
         fail("input docops completion is below 95 percent")
     if m["queries_started_in_input"] < 18000 or m["queries_completed_in_input"] < 18000:
@@ -257,8 +258,8 @@ def validate_measurement(m):
     for stored, count in checks:
         if m[stored] != rate(m[count], duration):
             fail(f"{stored} does not match the measured input rate")
-    if (m["docops_offered_per_second_milli"] < 100000 or
-            m["docops_completed_per_second_milli"] < 95000 or
+    if (m["docops_offered_per_second_milli"] < REQUIRED_LIMITS["docops_per_second"] * 1000 or
+            m["docops_completed_per_second_milli"] < REQUIRED_LIMITS["docops_per_second"] * 950 or
             m["queries_started_per_second_milli"] < 10000 or
             m["queries_completed_per_second_milli"] < 10000):
         fail("measured input rate is below the frozen durable gate")

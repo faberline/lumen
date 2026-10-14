@@ -85,9 +85,9 @@ Before `lumen@0.6.1` the verifier refuses durable performance arguments.
 
 Each release image carries a keyless Cosign signature and SLSA v1 provenance on the
 root index, with per-platform SPDX 2.3 JSON SBOM attestations. The release workflow
-verifies artifacts and runs native amd64 and arm64 kind runs before publication. The
-candidate kind runs do not wait for the durable performance matrix. These local kind
-runs do not prove GKE, Regional HA, Fleet, or autoscaling.
+verifies artifacts and runs native amd64 and arm64 kind runs before publication. See
+[the release gate](#release-gate-kind-and-local-durable-perf) for the candidate
+kind runs and the durable performance matrix.
 
 Shipped container images set `LUMEN_HOST=0.0.0.0` by default so published
 ports are reachable from the host without extra environment variables. The bare
@@ -183,6 +183,70 @@ curl -fsS http://127.0.0.1:7373/openapi.json
 
 Use [configuration](configuration.md) for precedence and restart behavior.
 
+## Release gate: Kind and local durable perf
+
+This section is the single description of how the `lumen@0.6.1` release gate
+runs. The workload, the sixteen cells, and every pass threshold are defined
+once in the
+[incremental segment checkpoint outcome](../ROADMAP.md#incremental-segment-checkpoint).
+`lumen@0.6.1` does not claim GKE; see [GKE](gke.md#release-claim).
+
+The `lumen-release-candidate` workflow builds the candidate once and runs
+these jobs against the exact commit:
+
+| Job | What it proves |
+|---|---|
+| `identity`, `build`, `ghcr-image-and-attest`, `manifest` | One candidate version and commit, the release binaries, and the signed, attested multi-arch GHCR image. |
+| `gates-default` | `cargo test --locked -p lumen` |
+| `gates-operator` | `cargo test --locked -p lumen --features "operator delegated-auth"` |
+| `gates-raft-wal` | The `raft-wal` feature cases, plus the `raft-wal` build, lib test build, and `git diff --check`. |
+| `gates-release-features` | The release feature set (`release_feature_set::`). |
+| `container-smoke` | `scripts/standalone-container-smoke.sh` in `bind` and `durable` modes against the candidate image. |
+| `cloud-free-config` | Terraform and Kustomize static checks; it calls no cloud API. |
+| `perf-coarse` | The release-profile `perf_gate::` cases except the thirty-minute durable workload. It still blocks the release. |
+| `verify-candidate` | `scripts/verify-release-candidate.sh`: supply-chain verification only. |
+| `kind-amd64`, `kind-arm64` | Native Kind e2e on each architecture. |
+| `result` | Writes `final-candidate-manifest.json`, whose `jobs` map binds every job above. |
+
+The service and Raft crate tests (`service-k8s`, `storage-durable`,
+`service-backup`, `raft-core`, `raft-runtime`) belong to faberline/core. Its
+own CI runs them for each core tag; the Lumen candidate does not rerun them.
+
+Each Kind job runs `scripts/kind-e2e.sh` twice with the prebuilt candidate
+image, once per mode, and checks the image's version, commit, and runtime
+digest:
+
+```bash
+LUMEN_E2E_MODE=overlay LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 \
+  LUMEN_E2E_IMAGE=ghcr.io/faberline/lumen@sha256:<root digest> scripts/kind-e2e.sh
+LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 \
+  LUMEN_E2E_IMAGE=ghcr.io/faberline/lumen@sha256:<root digest> scripts/kind-e2e.sh
+```
+
+`scripts/kind-e2e.sh` also defaults to 100,000 documents. The candidate kind
+runs do not wait for the durable performance matrix. These kind runs do not
+prove GKE, Regional HA, Fleet, or autoscaling.
+
+The durable performance matrix runs locally, on a Mac with OrbStack, through
+`scripts/durable-perf-local.sh`. CI does not run the thirty-minute cells.
+`build`, `cell`, `matrix`, and `status` are diagnostic only. Qualifying
+receipts come from `qualify` and `qualify-matrix`, which require a clean
+checkout at the candidate commit and these inputs:
+
+```bash
+LUMEN_PERF_IMAGE=ghcr.io/faberline/lumen@sha256:<root digest> \
+LUMEN_PERF_RUN_ID=<candidate run id> LUMEN_PERF_RUN_ATTEMPT=<attempt> \
+LUMEN_PERF_COMMIT=<candidate commit> \
+  scripts/durable-perf-local.sh qualify-matrix
+```
+
+Both the server image and the load client use the repository
+`[profile.release]`; every mode refuses `CARGO_PROFILE_*` overrides. After all
+sixteen receipts exist, `scripts/verify-durable-perf.py` judges them and writes
+`durable-perf-summary.json` and its `.sha256` sidecar. That directory and the
+summary SHA-256 are the `--durable-perf-dir` and
+`--durable-perf-summary-sha256` release inputs shown above.
+
 ## Managed prerequisites
 
 Managed mode uses an existing Kubernetes cluster. Prepare these inputs before
@@ -221,11 +285,9 @@ and certificate substrate.
 
 ### Production target
 
-GKE Standard Regional is the first Managed production target. Current
-acceptance uses zonal GKE Standard only. It does not prove regional HA. The
-future profile uses Kubernetes-native resources, StorageClass, selectors,
-tolerations, and topology intent. GKE-only ComputeClass and node lifecycle stay
-in the platform profile, not the core Lumen API. See the [GKE guide](gke.md).
+GKE Standard Regional is the first Managed production target, and
+`lumen@0.6.1` does not claim GKE. The [GKE guide](gke.md) owns the support
+tiers, the optional acceptance, and the target profile.
 
 ## Install the Managed control plane
 

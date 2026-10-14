@@ -19,7 +19,7 @@ Search v2 target is future work. It is not available in the current runtime. Use
 | Current and target field schema meaning | [Schema contract](#schema-contract) | Run `lumen spec --fields` for current fields. |
 | Current and target write semantics | [Write contract](#write-contract) | Run `lumen spec --shapes` for current request bodies. |
 | Acknowledgement and persistence meaning | [Durability](#durability) | Check the selected backend and fsync policy. |
-| Planned checkpoint scaling | [Incremental segment checkpoint](#planned-incremental-segment-checkpoint) | This is future work; see its completion evidence. |
+| Checkpoint scaling | [Incremental segment checkpoint](#incremental-segment-checkpoint) | Read the pending-change budget and merge rules; see its completion evidence. |
 | Rebuild, generation, activation, and rollback | [Rebuild and activation](#rebuild-and-activation) | Separate the current stream endpoint from the Search v2 target. |
 | Current contract to Search v2 caller changes | [Search v2 migration](migration-search-v2.md) | Use the versioned migration table and future offline tools. |
 | Current implementation support | [STATUS.md](../STATUS.md) | Read each indexing support row and its evidence. |
@@ -204,10 +204,10 @@ A caller must select and verify the runtime storage configuration. A current
 2xx response must not be treated as the same disk-loss guarantee in every
 backend mode.
 
-Current segment checkpoints re-seal every live collection. Each seal holds the
-global engine write lock while it rebuilds and writes the collection's
-segments. Sealing a large collection can therefore delay reads and writes for
-every collection. This is a current limit, not a throughput or latency
+Segment checkpoints capture changes at a short `CaptureBarrier` and write
+sparse segments outside it; see [Incremental segment checkpoint](#incremental-segment-checkpoint).
+A full pending-change budget returns `429` until a checkpoint publishes. The
+budget and merge rules are behavior limits, not a throughput or latency
 guarantee.
 
 `docs:truncate` is one durable command per physical shard. The command replays
@@ -235,9 +235,9 @@ atomically, so a later write can recreate an unindexed row. All voting members
 must run 0.4.31 before its first durable command. Downgrade after that point
 also needs an older snapshot or a collection rebuild.
 
-### Planned incremental segment checkpoint
+### Incremental segment checkpoint
 
-This future outcome writes a v2 complete manifest and sparse changed segments
+A persistent checkpoint writes a v2 complete manifest and sparse changed segments
 for every current field type, including Flat and HNSW vector fields. A manifest
 names its data version, collection epochs, schema, checkpoint sequence, ordered
 segments, and stable external-ID mappings for local delta rows. It hard-links
@@ -276,8 +276,8 @@ base only when delta bytes meet base bytes. It retains delete markers and files
 held by a reader or retained checkpoint.
 
 See [Incremental segment checkpoint](../ROADMAP.md#incremental-segment-checkpoint)
-for the required correctness and performance evidence. It is not implemented
-in the current runtime.
+for the required correctness and performance evidence. Its release evidence is
+the `lumen@0.6.1` local durable-perf matrix.
 
 ### Search v2 target acknowledgement
 
@@ -334,10 +334,10 @@ of these shadow-generation behaviors are implemented today.
 - Current batch writes do not have the complete item-atomic partial-success
   contract.
 - Write acknowledgement is not uniform across in-memory and persistent modes.
-- Current segment checkpoints re-seal every live collection while holding the
-  global engine write lock. Sealing one collection can delay requests to
-  every collection. Incremental checkpointing and background merge are future
-  work.
+- Segment checkpoints are incremental, with one background merge per process.
+  The pending-change budget can return `429` with `Retry-After: 1`. The
+  `lumen@0.6.1` local durable-perf matrix is their release evidence; see
+  [Incremental segment checkpoint](#incremental-segment-checkpoint).
 - Stream reindex writes to the active collection. There is no shadow
   generation, seal, activation, or rollback.
 - The strict Search v2 schema types and orthogonal `multi` and `facetable` options are

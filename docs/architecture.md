@@ -120,7 +120,10 @@ rules.
 
 ## Source responsibilities
 
-Every source contributes one part of the Managed result.
+Every source contributes one part of the Managed result. `apps/lumen` names
+this repository. `libs/<name>` names the
+[faberline/core](https://github.com/faberline/core) crate of that name at git
+tag `v0.4.13`.
 
 | Source | Current responsibility | Planned boundary |
 |---|---|---|
@@ -136,7 +139,7 @@ Every source contributes one part of the Managed result.
 | GCP Terraform capacity module | Current GCE node pools and `lumen-system/lumen-capacity-catalog`. | Remain a legacy compatibility substrate. The Kubernetes-native contract uses resources, StorageClass, selectors, tolerations, and topology intent. A GKE profile can select a platform-owned ComputeClass. |
 
 The planned shared Fleet library is not implemented yet. Current Fleet code
-still lives in `apps/lumen`.
+still lives in this repository.
 
 Both Kubernetes paths use the shared `StatefulInstancePlan` adapter boundary.
 Standalone owns one independent PVC instance, while Managed and Fleet use

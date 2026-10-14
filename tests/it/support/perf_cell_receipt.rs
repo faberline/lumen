@@ -18,7 +18,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: u64 = 1;
 pub const RECEIPT_KIND: &str = "lumen.durable-perf-cell";
 pub const INPUT_SECONDS: u64 = 30 * 60;
-pub const DOCOPS_PER_SECOND: u64 = 100;
+pub const DOCOPS_PER_SECOND: u64 = 60;
 pub const QUERY_QPS: u64 = 10;
 pub const COMPLETED_PERCENT: u64 = 95;
 pub const QUERY_P99_LIMIT_MS: u64 = 1_000;
@@ -29,7 +29,7 @@ pub const RSS_LIMIT_BYTES: u64 = 12 * 1024 * 1024 * 1024;
 pub const DOCKER_CPUS_MILLI: u64 = 2_500;
 pub const DOCKER_MEMORY_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 pub const SNAPSHOT_SECONDS: u64 = 15;
-pub const HOT_DOCUMENTS: u64 = 200_000;
+pub const HOT_DOCUMENTS: u64 = 100_000;
 pub const IDLE_COLLECTIONS: u64 = 181;
 pub const IDLE_DOCUMENTS_PER_COLLECTION: u64 = 100;
 pub const FIELD_COUNT: u64 = 14;
@@ -1838,15 +1838,15 @@ mod tests {
             items_completed_in_input: 2_520_000,
             items_started_per_second_milli: 1_400_000,
             items_completed_per_second_milli: 1_400_000,
-            docops_offered: 180_000,
-            docops_completed: 180_000,
-            docops_offered_in_input: 180_000,
-            docops_completed_in_input: 180_000,
+            docops_offered: 108_000,
+            docops_completed: 108_000,
+            docops_offered_in_input: 108_000,
+            docops_completed_in_input: 108_000,
             index_requests_started_in_input: 6_000,
             replace_requests_started_in_input: 6_000,
             unindex_requests_started_in_input: 6_000,
-            docops_offered_per_second_milli: 100_000,
-            docops_completed_per_second_milli: 100_000,
+            docops_offered_per_second_milli: 60_000,
+            docops_completed_per_second_milli: 60_000,
             docops_completion_percent_milli: 100_000,
             request_latency_p99_ms: 800,
             request_latency_max_ms: 1_200,
@@ -2041,12 +2041,12 @@ mod tests {
         ));
 
         let mut underload = aggregate_receipts();
-        underload[0].measurement.docops_offered_in_input = 179_999;
-        underload[0].measurement.docops_completed_in_input = 179_999;
-        underload[0].measurement.docops_offered = 179_999;
-        underload[0].measurement.docops_completed = 179_999;
-        underload[0].measurement.docops_offered_per_second_milli = 99_999;
-        underload[0].measurement.docops_completed_per_second_milli = 99_999;
+        underload[0].measurement.docops_offered_in_input = 107_999;
+        underload[0].measurement.docops_completed_in_input = 107_999;
+        underload[0].measurement.docops_offered = 107_999;
+        underload[0].measurement.docops_completed = 107_999;
+        underload[0].measurement.docops_offered_per_second_milli = 59_999;
+        underload[0].measurement.docops_completed_per_second_milli = 59_999;
         assert!(matches!(
             validate_aggregate(&expected, &underload),
             Err(ReceiptError::Invalid(_))
@@ -2137,14 +2137,14 @@ mod tests {
         let expected = expectation();
         let mut receipts = aggregate_receipts();
         let measurement = &mut receipts[0].measurement;
-        measurement.docops_completed_in_input = 171_000;
-        measurement.docops_completed_per_second_milli = 95_000;
+        measurement.docops_completed_in_input = 102_600;
+        measurement.docops_completed_per_second_milli = 57_000;
         measurement.docops_completion_percent_milli = 95_000;
         validate_aggregate(&expected, &receipts)
             .expect("the allowed five percent may complete during drain");
 
         let mut incomplete_drain = receipts.clone();
-        incomplete_drain[0].measurement.docops_completed = 179_999;
+        incomplete_drain[0].measurement.docops_completed = 107_999;
         assert!(matches!(
             validate_aggregate(&expected, &incomplete_drain),
             Err(ReceiptError::Invalid(_))
