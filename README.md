@@ -152,11 +152,11 @@ the normal local path. Managed runs stateful workloads through the operator.
 entry point. Fleet, high availability, sharding, and autoscaling are separate
 choices.
 
-The first Managed production target is GKE Standard Regional. Current GKE
-acceptance is zonal and does not prove regional high availability. A one-Pod
-Managed runtime can be persistent, but it is not highly available. The target
-production baseline uses three voters for each shard across three zones. See
-the [GKE guide](docs/gke.md) for the support tiers and topology contract.
+The first Managed production target is GKE Standard Regional. `lumen@0.6.1`
+does not claim GKE. A one-Pod Managed runtime can be persistent, but it is not
+highly available. The target production baseline uses three voters for each
+shard across three zones. See the [GKE guide](docs/gke.md) for the release
+claim, support tiers, and topology contract.
 
 Standalone GKE uses the shared `StatefulInstancePlan` boundary. It renders one
 StatefulSet and one separately owned PVC instance. It is not Managed or Fleet
@@ -213,8 +213,8 @@ The binary and the running service publish the detailed contract.
 Every entry below is a Lumen product capability. The list has no primary and
 secondary classes.
 
-A capability can have several sources. `apps/lumen` supplies Lumen-specific
-behavior and composition. `libs/<name>` supplies a reusable mechanism.
+A capability can have several sources. `apps/lumen` (this repository) supplies Lumen-specific
+behavior and composition. `libs/<name>` (the [faberline/core](https://github.com/faberline/core) crate of that name at git tag `v0.4.13`) supplies a reusable mechanism.
 `external:<name>` supplies an outside runtime, authority, or provisioned
 contract. Each source below states its direct contribution.
 
@@ -279,7 +279,7 @@ contract. Each source below states its direct contribution.
     lease, RBAC, and Secret contracts.
 - Gate: `cargo test -p lumen --features operator --test it -- operator_render:: operator_backup_kubernetes_wiring::`
 - Gate: `scripts/kind-e2e.sh`
-- Gate: `acceptance/gcp/scripts/run.sh`
+- Gate: `LUMEN_E2E_MODE=operator scripts/kind-e2e.sh`
 
 ### Managed Fleet materialization
 
@@ -323,10 +323,10 @@ contract. Each source below states its direct contribution.
     leaf lifecycle is tracked separately in the [roadmap](ROADMAP.md).
   - `external:kubernetes` acts as the request identity and authorization
     authority and stores externally provisioned TLS Secrets.
-- Gate: `cargo test -p lumen -p service-auth -p service-k8s -p peer-tls`
+- Gate: `cargo test -p lumen`; the `service-auth`, `service-k8s`, and
+  `peer-tls` tests run in faberline/core CI.
 - Gate: `cargo test -p lumen --test it -- auth_e2e:: authz_matrix_e2e:: serving_tls_rotation::`
 - Gate: `cargo test -p lumen --features operator --test it -- operator_render::`
-- Gate: `acceptance/gcp/scripts/verify-lumen-auth.sh`
 
 ### Scaling and availability
 
@@ -370,7 +370,7 @@ contract. Each source below states its direct contribution.
   - [`libs/raft-runtime`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-runtime/README.md) installs replica
     snapshots and manages the replicated log lifecycle.
 - Gate: `cargo test -p lumen --test it -- backup_restore_e2e:: indexing_durable_oracle::`
-- Gate: `acceptance/gcp/scripts/run.sh`
+- Gate: `scripts/kind-e2e.sh`
 
 ### Operations and observability
 
@@ -422,20 +422,7 @@ contract. Each source below states its direct contribution.
 |---|---|
 | [STATUS.md](STATUS.md) | Current support boundaries and evidence |
 | [ROADMAP.md](ROADMAP.md) | Future outcomes and explicit non-goals |
-| [Architecture](docs/architecture.md) | Runtime planes, ownership axes, and source responsibilities |
-| [Deployment](docs/deployment.md) | Standalone and Managed installation paths |
-| [Configuration](docs/configuration.md) | Setting precedence and change activation |
-| [Authentication](docs/authentication.md) | Current KSA flow and planned Managed access contract |
-| [Protocol](docs/protocol.md) | Canonical source map, connection paths, operation families, and current protocol boundaries |
-| [Generated clients](clients/README.md) | Client generation, language matrix, connection inputs, and current limits |
-| [Indexing](docs/indexing.md) | Current and target schema, write, durability, rebuild, and activation contracts |
-| [Product areas](docs/product/README.md) | Current indexing limits and the planned incremental checkpoint outcome alongside other product promises |
-| [Querying](docs/querying.md) | Source hydration plus current and target query, result, facet, metric, and limit contracts |
-| [GKE](docs/gke.md) | Local and GKE support tiers, runtime topology, placement, security, and production verification |
-| [Client integration](docs/client-integration.md) | Generated-client, workload-template, retry, and source-hydration responsibilities |
-| [Search v2 migration](docs/migration-search-v2.md) | Versioned compatibility rules, caller actions, offline tools, and Managed activation |
-| [Scale and benchmark notes](docs/benchmarks-scale.md) | Capacity, performance gates, and benchmark procedure |
-| [Operator control-plane runbook](docs/runbooks/operator-control-plane.md) | Reconciliation and incident operations |
+| [Documentation index](docs/README.md) | Every guide, grouped by need |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Lumen edit rules and required verification commands |
 
 Historical evidence and implementation planning do not define the current

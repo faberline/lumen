@@ -5,6 +5,12 @@ paced qps, write qps, and disk footprint. The authoritative regression contract
 lives in `tests/perf-baseline.json`; this document is the human
 handoff for what the current numbers mean.
 
+This page does not define the durable workload release gate. The
+[incremental segment checkpoint outcome](../ROADMAP.md#incremental-segment-checkpoint)
+owns that workload and its thresholds, and the
+[deployment guide](deployment.md#release-gate-kind-and-local-durable-perf)
+owns how it runs.
+
 > **Status (2026-06-08 calibration):** the retained competitive calibration was
 > run at `N=1,000,000` docs. At that size lumen cleared every OpenSearch
 > read/search cell in both in-memory and segment-disk modes, cleared the

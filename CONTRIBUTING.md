@@ -2,7 +2,7 @@
 
 ## Brief
 
-Use this guide to change `apps/lumen`. The [README](README.md) owns product
+Use this guide to change Lumen in this repository. The [README](README.md) owns product
 promises. The ecosystem [CONTRIBUTING.md](https://github.com/faberline/core/blob/main/CONTRIBUTING.md) owns repository-wide
 authoring rules.
 
@@ -42,21 +42,23 @@ edit generated schema as a substitute for changing its source.
 
 ## Local Workflow
 
-Use `product-deliver` for authorized behavior work. QA writes the failing
-black-box case before Dev changes `src/`; Dev adds the red unit test
-and implementation. A fresh `lumen-qa` runs the declared complete gate. The
-controller owns Git, tracker, and acceptance. Legacy AW use is explicit-only.
+Authorized behavior work runs through the agents in `.claude/agents/`.
+`lumen-pm` drafts product documents. `lumen-qa` writes the failing black-box
+case (`aw e2e`) before `lumen-dev` changes `src/` and adds the red unit test and
+implementation (`aw impl`). A fresh `lumen-qa` run executes the declared
+complete gate. The controller owns Git, tracker, and acceptance.
 
-Keep Lumen-specific search, schema, shard, and health policy in `apps/lumen`.
-Put reusable Kubernetes mechanisms in `libs/service-k8s` after their shared
-contract is defined. Do not move Lumen's protected reshard fields into a
-generic Fleet policy.
+Keep Lumen-specific search, schema, shard, and health policy in this
+repository. Put reusable Kubernetes mechanisms in the
+[faberline/core](https://github.com/faberline/core) `service-k8s` crate after
+their shared contract is defined. Do not move Lumen's protected reshard fields
+into a generic Fleet policy.
 
 Keep the Lumen audience, token path, anonymous routes, typed access API, and
-SubjectAccessReview resource mapping in this app. Put token and review
-mechanisms in `libs/service-auth`, generic request-time client providers in
-`libs/openapi-codegen`, and Kubernetes object mechanics in
-`libs/service-k8s`. Never place a bearer token in a CRD, argument, environment
+SubjectAccessReview resource mapping in this repository. Put token and review
+mechanisms in the faberline/core `service-auth` crate, generic request-time
+client providers in its `openapi-codegen` crate, and Kubernetes object
+mechanics in its `service-k8s` crate. Never place a bearer token in a CRD, argument, environment
 variable, status, Event, or log.
 
 When a Rust CRD type changes, regenerate the checked-in schema:
@@ -69,24 +71,18 @@ cargo run -p lumen --features operator --bin lumen -- \
 When README, STATUS, ROADMAP, protocol, generated-client, indexing, querying,
 GKE, client-integration, or migration documentation changes, update the adopted
 product-document set when its claims or links overlap. Keep current behavior
-separate from target behavior. Run the checker from `apps/lumen`, not from a
-nested supporting-doc directory. (The `$project-readme-check` skill that
-followed it is deleted; the deterministic command is the whole check.)
+separate from target behavior.
 
 ## Verification
 
 ### Product documents
 
 ```bash
-python3 scripts/meta/test_readme_contract.py
-python3 scripts/meta/test_project_docs_contract.py
-python3 scripts/meta/project_docs_contract.py check apps/lumen --format json
+aw meta check
 ```
 
-The first two commands test the validators. The third checks the three core
-documents plus every adopted protocol, generated-client, indexing, querying,
-GKE, client-integration, and linked migration guide. A
-docs-only change does not claim that product gates ran.
+The command scans the root documents and `docs/` against the META-doc rules.
+A docs-only change does not claim that product gates ran.
 
 ### Product behavior
 
@@ -112,16 +108,11 @@ capability gates in the README when the claim is narrower or requires a
 live-cluster script.
 
 The durable performance matrix (README gate `cargo test --release --locked -p
-lumen --test it -- perf_gate:: --ignored --test-threads=1 --nocapture`) has a local
-driver, `scripts/durable-perf-local.sh`: `build` makes a
-source-bound image from `Dockerfile`, `cell <endpoint> <batch>
-<backend>` runs one diagnostic cell, `matrix` runs all sixteen and resumes past
-cells already green, and `status` prints the receipts. These runs are
-diagnostic only. The `lumen-release-candidate` workflow runs the remaining
-`perf_gate::` tests with `--skip durable_workload`; it does not run the
-thirty-minute cells. From `lumen@0.6.1`, qualifying receipts come from
-`qualify-matrix`: it runs the sixteen cells on a clean checkout at the
-candidate commit against the candidate registry digest, binds each receipt to
-the candidate run ID and attempt, and writes the `verify-durable-perf.py`
-summary. That evidence directory and its summary SHA-256 are release inputs.
-No mode accepts `CARGO_PROFILE_*` overrides.
+lumen --test it -- perf_gate:: --ignored --test-threads=1 --nocapture`) runs
+locally through `scripts/durable-perf-local.sh`. The candidate workflow's
+`perf-coarse` job runs the other `perf_gate::` tests with
+`--skip durable_workload`. The
+[release gate](docs/deployment.md#release-gate-kind-and-local-durable-perf)
+owns the driver modes, the qualifying `qualify-matrix` run, the CI job split,
+and the release inputs. [ROADMAP](ROADMAP.md) owns the workload and its
+thresholds.

@@ -14,6 +14,19 @@ This guide separates three independent choices:
 
 None of these choices silently enables another one.
 
+## Release claim
+
+This guide is the single source for Lumen's GKE release claim.
+
+`lumen@0.6.1` does not claim GKE. Its release gate is the native Kind e2e on
+amd64 and arm64 plus the local durable-perf matrix; see
+[Deployment](deployment.md#release-gate-kind-and-local-durable-perf). GKE
+acceptance is optional. A release without a Standalone GKE receipt publishes no
+GKE receipt assets, and its notes state `- Standalone GKE: not claimed`. The
+release verifier refuses a published GKE receipt that the release does not
+claim. Regional GKE certification and a GKE durable-perf run are later work in
+the [roadmap](../ROADMAP.md).
+
 ## Standalone GKE instance
 
 Standalone GKE uses the shared `StatefulInstancePlan` boundary to render one
@@ -57,26 +70,21 @@ the concrete default is `http://lumen.lumen.svc.cluster.local:7373`. The
 client reads the mounted token for the calling Pod's configured KSA, not an SA
 named `default`. The server checks that KSA against `allowedServiceAccounts`.
 
-The Standalone GKE live acceptance is controller-run, manual, and paid. It is
-separate from the existing Managed/operator GCP acceptance. Candidate CI does
-not claim GKE or `gcloud` coverage. Before the `lumen@0.4.29` release, the
-controller must run this gate against the exact candidate. It checks the
-Standalone `LUMEN_AUTH=in-cluster` matrix and the inherited Managed
+The optional Standalone GKE live acceptance is controller-run, manual, and
+paid. It is separate from the Managed/operator GCP acceptance. Candidate CI does
+not run GKE or `gcloud`. When a release chooses to claim GKE, the controller
+runs this gate against the exact candidate. It checks the Standalone
+`LUMEN_AUTH=in-cluster` matrix and the inherited Managed
 `LUMEN_AUTH=required` continuity matrix: a projected `lumen.axiom.dev` token is
 allowed, the same KSA's default token returns `401`, and a projected unlisted
 KSA returns `403`. It also checks cleanup and writes a sanitized receipt only
-after every check passes. The gate has not passed until the controller records
-that receipt. Its private cluster inputs and exact execution remain
+after every check passes. Its private cluster inputs and exact execution remain
 controller-owned.
 The gate first waits for the platform Konnectivity agent. Its timeout is a GKE
 infrastructure failure, not a Lumen product failure.
-For `lumen@0.4.29` through `lumen@0.6.0`, the GitHub Release publishes
+Releases `lumen@0.4.29` through `lumen@0.6.0` published
 `lumen-standalone-gke-receipt.json`, its exact `.sha256` sidecar, and the
 receipt SHA-256 in the release notes.
-From `lumen@0.6.1`, the Standalone GKE receipt is optional. A release without
-it publishes no GKE receipt assets, and its notes state
-`- Standalone GKE: not claimed`. The verifier refuses a published GKE receipt
-that the release does not claim.
 
 ## Contract map
 
@@ -87,7 +95,7 @@ that the release does not claim.
 | Install and upgrade order | [Deployment](deployment.md) | Use the commands for the selected current mode. |
 | Current Kubernetes API | Generated Lumen CRDs | `lumen k8s crd render --out <directory>` |
 | Current GCP substrate | [Installation Terraform](../terraform/README.md) | Read the current capacity-catalog and PKI boundaries. |
-| Current Managed GCP acceptance | [GCP acceptance](https://github.com/faberline/workspace/blob/main/acceptance/gcp/README.md) | Run `bash acceptance/gcp/scripts/check.sh` for the static contract. Use the linked controller-run path for live proof. |
+| Current Managed GCP acceptance | [GCP acceptance](https://github.com/faberline/workspace/blob/main/acceptance/gcp/README.md) in `faberline/workspace` | From a `faberline/workspace` checkout, run `bash acceptance/gcp/scripts/check.sh` for the static contract. Use the linked controller-run path for live proof. |
 
 ## Support tiers
 
@@ -95,7 +103,7 @@ that the release does not claim.
 |---|---|---|
 | Bare binary or local container | Supported Standalone path. | Local development, tests, and trusted single-process use. |
 | Direct Kubernetes Kustomize overlay | Supported compatibility path with one in-memory Standalone process. | Cluster-local development only. It is not Managed or production. |
-| GKE Standard zonal | Limited acceptance environment. | Current operator, persistence, backup, placement, and selected lifecycle proof. It is not regional HA evidence. |
+| GKE Standard zonal | Limited acceptance environment. It is not a `lumen@0.6.1` release gate. | Current operator, persistence, backup, placement, and selected lifecycle proof. It is not regional HA evidence. |
 | GKE Standard Regional | Target first Managed production profile. It is not certified today. | Small persistent runtimes through multi-shard, replicated production runtimes. |
 | GKE Autopilot | Not certified. | A later target after the portable placement contract no longer needs current node-pool control. |
 | Other Kubernetes distributions | Not certified. | The public target remains Kubernetes-native, but support needs its own storage, networking, identity, and failure gates. |
@@ -245,7 +253,10 @@ public client trust bundle into allowed client namespaces. See
 
 ## Verification
 
-The current Managed GCP static gate is:
+None of the checks below gate `lumen@0.6.1`.
+
+The Managed GCP static gate lives in `faberline/workspace`. From that checkout,
+run:
 
 ```bash
 bash acceptance/gcp/scripts/check.sh
@@ -255,13 +266,15 @@ The separate Managed zonal live harness uses a named Standard cluster. Its
 documented proof remains valuable, but it does not certify the target regional
 profile.
 
-The Standalone live release gate is separate. The controller runs
-`terraform/lumen-standalone-gke/scripts/live-acceptance.sh` with private inputs.
-After release, verify its public receipt and exact checksum sidecar:
+The optional Standalone live acceptance is separate. The controller runs
+`terraform/lumen-standalone-gke/scripts/live-acceptance.sh` with private
+inputs. That wrapper runs `scripts/standalone-gke-acceptance.sh --mode gke`,
+which mutates the cluster only with `LUMEN_STANDALONE_GKE_MUTATION=1`. When a
+release claims GKE, verify its public receipt and exact checksum sidecar:
 
 ```bash
 receipt_dir=$(mktemp -d)
-gh release download lumen@0.4.29 --repo faberline/lumen \
+gh release download lumen@<version> --repo faberline/lumen \
   --pattern 'lumen-standalone-gke-receipt.json*' --dir "$receipt_dir"
 (cd "$receipt_dir" && shasum -a 256 -c lumen-standalone-gke-receipt.json.sha256)
 ```
@@ -285,6 +298,7 @@ row for the regional profile.
 
 ## Current boundaries
 
+- `lumen@0.6.1` does not claim GKE; GKE acceptance is optional.
 - GKE Standard Regional is the selected production target, not a current
   support claim.
 - The current live GKE harness is zonal.
@@ -311,4 +325,4 @@ row for the regional profile.
 - [Client integration](client-integration.md)
 - [Operator runbook](runbooks/operator-control-plane.md)
 - [Installation Terraform](../terraform/README.md)
-- [GCP acceptance](https://github.com/faberline/workspace/blob/main/acceptance/gcp/README.md)
+- [GCP acceptance in `faberline/workspace`](https://github.com/faberline/workspace/blob/main/acceptance/gcp/README.md)

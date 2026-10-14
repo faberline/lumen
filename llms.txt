@@ -15,10 +15,10 @@
 - [docs/migration-search-v2.md](docs/migration-search-v2.md): 0.4.x to Search v2 caller migration.
 - [docs/protocol.md](docs/protocol.md): HTTP fact sources and discovery paths.
 - [clients/README.md](clients/README.md): generated-client language differences and limits.
-- [docs/gke.md](docs/gke.md): local and GKE support tiers, topology, placement, and production verification.
+- [docs/gke.md](docs/gke.md): GKE release claim (`lumen@0.6.1` does not claim GKE), local and GKE support tiers, topology, placement, and optional acceptance.
 - [docs/client-integration.md](docs/client-integration.md): client profiles, workload projection, request mechanics, and source hydration.
 - [docs/authentication.md](docs/authentication.md): current and planned KSA access.
-- [docs/deployment.md](docs/deployment.md): Standalone and Managed activation.
+- [docs/deployment.md](docs/deployment.md): Standalone and Managed activation, and the Kind plus local durable-perf release gate.
 - [CONTRIBUTING.md](CONTRIBUTING.md): local edit and verification rules.
 
 ## Behaviour
@@ -35,7 +35,7 @@
 
 - Build debug: `./build.sh debug`.
 - Prepare and verify a release: `./build.sh release`, then use `lumen llm --topic verify-release` for the canonical candidate-to-promotion lifecycle. If the tag-pinned promotion fails before public writes, do not rerun that broken route. Use only its fixed-identity, one-time recovery controller: `.github/workflows/lumen-release-recovery.yml` for `lumen@0.4.28`, `.github/workflows/lumen-release-0.4.29-recovery.yml` for `lumen@0.4.29`, or `.github/workflows/lumen-release-0.4.30-recovery.yml` for `lumen@0.4.30`. These are not generic escape hatches. They cannot rebuild or move the tag, choose another identity, or bypass verification. Recovery tooling may land separately on `main`, but cannot change the frozen release commit, tag, candidate, or product bytes.
-- Install: repo root `install.sh --project=lumen` dispatches to `./install.sh`.
+- Install: `curl -fsSL https://raw.githubusercontent.com/faberline/lumen/main/install.sh | sh`, or run `./install.sh` from a checkout.
 - Test: `cargo test -p lumen`.
 
 ## Root Artifacts

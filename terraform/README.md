@@ -154,12 +154,13 @@ place the current default `e2-standard-2` Lumen instance.
 
 ## Running the gate
 
-```bash
-bash acceptance/gcp/scripts/check.sh
-```
-
-That runs `fmt`, `validate`, and `terraform test` over both directories, plus
-the ownership oracle in `acceptance/gcp/tests/lumen_pki_ownership.sh`.
+No script in this repository wraps these modules. The candidate workflow's
+`cloud-free-config` job checks only `terraform/lumen-standalone-gke`. Run
+`terraform fmt -check -recursive`, `terraform init -backend=false`,
+`terraform validate`, and `terraform test` in `modules/lumen-pki`,
+`modules/lumen-capacity`, and `examples/installation`. The resource-type
+ownership oracle described below is not in this repository;
+`tests/it/certificate_ownership.rs` keeps only the no-leaf-certificate check.
 
 The fixtures run against a mocked provider: **no GCP project, no credential,
 nothing billable.** That is what makes the rejects — a public DNS suffix, a zone

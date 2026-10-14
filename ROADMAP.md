@@ -11,12 +11,12 @@ destination without copying tracker state.
 
 ## Near-term outcomes
 
-Milestone #8 (`0.6.0`) delivers only the sealed Keyword update correction in
-[report #4164](https://github.com/faberline/axiom/issues/4164) and the
-`bounded-raft-shutdown-and-failover` outcome in
-[issue #4069](https://github.com/faberline/axiom/issues/4069). Standalone
-gains no new feature in this release. Its existing bind smoke remains a
-regression gate. Search v2 is outside this release, and its activation remains
+Milestone #36 (`lumen@0.6.1`) delivers the `incremental-segment-checkpoint`
+outcome below. Its release gate is the native Kind e2e on amd64 and arm64 plus
+the local durable-perf matrix; [Deployment](docs/deployment.md#release-gate-kind-and-local-durable-perf)
+describes how both run. `lumen@0.6.1` does not claim GKE; see
+[GKE](docs/gke.md#release-claim). Standalone gains no new feature in this
+release. Search v2 is outside this release, and its activation remains
 `lumen@0.37.0`.
 
 ### Incremental segment checkpoint
@@ -93,28 +93,33 @@ regression gate. Search v2 is outside this release, and its activation remains
   reports requests, field items, and complete document operations separately;
   an `/index` document counts only after all of its fields complete.
 
-  With a fixed seed, 200,000 hot documents, 14 fields, three ngram text
-  subfields, 182 collections, and separate Flat and HNSW vector cases, each
-  batch-size and vector-backend workload case runs independently for 30
-  minutes on 2.5 CPU and 16 GiB. It includes checkpoint and merge while
-  serving 10 query QPS and 100 complete document operations per second across
-  create, update, and delete. Results cannot aggregate separate matrix cases.
-  Query p99 per attempt is at most 1 second, each attempt is at most 5
-  seconds, and there are zero non-`429` errors and zero timeouts. A typed
+  With a fixed seed, one hot collection of 100,000 documents, 181 idle
+  collections of 100 documents each, 14 fields, three ngram text subfields,
+  and separate Flat and HNSW vector cases, each batch-size and vector-backend
+  workload case runs independently for 1,800 seconds on 2.5 CPU and 16 GiB.
+  That is sixteen cells: `/index` 1, 100, and 1,000; `docs:replace` 1 and 32;
+  and `docs:unindex` 1, 100, and 1,000, each with `flat-cpu` and `hnsw-cpu`.
+  It includes checkpoint and merge while serving 10 query QPS and 60 complete
+  document operations per second across create, update, and delete, so each
+  class covers 36,000 documents. Results cannot aggregate separate matrix
+  cases. Query p99 per attempt is at most 1 second, each attempt is at most 5
+  seconds, and there are zero non-`429` errors, zero timeouts, zero semantic
+  errors, and zero lost acknowledged writes. A typed
   `429 pending_change_capacity` refusal is resent after its `Retry-After`;
   refusals stay at or below 1% of mutation requests and every refused request
   later succeeds. Missed `/metrics` samples stay at or below 1%, and every
   gate is still evaluated and recorded. Completed document-operation
   throughput is at least 95% of target, submitted writes drain within 60
-  seconds after input stops, and RSS stays at or below 12 GiB. The run
-  records capture time, checkpoint and merge I/O, pending bytes, disk use,
-  and restart time. A run without its input rate, checkpoint, or merge is
-  invalid. The server image and the load client both use the repository
-  `[profile.release]`. The sixteen qualifying receipts run locally against the
-  candidate registry digest and are judged by `verify-durable-perf.py`. The
-  500,000-document matrix and a standalone GKE controller run are deferred
-  past `lumen@0.6.1`.
-- Tracking: Not assigned.
+  seconds after input stops, restart completes within 30 seconds, and RSS
+  stays at or below 12 GiB. The run records capture time, checkpoint and merge
+  I/O, pending bytes, disk use, and restart time. A run without its input
+  rate, checkpoint, or merge is invalid. The server image and the load client
+  both use the repository `[profile.release]`. The sixteen qualifying receipts
+  run locally against the candidate registry digest and are judged by
+  `verify-durable-perf.py`. Native Kind e2e runs 100,000 documents in both
+  overlay and operator modes on amd64 and arm64. A 500,000-document matrix
+  and a GKE run are later work, not part of `lumen@0.6.1`.
+- Tracking: [Milestone #36](https://github.com/faberline/lumen/milestone/36).
 
 ### Durable write contract
 
@@ -291,8 +296,8 @@ regression gate. Search v2 is outside this release, and its activation remains
   Search v2 request and response contract as typed APIs.
 - Boundary: Lumen integration owns the service-specific discriminated query,
   filter, facet, metric, total, cursor, and collapse contract. Generic
-  cross-language discriminator and schema mechanisms remain in
-  `libs/openapi-codegen`. Package publication remains a non-goal.
+  cross-language discriminator and schema mechanisms remain in the
+  faberline/core `openapi-codegen` crate. Package publication remains a non-goal.
 - Completion evidence: A required three-language gate compiles and executes
   scoring and filter combinations, every facet and metric definition, tagged
   totals, cursor errors, collapse, decimal strings, and every `kind` result.
@@ -395,8 +400,8 @@ regression gate. Search v2 is outside this release, and its activation remains
   and the fixed token path
   `/var/run/secrets/lumen.axiom.dev/token`. The application or platform projects
   the audience `lumen.axiom.dev` token and CA into its workload. Fleet does not
-  mutate client workloads. `libs/service-auth` supplies a portable opaque token
-  source and redaction. `libs/openapi-codegen` supplies the per-request header
+  mutate client workloads. The faberline/core `service-auth` crate supplies a
+  portable opaque token source and redaction. Its `openapi-codegen` crate supplies the per-request header
   provider. A missing, unreadable, or empty Managed token fails before
   transport. The client does not parse the token as an authorization decision.
   Server-side TokenReview remains authoritative for signature, expiry,
@@ -437,8 +442,8 @@ regression gate. Search v2 is outside this release, and its activation remains
 - ID: `protocol-contract-completeness`
 - Outcome: Lumen's machine-readable contract describes every public request
   control, shared failure response, and media type that a client must handle.
-- Boundary: `apps/lumen` keeps domain routes, schemas, and error meaning.
-  `libs/service-http` supplies reusable middleware response projection. The
+- Boundary: Lumen keeps domain routes, schemas, and error meaning. The
+  faberline/core `service-http` crate supplies reusable middleware response projection. The
   OpenAPI document adds `X-Read-Consistency`, the shared `401`, `413`, `429`,
   and `500` structured error responses, and the complete `text/plain` NDJSON
   request and streaming response declarations. Runtime behavior does not move
@@ -456,7 +461,7 @@ regression gate. Search v2 is outside this release, and its activation remains
 - Outcome: Generated TypeScript, Python, and Rust clients preserve Lumen's
   supported operation media types, streaming contract, error contract, and
   schema types.
-- Boundary: `libs/openapi-codegen` owns non-JSON operation modeling, NDJSON
+- Boundary: The faberline/core `openapi-codegen` crate owns non-JSON operation modeling, NDJSON
   streaming methods, typed structured errors, cross-language schema mapping,
   and target dependency manifests. Lumen owns the service-specific integration
   contract. Dynamic KSA token loading remains the separate
@@ -552,7 +557,7 @@ regression gate. Search v2 is outside this release, and its activation remains
   replication, configuration, capacity, and degraded state without conflating
   them.
 - Boundary: Reusable ownership, adoption, prune, status-projection, and watch
-  mechanics move to `libs/service-k8s::fleet`. Lumen supplies child objects,
+  mechanics move to `service_k8s::fleet` in faberline/core. Lumen supplies child objects,
   protected topology projection, and health mapping. `Ready` continues to mean
   searchable. `Writable`, `ReplicationReady`, `ConfigReady`, `CapacityReady`,
   and `Degraded` remain separate conditions. A low-frequency repair requeue

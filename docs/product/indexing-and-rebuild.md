@@ -6,7 +6,7 @@
 - Who: Application teams that own source records.
 - Promise: Lumen accepts the declared index-write API and keeps source records outside Lumen.
 - Status rows: `index-query-api`, `current-index-write-api`, `sealed-keyword-update-persistence`, `incremental-segment-checkpoint`, `current-external-version-writes`, `current-request-id-deduplication`, `item-atomic-batch-writes`, `versioned-delete-tombstones`, `shadow-rebuild-generations`, `strict-search-schema-types`.
-- Limits today: A segment checkpoint re-seals every live collection while holding the global engine write lock. Sealing one collection can delay requests to every collection. Item atomicity, tombstones, shadow generations, strict target types, and incremental checkpointing are future work.
+- Limits today: Item atomicity, tombstones, shadow generations, and strict target types are future work. Incremental segment checkpoint is Limited until its `lumen@0.6.1` release evidence is recorded.
 - Non-goals: Source-record ownership or hydration.
 - Neighbours: Querying selects the indexed IDs; recovery defines durable acknowledgement.
 
@@ -30,15 +30,13 @@
 - Open: Define retention and conflict reporting.
 - Neighbours: Durable writes and generated-client resilience.
 
-## Incremental segment checkpoint (Milestone #132)
+## Incremental segment checkpoint (Milestone #36)
 
 - Problem: A full checkpoint can rebuild a large collection while holding the global engine write lock and delay requests to every collection.
 - Who: Teams that keep a persistent Lumen index while serving reads and writes.
-- Promise: A completed v2 checkpoint retains hard-linked unchanged segments, captures sparse changes through `CaptureBarrier`, and publishes a complete validated manifest with its data version before it trims AOF data.
+- Promise: The [indexing guide](../indexing.md#incremental-segment-checkpoint) describes the checkpoint behavior.
 - Status row: `incremental-segment-checkpoint` is Limited until the outcome completes.
-- Outcome: `incremental-segment-checkpoint`. Tracking: [Milestone #132](https://github.com/faberline/lumen/milestone/132).
-- Non-goals: New request shapes, changed batch limits, source-record storage, a coordinator `MutationGate` checkpoint lock, a full-copy fallback, and a performance claim before the required workload passes.
-- Open: Validate all-field layer correctness; v2 data-version and 0.6.0 compatibility; `CaptureBarrier` plus serialized restore/publication epoch validation; 128/256 MiB admission and reservation release; four/16 segment merge rules; failure recovery; batch limits; and each independent 30-minute workload case in the roadmap.
+- Outcome: [`incremental-segment-checkpoint`](../../ROADMAP.md#incremental-segment-checkpoint) owns the non-goals, the required workload, and its gates. Tracking: [Milestone #36](https://github.com/faberline/lumen/milestone/36).
 - Neighbours: Durable acknowledgement defines the publish and AOF boundary; recovery owns reopen, backup, and restore.
 
 ## Item-atomic batch writes (Milestone #11)

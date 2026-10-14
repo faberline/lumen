@@ -12,7 +12,7 @@ is preceded by a user-visible symptom. That silence is the reason they exist.
 leader gauge is per-replica, so a collapsed target would make a lease handover
 invisible.
 
-**Published series** (from `libs/service-k8s/src/metrics.rs`, prefixed from the
+**Published series** (from faberline/core [`crates/service-k8s/src/metrics.rs`](https://github.com/faberline/core/blob/v0.4.13/crates/service-k8s/src/metrics.rs), prefixed from the
 service's `MANAGER`):
 
 | Series | Type | Meaning |
@@ -299,9 +299,9 @@ curl -fsS http://127.0.0.1:7373/metrics | grep lumen_storage_degraded
 
 ## Related
 
-- `libs/service-k8s/src/controller.rs` — the reconcile loop, leader gate, and Event publication.
-- `libs/service-k8s/src/metrics.rs` — the metric definitions and the `/metrics` listener.
+- faberline/core [`crates/service-k8s/src/controller.rs`](https://github.com/faberline/core/blob/v0.4.13/crates/service-k8s/src/controller.rs) (`v0.4.13`) — the reconcile loop, leader gate, and Event publication.
+- faberline/core [`crates/service-k8s/src/metrics.rs`](https://github.com/faberline/core/blob/v0.4.13/crates/service-k8s/src/metrics.rs) (`v0.4.13`) — the metric definitions and the `/metrics` listener.
 - `k8s/components/observability/` — the **instance** (data-plane) alerts, a separate concern from this runbook.
 - `docs/deployment.md` — Standalone and Managed install flow.
-- `docs/gke.md` — current GKE evidence and the regional production target.
+- `docs/gke.md` — the GKE release claim, support tiers, and the regional production target.
 - `docs/client-integration.md` — current and planned client workload responsibilities.
