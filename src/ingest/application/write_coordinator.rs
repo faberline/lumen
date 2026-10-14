@@ -29,6 +29,7 @@ mod committed_scalar;
 pub(crate) mod errors;
 pub(crate) mod local_record;
 pub(crate) mod mutation_gate;
+mod reservation_ledger;
 pub(crate) mod submit;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -37,7 +38,7 @@ use std::sync::{Arc, Mutex, Weak};
 use anyhow::Result;
 use raft_runtime::OutcomeWindow;
 use rustc_hash::FxHashMap;
-use tokio::sync::{oneshot, Mutex as AsyncMutex, OwnedRwLockReadGuard};
+use tokio::sync::{oneshot, OwnedRwLockReadGuard};
 
 use crate::index::application::admission::record_reservation::{
     RecordReservation, RecordTransientReservation,
@@ -126,12 +127,13 @@ pub type SharedAof = Arc<Mutex<crate::persistence::infrastructure::aof::aof_writ
 pub struct WriteCoordinator {
     wal: SharedWal,
     engine: Arc<Engine>,
-    /// A local submit holds this lock from WAL publication through installing
-    /// its sequence-keyed reservation. The apply loop takes and removes the
-    /// reservation before it enters `spawn_blocking`; therefore a subscriber
-    /// that observes a record while `publish` is still returning cannot apply
-    /// it through the unadmitted path.
-    local_reservations: AsyncMutex<FxHashMap<u64, LocalRecordReservation>>,
+    /// A local submit holds a publication turn from WAL publication through
+    /// installing its sequence-keyed reservation. The apply loop takes and
+    /// removes the reservation before it enters `spawn_blocking`; therefore a
+    /// subscriber that observes a record while `publish` is still returning
+    /// cannot apply it through the unadmitted path. It waits only for that
+    /// in-flight publication, not for submits queued behind it.
+    local_reservations: reservation_ledger::ReservationLedger<LocalRecordReservation>,
     has_local_aof: bool,
     /// A refused local request can need source relief without an apply waiter.
     capacity_relief_requested: AtomicBool,

@@ -23,6 +23,7 @@ mod restore;
 #[cfg(test)]
 mod seal;
 mod search;
+mod state_hold;
 pub(in crate::index) mod stats;
 #[cfg(test)]
 pub(in crate::index) mod tests;
@@ -126,5 +127,13 @@ impl Engine {
             .map(|fi| fi.bytes())
             .sum();
         self.metrics.set_storage_bytes(total_bytes);
+    }
+
+    /// Run `work` while holding the state write lock, standing in for an
+    /// apply or checkpoint publication outside `crate::index`.
+    #[cfg(test)]
+    pub(crate) fn with_state_write_held<T>(&self, work: impl FnOnce() -> T) -> T {
+        let _state = self.state.write().unwrap();
+        work()
     }
 }

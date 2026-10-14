@@ -14,6 +14,20 @@ use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::change_budget::AdmissionError;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 
+/// Run synchronous admission pricing without stalling a reactor worker.
+/// Pricing walks the record and takes the Engine state read lock, which an
+/// apply or checkpoint can hold for seconds. On a multi-thread runtime the
+/// worker hands its other tasks (searches, `/metrics`, `/healthz`) to another
+/// thread first. A current-thread runtime cannot do that and runs it inline.
+fn off_reactor<T>(work: impl FnOnce() -> T) -> T {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(work)
+        }
+        _ => work(),
+    }
+}
+
 pub(super) enum PreparedLocalRecord<'a> {
     Prepared(RecordApplyGuard<'a>),
     /// The committed source needs a larger exact charge than its publication
@@ -84,7 +98,7 @@ pub(super) fn prepare_local_record<'a>(
 
 impl WriteCoordinator {
     pub(super) async fn take_local_reservation(&self, seq: u64) -> Option<LocalRecordReservation> {
-        self.local_reservations.lock().await.remove(&seq)
+        self.local_reservations.take(seq).await
     }
 
     /// `try_reserve_record` prices the submitted raw record. Without an AOF,
@@ -186,7 +200,7 @@ impl WriteCoordinator {
             // Observe before admission so a release during this attempt
             // retries even when its checkpoint revision remains pending.
             let observed = wake.epoch();
-            let (result, revision) = self.try_admit_local_record_once(entry);
+            let (result, revision) = off_reactor(|| self.try_admit_local_record_once(entry));
             match result {
                 Ok(reservation) => return Ok(reservation),
                 Err(error) => {

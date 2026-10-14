@@ -4,4 +4,5 @@
 
 pub(crate) mod capture_barrier;
 pub mod log_entry;
+pub(crate) mod request_arrival;
 pub(crate) mod types;

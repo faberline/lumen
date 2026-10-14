@@ -42,6 +42,18 @@ impl Engine {
         self.changes.budget.has_capacity_waiters()
     }
 
+    /// This Engine's writes are refused, or soon will be: a refusal requested
+    /// checkpoint relief, a committed record waits for capacity, or its
+    /// pending changes reached the checkpoint trigger. Only a checkpoint
+    /// releases pending bytes.
+    pub(crate) fn write_capacity_pressed(&self) -> bool {
+        self.capacity_owner_state().is_some_and(|state| {
+            state.checkpoint_request_revision.is_some()
+                || state.active.saturating_add(state.frozen)
+                    >= crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER
+        }) || self.changes.budget.has_capacity_waiters()
+    }
+
     #[cfg(test)]
     pub(crate) fn with_change_budget(budget: ChangeBudget) -> Self {
         let mut engine = Self::new();

@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, bail, Result};
 
 use crate::index::application::checkpoint_capture::CheckpointCapture;
+use crate::index::application::engine::state_hold::StateHoldTrace;
 use crate::index::application::engine::Engine;
 use crate::index::application::live_base::scalar_prepared_segment;
 use crate::index::domain::field_index::FieldIndex;
@@ -20,7 +21,10 @@ impl Engine {
     ) -> Result<()> {
         let mut plans = Vec::new();
         {
+            let mut hold =
+                StateHoldTrace::begin("prepare_scalar_checkpoint_publications.plans", "", "read");
             let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
+            hold.acquired();
             for (name, cuts) in &capture.scalar_cuts {
                 let identity = capture
                     .collections
@@ -105,7 +109,10 @@ impl Engine {
         // This is the final dry prefix check before the generation caller may
         // validate its staged layout and advance CURRENT. A later mutation may
         // append only a private layer; a changed catalog prefix refuses here.
+        let mut hold =
+            StateHoldTrace::begin("prepare_scalar_checkpoint_publications.prefix", "", "read");
         let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
+        hold.acquired();
         for (name, publications) in &capture.scalar_publications {
             let identity = capture
                 .collections
@@ -150,7 +157,9 @@ impl Engine {
         self.prepare_scalar_checkpoint_publications(capture)?;
         let mut plans = Vec::new();
         {
+            let mut hold = StateHoldTrace::begin("prepare_checkpoint_compactions", "", "read");
             let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
+            hold.acquired();
             for (name, compactions) in &capture.prepared_compactions {
                 let identity = capture
                     .collections

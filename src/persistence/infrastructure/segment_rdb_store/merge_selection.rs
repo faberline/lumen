@@ -4,6 +4,7 @@
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, SegmentKind, SegmentReference, SegmentRole,
 };
+use crate::persistence::infrastructure::composed_segment::MAX_INCREMENTAL_LAYERS;
 use crate::persistence::infrastructure::segment_rdb_store::compacted_fields::segment_reference_bytes;
 use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
@@ -29,6 +30,21 @@ pub(in crate::persistence) struct StagedMergeCandidate {
     pub(in crate::persistence) includes_base: bool,
 }
 
+/// A stack this deep has used half of the query-time layer bound.
+const DEEP_DELTA_STACK: usize = MAX_INCREMENTAL_LAYERS / 2;
+/// Each checkpoint adds one delta per dirty field, so a merge that folds
+/// only a pair just holds a deep stack's depth. Before the stack reaches the
+/// bound and stalls checkpoints, fold a wider adjacent run instead.
+const DEEP_DELTA_WINDOW: usize = 4;
+
+fn delta_window_len(depth: usize) -> usize {
+    if depth >= DEEP_DELTA_STACK {
+        DEEP_DELTA_WINDOW
+    } else {
+        2
+    }
+}
+
 /// Select one field-level merge from `collections`, reading segment sizes from
 /// `root`.
 ///
@@ -37,8 +53,9 @@ pub(in crate::persistence) struct StagedMergeCandidate {
 /// that collection depth is then returned in field-name order. Shallower
 /// eligible fields remain for a later scheduling pass. Unless a selected
 /// field's complete delta stack has reached the base size, that field
-/// contributes exactly the adjacent pair with the smallest combined on-disk
-/// size.
+/// contributes exactly the adjacent window with the smallest combined on-disk
+/// size: a pair, or [`DEEP_DELTA_WINDOW`] deltas once the stack is
+/// [`DEEP_DELTA_STACK`] deep.
 /// Once the delta stack reaches the base size, the base and all captured
 /// deltas are folded together so the base can be replaced.
 pub(in crate::persistence) fn select_staged_delta_window(
@@ -132,23 +149,26 @@ pub(in crate::persistence) fn select_staged_delta_window(
                 full_stack_bytes,
             )
         } else {
+            let window_len = delta_window_len(deltas.len());
             let mut smallest: Option<(u64, usize)> = None;
-            for (index, pair) in deltas.windows(2).enumerate() {
-                let pair_bytes = segment_reference_bytes(root, pair[0])?
-                    .checked_add(segment_reference_bytes(root, pair[1])?)
-                    .ok_or_else(|| anyhow!("adjacent delta byte count overflow"))?;
-                if smallest.is_none_or(|(best_bytes, _)| pair_bytes < best_bytes) {
-                    smallest = Some((pair_bytes, index));
+            for (index, window) in deltas.windows(window_len).enumerate() {
+                let window_bytes = window.iter().try_fold(0u64, |total, segment| {
+                    total
+                        .checked_add(segment_reference_bytes(root, segment)?)
+                        .ok_or_else(|| anyhow!("adjacent delta byte count overflow"))
+                })?;
+                if smallest.is_none_or(|(best_bytes, _)| window_bytes < best_bytes) {
+                    smallest = Some((window_bytes, index));
                 }
             }
-            let (pair_bytes, index) =
-                smallest.ok_or_else(|| anyhow!("delta field has no adjacent pair"))?;
+            let (window_bytes, index) =
+                smallest.ok_or_else(|| anyhow!("delta field has no adjacent window"))?;
             (
-                deltas[index..index + 2]
+                deltas[index..index + window_len]
                     .iter()
                     .map(|segment| (*segment).clone())
                     .collect(),
-                pair_bytes,
+                window_bytes,
             )
         };
         candidates.push((

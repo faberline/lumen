@@ -399,6 +399,22 @@ configure_lumen_only_deployment() {
   kubectl -n "$NAMESPACE" set resources deploy/"${LUMEN_CR_NAME}" \
     --requests="cpu=${SERVING_CPU},memory=${SERVING_MEMORY}"
   kubectl -n "$NAMESPACE" set env deploy/"${LUMEN_CR_NAME}" LUMEN_WAL=embedded
+  # The shipped Deployment keeps no state across pod replacement. The durable
+  # restart oracle replaces the pod, so give this fixture a claim at the image's
+  # LUMEN_DATA_DIR, as the container persistence contract requires.
+  kubectl -n "$NAMESPACE" apply -f - <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${LUMEN_CR_NAME}-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 4Gi
+EOF
+  kubectl -n "$NAMESPACE" patch deploy/"${LUMEN_CR_NAME}" --type json -p \
+    "[{\"op\":\"add\",\"path\":\"/spec/template/spec/volumes/-\",\"value\":{\"name\":\"data\",\"persistentVolumeClaim\":{\"claimName\":\"${LUMEN_CR_NAME}-data\"}}},{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/volumeMounts/-\",\"value\":{\"name\":\"data\",\"mountPath\":\"/var/lib/lumen/data\"}}]"
   kubectl -n "$NAMESPACE" rollout status deploy/"${LUMEN_CR_NAME}" --timeout=180s
 }
 

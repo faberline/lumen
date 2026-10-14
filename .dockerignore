@@ -1,0 +1,26 @@
+# The Dockerfile copies the repo root. Keep that context to source only:
+# target/ holds tens of GiB of build output, and worktrees nest whole copies.
+/target/
+.git
+.claude/
+.codex/
+.agents/
+.aw/
+.qc/
+.meter/
+.vat/
+.rig/
+.arena/
+.local/
+.benchmarks/
+.baselines/
+.jet/
+.vite/
+mutants.out
+mutants.out.old
+**/__pycache__/
+**/node_modules/
+.venv/
+.env
+.env.*
+.DS_Store

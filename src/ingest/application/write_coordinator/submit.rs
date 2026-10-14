@@ -175,8 +175,11 @@ impl WriteCoordinator {
         let admission_started_at = std::time::Instant::now();
         let submit_deadline = tokio::time::Instant::now() + SUBMIT_TIMEOUT;
         let admission_deadline = submit_deadline - LOCAL_CAPACITY_APPLY_RESERVE;
-        let capacity_deadline =
-            admission_deadline.min(tokio::time::Instant::now() + LOCAL_CAPACITY_RELIEF_TIMEOUT);
+        // The client's request timeout began before the body was received
+        // and parsed, so measure the relief wait from the request's arrival.
+        let received_at = crate::shared_kernel::request_arrival::received_at()
+            .unwrap_or_else(tokio::time::Instant::now);
+        let capacity_deadline = admission_deadline.min(received_at + LOCAL_CAPACITY_RELIEF_TIMEOUT);
         let mut diagnostic = WritePhase::begin(
             kind,
             #[cfg(test)]
@@ -250,19 +253,19 @@ impl WriteCoordinator {
                     "submit deadline expired before WAL publication".into(),
                 )))
             } else if let Some(reservation) = reservation {
-                // The subscriber cannot take this ledger while publication is
-                // still returning, so it sees the reservation for this exact
-                // sequence before it can start local apply.
-                let mut ledger = publisher.local_reservations.lock().await;
+                // The subscriber cannot take this sequence while its
+                // publication turn is still returning, so it sees the
+                // reservation for this exact sequence before it can start
+                // local apply.
+                let turn = publisher.local_reservations.begin_publication().await;
                 match wal.publish(WalRecord::new(entry)).await {
                     Ok(seq) => {
                         publication.sequence_returned(seq);
-                        if ledger.insert(seq, reservation).is_some() {
+                        if turn.install(seq, reservation).is_some() {
                             Err(anyhow::anyhow!(
                                 "duplicate local reservation for sequence {seq}"
                             ))
                         } else {
-                            drop(ledger);
                             publisher
                                 .register_waiter(seq, mutation_permit)
                                 .map(|receiver| (seq, receiver))

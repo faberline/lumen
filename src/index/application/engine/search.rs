@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use anyhow::{anyhow, bail, Result};
 
+use crate::index::application::engine::state_hold::StateHoldTrace;
 use crate::index::application::engine::Engine;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::query::eval::eval_query;
@@ -35,6 +36,17 @@ use crate::index::domain::storage_error::StorageError;
 use crate::shared_kernel::types::query::{QueryNode, SortMissing};
 use crate::shared_kernel::types::search::{SearchHit, SearchRequest, SearchResponse};
 
+/// The top-level query kind, for slow state-hold logs.
+fn query_kind(query: &QueryNode) -> &'static str {
+    match query {
+        QueryNode::Match(_) => "match",
+        QueryNode::Term(_) => "term",
+        QueryNode::Knn(_) => "knn",
+        QueryNode::And(_) | QueryNode::Or(_) | QueryNode::Not(_) => "boolean",
+        _ => "other",
+    }
+}
+
 impl Engine {
     pub fn search(&self, collection_id: &str, req: SearchRequest) -> Result<SearchResponse> {
         let start = Instant::now();
@@ -46,7 +58,9 @@ impl Engine {
             )
             .into());
         }
+        let mut hold = StateHoldTrace::begin("search", collection_id, query_kind(&req.query));
         let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
+        hold.acquired();
         let coll = state
             .collections
             .get(collection_id)

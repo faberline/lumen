@@ -176,6 +176,8 @@ mod link_cost;
 
 mod phase_metrics;
 
+mod publish_validation;
+
 mod scratch_cleanup;
 
 mod whole_delta_stack;

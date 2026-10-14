@@ -1,9 +1,13 @@
 //! Validating a staged or published generation: every entry and the layout of
 //! its tree, in parallel passes over the root.
 
-use crate::persistence::domain::generation_manifest::SegmentReference;
+use crate::persistence::domain::generation_manifest::{
+    CollectionCatalog, SegmentGenerationManifest, SegmentReference,
+};
 use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::catalog::validate_catalog_references_with_prior;
+use crate::persistence::infrastructure::segment_rdb_store::delta_integrity::is_inherited_base;
+use crate::persistence::infrastructure::segment_rdb_store::flat_layout::collection_checkpoint_dir_name;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::{
     read_generation_manifest, PriorCatalog,
 };
@@ -72,6 +76,28 @@ pub(in crate::persistence) fn map_generation_pass<T: Sync, R: Send>(
         .collect()
 }
 
+/// Every catalogued segment by its generation-relative path, with the
+/// collection that declares it.
+type CatalogIndex<'a> = BTreeMap<&'a str, (&'a CollectionCatalog, &'a SegmentReference)>;
+
+/// One index over the whole catalog: resolving each declared base by a linear
+/// scan of every collection's segments made this pass quadratic in the number
+/// of collections.
+fn catalog_index(manifest: Option<&SegmentGenerationManifest>) -> CatalogIndex<'_> {
+    let mut references = CatalogIndex::new();
+    for collection in manifest
+        .into_iter()
+        .flat_map(|manifest| &manifest.collections)
+    {
+        for reference in &collection.segments {
+            references
+                .entry(reference.path.as_str())
+                .or_insert((collection, reference));
+        }
+    }
+    references
+}
+
 /// Validate one direct entry of a generation directory: either its manifest
 /// file, or one collection subtree with its checkpoint schema and every base
 /// segment the schema declares.
@@ -82,9 +108,10 @@ pub(in crate::persistence) fn map_generation_pass<T: Sync, R: Send>(
 fn validate_generation_entry(
     path: &Path,
     record: &GenerationRecord,
-    references: &BTreeMap<&str, &SegmentReference>,
+    references: &CatalogIndex<'_>,
     v2: bool,
     flat: bool,
+    prior: PriorCatalog<'_>,
 ) -> Result<bool> {
     let metadata = std::fs::symlink_metadata(path)?;
     if metadata.file_type().is_symlink() {
@@ -103,7 +130,24 @@ fn validate_generation_entry(
     if flat && path.file_name().and_then(|name| name.to_str()) == Some(FLAT_PAYLOAD_DIR) {
         return Ok(false);
     }
+    validate_collection_dir(path, &record.path, record.sequence, v2, references, prior)?;
+    Ok(true)
+}
 
+/// Validate one collection directory's checkpoint schema and, for a v2
+/// catalog, the header of every base segment the schema declares.
+///
+/// A base that a verified source already checked, under the same reference,
+/// the same checkpoint schema file and the same hard-linked segment file, is
+/// not opened again.
+fn validate_collection_dir(
+    path: &Path,
+    root: &Path,
+    sequence: u64,
+    v2: bool,
+    references: &CatalogIndex<'_>,
+    prior: PriorCatalog<'_>,
+) -> Result<()> {
     let schema_path = path.join(CHECKPOINT_SCHEMA_FILE);
     let schema_metadata = std::fs::symlink_metadata(&schema_path)
         .with_context(|| format!("inspect checkpoint schema {}", schema_path.display()))?;
@@ -127,11 +171,10 @@ fn validate_generation_entry(
                 schema_path.display()
             )
         })?;
-    if (v2 && applied_seq > record.sequence) || (!v2 && applied_seq != record.sequence) {
+    if (v2 && applied_seq > sequence) || (!v2 && applied_seq != sequence) {
         bail!(
-            "checkpoint schema {} has sequence {applied_seq}, expected {}",
+            "checkpoint schema {} has sequence {applied_seq}, expected {sequence}",
             schema_path.display(),
-            record.sequence
         );
     }
     if v2 {
@@ -153,38 +196,48 @@ fn validate_generation_entry(
                 bases.push((path.join(format!("{stem}.eids.lseg")), false));
             }
         }
+        let schema_relative = schema_path
+            .strip_prefix(root)?
+            .to_str()
+            .ok_or_else(|| anyhow!("non-UTF8 checkpoint schema path"))?;
+        let legacy_layout =
+            layout == crate::index::infrastructure::checkpoint_fs::CheckpointLayout::Legacy;
         for (file, vector) in bases {
-            let segment = SegmentReader::open(&file)
-                .with_context(|| format!("catalogued segment is missing: {}", file.display()))?;
-            // Only shipped raw-layout vectors used row count as watermark.
-            let legacy_vector_header = layout
-                == crate::index::infrastructure::checkpoint_fs::CheckpointLayout::Legacy
-                && vector
-                && segment.applied_seq() == segment.n_docs() as u64;
             let relative = file
-                .strip_prefix(&record.path)?
+                .strip_prefix(root)?
                 .to_str()
                 .ok_or_else(|| anyhow!("non-UTF8 base path"))?;
-            let reference = *references
+            let (collection, reference) = *references
                 .get(relative)
                 .ok_or_else(|| anyhow!("base segment has no catalog reference"))?;
             // Original v2 bases inherit their collection sidecar cut.
             // Compacted bases record their own, possibly newer, cut.
             let catalog_sequence = reference.applied_seq.unwrap_or(applied_seq);
+            if is_inherited_base(root, collection, reference, schema_relative, prior)? {
+                if !(legacy_layout && vector) && catalog_sequence > sequence {
+                    bail!("segment sequence does not match checkpoint catalog");
+                }
+                continue;
+            }
+            let segment = SegmentReader::open(&file)
+                .with_context(|| format!("catalogued segment is missing: {}", file.display()))?;
+            // Only shipped raw-layout vectors used row count as watermark.
+            let legacy_vector_header =
+                legacy_layout && vector && segment.applied_seq() == segment.n_docs() as u64;
             if !legacy_vector_header
-                && (segment.applied_seq() != catalog_sequence || catalog_sequence > record.sequence)
+                && (segment.applied_seq() != catalog_sequence || catalog_sequence > sequence)
             {
                 bail!("segment sequence does not match checkpoint catalog");
             }
         }
     }
-    Ok(true)
+    Ok(())
 }
 
 pub(in crate::persistence) fn validate_generation_layout(
     record: &GenerationRecord,
 ) -> Result<usize> {
-    validate_generation_layout_with_prior(record, None)
+    validate_generation_layout_with_prior(record, &[])
 }
 
 pub(in crate::persistence) fn validate_generation_layout_with_prior(
@@ -235,23 +288,10 @@ pub(in crate::persistence) fn validate_generation_layout_with_prior(
     }
     entries.sort();
 
-    // One index over the whole catalog: resolving each declared base by a
-    // linear scan of every collection's segments made this pass quadratic in
-    // the number of collections.
-    let mut references: BTreeMap<&str, &SegmentReference> = BTreeMap::new();
-    for reference in manifest
-        .as_ref()
-        .into_iter()
-        .flat_map(|manifest| &manifest.collections)
-        .flat_map(|collection| &collection.segments)
-    {
-        references
-            .entry(reference.path.as_str())
-            .or_insert(reference);
-    }
+    let references = catalog_index(manifest.as_ref());
     let mut collections = 0usize;
     for outcome in map_generation_pass(&entries, GENERATION_VALIDATE_WORKERS, |path| {
-        validate_generation_entry(path, record, &references, v2, flat)
+        validate_generation_entry(path, record, &references, v2, flat, prior)
     }) {
         if outcome? {
             collections += 1;
@@ -268,7 +308,9 @@ pub(in crate::persistence) fn validate_generation_layout_with_prior(
                 );
             }
         }
-        let manifest = read_generation_manifest(&record.path)?;
+        let manifest = manifest
+            .as_ref()
+            .expect("a non-legacy generation read its manifest above");
         let expected_previous = record.previous.as_ref().map(GenerationName::as_str);
         if (manifest.schema_version != 1
             && !matches!(
@@ -288,10 +330,44 @@ pub(in crate::persistence) fn validate_generation_layout_with_prior(
             manifest.schema_version,
             GENERATION_MANIFEST_V2 | GENERATION_MANIFEST_V3
         ) {
-            validate_catalog_references_with_prior(&record.path, &manifest, prior)?;
+            validate_catalog_references_with_prior(&record.path, manifest, prior)?;
         }
     }
     Ok(collections)
+}
+
+/// Verify a merge job's outputs in its private scratch tree, before its
+/// publication takes the save gate.
+///
+/// `outputs` is the job's collection, rebased onto `source` exactly as
+/// publication later rebases it onto CURRENT. Every check the published
+/// generation's catalog and collection-directory validation makes runs here;
+/// files the scratch tree hard-linked from the verified `source` are reused,
+/// so only the outputs are read. Publication then passes `(scratch, outputs)`
+/// as a verified source and reads none of those files again while it holds
+/// the gate.
+pub(in crate::persistence) fn verify_merge_outputs(
+    scratch: &Path,
+    outputs: &SegmentGenerationManifest,
+    source: (&Path, &SegmentGenerationManifest),
+) -> Result<()> {
+    validate_catalog_references_with_prior(scratch, outputs, &[source])?;
+    if outputs.schema_version == GENERATION_MANIFEST_V2 {
+        let references = catalog_index(Some(outputs));
+        for collection in &outputs.collections {
+            let path = scratch.join(collection_checkpoint_dir_name(&collection.collection_id));
+            validate_real_tree(&path)?;
+            validate_collection_dir(
+                &path,
+                scratch,
+                outputs.checkpoint_sequence,
+                true,
+                &references,
+                &[source],
+            )?;
+        }
+    }
+    Ok(())
 }
 
 fn validate_real_tree(root: &Path) -> Result<()> {

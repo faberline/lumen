@@ -338,3 +338,169 @@ fn capacity_owner_merge_completes_after_capacity_progress_while_follow_up_merge_
     );
     drop(fallback);
 }
+
+/// Hold the first merge before publication until the test releases it.
+#[derive(Default)]
+struct PublishGateObserver {
+    state: Mutex<(u64, u64, bool)>,
+    changed: Condvar,
+}
+
+impl PublishGateObserver {
+    fn wait_until(&self, predicate: impl Fn(&(u64, u64, bool)) -> bool, message: &str) {
+        let deadline = Instant::now() + CASE_TIMEOUT;
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        while !predicate(&state) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            assert!(!left.is_zero(), "{message}");
+            state = self
+                .changed
+                .wait_timeout(state, left)
+                .unwrap_or_else(|p| p.into_inner())
+                .0;
+        }
+    }
+
+    fn release(&self) {
+        self.state.lock().unwrap_or_else(|p| p.into_inner()).2 = true;
+        self.changed.notify_all();
+    }
+
+    fn published(&self) -> u64 {
+        self.state.lock().unwrap_or_else(|p| p.into_inner()).1
+    }
+}
+
+impl MergeObserver for PublishGateObserver {
+    fn observe(&self, phase: MergePhase) -> std::io::Result<()> {
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        match phase {
+            MergePhase::BeforePublish => {
+                state.0 += 1;
+                self.changed.notify_all();
+                while !state.2 {
+                    state = self.changed.wait(state).unwrap_or_else(|p| p.into_inner());
+                }
+            }
+            MergePhase::AfterPublish => {
+                state.1 += 1;
+                self.changed.notify_all();
+            }
+            MergePhase::BeforeEncode => {}
+        }
+        Ok(())
+    }
+}
+
+struct PublishGateRelease(Arc<PublishGateObserver>);
+
+impl Drop for PublishGateRelease {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+
+/// Pause one merge before publication while its Engine's pending changes
+/// sit at the checkpoint trigger.
+fn merge_held_before_publish_under_write_pressure() -> (
+    tempfile::TempDir,
+    Arc<PublishGateObserver>,
+    SegmentRdbStore,
+    Arc<Engine>,
+    crate::ingest::domain::change_budget::RetainedCharge,
+) {
+    use crate::ingest::domain::change_budget::{ChangeBudget, CHECKPOINT_TRIGGER};
+    use crate::persistence::application::background_merge::tests::{keyword_schema, put_row};
+
+    let directory = tempfile::tempdir().unwrap();
+    let observer = Arc::new(PublishGateObserver::default());
+    let store = SegmentRdbStore::with_merge_observer(directory.path(), observer.clone()).unwrap();
+    // A private budget keeps this pressure out of parallel tests' Engines.
+    let engine = Arc::new(Engine::with_change_budget(ChangeBudget::with_hard_limit(
+        2 * CHECKPOINT_TRIGGER,
+    )));
+    engine
+        .create_collection("hot", keyword_schema(&["h_alpha"]))
+        .unwrap();
+    put_row(&engine, "hot", "h_alpha", "seed", "seed-value");
+    store.save_required(&engine, 1).unwrap();
+    for sequence in 2..=4u64 {
+        put_row(&engine, "hot", "h_alpha", "hot", &format!("hot-{sequence}"));
+        store.save_required(&engine, sequence).unwrap();
+    }
+    observer.wait_until(
+        |state| state.0 >= 1,
+        "background merge must reach publication",
+    );
+    let charge = engine.test_retained_owner_charge(CHECKPOINT_TRIGGER);
+    assert!(engine.write_capacity_pressed());
+    observer.release();
+    (directory, observer, store, engine, charge)
+}
+
+/// A merge publication holds the save gate for seconds. While writes wait
+/// for checkpoint relief it must let the checkpoint go first, then publish
+/// once the pressure clears.
+#[test]
+fn merge_publication_yields_to_write_pressure_until_it_clears() {
+    if capacity_progress_case_runs_in_its_own_process(
+        "persistence::application::background_merge::tests::capacity_progress::merge_publication_yields_to_write_pressure_until_it_clears",
+    ) {
+        return;
+    }
+    let (_directory, observer, store, engine, charge) =
+        merge_held_before_publish_under_write_pressure();
+    let _release_on_drop = PublishGateRelease(observer.clone());
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(
+        observer.published(),
+        0,
+        "merge published while its Engine waited for checkpoint relief"
+    );
+
+    drop(charge);
+    assert!(!engine.write_capacity_pressed());
+    observer.wait_until(
+        |state| state.1 >= 1,
+        "merge must publish once write pressure clears",
+    );
+    store
+        .wait_for_merges(Duration::from_secs(10))
+        .expect("background merge worker must drain before fixture teardown");
+}
+
+/// A checkpoint waiting for this merge cannot make progress without it, so
+/// write pressure must not hold the publication back.
+#[test]
+fn merge_publication_does_not_yield_to_a_checkpoint_waiting_for_it() {
+    if capacity_progress_case_runs_in_its_own_process(
+        "persistence::application::background_merge::tests::capacity_progress::merge_publication_does_not_yield_to_a_checkpoint_waiting_for_it",
+    ) {
+        return;
+    }
+    let (_directory, observer, store, engine, charge) =
+        merge_held_before_publish_under_write_pressure();
+    let _release_on_drop = PublishGateRelease(observer.clone());
+    let started = Instant::now();
+    let waited = store
+        .background
+        .wait_for_capacity_progress_after(0, Instant::now() + CASE_TIMEOUT)
+        .expect("checkpoint capacity wait must not fail");
+    assert!(
+        matches!(
+            waited,
+            crate::persistence::application::background_merge::CapacityWait::Published
+        ),
+        "the waiting checkpoint must observe the merge publication"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "merge yielded for {:?} to a checkpoint waiting for it",
+        started.elapsed()
+    );
+    assert!(engine.write_capacity_pressed());
+    drop(charge);
+    store
+        .wait_for_merges(Duration::from_secs(10))
+        .expect("background merge worker must drain before fixture teardown");
+}

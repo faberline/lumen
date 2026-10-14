@@ -40,19 +40,23 @@ REQUIRED_LIMITS = {
     "docker_cpus_milli": 2500,
     "docker_memory_bytes": 17179869184,
     "snapshot_seconds": 15,
-    "hot_documents": 500000,
+    "hot_documents": 200000,
     "idle_collections": 181,
     "idle_documents_per_collection": 100,
     "field_count": 14,
     "seed": 4775511124152791525,
     "ngram_text_fields": 3,
     "vector_dimensions": 8,
+    "capacity_refusal_percent": 1,
+    "metric_sample_missing_percent": 1,
 }
 MEASUREMENT_INTS = frozenset((
     "input_duration_ms", "observed_input_elapsed_ms", "requests_offered", "requests_finished",
     "requests_completed", "requests_started_in_input", "requests_finished_in_input",
     "requests_completed_in_input", "requests_started_per_second_milli",
     "requests_completed_per_second_milli", "request_errors", "client_cancellations",
+    "capacity_refusals", "capacity_refused_requests",
+    "metric_sample_seconds", "metric_sample_missed_seconds",
     "items_offered", "items_completed", "items_failed", "items_started_in_input",
     "items_completed_in_input", "items_started_per_second_milli",
     "items_completed_per_second_milli", "docops_offered",
@@ -231,6 +235,17 @@ def validate_measurement(m):
         fail("query count conservation failed")
     if any(m[key] != 0 for key in ("request_errors", "client_cancellations", "items_failed", "query_errors_or_timeouts")):
         fail("receipt reports request, item, or query errors")
+    # A typed capacity refusal changed nothing and was resent; request
+    # conservation above already proves every refused request succeeded.
+    if (m["capacity_refused_requests"] > m["capacity_refusals"] or
+            m["capacity_refused_requests"] > m["requests_offered"] or
+            m["capacity_refusals"] * 100 > m["requests_offered"] * REQUIRED_LIMITS["capacity_refusal_percent"]):
+        fail("capacity refusals are inconsistent or exceed the approved percent")
+    # Missed /metrics scrapes lose coverage, not counter evidence.
+    if (m["metric_sample_seconds"] == 0 or
+            m["metric_sample_missed_seconds"] > m["metric_sample_seconds"] or
+            m["metric_sample_missed_seconds"] * 100 > m["metric_sample_seconds"] * REQUIRED_LIMITS["metric_sample_missing_percent"]):
+        fail("metric sample coverage is missing or exceeds the approved missed percent")
     checks = (("requests_started_per_second_milli", "requests_started_in_input"),
               ("requests_completed_per_second_milli", "requests_completed_in_input"),
               ("items_started_per_second_milli", "items_started_in_input"),

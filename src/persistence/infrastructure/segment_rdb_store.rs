@@ -261,6 +261,11 @@ impl GenerationStaging {
         store: &GenerationStore,
         acquire: impl FnOnce() -> std::io::Result<G>,
     ) -> Result<GenerationName, storage_durable::CommitError> {
+        // The store fsyncs every staged file and directory one by one, and
+        // each call is a device flush. One filesystem flush first leaves those
+        // per-entry calls with nothing to write; the store's own syncs still
+        // decide durability, so a failed pre-flush only costs the fast path.
+        let _ = flush_staged_filesystem(self.path());
         match self {
             Self::Generic(staged) => store.commit_with_publication_guard(staged, acquire),
             Self::Current(staged) => {
@@ -268,6 +273,25 @@ impl GenerationStaging {
             }
         }
     }
+}
+
+/// Write back the whole filesystem that holds a staged generation in one
+/// flush. Only Linux exposes `syncfs`; elsewhere the store's syncs do it all.
+#[cfg(target_os = "linux")]
+pub(in crate::persistence) fn flush_staged_filesystem(path: &Path) -> std::io::Result<()> {
+    use std::os::fd::AsRawFd;
+    let directory = std::fs::File::open(path)?;
+    // SAFETY: directory owns an open descriptor for the duration of syncfs.
+    if unsafe { libc::syncfs(directory.as_raw_fd()) } == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(in crate::persistence) fn flush_staged_filesystem(path: &Path) -> std::io::Result<()> {
+    std::fs::metadata(path).map(|_| ())
 }
 
 pub(in crate::persistence) struct PendingFrozenCheckpoint {

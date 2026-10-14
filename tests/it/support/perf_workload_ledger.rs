@@ -11,7 +11,11 @@
 //! Performance: the fixed plan is 30 minutes, 100 actual full-document body
 //! starts/s over that complete window at >=95%, 10 combined hot/idle QPS,
 //! p99 <=1s, max <=5s, zero errors/timeouts, drain <=60s, RSS <=12 GiB,
-//! plus checkpoint and merge. The scheduler still creates the mixed 100-op
+//! plus checkpoint and merge. A typed `pending_change_capacity` refusal is
+//! not an error: the server guarantees it changed nothing, so the client
+//! resends after `Retry-After`. Refusals stay at or below 1% of mutation
+//! requests, every refused request must still succeed, and latency counts
+//! each attempt separately without the `Retry-After` wait. The scheduler still creates the mixed 100-op
 //! turn each second, while fixed 1,000-item builders may form bounded bursts.
 //! This module validates evidence. It does not measure a benchmark.
 
@@ -109,6 +113,9 @@ pub struct ApprovedLimits {
     pub max_query_limit: Duration,
     pub drain_limit: Duration,
     pub rss_limit_bytes: u64,
+    pub capacity_refusal_percent: u64,
+    pub metric_sample_missing_percent: u64,
+    pub offer_lag_limit: Duration,
 }
 
 impl ApprovedLimits {
@@ -122,6 +129,11 @@ impl ApprovedLimits {
             max_query_limit: Duration::from_secs(5),
             drain_limit: Duration::from_secs(60),
             rss_limit_bytes: 12 * GIB,
+            capacity_refusal_percent: 1,
+            metric_sample_missing_percent: 1,
+            // A full mutation pump may hold the generator back by at most one
+            // client request timeout before the schedule counts as missed.
+            offer_lag_limit: Duration::from_secs(5),
         }
     }
 }
@@ -253,12 +265,23 @@ pub enum GateFailure {
     /// counted from all required HTTP body starts over the full window, so
     /// 1,000-item requests may burst naturally.
     GeneratorScheduleUnderloadBucket(u64, u64, u64),
+    /// The generator offered a document this long after its scheduled slot,
+    /// beyond the approved limit, so it fell behind the schedule it claims.
+    GeneratorOfferLag(Duration, Duration),
     CompletionRateTooLow(u64, u64, u64),
     MissingRequiredItemSubmissions(u64),
     MissingMutationEndpoint(Endpoint),
     MissingQueryClass(QueryClass),
     PendingRequestsWithoutEndTime(usize),
     RequestErrors(u64),
+    /// Refused attempts, mutation requests offered, approved percent.
+    CapacityRefusalsTooMany(u64, u64, u64),
+    /// Requests that were refused at least once and never succeeded.
+    CapacityRefusedRequestsFailed(u64),
+    /// The interval `/metrics` sampler never reported its coverage.
+    MetricSampleCoverageMissing,
+    /// Missed one-second sample slots, scheduled slots, approved percent.
+    MetricSamplesMissing(u64, u64, u64),
     ClientCancellations(u64),
     MissingRequestLatency,
     RequestP99TooHigh(Duration, Duration),
@@ -289,6 +312,11 @@ pub struct WorkloadReport {
     pub requests_completed_in_input: u64,
     pub request_errors: u64,
     pub client_cancellations: u64,
+    /// Typed `pending_change_capacity` refusals, one per refused attempt.
+    pub capacity_refusals: u64,
+    /// Requests refused at least once before their final attempt.
+    pub capacity_refused_requests: u64,
+    pub capacity_refused_requests_failed: u64,
     pub items_offered: u64,
     pub items_completed: u64,
     pub items_failed: u64,
@@ -322,6 +350,10 @@ pub struct WorkloadReport {
     pub checkpoints: u64,
     pub merges: u64,
     pub peak_rss_bytes: Option<u64>,
+    /// One-second `/metrics` slots in the input window, and how many of them
+    /// produced no sample (timeout, non-success, or unparseable body).
+    pub metric_sample_slots: Option<u64>,
+    pub metric_samples_missed: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -350,6 +382,10 @@ struct PendingItem {
 #[derive(Debug)]
 struct PendingRequest {
     body_started_at: Duration,
+    /// Start of the current attempt. A capacity refusal moves it to the
+    /// resend time so the `Retry-After` wait is not counted as latency.
+    attempt_started_at: Duration,
+    capacity_refusals: u64,
     body_started_in_input: bool,
     items: Vec<PendingItem>,
     client_cancelled: bool,
@@ -377,6 +413,9 @@ pub struct WorkloadLedger {
     requests_completed_in_input: u64,
     client_cancellations: u64,
     request_errors: u64,
+    capacity_refusals: u64,
+    capacity_refused_requests: u64,
+    capacity_refused_requests_failed: u64,
     items_offered: u64,
     items_completed: u64,
     items_failed: u64,
@@ -396,12 +435,14 @@ pub struct WorkloadLedger {
     checkpoints: u64,
     merges: u64,
     peak_rss_bytes: Option<u64>,
+    metric_samples: Option<(u64, u64)>,
     last_input_request_completion: Option<Duration>,
     last_input_query_completion: Option<Duration>,
     // Kept under this historical name because the release inventory reads
     // it. These are scheduled mixed-operation turns, never actual throughput
     // credit; actual full-document throughput is `docops_offered_in_input`.
     input_docop_offer_buckets: Vec<u64>,
+    max_offer_lag: Duration,
     input_query_start_buckets: Vec<u64>,
     input_requests_submitted: u64,
     input_requests_finished: u64,
@@ -435,6 +476,9 @@ impl WorkloadLedger {
             requests_completed_in_input: 0,
             client_cancellations: 0,
             request_errors: 0,
+            capacity_refusals: 0,
+            capacity_refused_requests: 0,
+            capacity_refused_requests_failed: 0,
             items_offered: 0,
             items_completed: 0,
             items_failed: 0,
@@ -454,9 +498,11 @@ impl WorkloadLedger {
             checkpoints: 0,
             merges: 0,
             peak_rss_bytes: None,
+            metric_samples: None,
             last_input_request_completion: None,
             last_input_query_completion: None,
             input_docop_offer_buckets: Vec::new(),
+            max_offer_lag: Duration::ZERO,
             input_query_start_buckets: Vec::new(),
             input_requests_submitted: 0,
             input_requests_finished: 0,
@@ -504,6 +550,19 @@ impl WorkloadLedger {
     /// Records planned work only. It cannot add rate evidence until every
     /// required item reaches an actual HTTP body start in `submit_request`.
     pub fn begin_operation(&mut self, prepared_at: Duration, operation: DocumentOperation) {
+        self.begin_scheduled_operation(prepared_at, prepared_at, operation);
+    }
+
+    /// Schedule evidence belongs to the slot the generator planned, so a
+    /// client wake that lands a few milliseconds late does not move the last
+    /// slots of one second into the next. How late the offer itself was is
+    /// bounded separately by `offer_lag_limit`.
+    pub fn begin_scheduled_operation(
+        &mut self,
+        scheduled_at: Duration,
+        prepared_at: Duration,
+        operation: DocumentOperation,
+    ) {
         if !self.seen_operations.insert(operation.id) {
             self.faults
                 .push(EvidenceFault::DuplicateOperation(operation.id));
@@ -511,8 +570,11 @@ impl WorkloadLedger {
         }
 
         let prepared_in_input = self.input_bucket(prepared_at).is_some();
-        if let Some(bucket) = self.input_bucket(prepared_at) {
+        if let Some(bucket) = self.input_bucket(scheduled_at) {
             self.input_docop_offer_buckets[bucket] += 1;
+            self.max_offer_lag = self
+                .max_offer_lag
+                .max(prepared_at.saturating_sub(scheduled_at));
         }
         let mut required = BTreeSet::new();
         let mut failed = false;
@@ -726,6 +788,8 @@ impl WorkloadLedger {
             request.id,
             PendingRequest {
                 body_started_at: request.body_started_at,
+                attempt_started_at: request.body_started_at,
+                capacity_refusals: 0,
                 body_started_in_input,
                 items: pending_items,
                 client_cancelled: false,
@@ -775,6 +839,31 @@ impl WorkloadLedger {
         }
     }
 
+    /// Records one typed `pending_change_capacity` refusal. The refused
+    /// attempt contributes its own latency; the next attempt starts at
+    /// `resent_at`, after the `Retry-After` wait.
+    pub fn record_capacity_refusal(
+        &mut self,
+        request_id: RequestId,
+        refused_at: Duration,
+        resent_at: Duration,
+    ) {
+        let Some(request) = self.requests.get_mut(&request_id) else {
+            self.faults.push(EvidenceFault::UnknownRequest(request_id));
+            return;
+        };
+        if refused_at < request.attempt_started_at || resent_at < refused_at {
+            self.faults
+                .push(EvidenceFault::InvalidRequestLatency(request_id));
+            return;
+        }
+        self.request_latencies
+            .push(refused_at - request.attempt_started_at);
+        request.attempt_started_at = resent_at;
+        request.capacity_refusals += 1;
+        self.capacity_refusals += 1;
+    }
+
     pub fn finish_request(
         &mut self,
         request_id: RequestId,
@@ -787,12 +876,18 @@ impl WorkloadLedger {
         };
         self.requests_finished += 1;
         let finished_in_input = self.input_bucket(finished_at).is_some();
-        if finished_at < request.body_started_at {
+        if finished_at < request.attempt_started_at {
             self.faults
                 .push(EvidenceFault::InvalidRequestLatency(request_id));
         } else {
             self.request_latencies
-                .push(finished_at - request.body_started_at);
+                .push(finished_at - request.attempt_started_at);
+        }
+        if request.capacity_refusals > 0 {
+            self.capacity_refused_requests += 1;
+            if request_outcome != Outcome::Succeeded {
+                self.capacity_refused_requests_failed += 1;
+            }
         }
         if request.body_started_in_input {
             self.input_requests_finished += 1;
@@ -1000,6 +1095,12 @@ impl WorkloadLedger {
         self.peak_rss_bytes = Some(self.peak_rss_bytes.map_or(bytes, |old| old.max(bytes)));
     }
 
+    /// Records the sampler's coverage: `slots` one-second slots were
+    /// scheduled and `missed` of them produced no usable sample.
+    pub fn observe_metric_samples(&mut self, slots: u64, missed: u64) {
+        self.metric_samples = Some((slots, missed));
+    }
+
     pub fn report(&self) -> WorkloadReport {
         WorkloadReport {
             case: self.case.clone(),
@@ -1011,6 +1112,9 @@ impl WorkloadLedger {
             requests_completed_in_input: self.requests_completed_in_input,
             request_errors: self.request_errors,
             client_cancellations: self.client_cancellations,
+            capacity_refusals: self.capacity_refusals,
+            capacity_refused_requests: self.capacity_refused_requests,
+            capacity_refused_requests_failed: self.capacity_refused_requests_failed,
             items_offered: self.items_offered,
             items_completed: self.items_completed,
             items_failed: self.items_failed,
@@ -1062,6 +1166,8 @@ impl WorkloadLedger {
             checkpoints: self.checkpoints,
             merges: self.merges,
             peak_rss_bytes: self.peak_rss_bytes,
+            metric_sample_slots: self.metric_samples.map(|(slots, _)| slots),
+            metric_samples_missed: self.metric_samples.map(|(_, missed)| missed),
         }
     }
 
@@ -1106,6 +1212,12 @@ impl WorkloadLedger {
                 ));
             }
         }
+        if self.max_offer_lag > self.limits.offer_lag_limit {
+            failures.push(GateFailure::GeneratorOfferLag(
+                self.max_offer_lag,
+                self.limits.offer_lag_limit,
+            ));
+        }
         let missing_submissions = self
             .operations
             .values()
@@ -1139,6 +1251,20 @@ impl WorkloadLedger {
         }
         if self.client_cancellations > 0 {
             failures.push(GateFailure::ClientCancellations(self.client_cancellations));
+        }
+        if u128::from(self.capacity_refusals) * 100
+            > u128::from(self.requests_offered) * u128::from(self.limits.capacity_refusal_percent)
+        {
+            failures.push(GateFailure::CapacityRefusalsTooMany(
+                self.capacity_refusals,
+                self.requests_offered,
+                self.limits.capacity_refusal_percent,
+            ));
+        }
+        if self.capacity_refused_requests_failed > 0 {
+            failures.push(GateFailure::CapacityRefusedRequestsFailed(
+                self.capacity_refused_requests_failed,
+            ));
         }
         match report.request_latency_p99 {
             None => failures.push(GateFailure::MissingRequestLatency),
@@ -1276,6 +1402,22 @@ impl WorkloadLedger {
             }
             Some(_) => {}
         }
+        match self.metric_samples {
+            None => failures.push(GateFailure::MetricSampleCoverageMissing),
+            Some((slots, missed))
+                if missed > slots
+                    || u128::from(missed) * 100
+                        > u128::from(slots)
+                            * u128::from(self.limits.metric_sample_missing_percent) =>
+            {
+                failures.push(GateFailure::MetricSamplesMissing(
+                    missed,
+                    slots,
+                    self.limits.metric_sample_missing_percent,
+                ));
+            }
+            Some(_) => {}
+        }
 
         if failures.is_empty() {
             Ok(report)
@@ -1326,6 +1468,9 @@ mod tests {
             max_query_limit: at(5),
             drain_limit: at(60),
             rss_limit_bytes: 1_024,
+            capacity_refusal_percent: 1,
+            metric_sample_missing_percent: 1,
+            offer_lag_limit: at(1),
         }
     }
 
@@ -1348,6 +1493,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(512);
+        ledger.observe_metric_samples(1_800, 0);
     }
 
     fn fields_14() -> Vec<String> {
@@ -1389,6 +1535,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
     }
 
     #[test]
@@ -1901,6 +2048,171 @@ mod tests {
         }
     }
 
+    /// Submits `requests` two-document replace requests. Request `refused`
+    /// is refused `refusals` times before its final attempt ends with
+    /// `final_outcome`; every other request succeeds on its first attempt.
+    fn replace_with_capacity_refusals(
+        requests: u64,
+        refused: u64,
+        refusals: u64,
+        final_outcome: Outcome,
+    ) -> WorkloadLedger {
+        let mut ledger = ledger(Endpoint::Replace, 2);
+        for request in 0..requests {
+            let (first, second) = (request * 2, request * 2 + 1);
+            ledger.begin_operation(
+                at(0),
+                DocumentOperation::replace(first, format!("doc-{first}")),
+            );
+            ledger.begin_operation(
+                at(0),
+                DocumentOperation::replace(second, format!("doc-{second}")),
+            );
+            ledger.submit_request(Request::new(
+                request,
+                Endpoint::Replace,
+                at(0),
+                at(0),
+                vec![
+                    RequestItem::new(first, REPLACE_ITEM),
+                    RequestItem::new(second, REPLACE_ITEM),
+                ],
+            ));
+            let mut attempt_started = at(0);
+            if request == refused {
+                for _ in 0..refusals {
+                    let refused_at = attempt_started + Duration::from_millis(10);
+                    attempt_started = refused_at + at(1);
+                    ledger.record_capacity_refusal(request, refused_at, attempt_started);
+                }
+            }
+            let outcome = if request == refused {
+                final_outcome
+            } else {
+                Outcome::Succeeded
+            };
+            ledger.record_item_result(request, first, REPLACE_ITEM, outcome);
+            ledger.record_item_result(request, second, REPLACE_ITEM, outcome);
+            ledger.finish_request(request, attempt_started + Duration::from_millis(1), outcome);
+        }
+        record_valid_non_document_evidence(&mut ledger);
+        ledger
+    }
+
+    #[test]
+    fn capacity_refusal_resend_is_counted_per_attempt_without_retry_after_wait() {
+        let ledger = replace_with_capacity_refusals(100, 7, 1, Outcome::Succeeded);
+
+        let report = ledger
+            .validate()
+            .expect("one refusal in 100 requests that later succeeds stays within the gate");
+        assert_eq!(report.capacity_refusals, 1);
+        assert_eq!(report.capacity_refused_requests, 1);
+        assert_eq!(report.capacity_refused_requests_failed, 0);
+        assert_eq!(report.request_errors, 0);
+        assert_eq!(report.requests_completed, 100);
+        // The refused attempt took 10 ms and the resend 1 ms. Counting the
+        // whole request would report the 1-second `Retry-After` wait.
+        assert_eq!(report.request_latency_max, Some(Duration::from_millis(10)));
+    }
+
+    #[test]
+    fn capacity_refusals_above_one_percent_of_requests_are_rejected() {
+        let ledger = replace_with_capacity_refusals(100, 7, 2, Outcome::Succeeded);
+
+        let failures = ledger
+            .validate()
+            .expect_err("two refusals in 100 requests exceed the 1% gate");
+        assert!(failures
+            .iter()
+            .any(|failure| { matches!(failure, GateFailure::CapacityRefusalsTooMany(2, 100, 1)) }));
+        assert!(!failures
+            .iter()
+            .any(|failure| matches!(failure, GateFailure::RequestErrors(..))));
+    }
+
+    #[test]
+    fn metric_sample_misses_above_one_percent_are_rejected_without_hiding_other_gates() {
+        let mut ledger = replace_with_capacity_refusals(100, 7, 0, Outcome::Succeeded);
+        ledger.observe_metric_samples(1_800, 18);
+        let report = ledger
+            .validate()
+            .expect("1% missed samples is within the gate");
+        assert_eq!(report.metric_sample_slots, Some(1_800));
+        assert_eq!(report.metric_samples_missed, Some(18));
+
+        ledger.observe_metric_samples(1_800, 19);
+        let failures = ledger
+            .validate()
+            .expect_err("more than 1% missed samples rejects");
+        assert_eq!(failures.len(), 1, "{failures:?}");
+        assert!(matches!(
+            failures[0],
+            GateFailure::MetricSamplesMissing(19, 1_800, 1)
+        ));
+    }
+
+    #[test]
+    fn missing_metric_sample_coverage_is_rejected() {
+        let mut ledger = ledger(Endpoint::Replace, 1);
+        complete_replace(&mut ledger, 9, 19);
+
+        let failures = ledger
+            .validate()
+            .expect_err("a ledger without sampler coverage rejects");
+        assert!(failures
+            .iter()
+            .any(|failure| matches!(failure, GateFailure::MetricSampleCoverageMissing)));
+    }
+
+    #[test]
+    fn refused_request_that_never_succeeds_is_rejected() {
+        let ledger = replace_with_capacity_refusals(100, 7, 1, Outcome::Failed);
+
+        let failures = ledger
+            .validate()
+            .expect_err("a refused request must eventually succeed");
+        assert!(failures
+            .iter()
+            .any(|failure| matches!(failure, GateFailure::CapacityRefusedRequestsFailed(1))));
+        assert!(failures
+            .iter()
+            .any(|failure| matches!(failure, GateFailure::RequestErrors(..))));
+    }
+
+    #[test]
+    fn capacity_refusal_before_its_attempt_started_is_invalid_evidence() {
+        let mut ledger = ledger(Endpoint::Replace, 1);
+        ledger.begin_operation(at(0), DocumentOperation::replace(1, "doc-1"));
+        ledger.submit_request(Request::new(
+            1,
+            Endpoint::Replace,
+            at(0),
+            at(2),
+            vec![RequestItem::new(1, REPLACE_ITEM)],
+        ));
+        ledger.record_capacity_refusal(1, at(1), at(3));
+        ledger.record_capacity_refusal(99, at(3), at(4));
+        ledger.record_item_result(1, 1, REPLACE_ITEM, Outcome::Succeeded);
+        ledger.finish_request(1, at(3), Outcome::Succeeded);
+        record_valid_non_document_evidence(&mut ledger);
+
+        let failures = ledger.validate().expect_err("invalid refusal timing");
+        assert!(failures.iter().any(|failure| {
+            matches!(
+                failure,
+                GateFailure::Evidence(EvidenceFault::InvalidRequestLatency(1))
+            )
+        }));
+        assert!(failures.iter().any(|failure| {
+            matches!(
+                failure,
+                GateFailure::Evidence(EvidenceFault::UnknownRequest(99))
+            )
+        }));
+        assert_eq!(ledger.report().capacity_refusals, 0);
+    }
+
     #[test]
     fn only_twenty_nine_minutes_is_rejected() {
         let mut ledger =
@@ -1926,6 +2238,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger.validate().expect_err("one docop is underloaded");
         assert!(failures
@@ -1971,6 +2284,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger.validate().expect_err("missing query end rejects");
         assert!(failures.iter().any(|failure| {
@@ -1995,6 +2309,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger.validate().expect_err("slow and timeout reject");
         assert!(failures
@@ -2027,6 +2342,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger
             .validate()
@@ -2067,6 +2383,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger.validate().expect_err("pending request rejects");
         assert!(failures
@@ -2080,6 +2397,7 @@ mod tests {
         complete_replace(&mut ledger, 13, 23);
         record_valid_non_document_evidence(&mut ledger);
         ledger.observe_peak_rss_bytes(1_025);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger.validate().expect_err("RSS over limit rejects");
         assert!(failures
@@ -2109,6 +2427,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger.validate().expect_err("slow drain rejects");
         assert!(failures.iter().any(|failure| {
@@ -2128,6 +2447,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger.validate().expect_err("six-second query rejects");
         assert!(failures.iter().any(|failure| {
@@ -2240,6 +2560,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger
             .validate()
@@ -2253,6 +2574,56 @@ mod tests {
         assert!(failures
             .iter()
             .any(|failure| { matches!(failure, GateFailure::QueryUnderloadBucket(1, 0, 1)) }));
+    }
+
+    fn scheduled_replacements(offers: &[(Duration, Duration)]) -> WorkloadLedger {
+        let mut limits = test_limits();
+        limits.input_duration = at(3);
+        let mut ledger = WorkloadLedger::with_limits(
+            WorkloadCase::new(Endpoint::Replace, 1, Backend::FlatCpu),
+            limits,
+        );
+        ledger.set_input_window(at(0), at(3));
+        for (operation, (scheduled_at, offered_at)) in (1..).zip(offers.iter().copied()) {
+            ledger.begin_scheduled_operation(
+                scheduled_at,
+                offered_at,
+                DocumentOperation::replace(operation, format!("d{operation}")),
+            );
+        }
+        ledger
+    }
+
+    #[test]
+    fn a_late_client_wake_keeps_the_offer_in_its_scheduled_second() {
+        let ms = Duration::from_millis;
+        let ledger = scheduled_replacements(&[
+            (ms(990), ms(1_030)),
+            (ms(1_990), ms(2_036)),
+            (ms(2_500), ms(2_510)),
+        ]);
+
+        let failures = ledger.validate().expect_err("no request ever started");
+        assert!(!failures.iter().any(|failure| matches!(
+            failure,
+            GateFailure::GeneratorScheduleUnderloadBucket(..) | GateFailure::GeneratorOfferLag(..)
+        )));
+    }
+
+    #[test]
+    fn an_offer_far_behind_its_slot_rejects_the_generator_schedule() {
+        let ms = Duration::from_millis;
+        let ledger = scheduled_replacements(&[
+            (ms(0), ms(10)),
+            (ms(1_000), ms(2_500)),
+            (ms(2_000), ms(2_600)),
+        ]);
+
+        let failures = ledger.validate().expect_err("the generator fell behind");
+        assert!(failures.iter().any(|failure| matches!(
+            failure,
+            GateFailure::GeneratorOfferLag(lag, limit) if *lag == ms(1_500) && *limit == at(1)
+        )));
     }
 
     #[test]
@@ -2301,6 +2672,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger
             .validate()
@@ -2388,6 +2760,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let failures = ledger
             .validate()
@@ -2529,6 +2902,7 @@ mod tests {
         ledger.record_checkpoint_completion();
         ledger.record_merge_completion();
         ledger.observe_peak_rss_bytes(1);
+        ledger.observe_metric_samples(1_800, 0);
 
         let report = ledger
             .validate()

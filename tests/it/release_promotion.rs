@@ -15,9 +15,9 @@ const VERSION: &str = "0.4.28";
 const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const RUN_ID: &str = "123";
 const RELEASE_WORKFLOW_SHA256: &str =
-    "c82d4eb1aefcbb99c4b8d7d28b04a346c7d7481070c549cf19ea3d1c917bf30f";
+    "d88da5b42dfa535c62f479166967bf389163c62da09939ebacac2ad5a10757e5";
 const PROMOTION_VERIFIER_BYTES_SHA256: &str =
-    "97c5c7456d4e3c4a288378647f6bf07f8a60ce59af095e1bc7b0021b9269156f";
+    "f8212096d8f6e818a8934603f55140a0982404b7c76e46266904e2b0d9b80053";
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const COSIGN_INSTALLER: &str = "sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6";
 const SETUP_BUILDX: &str = "docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f";
@@ -28,7 +28,33 @@ const PUBLIC_RELEASE_NOTE_STATEMENTS: &[&str] = &[
     "- Legacy placement path: an empty selector, tolerations-only placement, or a non-default initialMachineType still requires lumen-system/lumen-capacity-catalog.",
 ];
 const PUBLIC_COMPATIBILITY_NOTE: &str = "- Compatibility: shipped Docker images default to durable segment storage at /var/lib/lumen/data; bare lumen serve stays ephemeral without --data-dir or LUMEN_DATA_DIR. A 0.4.28 segment volume upgrades one way on first 0.4.29 start; in-place downgrade is unsupported.";
-const PUBLIC_RECEIPT_NOTE: &str = "- Standalone GKE receipt SHA-256: ${{ needs.verify-inputs.outputs.standalone_gke_receipt_sha256 }}";
+const PUBLIC_RECEIPT_NOTE: &str =
+    "evidence=\"- Standalone GKE receipt SHA-256: $STANDALONE_GKE_RECEIPT_SHA256\"";
+const DURABLE_PERF_INPUTS: &[(&str, &str)] = &[
+    (
+        "durable_perf_evidence_commit",
+        "Commit whose release-evidence/lumen@<version>/ tree holds the local durable performance evidence (lumen@0.6.1 and later).",
+    ),
+    (
+        "durable_perf_summary_sha256",
+        "Lowercase SHA-256 of that durable-perf-summary.json (lumen@0.6.1 and later).",
+    ),
+];
+const DURABLE_PERF_FETCH_RUN: &str = r#"set -euo pipefail
+if [[ -z "$DURABLE_PERF_EVIDENCE_COMMIT$DURABLE_PERF_SUMMARY_SHA256" ]]; then
+  echo "dir=" >> "$GITHUB_OUTPUT"
+  exit 0
+fi
+[[ "$DURABLE_PERF_EVIDENCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "durable performance evidence commit is invalid" >&2; exit 1; }
+git fetch --no-tags --depth 1 origin "$DURABLE_PERF_EVIDENCE_COMMIT"
+mkdir -p durable-perf
+git archive "$DURABLE_PERF_EVIDENCE_COMMIT" "release-evidence/lumen@${{ inputs.version }}" | tar -x -C durable-perf --strip-components=2
+echo "dir=$PWD/durable-perf" >> "$GITHUB_OUTPUT"
+"#;
+const DURABLE_PERF_VERIFIER_ARGS: &[&str] = &[
+    "--durable-perf-dir \"${{ steps.durable_perf.outputs.dir }}\"",
+    "--durable-perf-summary-sha256 \"${{ inputs.durable_perf_summary_sha256 }}\"",
+];
 const PUBLIC_RECEIPT_INPUTS: &[(&str, &str)] = &[
     (
         "standalone_gke_receipt_b64",
@@ -48,6 +74,10 @@ const PUBLIC_RECEIPT_INPUTS: &[(&str, &str)] = &[
     ),
 ];
 const PUBLIC_RECEIPT_DECODE_RUN: &str = r#"set -euo pipefail
+if [[ -z "$STANDALONE_GKE_RECEIPT_B64$STANDALONE_GKE_RECEIPT_SHA256$STANDALONE_GKE_RECEIPT_SIDECAR_B64$STANDALONE_GKE_RECEIPT_SIDECAR_SHA256" ]]; then
+  { echo "receipt="; echo "sidecar="; } >> "$GITHUB_OUTPUT"
+  exit 0
+fi
 mkdir -p gke-receipt
 decode_exact() {
   local encoded="$1" expected="$2" output="$3" actual
@@ -575,22 +605,7 @@ const CANDIDATE_EXECUTION_NAMES: &[&str] = &[
     "final candidate receipt",
     "kind e2e (amd64)",
     "kind e2e (arm64)",
-    "verify exact candidate gates (index-1-flat-cpu)",
-    "verify exact candidate gates (index-100-flat-cpu)",
-    "verify exact candidate gates (index-1000-flat-cpu)",
-    "verify exact candidate gates (replace-1-flat-cpu)",
-    "verify exact candidate gates (replace-32-flat-cpu)",
-    "verify exact candidate gates (unindex-1-flat-cpu)",
-    "verify exact candidate gates (unindex-100-flat-cpu)",
-    "verify exact candidate gates (unindex-1000-flat-cpu)",
-    "verify exact candidate gates (index-1-hnsw-cpu)",
-    "verify exact candidate gates (index-100-hnsw-cpu)",
-    "verify exact candidate gates (index-1000-hnsw-cpu)",
-    "verify exact candidate gates (replace-1-hnsw-cpu)",
-    "verify exact candidate gates (replace-32-hnsw-cpu)",
-    "verify exact candidate gates (unindex-1-hnsw-cpu)",
-    "verify exact candidate gates (unindex-100-hnsw-cpu)",
-    "verify exact candidate gates (unindex-1000-hnsw-cpu)",
+    "verify exact candidate gates",
     "verify service and Raft library gates",
 ];
 
@@ -906,6 +921,7 @@ fn execute_public_release_note_binding(verifier: &str, release_json: &serde_json
             "STANDALONE_GKE_RECEIPT_SHA256",
             RECOVERY_0429_RECEIPT_SHA256,
         )
+        .env("STANDALONE_GKE_CLAIMED", "true")
         .output()
         .unwrap()
 }
@@ -1120,13 +1136,49 @@ fn validate_release_creation_step(step: &Value, path: &str) -> Result<(), String
         &[],
         Some("steps.existing_release.outputs.exists == 'false'"),
         None,
-        true,
+        false,
     )?;
     let step = yaml_mapping(step, path)?;
+    let env = yaml_mapping(yaml_field(step, "env", path)?, &format!("{path}.env"))?;
+    let env_path = format!("{path}.env");
+    exact_keys(
+        env,
+        &[
+            "GH_TOKEN",
+            "STANDALONE_GKE_RECEIPT_SHA256",
+            "DURABLE_PERF_SUMMARY_SHA256",
+        ],
+        &env_path,
+    )?;
+    expect_text(env, "GH_TOKEN", "${{ github.token }}", &env_path)?;
+    expect_text(
+        env,
+        "STANDALONE_GKE_RECEIPT_SHA256",
+        "${{ needs.verify-inputs.outputs.standalone_gke_receipt_sha256 }}",
+        &env_path,
+    )?;
+    expect_text(
+        env,
+        "DURABLE_PERF_SUMMARY_SHA256",
+        "${{ needs.verify-inputs.outputs.durable_perf_summary_sha256 }}",
+        &env_path,
+    )?;
     let run = yaml_text(yaml_field(step, "run", path)?, &format!("{path}.run"))?;
     let lines = run.lines().collect::<Vec<_>>();
+    let receipt_note = format!("  {PUBLIC_RECEIPT_NOTE}");
     let expected = [
         "set -euo pipefail",
+        "assets=(candidate/lumen-*.tar.gz candidate/lumen-*.tar.gz.sha256 candidate/spdx-amd64.json candidate/spdx-arm64.json)",
+        "if [[ -n \"$STANDALONE_GKE_RECEIPT_SHA256\" ]]; then",
+        &receipt_note,
+        "  assets+=(gke-receipt/lumen-standalone-gke-receipt.json gke-receipt/lumen-standalone-gke-receipt.json.sha256)",
+        "else",
+        "  evidence=\"- Standalone GKE: not claimed\"",
+        "fi",
+        "if [[ -n \"$DURABLE_PERF_SUMMARY_SHA256\" ]]; then",
+        "  evidence+=$'\\n'\"- Durable performance summary SHA-256: $DURABLE_PERF_SUMMARY_SHA256\"",
+        "  assets+=(durable-perf/durable-perf-summary.json durable-perf/durable-perf-summary.json.sha256)",
+        "fi",
         "cat > release-notes.md <<EOF",
         "# lumen@${{ inputs.version }}",
         "",
@@ -1137,21 +1189,21 @@ fn validate_release_creation_step(step: &Value, path: &str) -> Result<(), String
         "- Root index digest: ${{ needs.verify-inputs.outputs.root_digest }}",
         "- linux/amd64 digest: ${{ needs.verify-inputs.outputs.amd64_digest }}",
         "- linux/arm64 digest: ${{ needs.verify-inputs.outputs.arm64_digest }}",
-        PUBLIC_RECEIPT_NOTE,
+        "${evidence}",
         PUBLIC_RELEASE_NOTE_STATEMENTS[0],
         PUBLIC_RELEASE_NOTE_STATEMENTS[1],
         PUBLIC_RELEASE_NOTE_STATEMENTS[2],
         PUBLIC_COMPATIBILITY_NOTE,
         "EOF",
         "gh release create \"lumen@${{ inputs.version }}\" --repo \"$GITHUB_REPOSITORY\" --target \"$GITHUB_SHA\" --title \"lumen@${{ inputs.version }}\" --notes-file release-notes.md \\",
-        "  candidate/lumen-*.tar.gz candidate/lumen-*.tar.gz.sha256 candidate/spdx-amd64.json candidate/spdx-arm64.json gke-receipt/lumen-standalone-gke-receipt.json gke-receipt/lumen-standalone-gke-receipt.json.sha256",
+        "  \"${assets[@]}\"",
     ];
     if lines.as_slice() != expected {
         return Err(format!(
             "{path}.run release-note heredoc or create command changed"
         ));
     }
-    let body = &lines[2..16];
+    let body = &lines[13..28];
     if body
         .iter()
         .filter(|line| **line == PUBLIC_COMPATIBILITY_NOTE)
@@ -1160,6 +1212,48 @@ fn validate_release_creation_step(step: &Value, path: &str) -> Result<(), String
     {
         return Err(format!(
             "{path}.run compatibility note is not one raw heredoc body line"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_durable_perf_fetch(step: &Value, path: &str) -> Result<(), String> {
+    let step = yaml_mapping(step, path)?;
+    exact_keys(step, &["name", "id", "env", "shell", "run"], path)?;
+    expect_text(
+        step,
+        "name",
+        "Fetch exact durable performance evidence",
+        path,
+    )?;
+    expect_text(step, "id", "durable_perf", path)?;
+    expect_text(step, "shell", "bash", path)?;
+    let env = yaml_mapping(yaml_field(step, "env", path)?, &format!("{path}.env"))?;
+    let env_path = format!("{path}.env");
+    exact_keys(
+        env,
+        &[
+            "DURABLE_PERF_EVIDENCE_COMMIT",
+            "DURABLE_PERF_SUMMARY_SHA256",
+        ],
+        &env_path,
+    )?;
+    expect_text(
+        env,
+        "DURABLE_PERF_EVIDENCE_COMMIT",
+        "${{ inputs.durable_perf_evidence_commit }}",
+        &env_path,
+    )?;
+    expect_text(
+        env,
+        "DURABLE_PERF_SUMMARY_SHA256",
+        "${{ inputs.durable_perf_summary_sha256 }}",
+        &env_path,
+    )?;
+    let run = yaml_text(yaml_field(step, "run", path)?, &format!("{path}.run"))?;
+    if run != DURABLE_PERF_FETCH_RUN {
+        return Err(format!(
+            "{path}.run durable performance evidence fetch changed"
         ));
     }
     Ok(())
@@ -1202,6 +1296,19 @@ fn validate_public_receipt_decoder(step: &Value, path: &str) -> Result<(), Strin
     Ok(())
 }
 
+fn validate_verifier_durable_args(step: &Value, path: &str) -> Result<(), String> {
+    let step = yaml_mapping(step, path)?;
+    let run = yaml_text(yaml_field(step, "run", path)?, &format!("{path}.run"))?;
+    for argument in DURABLE_PERF_VERIFIER_ARGS {
+        if count(run, argument) != 1 {
+            return Err(format!(
+                "{path}.run does not pass exact durable performance evidence: {argument}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn count(text: &str, needle: &str) -> usize {
     text.match_indices(needle).count()
 }
@@ -1233,21 +1340,31 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
             "standalone_gke_receipt_sha256",
             "standalone_gke_receipt_sidecar_b64",
             "standalone_gke_receipt_sidecar_sha256",
+            "durable_perf_evidence_commit",
+            "durable_perf_summary_sha256",
         ],
         "workflow.on.workflow_dispatch.inputs",
     )?;
-    for (name, description) in [
-        ("version", "Exact Lumen semver without the lumen@ prefix."),
+    // From lumen@0.6.1 the standalone GKE receipt is optional and the local
+    // durable performance evidence is required; the verifier enforces both.
+    for (name, description, required) in [
+        (
+            "version",
+            "Exact Lumen semver without the lumen@ prefix.",
+            true,
+        ),
         (
             "candidate_run_id",
             "Exact successful lumen-release-candidate run ID.",
+            true,
         ),
     ]
     .into_iter()
     .chain(
         PUBLIC_RECEIPT_INPUTS
             .iter()
-            .map(|(name, description)| (*name, *description)),
+            .chain(DURABLE_PERF_INPUTS)
+            .map(|(name, description)| (*name, *description, false)),
     ) {
         let input_path = format!("workflow.on.workflow_dispatch.inputs.{name}");
         let input = yaml_mapping(
@@ -1256,7 +1373,7 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         )?;
         exact_keys(input, &["description", "required", "type"], &input_path)?;
         expect_text(input, "description", description, &input_path)?;
-        expect_bool(input, "required", true, &input_path)?;
+        expect_bool(input, "required", required, &input_path)?;
         expect_text(input, "type", "string", &input_path)?;
     }
 
@@ -1330,6 +1447,7 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
             "candidate_url",
             "pr_url",
             "standalone_gke_receipt_sha256",
+            "durable_perf_summary_sha256",
         ],
         "workflow.jobs.verify-inputs.outputs",
     )?;
@@ -1341,6 +1459,7 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         "candidate_url",
         "pr_url",
         "standalone_gke_receipt_sha256",
+        "durable_perf_summary_sha256",
     ] {
         expect_text(
             outputs,
@@ -1353,7 +1472,7 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         yaml_field(verify, "steps", "workflow.jobs.verify-inputs")?,
         "workflow.jobs.verify-inputs.steps",
     )?;
-    if verify_steps.len() != 8 {
+    if verify_steps.len() != 9 {
         return Err("verify-inputs step count changed".to_owned());
     }
     validate_action_step(
@@ -1403,9 +1522,11 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         None,
     )?;
     validate_public_receipt_decoder(&verify_steps[5], "workflow.jobs.verify-inputs.steps[5]")?;
+    validate_durable_perf_fetch(&verify_steps[6], "workflow.jobs.verify-inputs.steps[6]")?;
+    validate_verifier_durable_args(&verify_steps[7], "workflow.jobs.verify-inputs.steps[7]")?;
     validate_run_step(
-        &verify_steps[6],
-        "workflow.jobs.verify-inputs.steps[6]",
+        &verify_steps[7],
+        "workflow.jobs.verify-inputs.steps[7]",
         "Verify tag ruleset, candidate receipt, and supply chain",
         &["name", "env", "shell", "run"],
         &[
@@ -1420,14 +1541,16 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         true,
     )?;
     validate_run_step(
-        &verify_steps[7],
-        "workflow.jobs.verify-inputs.steps[7]",
+        &verify_steps[8],
+        "workflow.jobs.verify-inputs.steps[8]",
         "Export immutable candidate contract",
         &["name", "id", "shell", "run"],
         &[
             ".commit == $commit",
             "candidate_run_id",
-            ".standalone_gke_receipt_sha256 == $receipt",
+            "(.standalone_gke_receipt_sha256 // \"\") == $receipt",
+            "(.durable_perf_summary_sha256 // \"\") == $perf",
+            "echo \"durable_perf_summary_sha256=$(jq -r '.durable_perf_summary_sha256 // \"\"' promotion-contract.json)\"",
             "([.root_digest,.amd64_digest,.arm64_digest] | all(test(\"^sha256:[0-9a-f]{64}$\")))",
             "root_digest=$(jq -r",
         ],
@@ -1478,7 +1601,7 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         yaml_field(publish, "steps", "workflow.jobs.publish-release")?,
         "workflow.jobs.publish-release.steps",
     )?;
-    if publish_steps.len() != 12 {
+    if publish_steps.len() != 13 {
         return Err("publish-release step count changed".to_owned());
     }
     validate_action_step(
@@ -1514,16 +1637,24 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         None,
     )?;
     validate_public_receipt_decoder(&publish_steps[4], "workflow.jobs.publish-release.steps[4]")?;
+    validate_durable_perf_fetch(&publish_steps[5], "workflow.jobs.publish-release.steps[5]")?;
+    for index in [6, 8, 12] {
+        validate_verifier_durable_args(
+            &publish_steps[index],
+            &format!("workflow.jobs.publish-release.steps[{index}]"),
+        )?;
+    }
     validate_run_step(
-        &publish_steps[5],
-        "workflow.jobs.publish-release.steps[5]",
+        &publish_steps[6],
+        "workflow.jobs.publish-release.steps[6]",
         "Re-query exact candidate immediately before stable writes",
         &["name", "env", "shell", "run"],
         &[
             "verify-release-artifacts.sh",
             "--mode candidate",
             ".root_digest == $root",
-            ".standalone_gke_receipt_sha256 == $receipt",
+            "(.standalone_gke_receipt_sha256 // \"\") == $receipt",
+            "(.durable_perf_summary_sha256 // \"\") == $perf",
             "--standalone-gke-receipt \"${{ steps.gke_receipt.outputs.receipt }}\"",
             "--standalone-gke-receipt-sidecar \"${{ steps.gke_receipt.outputs.sidecar }}\"",
         ],
@@ -1532,8 +1663,8 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         true,
     )?;
     validate_run_step(
-        &publish_steps[6],
-        "workflow.jobs.publish-release.steps[6]",
+        &publish_steps[7],
+        "workflow.jobs.publish-release.steps[7]",
         "Exit safely if this exact public release already exists",
         &["name", "id", "env", "shell", "run"],
         &["gh api graphql", "release(tagName", "exists=true"],
@@ -1542,8 +1673,8 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         true,
     )?;
     validate_run_step(
-        &publish_steps[7],
-        "workflow.jobs.publish-release.steps[7]",
+        &publish_steps[8],
+        "workflow.jobs.publish-release.steps[8]",
         "Verify existing public release without moving latest",
         &["name", "if", "env", "shell", "run"],
         &[
@@ -1557,8 +1688,8 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         true,
     )?;
     validate_run_step(
-        &publish_steps[8],
-        "workflow.jobs.publish-release.steps[8]",
+        &publish_steps[9],
+        "workflow.jobs.publish-release.steps[9]",
         "Download exact candidate release bytes",
         &["name", "if", "env", "shell", "run"],
         &["gh run download", "final-candidate-manifest.json"],
@@ -1567,8 +1698,8 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         true,
     )?;
     validate_run_step(
-        &publish_steps[9],
-        "workflow.jobs.publish-release.steps[9]",
+        &publish_steps[10],
+        "workflow.jobs.publish-release.steps[10]",
         "Promote exact root digest to semver and safe latest",
         &["name", "if", "env", "shell", "run"],
         &[
@@ -1592,12 +1723,12 @@ fn validate_promotion_workflow(workflow: &str) -> Result<(), String> {
         true,
     )?;
     validate_release_creation_step(
-        &publish_steps[10],
-        "workflow.jobs.publish-release.steps[10]",
-    )?;
-    validate_run_step(
         &publish_steps[11],
         "workflow.jobs.publish-release.steps[11]",
+    )?;
+    validate_run_step(
+        &publish_steps[12],
+        "workflow.jobs.publish-release.steps[12]",
         "Publicly verify immutable tag, release bytes, and promoted image",
         &["name", "if", "env", "shell", "run"],
         &[
@@ -2948,8 +3079,8 @@ fn promotion_latest_run_script() -> String {
     )
     .unwrap();
     let step = yaml_mapping(
-        &steps[9],
-        "promotion workflow.jobs.publish-release.steps[9]",
+        &steps[10],
+        "promotion workflow.jobs.publish-release.steps[10]",
     )
     .unwrap();
     yaml_text(
@@ -3161,8 +3292,8 @@ fn promotion_workflow_is_semantically_frozen_and_exactly_hashed() {
 fn promotion_workflow_rejects_high_risk_source_mutations() {
     let workflow = include_str!("../../.github/workflows/lumen-release.yml");
     let yaml_comment = workflow.replacen(
-        "        run: |\n          set -euo pipefail\n          cat > release-notes.md <<EOF",
-        "        # run: |\n          set -euo pipefail\n          cat > release-notes.md <<EOF",
+        "        run: |\n          set -euo pipefail\n          assets=(candidate/",
+        "        # run: |\n          set -euo pipefail\n          assets=(candidate/",
         1,
     );
     let shell_comment = workflow.replacen(
@@ -4078,51 +4209,219 @@ fn candidate_execution_inventory_is_exact_and_fail_closed() {
 }
 
 #[test]
-fn candidate_execution_inventory_rejects_obsolete_unmatrixed_gate_name() {
+fn candidate_execution_inventory_rejects_obsolete_durable_matrix_gate_name() {
     let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
     let mut obsolete = CANDIDATE_EXECUTION_NAMES.to_vec();
-    obsolete[13] = "verify exact candidate gates";
+    obsolete[11] = "verify exact candidate gates (index-1-flat-cpu)";
     assert!(
         execute_candidate_fetch(verifier, &candidate_jobs(CANDIDATE_EXECUTION_NAMES, None)),
-        "exact 28-name fixture must be valid before obsolete-name mutation"
+        "exact 13-name fixture must be valid before obsolete-name mutation"
     );
     assert!(
         !execute_candidate_fetch(verifier, &candidate_jobs(&obsolete, None)),
-        "obsolete un-matrixed candidate gate name was accepted"
+        "obsolete durable-matrix candidate gate name was accepted"
+    );
+}
+
+/// Writes sixteen qualifying local receipts bound to `attempt` of the fixture
+/// candidate, aggregates them, and copies the summary pair to the public dir.
+fn add_durable_perf_evidence(fixture: &GkeReceiptFixture, attempt: &str) -> (PathBuf, String) {
+    use crate::support::perf_cell_receipt;
+    let dir = fixture
+        .release
+        .candidate
+        .parent()
+        .unwrap()
+        .join("durable-perf");
+    let receipts = dir.join("perf");
+    fs::create_dir_all(&receipts).unwrap();
+    let binding = perf_cell_receipt::Binding {
+        repository: "faberline/lumen".to_owned(),
+        run_id: RUN_ID.to_owned(),
+        run_attempt: attempt.to_owned(),
+        commit: COMMIT.to_owned(),
+        image_reference: format!("ghcr.io/faberline/lumen@sha256:{}", "1".repeat(64)),
+        actual_image_id: format!("sha256:{}", "4".repeat(64)),
+    };
+    for cell in perf_cell_receipt::expected_cells() {
+        let receipt = perf_cell_receipt::Receipt {
+            schema_version: perf_cell_receipt::SCHEMA_VERSION,
+            kind: perf_cell_receipt::RECEIPT_KIND.to_owned(),
+            binding: binding.clone(),
+            cell: cell.clone(),
+            limits: perf_cell_receipt::Limits::approved(),
+            measurement: crate::release_candidate::durable_perf_fixture_measurement(),
+            outcome: perf_cell_receipt::Outcome {
+                qualifying: true,
+                diagnostic: false,
+                succeeded: true,
+            },
+        };
+        perf_cell_receipt::write_new(&receipts.join(format!("{}.json", cell.id)), &receipt)
+            .expect("write a unique valid receipt");
+    }
+    let summary = dir.join("durable-perf-summary.json");
+    let output = Command::new("python3")
+        .arg("-I")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/verify-durable-perf.py"))
+        .arg("--receipts-dir")
+        .arg(&receipts)
+        .args([
+            "--repo",
+            "faberline/lumen",
+            "--run-id",
+            RUN_ID,
+            "--run-attempt",
+            attempt,
+        ])
+        .args([
+            "--commit",
+            COMMIT,
+            "--image",
+            &binding.image_reference,
+            "--output",
+        ])
+        .arg(&summary)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "aggregate local durable receipts: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for name in [
+        "durable-perf-summary.json",
+        "durable-perf-summary.json.sha256",
+    ] {
+        fs::copy(dir.join(name), fixture.release.public.join(name)).unwrap();
+    }
+    let summary_sha256 = sha256(&summary);
+    (dir, summary_sha256)
+}
+
+fn run_promotion_fixture(
+    fixture: &GkeReceiptFixture,
+    gke: bool,
+    durable_perf: Option<(&Path, &str)>,
+) -> Output {
+    let mut command = Command::new("bash");
+    command
+        .arg(release_script())
+        .args(["--repo", "faberline/lumen", "--tag"])
+        .arg(&fixture.tag)
+        .args([
+            "--commit",
+            COMMIT,
+            "--candidate-run-id",
+            RUN_ID,
+            "--mode",
+            "fixture",
+            "--candidate-receipt-dir",
+        ])
+        .arg(&fixture.release.candidate)
+        .arg("--release-assets-dir")
+        .arg(&fixture.release.public);
+    if gke {
+        command
+            .arg("--standalone-gke-receipt")
+            .arg(&fixture.receipt)
+            .arg("--standalone-gke-receipt-sidecar")
+            .arg(&fixture.sidecar);
+    }
+    if let Some((dir, summary_sha256)) = durable_perf {
+        command
+            .arg("--durable-perf-dir")
+            .arg(dir)
+            .args(["--durable-perf-summary-sha256", summary_sha256]);
+    }
+    command.output().unwrap()
+}
+
+fn remove_public_gke_receipt(fixture: &GkeReceiptFixture) {
+    for name in [
+        "lumen-standalone-gke-receipt.json",
+        "lumen-standalone-gke-receipt.json.sha256",
+    ] {
+        fs::remove_file(fixture.release.public.join(name)).unwrap();
+    }
+}
+
+fn assert_refused(output: Output, name: &str, needle: &str) {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{name} passed");
+    assert!(stderr.contains(needle), "{name}: {stderr}");
+}
+
+#[test]
+fn promotion_binds_local_durable_performance_evidence_from_0_6_1() {
+    let fixture = gke_receipt_fixture_for("0.6.1");
+    let (dir, summary_sha256) = add_durable_perf_evidence(&fixture, "1");
+    let output = run_promotion_fixture(&fixture, true, Some((&dir, &summary_sha256)));
+    assert!(
+        output.status.success(),
+        "0.6.1 with GKE and local durable evidence was rejected: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_refused(
+        run_promotion_fixture(&fixture, true, None),
+        "missing durable evidence",
+        "requires durable performance evidence",
+    );
+    assert_refused(
+        run_promotion_fixture(&fixture, true, Some((&dir, &"0".repeat(64)))),
+        "foreign summary hash",
+        "durable performance evidence does not bind the candidate",
+    );
+    fs::write(
+        fixture.release.public.join("durable-perf-summary.json"),
+        "{}\n",
+    )
+    .unwrap();
+    assert_refused(
+        run_promotion_fixture(&fixture, true, Some((&dir, &summary_sha256))),
+        "public summary bytes",
+        "public durable performance summary differs from verified evidence",
+    );
+
+    let foreign = gke_receipt_fixture_for("0.6.1");
+    let (dir, summary_sha256) = add_durable_perf_evidence(&foreign, "2");
+    assert_refused(
+        run_promotion_fixture(&foreign, true, Some((&dir, &summary_sha256))),
+        "receipts from another candidate attempt",
+        "durable performance evidence does not bind the candidate",
     );
 }
 
 #[test]
-fn promotion_requires_durable_performance_receipt_bound_to_0_6_1_identity() {
+fn standalone_gke_is_optional_and_not_claimed_from_0_6_1() {
     let fixture = gke_receipt_fixture_for("0.6.1");
-    let manifest_path = fixture.release.candidate.join("final-candidate-manifest.json");
-    let mut manifest: serde_json::Value = serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
-    manifest["performance"] = json!({"schema_version":1,"summary_file":"durable-perf-summary.json","summary_sha256":"b".repeat(64),"receipts_directory":"perf"});
-    fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
-    refresh_sha256_sidecar(&manifest_path);
-    let mut receipt: serde_json::Value = serde_json::from_slice(&fs::read(&fixture.receipt).unwrap()).unwrap();
-    receipt["candidate"]["manifest_sha256"] = json!(sha256(&manifest_path));
-    rewrite_receipt(&fixture, &receipt);
-    let output = run_gke_receipt_fixture(&fixture);
-    assert!(output.status.success(), "valid durable performance binding was rejected: {}", String::from_utf8_lossy(&output.stderr));
-    for name in ["missing", "schema", "summary file", "summary hash", "receipts directory", "extra key"] {
-        let mut mutated = manifest.clone();
-        match name {
-            "missing" => { mutated.as_object_mut().unwrap().remove("performance"); }
-            "schema" => mutated["performance"]["schema_version"] = json!(2),
-            "summary file" => mutated["performance"]["summary_file"] = json!("other.json"),
-            "summary hash" => mutated["performance"]["summary_sha256"] = json!("not-a-hash"),
-            "receipts directory" => mutated["performance"]["receipts_directory"] = json!("other"),
-            "extra key" => mutated["performance"]["extra"] = json!(true),
-            _ => unreachable!(),
-        }
-        fs::write(&manifest_path, serde_json::to_vec(&mutated).unwrap()).unwrap();
-        refresh_sha256_sidecar(&manifest_path);
-        let mut mutated_receipt = receipt.clone();
-        mutated_receipt["candidate"]["manifest_sha256"] = json!(sha256(&manifest_path));
-        rewrite_receipt(&fixture, &mutated_receipt);
-        assert!(!run_gke_receipt_fixture(&fixture).status.success(), "performance {name} mutation passed");
-    }
+    let (dir, summary_sha256) = add_durable_perf_evidence(&fixture, "1");
+    assert_refused(
+        run_promotion_fixture(&fixture, false, Some((&dir, &summary_sha256))),
+        "unclaimed GKE with a published GKE receipt",
+        "public release assets are not the exact receipt asset set",
+    );
+    remove_public_gke_receipt(&fixture);
+    let output = run_promotion_fixture(&fixture, false, Some((&dir, &summary_sha256)));
+    assert!(
+        output.status.success(),
+        "0.6.1 without a GKE claim was rejected: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let legacy = gke_receipt_fixture_for("0.6.0");
+    remove_public_gke_receipt(&legacy);
+    assert!(
+        !run_promotion_fixture(&legacy, false, None).status.success(),
+        "0.6.0 promotion without its required GKE receipt passed"
+    );
+    let legacy = gke_receipt_fixture_for("0.6.0");
+    let (dir, summary_sha256) = add_durable_perf_evidence(&legacy, "1");
+    assert_refused(
+        run_promotion_fixture(&legacy, true, Some((&dir, &summary_sha256))),
+        "durable evidence before 0.6.1",
+        "durable performance evidence is not valid before lumen@0.6.1",
+    );
 }
 
 #[test]

@@ -116,6 +116,12 @@ async fn record_subject_to_span(req: Request, next: Next) -> axum::response::Res
     next.run(req).await
 }
 
+/// Record when the request arrived, before its body is read, so write
+/// admission can bound its relief wait by the client's request timeout.
+async fn record_request_arrival(req: Request, next: Next) -> axum::response::Response {
+    crate::shared_kernel::request_arrival::scope(tokio::time::Instant::now(), next.run(req)).await
+}
+
 pub fn router(state: AppState) -> Router {
     router_with_admission(state, None)
 }
@@ -227,7 +233,8 @@ pub fn router_with_admission(
         .layer(service_http::body_limit_layer(
             crate::sharding::infrastructure::body_limit::body_limit_bytes_from_env(),
         ))
-        .layer(axum::extract::DefaultBodyLimit::disable());
+        .layer(axum::extract::DefaultBodyLimit::disable())
+        .layer(from_fn(record_request_arrival));
     let data_plane = match admission {
         Some(controller) => data_plane.route_layer(from_fn_with_state(
             service_http::AdmissionMiddleware::new(controller, |request| {

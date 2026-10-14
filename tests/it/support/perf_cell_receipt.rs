@@ -29,13 +29,15 @@ pub const RSS_LIMIT_BYTES: u64 = 12 * 1024 * 1024 * 1024;
 pub const DOCKER_CPUS_MILLI: u64 = 2_500;
 pub const DOCKER_MEMORY_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 pub const SNAPSHOT_SECONDS: u64 = 15;
-pub const HOT_DOCUMENTS: u64 = 500_000;
+pub const HOT_DOCUMENTS: u64 = 200_000;
 pub const IDLE_COLLECTIONS: u64 = 181;
 pub const IDLE_DOCUMENTS_PER_COLLECTION: u64 = 100;
 pub const FIELD_COUNT: u64 = 14;
 pub const WORKLOAD_SEED: u64 = 0x4246_0610_D00D_B1E5;
 pub const NGRAM_TEXT_FIELDS: u64 = 3;
 pub const VECTOR_DIMENSIONS: u64 = 8;
+pub const CAPACITY_REFUSAL_PERCENT: u64 = 1;
+pub const METRIC_SAMPLE_MISSING_PERCENT: u64 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Binding {
@@ -88,6 +90,8 @@ pub struct Limits {
     pub seed: u64,
     pub ngram_text_fields: u64,
     pub vector_dimensions: u64,
+    pub capacity_refusal_percent: u64,
+    pub metric_sample_missing_percent: u64,
 }
 
 impl Limits {
@@ -111,6 +115,8 @@ impl Limits {
             seed: WORKLOAD_SEED,
             ngram_text_fields: NGRAM_TEXT_FIELDS,
             vector_dimensions: VECTOR_DIMENSIONS,
+            capacity_refusal_percent: CAPACITY_REFUSAL_PERCENT,
+            metric_sample_missing_percent: METRIC_SAMPLE_MISSING_PERCENT,
         }
     }
 }
@@ -129,6 +135,10 @@ pub struct Measurement {
     pub requests_completed_per_second_milli: u64,
     pub request_errors: u64,
     pub client_cancellations: u64,
+    pub capacity_refusals: u64,
+    pub capacity_refused_requests: u64,
+    pub metric_sample_seconds: u64,
+    pub metric_sample_missed_seconds: u64,
     pub items_offered: u64,
     pub items_completed: u64,
     pub items_failed: u64,
@@ -435,6 +445,14 @@ impl Limits {
             ("seed", number(self.seed)),
             ("ngram_text_fields", number(self.ngram_text_fields)),
             ("vector_dimensions", number(self.vector_dimensions)),
+            (
+                "capacity_refusal_percent",
+                number(self.capacity_refusal_percent),
+            ),
+            (
+                "metric_sample_missing_percent",
+                number(self.metric_sample_missing_percent),
+            ),
         ])
     }
 
@@ -462,6 +480,8 @@ impl Limits {
                 "seed",
                 "ngram_text_fields",
                 "vector_dimensions",
+                "capacity_refusal_percent",
+                "metric_sample_missing_percent",
             ],
         )?;
         Ok(Self {
@@ -487,6 +507,16 @@ impl Limits {
             seed: take_number(&mut object, "limits", "seed")?,
             ngram_text_fields: take_number(&mut object, "limits", "ngram_text_fields")?,
             vector_dimensions: take_number(&mut object, "limits", "vector_dimensions")?,
+            capacity_refusal_percent: take_number(
+                &mut object,
+                "limits",
+                "capacity_refusal_percent",
+            )?,
+            metric_sample_missing_percent: take_number(
+                &mut object,
+                "limits",
+                "metric_sample_missing_percent",
+            )?,
         })
     }
 }
@@ -524,6 +554,16 @@ impl Measurement {
             ),
             ("request_errors", number(self.request_errors)),
             ("client_cancellations", number(self.client_cancellations)),
+            ("capacity_refusals", number(self.capacity_refusals)),
+            (
+                "capacity_refused_requests",
+                number(self.capacity_refused_requests),
+            ),
+            ("metric_sample_seconds", number(self.metric_sample_seconds)),
+            (
+                "metric_sample_missed_seconds",
+                number(self.metric_sample_missed_seconds),
+            ),
             ("items_offered", number(self.items_offered)),
             ("items_completed", number(self.items_completed)),
             ("items_failed", number(self.items_failed)),
@@ -661,6 +701,10 @@ impl Measurement {
                 "requests_completed_per_second_milli",
                 "request_errors",
                 "client_cancellations",
+                "capacity_refusals",
+                "capacity_refused_requests",
+                "metric_sample_seconds",
+                "metric_sample_missed_seconds",
                 "items_offered",
                 "items_completed",
                 "items_failed",
@@ -747,6 +791,22 @@ impl Measurement {
             )?,
             request_errors: take_number(&mut object, "measurement", "request_errors")?,
             client_cancellations: take_number(&mut object, "measurement", "client_cancellations")?,
+            capacity_refusals: take_number(&mut object, "measurement", "capacity_refusals")?,
+            capacity_refused_requests: take_number(
+                &mut object,
+                "measurement",
+                "capacity_refused_requests",
+            )?,
+            metric_sample_seconds: take_number(
+                &mut object,
+                "measurement",
+                "metric_sample_seconds",
+            )?,
+            metric_sample_missed_seconds: take_number(
+                &mut object,
+                "measurement",
+                "metric_sample_missed_seconds",
+            )?,
             items_offered: take_number(&mut object, "measurement", "items_offered")?,
             items_completed: take_number(&mut object, "measurement", "items_completed")?,
             items_failed: take_number(&mut object, "measurement", "items_failed")?,
@@ -1252,6 +1312,29 @@ fn validate_measurement(measurement: &Measurement, limits: &Limits) -> Result<()
             "qualifying receipt reports request, item, cancellation, or query failure".to_owned(),
         ));
     }
+    // A typed capacity refusal changed nothing and was resent. Request
+    // conservation above already proves every refused request succeeded.
+    if measurement.capacity_refused_requests > measurement.capacity_refusals
+        || measurement.capacity_refused_requests > measurement.requests_offered
+        || u128::from(measurement.capacity_refusals) * 100
+            > u128::from(measurement.requests_offered) * u128::from(limits.capacity_refusal_percent)
+    {
+        return Err(ReceiptError::Invalid(
+            "capacity refusals are inconsistent or exceed the approved percent".to_owned(),
+        ));
+    }
+    // Missed `/metrics` scrapes lose coverage, not counter evidence; the
+    // receipt still bounds how much of the input window went unobserved.
+    if measurement.metric_sample_seconds == 0
+        || measurement.metric_sample_missed_seconds > measurement.metric_sample_seconds
+        || u128::from(measurement.metric_sample_missed_seconds) * 100
+            > u128::from(measurement.metric_sample_seconds)
+                * u128::from(limits.metric_sample_missing_percent)
+    {
+        return Err(ReceiptError::Invalid(
+            "metric sample coverage is missing or exceeds the approved missed percent".to_owned(),
+        ));
+    }
     if measurement.request_latency_p99_ms > measurement.request_latency_max_ms
         || measurement.request_latency_p99_ms > limits.query_p99_limit_ms
         || measurement.request_latency_max_ms > limits.query_max_limit_ms
@@ -1744,6 +1827,10 @@ mod tests {
             requests_completed_per_second_milli: 10_000,
             request_errors: 0,
             client_cancellations: 0,
+            capacity_refusals: 0,
+            capacity_refused_requests: 0,
+            metric_sample_seconds: 1_800,
+            metric_sample_missed_seconds: 0,
             items_offered: 2_520_000,
             items_completed: 2_520_000,
             items_failed: 0,

@@ -114,7 +114,11 @@ pub(in crate::persistence) fn read_generation_manifest(
     }
 }
 
-pub(super) type PriorCatalog<'a> = Option<(&'a Path, &'a SegmentGenerationManifest)>;
+/// Generations whose files were validated against their own catalog: the
+/// verified predecessor, and a merge job's scratch tree once its outputs are
+/// verified there. A file hard-linked from one of them, under an identical
+/// reference, need not be read again. Cold recovery supplies none.
+pub(super) type PriorCatalog<'a> = &'a [(&'a Path, &'a SegmentGenerationManifest)];
 
 fn exact_prior_segment_reference(
     collection: &CollectionCatalog,

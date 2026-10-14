@@ -262,3 +262,72 @@ async fn submit_propagates_apply_error_with_type() {
     ));
     assert_eq!(coord.applied_seq(), 2);
 }
+
+/// A local submit prices its record under the Engine state read lock before
+/// publication. While an apply or checkpoint holds the write lock, that wait
+/// must not take a reactor worker with it: on a 2.5-CPU container the runtime
+/// has two workers, and searches and `/metrics` stopped being polled.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn admission_waiting_on_the_state_lock_keeps_the_reactor_worker_free() {
+    let engine = Arc::new(Engine::new());
+    let wal = Arc::new(MemWal::new());
+    let coord = WriteCoordinator::start(wal, engine.clone());
+    coord
+        .submit(RaftLogEntry::CreateCollection {
+            collection_id: "u".into(),
+            req: keyword_schema(),
+        })
+        .await
+        .unwrap();
+
+    let (held_tx, held_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let holder = {
+        let engine = engine.clone();
+        std::thread::spawn(move || {
+            engine.with_state_write_held(|| {
+                held_tx.send(()).unwrap();
+                let _ = release_rx.recv_timeout(std::time::Duration::from_secs(10));
+            })
+        })
+    };
+    held_rx.recv().unwrap();
+
+    let submit = tokio::spawn({
+        let coord = coord.clone();
+        async move {
+            coord
+                .submit(RaftLogEntry::Index {
+                    collection_id: "u".into(),
+                    req: IndexRequest {
+                        items: vec![IndexItem {
+                            external_id: "u1".into(),
+                            field: "email".into(),
+                            value: FieldValue::String("a@x.com".into()),
+                            version: None,
+                        }],
+                        request_id: None,
+                    },
+                })
+                .await
+        }
+    });
+    // Let the only worker reach admission and block on the read lock.
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // A blocked worker also stops driving Tokio timers, so wait on a std
+    // channel from this thread instead of `tokio::time::timeout`.
+    let (probe_tx, probe_rx) = std::sync::mpsc::channel();
+    tokio::spawn(async move { probe_tx.send(()).unwrap() });
+    let polled = probe_rx.recv_timeout(std::time::Duration::from_secs(2));
+    release_tx.send(()).unwrap();
+    holder.join().unwrap();
+    assert!(
+        polled.is_ok(),
+        "a task spawned while admission waited on the state lock was not polled"
+    );
+    match submit.await.unwrap().unwrap() {
+        ApplyOutcome::Indexed(r) => assert_eq!(r.indexed, 1),
+        other => panic!("expected Indexed, got {other:?}"),
+    }
+}

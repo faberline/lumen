@@ -385,7 +385,14 @@ async fn capacity_relief_leaves_a_fresh_local_reservation_when_no_apply_is_waiti
     // take it yet.
     let seq = tokio::time::timeout(std::time::Duration::from_secs(2), async {
         loop {
-            if let Some(seq) = coord.local_reservations.lock().await.keys().next().copied() {
+            if let Some(seq) = coord
+                .local_reservations
+                .lock()
+                .reservations
+                .keys()
+                .next()
+                .copied()
+            {
                 return seq;
             }
             assert!(
@@ -409,7 +416,11 @@ async fn capacity_relief_leaves_a_fresh_local_reservation_when_no_apply_is_waiti
     tokio::time::sleep(std::time::Duration::from_millis(120)).await;
 
     assert!(
-        coord.local_reservations.lock().await.contains_key(&seq),
+        coord
+            .local_reservations
+            .lock()
+            .reservations
+            .contains_key(&seq),
         "a door refusal alone must not steal an already-admitted, unapplied local reservation"
     );
 

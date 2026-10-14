@@ -61,6 +61,7 @@ thread_local! {
     pub(crate) static DICTIONARY_SEARCHES: Cell<usize> = const { Cell::new(0) };
     static VAR_SKIP_INDEX_DECODES: Cell<usize> = const { Cell::new(0) };
     static OWNED_STAGE_OPEN_CALLS: Cell<usize> = const { Cell::new(0) };
+    static SEGMENT_OPEN_CALLS: Cell<usize> = const { Cell::new(0) };
 }
 
 /// Header magic, "LSEG" little-endian.

@@ -42,6 +42,13 @@ impl MergeStepCosts {
         entry.1 += files;
     }
 
+    pub(super) fn elapsed(
+        &self,
+        step: crate::app::observability::metrics::labels::MergeStep,
+    ) -> Duration {
+        self.entries[step.index()].0
+    }
+
     pub(super) fn publish(
         &self,
         metrics: &crate::app::observability::metrics::Metrics,

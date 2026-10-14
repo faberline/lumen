@@ -1,6 +1,8 @@
 //! The collection lifecycle handlers: list, create and drop a collection, and
 //! drop one of its fields.
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -24,7 +26,15 @@ pub(crate) async fn list_collections(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthContext>,
 ) -> Result<Json<Vec<String>>, ApiErr> {
-    let all = state.engine.list_collections().map_err(ApiErr::from)?;
+    // `Engine::list_collections` takes the state read lock, which an apply or
+    // checkpoint publication can hold for seconds; wait for it on the bounded
+    // blocking bridge, not on a reactor worker.
+    let engine = Arc::clone(&state.engine);
+    let all = state
+        .search_executor
+        .run(move || engine.list_collections())
+        .await
+        .map_err(ApiErr::from)?;
     // Filter to what the caller can actually read. Each id is its own
     // SubjectAccessReview, so the checks go out concurrently — but bounded, or
     // one list request against a fleet with thousands of collections becomes

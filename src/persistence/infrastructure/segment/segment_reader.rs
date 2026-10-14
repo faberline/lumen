@@ -36,7 +36,7 @@ use crate::persistence::infrastructure::segment::{
 use std::cell::Cell;
 
 #[cfg(test)]
-use crate::persistence::infrastructure::segment::OWNED_STAGE_OPEN_CALLS;
+use crate::persistence::infrastructure::segment::{OWNED_STAGE_OPEN_CALLS, SEGMENT_OPEN_CALLS};
 
 /// Fail closed before constructing a reader.  Raw dictionary entry boundaries
 /// must stay in the mmap; decoding them into a `Vec` would reintroduce an
@@ -255,11 +255,23 @@ impl SegmentReader {
         OWNED_STAGE_OPEN_CALLS.with(Cell::get)
     }
 
+    #[cfg(test)]
+    pub(crate) fn reset_open_calls() {
+        SEGMENT_OPEN_CALLS.with(|count| count.set(0));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn open_calls() -> usize {
+        SEGMENT_OPEN_CALLS.with(Cell::get)
+    }
+
     /// Open and validate a segment file. Reads the footer first, validates
     /// `magic2`, the directory crc32, then the header magic / version /
     /// endianness. Any mismatch (bad magic, bad crc, wrong endian, directory
     /// pointer out of range) returns `Err`; the caller discards and replays.
     pub fn open(path: &Path) -> Result<SegmentReader> {
+        #[cfg(test)]
+        SEGMENT_OPEN_CALLS.with(|count| count.set(count.get() + 1));
         let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
         // SAFETY: read-only mapping; we never mutate it and treat all bytes as
         // untrusted (bounds-checked, crc-checked before use).

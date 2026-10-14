@@ -298,11 +298,13 @@ impl SegmentRdbStore {
         // Engine here would reconstruct every interner and HNSW graph merely
         // to publish unchanged hard links. Actual cold-open validation belongs
         // to the recovery path, before it installs data into a caller engine.
-        let inherited = current
+        let inherited: Vec<_> = current
             .as_ref()
             .zip(prior_manifest.as_ref())
-            .map(|(record, manifest)| (record.path.as_path(), manifest));
-        if let Err(error) = validate_generation_layout_with_prior(&staged_record, inherited) {
+            .map(|(record, manifest)| (record.path.as_path(), manifest))
+            .into_iter()
+            .collect();
+        if let Err(error) = validate_generation_layout_with_prior(&staged_record, &inherited) {
             let _ = std::fs::remove_dir_all(&staging_path);
             return Err(error).context("validate staged segment generation");
         }

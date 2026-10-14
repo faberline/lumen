@@ -295,3 +295,12 @@ fn prune_keeps_newest() {
     assert_eq!(store.generation_seqs().unwrap(), vec![4, 5]);
     assert_eq!(store.load_latest().unwrap().unwrap().1, 5);
 }
+
+#[test]
+fn staged_filesystem_flush_reaches_the_generation_directory() {
+    use crate::persistence::infrastructure::segment_rdb_store::flush_staged_filesystem;
+    let dir = tempfile::tempdir().unwrap();
+    flush_staged_filesystem(dir.path()).unwrap();
+    // A vanished stage is reported, never treated as flushed.
+    assert!(flush_staged_filesystem(&dir.path().join("missing")).is_err());
+}
