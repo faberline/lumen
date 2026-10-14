@@ -23,6 +23,10 @@
 #
 # Requirements: kind, kubectl, docker, curl, jq, python3.
 #
+# A private prebuilt image needs registry credentials on the kind nodes:
+# LUMEN_E2E_REGISTRY_CONFIG names an absolute docker config.json that every
+# node's kubelet reads from /var/lib/kubelet/config.json.
+#
 # Host → cluster reachability uses kind `extraPortMappings` (hostPort →
 # node NodePort) instead of `kubectl port-forward`: the long-lived
 # port-forward tunnel stalls on successive large POSTs (the 10k-doc index),
@@ -70,6 +74,7 @@ FIXTURE_FILE=""
 INDEX_BODIES=()
 IMAGE_TAG="${LUMEN_E2E_IMAGE:-lumen:latest}"
 IMAGE_MODE="${LUMEN_E2E_IMAGE_MODE:-local}"
+REGISTRY_CONFIG="${LUMEN_E2E_REGISTRY_CONFIG:-}"
 
 die() {
   echo "!! $*" >&2
@@ -93,6 +98,11 @@ if [[ "$IMAGE_MODE" == "prebuilt" ]]; then
   [[ "$EXPECTED_RUNTIME_DIGEST" != "$ROOT_DIGEST" ]] || die "runtime child digest must differ from root index digest"
 elif [[ "$IMAGE_MODE" != "local" ]]; then
   die "invalid LUMEN_E2E_IMAGE_MODE: $IMAGE_MODE (must be local or prebuilt)"
+fi
+if [[ -n "$REGISTRY_CONFIG" ]]; then
+  [[ ! "$REGISTRY_CONFIG" =~ [[:space:][:cntrl:]] ]] || die "LUMEN_E2E_REGISTRY_CONFIG contains whitespace or control characters"
+  [[ "$REGISTRY_CONFIG" == /* ]] || die "LUMEN_E2E_REGISTRY_CONFIG must be an absolute path"
+  [[ -f "$REGISTRY_CONFIG" && -r "$REGISTRY_CONFIG" ]] || die "LUMEN_E2E_REGISTRY_CONFIG is not a readable file: $REGISTRY_CONFIG"
 fi
 
 # ---------------------------------------------------------------------------
@@ -520,10 +530,14 @@ assert_operator_storage_live() {
 # untainted single node it already passes on.
 create_cluster() {
   local workers=""
+  local mounts=""
   local i
+  if [[ -n "$REGISTRY_CONFIG" ]]; then
+    mounts=$'\n    extraMounts:\n      - containerPath: /var/lib/kubelet/config.json\n        hostPath: '"$REGISTRY_CONFIG"
+  fi
   if (( EXPECTED_STORAGE_PODS > 1 )); then
     for (( i = 0; i < EXPECTED_STORAGE_PODS; i++ )); do
-      workers+="${workers:+$'\n'}  - role: worker"
+      workers+="${workers:+$'\n'}  - role: worker${mounts}"
     done
   fi
   kind create cluster --name "$CLUSTER_NAME" --wait 120s --config - <<EOF
@@ -534,7 +548,7 @@ nodes:
     extraPortMappings:
       - containerPort: ${NODE_PORT}
         hostPort: ${PORT_LOCAL}
-        protocol: TCP
+        protocol: TCP${mounts}
 ${workers}
 EOF
 }

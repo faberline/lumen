@@ -47,9 +47,9 @@ const ACTIONS: &[&str] = &[
     "anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610",
 ];
 const WORKFLOW_BYTES_SHA256: &str =
-    "ab25cbb208f7b81fa94b2b6675ecf0833ff8ad9fa1d897be3ec7bc518f03ac3d";
+    "0b75cc3630e3987366452df196b779587de4ce707c02e92b435607214af6b142";
 const KIND_E2E_BYTES_SHA256: &str =
-    "96854d9ed109c8265870265c71b4a5d314e9774abd5abc71f68af8c3f5b5c8f5";
+    "fa8d69429256ef1397f16d100b40cbd604984dd9b3b8fb07ce513177ba619713";
 const RELEASE_PERF_GATE: &str = "cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --skip durable_workload --test-threads=1 --nocapture";
 const VERIFIER_BYTES_SHA256: &str =
     "c0243c72efe11b1f93a3d542cfc0433b17b2938042117350c41299a274de95a7";
@@ -991,7 +991,7 @@ fn validate_candidate_and_kind_commands(workflow: &Yaml) -> Result<(), Finding> 
         ),
     ] {
         let command = format!(
-            "LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_IMAGE=\"${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}\" LUMEN_E2E_EXPECTED_VERSION=\"${{{{ needs.identity.outputs.version }}}}\" LUMEN_E2E_EXPECTED_GIT_SHA=\"${{short_sha:0:8}}\" LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"{digest}\" scripts/kind-e2e.sh"
+            "LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_IMAGE=\"${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}\" LUMEN_E2E_EXPECTED_VERSION=\"${{{{ needs.identity.outputs.version }}}}\" LUMEN_E2E_EXPECTED_GIT_SHA=\"${{short_sha:0:8}}\" LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"{digest}\" LUMEN_E2E_REGISTRY_CONFIG=\"$HOME/.docker/config.json\" scripts/kind-e2e.sh"
         );
         validate_exact_run_step(
             workflow,
@@ -1042,6 +1042,7 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
                 "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "Assert native x86_64 runner architecture",
                 "Install verified kind v0.32.0",
+                "Log in to GHCR for kind node image pulls",
                 "Run prebuilt candidate kind e2e",
             ][..],
         ),
@@ -1051,6 +1052,7 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
                 "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "Assert native aarch64 runner architecture",
                 "Install verified kind v0.32.0",
+                "Log in to GHCR for kind node image pulls",
                 "Run prebuilt candidate kind e2e",
             ][..],
         ),

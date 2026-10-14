@@ -810,21 +810,25 @@ fn execute_verifier_function_with_arg(
     function: &str,
     argument: &str,
     input: &str,
+    env: &[(&str, &str)],
 ) -> Output {
     let temp = TempDir::new("pagination-arg");
     let script_path = temp.0.join("verifier.sh");
     let input_path = temp.0.join("input.json");
     fs::write(&script_path, verifier).unwrap();
     fs::write(&input_path, input).unwrap();
-    Command::new("bash")
+    let mut command = Command::new("bash");
+    command
         .args(["-c", "source \"$1\"; \"$2\" \"$3\" < \"$4\""])
         .arg("bash")
         .arg(&script_path)
         .arg(function)
         .arg(argument)
-        .arg(&input_path)
-        .output()
-        .unwrap()
+        .arg(&input_path);
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    command.output().unwrap()
 }
 
 fn execute_verifier_function_with_env(
@@ -3860,8 +3864,7 @@ fn recovery_0430_workflow_is_frozen_and_rejects_high_risk_mutations() {
 
 #[test]
 fn public_verify_0429_workflow_is_frozen_and_rejects_write_or_identity_mutations() {
-    let workflow =
-        include_str!("../../.github/workflows/lumen-release-0.4.29-public-verify.yml");
+    let workflow = include_str!("../../.github/workflows/lumen-release-0.4.29-public-verify.yml");
     validate_public_verify_0429_workflow(workflow)
         .expect("0.4.29 public verifier workflow must satisfy its frozen read-only contract");
     assert_eq!(
@@ -3964,12 +3967,19 @@ fn public_release_notes_are_bound_to_candidate_and_promotion_evidence() {
 #[test]
 fn public_release_note_body_helper_is_hermetic_and_fail_closed() {
     let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    // Pin TAG: the sourced verifier runs under `set -u` and gates notes by tag.
+    const PRE_DURABLE_PERF_TAG_ENV: &[(&str, &str)] = &[("TAG", "lumen@0.6.0")];
     assert!(verifier.contains("verify_public_release_notes <<<\"$release_json\""));
     let valid = format!(r#"{{"body":"{PUBLIC_COMPATIBILITY_NOTE}"}}"#);
     assert!(
-        execute_verifier_function(verifier, "verify_public_release_notes", &valid)
-            .status
-            .success(),
+        execute_verifier_function_with_env(
+            verifier,
+            "verify_public_release_notes",
+            &valid,
+            PRE_DURABLE_PERF_TAG_ENV,
+        )
+        .status
+        .success(),
         "exact compatibility bullet was rejected"
     );
     let receipt_sha256 = "a".repeat(64);
@@ -3984,6 +3994,7 @@ fn public_release_note_body_helper_is_hermetic_and_fail_closed() {
             "verify_public_release_notes",
             &receipt_sha256,
             &valid_with_receipt,
+            PRE_DURABLE_PERF_TAG_ENV,
         )
         .status
         .success(),
@@ -4014,6 +4025,7 @@ fn public_release_note_body_helper_is_hermetic_and_fail_closed() {
                 "verify_public_release_notes",
                 &receipt_sha256,
                 &input,
+                PRE_DURABLE_PERF_TAG_ENV,
             )
             .status
             .success(),
@@ -4070,12 +4082,100 @@ fn public_release_note_body_helper_is_hermetic_and_fail_closed() {
     for (name, body) in variants {
         let input = format!(r#"{{"body":{}}}"#, serde_json::to_string(&body).unwrap());
         assert!(
-            !execute_verifier_function(verifier, "verify_public_release_notes", &input)
-                .status
-                .success(),
+            !execute_verifier_function_with_env(
+                verifier,
+                "verify_public_release_notes",
+                &input,
+                PRE_DURABLE_PERF_TAG_ENV,
+            )
+            .status
+            .success(),
             "compatibility body helper accepted {name} variant"
         );
     }
+}
+
+#[test]
+fn durable_perf_release_notes_bind_summary_and_gke_claim() {
+    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let perf_sha256 = "c".repeat(64);
+    let receipt_sha256 = "a".repeat(64);
+    let env: &[(&str, &str)] = &[
+        ("TAG", "lumen@0.6.1"),
+        ("DURABLE_PERF_SUMMARY_SHA256", &perf_sha256),
+    ];
+    let perf_note = format!("- Durable performance summary SHA-256: {perf_sha256}");
+    let receipt_note = format!("- Standalone GKE receipt SHA-256: {receipt_sha256}");
+    let not_claimed = "- Standalone GKE: not claimed";
+    let input = |lines: &[&str]| {
+        let mut body = vec![PUBLIC_COMPATIBILITY_NOTE];
+        body.extend_from_slice(lines);
+        format!(
+            r#"{{"body":{}}}"#,
+            serde_json::to_string(&body.join("\n")).unwrap()
+        )
+    };
+    assert!(
+        execute_verifier_function_with_env(
+            verifier,
+            "verify_public_release_notes",
+            &input(&[&perf_note, not_claimed]),
+            env,
+        )
+        .status
+        .success(),
+        "durable perf note with unclaimed GKE was rejected"
+    );
+    assert!(
+        execute_verifier_function_with_arg(
+            verifier,
+            "verify_public_release_notes",
+            &receipt_sha256,
+            &input(&[&perf_note, &receipt_note]),
+            env,
+        )
+        .status
+        .success(),
+        "durable perf note with claimed GKE receipt was rejected"
+    );
+    let divergent_perf = format!("- Durable performance summary SHA-256: {}", "d".repeat(64));
+    for (name, lines) in [
+        ("missing perf", vec![not_claimed]),
+        ("divergent perf", vec![divergent_perf.as_str(), not_claimed]),
+        ("missing not-claimed", vec![perf_note.as_str()]),
+        (
+            "duplicate not-claimed",
+            vec![perf_note.as_str(), not_claimed, not_claimed],
+        ),
+        (
+            "unbound receipt",
+            vec![perf_note.as_str(), not_claimed, receipt_note.as_str()],
+        ),
+    ] {
+        assert!(
+            !execute_verifier_function_with_env(
+                verifier,
+                "verify_public_release_notes",
+                &input(&lines),
+                env,
+            )
+            .status
+            .success(),
+            "durable perf note helper accepted {name} body"
+        );
+    }
+    assert!(
+        !execute_verifier_function_with_arg(
+            verifier,
+            "verify_public_release_notes",
+            &receipt_sha256,
+            &input(&[&perf_note, &receipt_note, not_claimed]),
+            env,
+        )
+        .status
+        .success(),
+        "durable perf note helper accepted claimed GKE alongside not-claimed"
+    );
 }
 
 #[test]
