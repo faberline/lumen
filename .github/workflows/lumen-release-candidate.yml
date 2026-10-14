@@ -493,6 +493,9 @@ jobs:
           set -euo pipefail
           cargo test --locked -p lumen --features raft-wal --test it -- legacy_3073_app::
           cargo test --locked -p lumen --features raft-wal --bin lumen cluster_state_poller_converges_role_to_live_election_result
+          cargo build --locked -p lumen --features raft-wal
+          cargo test --locked -p lumen --features raft-wal --lib --no-run
+          git -c core.fsmonitor=false diff --check
 
   gates-release-features:
     name: cargo gates (release feature set)
@@ -703,43 +706,9 @@ jobs:
             --arm64-digest "${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}" \
             --mode full
 
-  verify-libraries:
-    name: verify service and Raft library gates
-    needs: [identity]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.identity.outputs.commit }}
-          fetch-depth: 0
-      - name: Run required service and Raft library gates without GKE
-        shell: bash
-        run: |
-          set -euo pipefail
-          core_rev="$(sed -n 's|^source = "git+https://github.com/faberline/core?tag=[^#]*#\([0-9a-f]\{40\}\)"$|\1|p' Cargo.lock | sort -u)"
-          [[ "$core_rev" =~ ^[0-9a-f]{40}$ ]] || { echo "Cargo.lock must pin exactly one faberline/core commit" >&2; exit 1; }
-          core="$RUNNER_TEMP/core"
-          git init -q "$core"
-          git -C "$core" fetch -q --depth 1 https://github.com/faberline/core "$core_rev"
-          git -C "$core" checkout -q --detach FETCH_HEAD
-          cargo test --locked --manifest-path "$core/Cargo.toml" -p service-k8s --test stateful_instance_render
-          cargo test --locked --manifest-path "$core/Cargo.toml" -p service-k8s --test stateful_adapter_equivalence
-          cargo test --locked --manifest-path "$core/Cargo.toml" -p service-k8s
-          cargo test --locked --manifest-path "$core/Cargo.toml" -p storage-durable
-          cargo test --locked --manifest-path "$core/Cargo.toml" -p service-backup --features http-client
-          cargo test --locked --manifest-path "$core/Cargo.toml" -p raft-runtime --test adversarial_recovery
-          cargo test --locked --manifest-path "$core/Cargo.toml" -p raft-core
-          cargo test --locked --manifest-path "$core/Cargo.toml" -p raft-runtime
-          cargo build --locked -p lumen --features raft-wal
-          cargo test --locked -p lumen --features raft-wal --lib --no-run
-          cargo test --locked -p lumen --features raft-wal --test it --no-run
-          git -c core.fsmonitor=false diff --check
-
   kind-amd64:
     name: kind e2e (amd64)
-    needs: [identity, verify-libraries, ghcr-image-and-attest]
+    needs: [identity, ghcr-image-and-attest]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -793,7 +762,7 @@ jobs:
 
   kind-arm64:
     name: kind e2e (arm64)
-    needs: [identity, verify-libraries, ghcr-image-and-attest]
+    needs: [identity, ghcr-image-and-attest]
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -847,7 +816,7 @@ jobs:
 
   result:
     name: final candidate receipt
-    needs: [identity, build, manifest, ghcr-image-and-attest, gates-default, gates-operator, gates-raft-wal, gates-release-features, container-smoke, cloud-free-config, perf-coarse, verify-candidate, verify-libraries, kind-amd64, kind-arm64]
+    needs: [identity, build, manifest, ghcr-image-and-attest, gates-default, gates-operator, gates-raft-wal, gates-release-features, container-smoke, cloud-free-config, perf-coarse, verify-candidate, kind-amd64, kind-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -900,7 +869,7 @@ jobs:
           set -euo pipefail
           cd candidate
           jq -e '.schema == "cclab.lumen.candidate-manifest.v3"' candidate-manifest.json >/dev/null
-          jq -c '. + {jobs:{identity:"${{ needs.identity.result }}",build:"${{ needs.build.result }}",manifest:"${{ needs.manifest.result }}","ghcr-image-and-attest":"${{ needs.ghcr-image-and-attest.result }}","gates-default":"${{ needs.gates-default.result }}","gates-operator":"${{ needs.gates-operator.result }}","gates-raft-wal":"${{ needs.gates-raft-wal.result }}","gates-release-features":"${{ needs.gates-release-features.result }}","container-smoke":"${{ needs.container-smoke.result }}","cloud-free-config":"${{ needs.cloud-free-config.result }}","perf-coarse":"${{ needs.perf-coarse.result }}","verify-candidate":"${{ needs.verify-candidate.result }}","verify-libraries":"${{ needs.verify-libraries.result }}","kind-amd64":"${{ needs.kind-amd64.result }}","kind-arm64":"${{ needs.kind-arm64.result }}",result:"success"}}' candidate-manifest.json > final-candidate-manifest.json
+          jq -c '. + {jobs:{identity:"${{ needs.identity.result }}",build:"${{ needs.build.result }}",manifest:"${{ needs.manifest.result }}","ghcr-image-and-attest":"${{ needs.ghcr-image-and-attest.result }}","gates-default":"${{ needs.gates-default.result }}","gates-operator":"${{ needs.gates-operator.result }}","gates-raft-wal":"${{ needs.gates-raft-wal.result }}","gates-release-features":"${{ needs.gates-release-features.result }}","container-smoke":"${{ needs.container-smoke.result }}","cloud-free-config":"${{ needs.cloud-free-config.result }}","perf-coarse":"${{ needs.perf-coarse.result }}","verify-candidate":"${{ needs.verify-candidate.result }}","kind-amd64":"${{ needs.kind-amd64.result }}","kind-arm64":"${{ needs.kind-arm64.result }}",result:"success"}}' candidate-manifest.json > final-candidate-manifest.json
           if command -v sha256sum >/dev/null 2>&1; then sha256sum final-candidate-manifest.json > final-candidate-manifest.json.sha256; else shasum -a 256 final-candidate-manifest.json > final-candidate-manifest.json.sha256; fi
       - name: Verify final receipt as local fixture only
         shell: bash

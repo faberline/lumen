@@ -199,15 +199,18 @@ these jobs against the exact commit:
 | `identity`, `build`, `ghcr-image-and-attest`, `manifest` | One candidate version and commit, the release binaries, and the signed, attested multi-arch GHCR image. |
 | `gates-default` | `cargo test --locked -p lumen` |
 | `gates-operator` | `cargo test --locked -p lumen --features "operator delegated-auth"` |
-| `gates-raft-wal` | The `raft-wal` feature cases. |
+| `gates-raft-wal` | The `raft-wal` feature cases, plus the `raft-wal` build, lib test build, and `git diff --check`. |
 | `gates-release-features` | The release feature set (`release_feature_set::`). |
 | `container-smoke` | `scripts/standalone-container-smoke.sh` in `bind` and `durable` modes against the candidate image. |
 | `cloud-free-config` | Terraform and Kustomize static checks; it calls no cloud API. |
 | `perf-coarse` | The release-profile `perf_gate::` cases except the thirty-minute durable workload. It still blocks the release. |
 | `verify-candidate` | `scripts/verify-release-candidate.sh`: supply-chain verification only. |
-| `verify-libraries` | The service and Raft crate tests against the faberline/core commit pinned in `Cargo.lock`, plus `raft-wal` build checks. This job stays until faberline/core CI runs those tests green at the pinned tag. |
 | `kind-amd64`, `kind-arm64` | Native Kind e2e on each architecture. |
 | `result` | Writes `final-candidate-manifest.json`, whose `jobs` map binds every job above. |
+
+The service and Raft crate tests (`service-k8s`, `storage-durable`,
+`service-backup`, `raft-core`, `raft-runtime`) belong to faberline/core. Its
+own CI runs them for each core tag; the Lumen candidate does not rerun them.
 
 Each Kind job runs `scripts/kind-e2e.sh` twice with the prebuilt candidate
 image, once per mode, and checks the image's version, commit, and runtime

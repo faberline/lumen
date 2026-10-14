@@ -17,7 +17,7 @@ const RUN_ID: &str = "123";
 const RELEASE_WORKFLOW_SHA256: &str =
     "d88da5b42dfa535c62f479166967bf389163c62da09939ebacac2ad5a10757e5";
 const PROMOTION_VERIFIER_BYTES_SHA256: &str =
-    "e722e92bd1eff0f20d239b3474e0cd6f4bd520cc133ad5340e4c326c7afee3ed";
+    "90444101995faedd2066286b7bc972611ddf0be95c47fee51efb8a5eecf85df1";
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const COSIGN_INSTALLER: &str = "sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6";
 const SETUP_BUILDX: &str = "docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f";
@@ -306,7 +306,7 @@ fn release_fixture() -> ReleaseFixture {
         .unwrap();
     }
     let manifest = format!(
-        r#"{{"schema":"cclab.lumen.candidate-manifest.v3","repository":"faberline/lumen","workflow_path":".github/workflows/lumen-release-candidate.yml","workflow_id":1,"run_id":"{RUN_ID}","run_attempt":"1","run_url":"https://github.com/faberline/lumen/actions/runs/{RUN_ID}/attempts/1","source_ref":"refs/heads/main","workflow_ref":"faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main","commit":"{COMMIT}","version":"{VERSION}","tag":"{TAG}","candidate_tag":"release-candidate-{RUN_ID}-1","pr":{{"number":1,"url":"https://github.com/faberline/lumen/pull/1"}},"image":{{"repository":"ghcr.io/faberline/lumen","root_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","amd64_digest":"sha256:2222222222222222222222222222222222222222222222222222222222222222","arm64_digest":"sha256:3333333333333333333333333333333333333333333333333333333333333333"}},"artifacts":[{}],"sboms":{{"amd64":{{"file":"spdx-amd64.json","sha256":"{}"}},"arm64":{{"file":"spdx-arm64.json","sha256":"{}"}}}},"jobs":{{"identity":"success","build":"success","manifest":"success","ghcr-image-and-attest":"success","gates-default":"success","gates-operator":"success","gates-raft-wal":"success","gates-release-features":"success","container-smoke":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success","result":"success"}}}}"#,
+        r#"{{"schema":"cclab.lumen.candidate-manifest.v3","repository":"faberline/lumen","workflow_path":".github/workflows/lumen-release-candidate.yml","workflow_id":1,"run_id":"{RUN_ID}","run_attempt":"1","run_url":"https://github.com/faberline/lumen/actions/runs/{RUN_ID}/attempts/1","source_ref":"refs/heads/main","workflow_ref":"faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main","commit":"{COMMIT}","version":"{VERSION}","tag":"{TAG}","candidate_tag":"release-candidate-{RUN_ID}-1","pr":{{"number":1,"url":"https://github.com/faberline/lumen/pull/1"}},"image":{{"repository":"ghcr.io/faberline/lumen","root_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","amd64_digest":"sha256:2222222222222222222222222222222222222222222222222222222222222222","arm64_digest":"sha256:3333333333333333333333333333333333333333333333333333333333333333"}},"artifacts":[{}],"sboms":{{"amd64":{{"file":"spdx-amd64.json","sha256":"{}"}},"arm64":{{"file":"spdx-arm64.json","sha256":"{}"}}}},"jobs":{{"identity":"success","build":"success","manifest":"success","ghcr-image-and-attest":"success","gates-default":"success","gates-operator":"success","gates-raft-wal":"success","gates-release-features":"success","container-smoke":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","kind-amd64":"success","kind-arm64":"success","result":"success"}}}}"#,
         artifacts.join(","),
         sha256(&candidate.join("spdx-amd64.json")),
         sha256(&candidate.join("spdx-arm64.json")),
@@ -613,7 +613,6 @@ const CANDIDATE_EXECUTION_NAMES: &[&str] = &[
     "kind e2e (arm64)",
     "standalone container smoke",
     "verify candidate supply chain",
-    "verify service and Raft library gates",
 ];
 
 fn shell_function_lines<'a>(source: &'a str, name: &str) -> Result<Vec<&'a str>, String> {
@@ -702,7 +701,10 @@ fn validate_candidate_execution_bindings(verifier: &str) -> Result<(), String> {
         ),
         (
             "missing",
-            candidate_jobs(&CANDIDATE_EXECUTION_NAMES[..19], None),
+            candidate_jobs(
+                &CANDIDATE_EXECUTION_NAMES[..CANDIDATE_EXECUTION_NAMES.len() - 1],
+                None,
+            ),
             false,
         ),
         (
@@ -725,7 +727,7 @@ fn validate_candidate_execution_bindings(verifier: &str) -> Result<(), String> {
                     .iter()
                     .enumerate()
                     .map(|(index, name)| {
-                        if index == 19 {
+                        if index == CANDIDATE_EXECUTION_NAMES.len() - 1 {
                             CANDIDATE_EXECUTION_NAMES[0]
                         } else {
                             name
@@ -5079,16 +5081,16 @@ fn fixture_mode_rejects_v2_and_job_map_drift() {
             "cclab.lumen.candidate-manifest.v3",
             "cclab.lumen.candidate-manifest.v2",
         ),
-        ("missing job key", "\"verify-libraries\":\"success\",", ""),
+        ("missing job key", "\"kind-arm64\":\"success\",", ""),
         (
             "extra job key",
-            "\"verify-libraries\":\"success\",",
-            "\"verify-libraries\":\"success\",\"extra\":\"success\",",
+            "\"kind-arm64\":\"success\",",
+            "\"kind-arm64\":\"success\",\"extra\":\"success\",",
         ),
         (
-            "failed library job",
-            "\"verify-libraries\":\"success\"",
-            "\"verify-libraries\":\"failure\"",
+            "failed kind job",
+            "\"kind-arm64\":\"success\"",
+            "\"kind-arm64\":\"failure\"",
         ),
     ] {
         let fixture = release_fixture();
