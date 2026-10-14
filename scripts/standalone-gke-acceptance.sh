@@ -401,7 +401,7 @@ validate_candidate_manifest_v2() {
     .candidate_tag == ("release-candidate-" + .run_id + "-" + .run_attempt) and
     .image.repository == "ghcr.io/faberline/lumen" and
     ([.image.root_digest,.image.amd64_digest,.image.arm64_digest] | all(.[]; type == "string" and test("^sha256:[0-9a-f]{64}$"))) and
-    (.jobs|keys|sort) == ["build","ghcr-image-and-attest","identity","kind-amd64","kind-arm64","manifest","result","verify-candidate","verify-libraries"] and
+    (.jobs|keys|sort) == ["build","cloud-free-config","container-smoke","gates-default","gates-operator","gates-raft-wal","gates-release-features","ghcr-image-and-attest","identity","kind-amd64","kind-arm64","manifest","perf-coarse","result","verify-candidate","verify-libraries"] and
     (.jobs|all(.[]; . == "success")) and
     (.artifacts|type == "array" and length == 5 and
       ([.[].target]|sort) == ["aarch64-apple-darwin","aarch64-unknown-linux-gnu","aarch64-unknown-linux-musl","x86_64-unknown-linux-gnu","x86_64-unknown-linux-musl"] and

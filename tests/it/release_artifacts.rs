@@ -64,7 +64,7 @@ fn validate(input: &Inputs) -> Result<(), Finding> {
     require!(!installer_checksum.contains("true ||") && !installer_checksum.contains("|| true") && !installer_version.contains("true ||") && !installer_version.contains("|| true"), "INSTALLER_INTEGRITY", "installer integrity control flow contains a bypass");
 
     let prebuilt = between(&input.kind, "if [[ \"$IMAGE_MODE\" == \"prebuilt\" ]]; then", "elif [[ \"$IMAGE_MODE\" != \"local\" ]]");
-    for needle in ["requires LUMEN_E2E_MODE=operator", "^ghcr\\.io/faberline/lumen@sha256:[0-9a-f]{64}$", "^sha256:[0-9a-f]{64}$", "^[0-9a-f]{8}$", "EXPECTED_RUNTIME_DIGEST\" != \"$ROOT_DIGEST", "cargo_ver=\"$(grep"] {
+    for needle in ["requires LUMEN_E2E_MODE=operator or overlay", "^ghcr\\.io/faberline/lumen@sha256:[0-9a-f]{64}$", "^sha256:[0-9a-f]{64}$", "^[0-9a-f]{8}$", "EXPECTED_RUNTIME_DIGEST\" != \"$ROOT_DIGEST", "cargo_ver=\"$(grep"] {
         require!(prebuilt.contains(needle), "KIND_INPUTS", format!("prebuilt input proof missing: {needle}"));
     }
     require!(!["docker build", "kind load docker-image", "docker login", "gh auth"].iter().any(|v| prebuilt.contains(v)), "KIND_PREBUILT_LOCAL", "prebuilt branch performs local or credential work");
@@ -114,8 +114,27 @@ fn validate(input: &Inputs) -> Result<(), Finding> {
     let named_pods = shell_fn(&input.kind, "assert_named_pods");
     require!(named_pods.contains("    normalized=\"$(normalize_runtime_image_id \"$runtime_id\")\" || die \"unrecognized $container runtime imageID: $runtime_id\"\n    runtime_digest_is_expected \"$normalized\" || \\\n      die \"$container runtime imageID $runtime_id is neither the pinned root digest $ROOT_DIGEST nor the expected platform child digest $EXPECTED_RUNTIME_DIGEST\""), "KIND_RUNTIME_ID", "pod runtime identity must use the exact fail-closed normalization and digest sequence");
     let identity_fn = shell_fn(&input.kind, "assert_cluster_identity");
-    for needle in ["deploy/lumen-operator -o json", ".name == \"operator\" and .image == $image", "get lumen/", ".spec.image", "get statefulset/", ".name == \"server\" and .image == $image", "assert_named_pods \"$OPERATOR_NS\"", "assert_named_pods \"$NAMESPACE\"", "/version", "(.version | type) == \"string\"", ".version != \"unknown\""] {
-        require!(identity_fn.contains(needle), "KIND_DESIRED_STATE", format!("identity surface missing: {needle}"));
+    let expected_dispatch = r###"
+  if [[ "$IMAGE_MODE" != "prebuilt" ]]; then
+    return 0
+  fi
+  echo "   verifying prebuilt cluster desired state and runtime image identities"
+  if [[ "$E2E_MODE" == "overlay" ]]; then
+    assert_overlay_identity
+  else
+    assert_operator_identity
+  fi
+  assert_version_identity"###;
+    require!(identity_fn == expected_dispatch, "KIND_DESIRED_STATE", "identity dispatch must check the deployed mode and /version");
+    for (function, needles) in [
+        ("assert_overlay_identity", &["get deploy/lumen -o json", ".name == \"lumen\" and .image == $image", "assert_named_pods \"$NAMESPACE\" \"$APP_LABEL\" lumen"][..]),
+        ("assert_operator_identity", &["deploy/lumen-operator -o json", ".name == \"operator\" and .image == $image", "get lumen/", ".spec.image", "get statefulset/", ".name == \"server\" and .image == $image", "assert_named_pods \"$OPERATOR_NS\"", "assert_named_pods \"$NAMESPACE\""][..]),
+        ("assert_version_identity", &["/version", "(.version | type) == \"string\"", ".version != \"unknown\""][..]),
+    ] {
+        let body = shell_fn(&input.kind, function);
+        for needle in needles {
+            require!(body.contains(needle), "KIND_DESIRED_STATE", format!("identity surface missing: {needle}"));
+        }
     }
     let first = input.kind.find("step \"4a2. assert cluster identity and /version\" assert_cluster_identity");
     let mutation = input.kind.find("step \"4b. PUT /collections/users\" api_put_collection");
@@ -770,6 +789,18 @@ fn scoped_negative_mutations_fail_with_stable_findings() {
         ("  sset_json=\"$(kubectl -n \"$NAMESPACE\" get statefulset/\"${LUMEN_CR_NAME}\" -o json)\"", "  sset_json=\"$(jq -nc --arg image \"$IMAGE_TAG\" '{spec:{replicas:1,template:{spec:{containers:[{name:\"server\",image:$image}]}}}}')\""),
         ("  assert_named_pods \"$OPERATOR_NS\" \"app.kubernetes.io/name=lumen-operator\" operator \"$op_replicas\"", "  : # operator Pod identity check omitted"),
         ("  assert_named_pods \"$NAMESPACE\" \"$APP_LABEL\" server \"$sset_replicas\"", "  : # serving Pod identity check omitted"),
+    ] {
+        let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "assert_operator_identity", from, to); expect(fixture, "KIND_DESIRED_STATE");
+    }
+    for (from, to) in [
+        ("  deploy_json=\"$(kubectl -n \"$NAMESPACE\" get deploy/lumen -o json)\"", "  deploy_json=\"$(jq -nc --arg image \"$IMAGE_TAG\" '{spec:{replicas:1,template:{spec:{containers:[{name:\"lumen\",image:$image}]}}}}')\""),
+        ("  assert_named_pods \"$NAMESPACE\" \"$APP_LABEL\" lumen \"$deploy_replicas\"", "  : # overlay Pod identity check omitted"),
+    ] {
+        let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "assert_overlay_identity", from, to); expect(fixture, "KIND_DESIRED_STATE");
+    }
+    for (from, to) in [
+        ("    assert_overlay_identity\n", "    : overlay identity omitted\n"),
+        ("  assert_version_identity", "  : version identity omitted"),
     ] {
         let mut fixture = live(); fixture.kind = function_replace(&fixture.kind, "assert_cluster_identity", from, to); expect(fixture, "KIND_DESIRED_STATE");
     }

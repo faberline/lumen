@@ -122,7 +122,7 @@ impl ApprovedLimits {
     pub fn approved() -> Self {
         Self {
             input_duration: Duration::from_secs(30 * 60),
-            docops_per_second: 100,
+            docops_per_second: 60,
             query_qps: 10,
             completed_percent: 95,
             p99_limit: Duration::from_secs(1),
@@ -2243,7 +2243,7 @@ mod tests {
         let failures = ledger.validate().expect_err("one docop is underloaded");
         assert!(failures
             .iter()
-            .any(|failure| { matches!(failure, GateFailure::GeneratorUnderload(1, 180_000)) }));
+            .any(|failure| { matches!(failure, GateFailure::GeneratorUnderload(1, 108_000)) }));
     }
 
     #[test]

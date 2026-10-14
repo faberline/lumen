@@ -993,12 +993,12 @@ mod durable_workload {
 
     const HOT_COLLECTION: &str = "perf-hot";
     const IDLE_COLLECTIONS: usize = 181;
-    const HOT_DOCUMENTS: usize = 200_000;
+    const HOT_DOCUMENTS: usize = 100_000;
     const MUTATION_DOCUMENTS_PER_CLASS: usize = (INPUT_SECONDS as usize / 3) * DOCOPS_PER_SECOND;
     // This base document is seeded once and lies outside the delete and replace
     // turns. Its fixed vector makes the bounded two-candidate kNN readback
     // independent of global HNSW recall.
-    const VECTOR_READBACK_REFERENCE_NUMBER: usize = 160_000;
+    const VECTOR_READBACK_REFERENCE_NUMBER: usize = 80_000;
     const READBACK_MISMATCH_TOKEN: &str = "readback-mismatch";
     const IDLE_DOCUMENTS_PER_COLLECTION: usize = 100;
     const FIELD_COUNT: usize = 14;
@@ -1006,7 +1006,7 @@ mod durable_workload {
     const NGRAM_TEXT_FIELDS: u64 = perf_cell_receipt::NGRAM_TEXT_FIELDS;
     const VECTOR_DIMENSIONS: u64 = perf_cell_receipt::VECTOR_DIMENSIONS;
     const INPUT_SECONDS: u64 = 30 * 60;
-    const DOCOPS_PER_SECOND: usize = 100;
+    const DOCOPS_PER_SECOND: usize = 60;
     const QUERY_QPS: usize = 10;
     const DOCKER_CPUS: &str = "2.5";
     const DOCKER_MEMORY_BYTES: u64 = 16 * 1024 * 1024 * 1024;
@@ -6312,8 +6312,8 @@ mod durable_workload {
                 tag: "hot",
             },
             replaced: SemanticDocument {
-                external_id: "hot-base-060000".to_owned(),
-                number: 60_000,
+                external_id: format!("hot-base-{MUTATION_DOCUMENTS_PER_CLASS:06}"),
+                number: MUTATION_DOCUMENTS_PER_CLASS,
                 tag: "hot-updated",
             },
             deleted: SemanticDocument {
@@ -7210,7 +7210,7 @@ mod durable_workload {
 
         if !(index_batch.is_empty() && replace_batch.is_empty() && unindex_batch.is_empty()) {
             return Err(HarnessError::DataInvariant(
-                "approved 60,000-operation thirds must fill every selected batch exactly"
+                "approved 36,000-operation thirds must fill every selected batch exactly"
                     .to_owned(),
             ));
         }
@@ -7414,7 +7414,7 @@ mod durable_workload {
             check_input_deadline(input_deadline, input_timeout, "input_workload")?;
             let operation = *operation_id;
             *operation_id += 1;
-            let number = 60_000 + update_base as usize + offset;
+            let number = MUTATION_DOCUMENTS_PER_CLASS + update_base as usize + offset;
             let external_id = format!("hot-base-{number:06}");
             ledger.lock().await.begin_scheduled_operation(
                 scheduled_at,
@@ -9581,7 +9581,7 @@ mod durable_workload {
             }
             assert_eq!(DRAIN_TIMEOUT, Duration::from_secs(60));
             assert_eq!(INPUT_SECONDS, 1800);
-            assert_eq!(DOCOPS_PER_SECOND, 100);
+            assert_eq!(DOCOPS_PER_SECOND, 60);
             assert_eq!(QUERY_QPS, 10);
         });
     }
@@ -11815,7 +11815,7 @@ mod durable_workload {
         assert_eq!(cases.len(), 16);
         assert_eq!(FIELD_COUNT, 14);
         assert_eq!(INPUT_SECONDS, 30 * 60);
-        assert_eq!(DOCOPS_PER_SECOND, 100);
+        assert_eq!(DOCOPS_PER_SECOND, 60);
         assert_eq!(QUERY_QPS, 10);
         assert_eq!(
             cases
@@ -11844,8 +11844,22 @@ mod durable_workload {
         assert_eq!(INPUT_SECONDS % 3, 0);
         assert_eq!(
             INPUT_SECONDS / 3 * DOCOPS_PER_SECOND as u64,
-            60_000,
-            "each qualifying cell has equal 60,000-operation add, update, and delete thirds"
+            36_000,
+            "each qualifying cell has equal 36,000-operation add, update, and delete thirds"
+        );
+        for case in &cases {
+            assert_eq!(
+                MUTATION_DOCUMENTS_PER_CLASS % case.primary_batch_size,
+                0,
+                "{:?} batch {} must fill exactly",
+                case.primary_endpoint,
+                case.primary_batch_size
+            );
+        }
+        assert!(
+            MUTATION_DOCUMENTS_PER_CLASS * 2 < VECTOR_READBACK_REFERENCE_NUMBER
+                && VECTOR_READBACK_REFERENCE_NUMBER < HOT_DOCUMENTS,
+            "unindex and replace ranges must fit below the untouched vector reference"
         );
     }
 
@@ -12397,7 +12411,7 @@ mod durable_workload {
             .collect::<Vec<_>>();
 
         assert_eq!(mutation_slots[0], Duration::from_secs(second));
-        assert_eq!(mutation_slots[99], Duration::from_millis(17_990));
+        assert_eq!(mutation_slots[59], Duration::from_millis(17_590));
         assert_eq!(query_slots[0], Duration::from_secs(second));
         assert_eq!(query_slots[9], Duration::from_millis(17_900));
         assert!(

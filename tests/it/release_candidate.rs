@@ -47,12 +47,12 @@ const ACTIONS: &[&str] = &[
     "anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610",
 ];
 const WORKFLOW_BYTES_SHA256: &str =
-    "0b75cc3630e3987366452df196b779587de4ce707c02e92b435607214af6b142";
+    "123d1ec0f9dae9cee70b7283272abcfdaccfc987ed3ad8a5cb1f196c687029d0";
 const KIND_E2E_BYTES_SHA256: &str =
-    "fa8d69429256ef1397f16d100b40cbd604984dd9b3b8fb07ce513177ba619713";
+    "e96c2a010d141eb6cfe4c261ad63f7017f4baacdf5509d65606731669beb0044";
 const RELEASE_PERF_GATE: &str = "cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --skip durable_workload --test-threads=1 --nocapture";
 const VERIFIER_BYTES_SHA256: &str =
-    "c0243c72efe11b1f93a3d542cfc0433b17b2938042117350c41299a274de95a7";
+    "21080d327065a21616c6e2fcc9373e9c5366c05b0ff75e908ddae89d9a7254ac";
 
 fn sha256_bytes(bytes: &[u8]) -> String {
     let mut child = Command::new("shasum")
@@ -122,10 +122,20 @@ fn replace_occurrence(source: &str, from: &str, to: &str, occurrence: usize) -> 
 }
 
 fn validate_uv_setup(workflow: &Yaml) -> Result<(), Finding> {
+    // The default and operator suites run spec_gen_e2e, which needs uv.
+    for (job_name, gate_name) in [
+        ("gates-default", "Run default-feature cargo gate"),
+        ("gates-operator", "Run operator delegated-auth cargo gate"),
+    ] {
+        validate_uv_setup_in(workflow, job_name, gate_name)?;
+    }
+    Ok(())
+}
+
+fn validate_uv_setup_in(workflow: &Yaml, job_name: &str, gate_name: &str) -> Result<(), Finding> {
     const UV_SETUP: &str = "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9";
-    const GATE_NAME: &str = "Run required Lumen product gates without GKE";
     let steps = field(
-        job(workflow, "verify-candidate").ok_or(Finding("UV_SETUP"))?,
+        job(workflow, job_name).ok_or(Finding("UV_SETUP"))?,
         "steps",
     )
     .and_then(Yaml::as_sequence)
@@ -145,7 +155,7 @@ fn validate_uv_setup(workflow: &Yaml) -> Result<(), Finding> {
         .iter()
         .enumerate()
         .filter_map(|(index, step)| {
-            (field(step, "name").and_then(Yaml::as_str) == Some(GATE_NAME)).then_some(index)
+            (field(step, "name").and_then(Yaml::as_str) == Some(gate_name)).then_some(index)
         })
         .collect();
     require(gate_indices.len() == 1, "UV_SETUP")?;
@@ -177,8 +187,9 @@ fn validate_uv_setup(workflow: &Yaml) -> Result<(), Finding> {
 
 fn validate_cloud_free_acceptance_gates(workflow: &Yaml) -> Result<(), Finding> {
     const RUBY: &str = "ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b";
+    const JOB: &str = "cloud-free-config";
     let steps = field(
-        job(workflow, "verify-candidate").ok_or(Finding("CLOUD_FREE_GATES"))?,
+        job(workflow, JOB).ok_or(Finding("CLOUD_FREE_GATES"))?,
         "steps",
     )
     .and_then(Yaml::as_sequence)
@@ -191,16 +202,14 @@ fn validate_cloud_free_acceptance_gates(workflow: &Yaml) -> Result<(), Finding> 
             .map(|(index, _)| index)
             .collect::<Vec<_>>()
     };
-    let uv = steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| {
-            field(step, "uses").and_then(Yaml::as_str)
-                == Some("astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9")
-        })
-        .map(|(index, _)| index)
-        .collect::<Vec<_>>();
-    require(uv.len() == 1, "CLOUD_FREE_GATES")?;
+    // checkout, ruby, terraform, kubectl, then the two gates and nothing else.
+    require(steps.len() == 6, "CLOUD_FREE_GATES")?;
+    require(
+        field(&steps[0], "uses")
+            .and_then(Yaml::as_str)
+            .is_some_and(|uses| uses.starts_with("actions/checkout@")),
+        "CLOUD_FREE_GATES",
+    )?;
     let ruby = steps
         .iter()
         .enumerate()
@@ -227,7 +236,7 @@ fn validate_cloud_free_acceptance_gates(workflow: &Yaml) -> Result<(), Finding> 
     )?;
     validate_exact_run_step(
         workflow,
-        "verify-candidate",
+        JOB,
         "Install verified Terraform 1.9.4",
         &["name", "shell", "run"],
         &[
@@ -240,7 +249,7 @@ fn validate_cloud_free_acceptance_gates(workflow: &Yaml) -> Result<(), Finding> 
     )?;
     validate_exact_run_step(
         workflow,
-        "verify-candidate",
+        JOB,
         "Install verified kubectl v1.37.0",
         &["name", "shell", "run"],
         &[
@@ -253,14 +262,14 @@ fn validate_cloud_free_acceptance_gates(workflow: &Yaml) -> Result<(), Finding> 
     )?;
     validate_exact_run_step(
         workflow,
-        "verify-candidate",
+        JOB,
         "Run cloud-free Terraform acceptance gate",
         &["name", "shell", "run"],
         &["bash terraform/lumen-standalone-gke/scripts/check.sh"],
     )?;
     validate_exact_run_step(
         workflow,
-        "verify-candidate",
+        JOB,
         "Run cloud-free Kustomize acceptance gate",
         &["name", "shell", "run"],
         &["bash kustomize/lumen-standalone-acceptance/tests/contract.sh"],
@@ -270,19 +279,18 @@ fn validate_cloud_free_acceptance_gates(workflow: &Yaml) -> Result<(), Finding> 
         "Install verified kubectl v1.37.0",
         "Run cloud-free Terraform acceptance gate",
         "Run cloud-free Kustomize acceptance gate",
-        "Run required Lumen product gates without GKE",
     ];
     let ordered = names.iter().map(|name| index_of(name)).collect::<Vec<_>>();
     require(
         ordered.iter().all(|indices| indices.len() == 1),
         "CLOUD_FREE_GATES",
     )?;
-    let mut previous = uv[0];
+    require(ruby[0] == 1, "CLOUD_FREE_GATES")?;
+    let mut previous = ruby[0];
     for indices in ordered {
-        require(previous < indices[0], "CLOUD_FREE_GATES")?;
+        require(previous + 1 == indices[0], "CLOUD_FREE_GATES")?;
         previous = indices[0];
     }
-    require(ruby[0] == uv[0] + 1, "CLOUD_FREE_GATES")?;
     Ok(())
 }
 
@@ -990,13 +998,14 @@ fn validate_candidate_and_kind_commands(workflow: &Yaml) -> Result<(), Finding> 
             "${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}",
         ),
     ] {
+        for mode in ["overlay", "operator"] {
         let command = format!(
-            "LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_IMAGE=\"${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}\" LUMEN_E2E_EXPECTED_VERSION=\"${{{{ needs.identity.outputs.version }}}}\" LUMEN_E2E_EXPECTED_GIT_SHA=\"${{short_sha:0:8}}\" LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"{digest}\" LUMEN_E2E_REGISTRY_CONFIG=\"$HOME/.docker/config.json\" scripts/kind-e2e.sh"
+            "LUMEN_E2E_MODE={mode} LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 LUMEN_E2E_IMAGE=\"${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}\" LUMEN_E2E_EXPECTED_VERSION=\"${{{{ needs.identity.outputs.version }}}}\" LUMEN_E2E_EXPECTED_GIT_SHA=\"${{short_sha:0:8}}\" LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"{digest}\" LUMEN_E2E_REGISTRY_CONFIG=\"$HOME/.docker/config.json\" scripts/kind-e2e.sh"
         );
         validate_exact_run_step(
             workflow,
             job_name,
-            "Run prebuilt candidate kind e2e",
+            &format!("Run prebuilt candidate kind e2e ({mode})"),
             &["name", "shell", "run"],
             &[
                 "set -euo pipefail",
@@ -1004,6 +1013,7 @@ fn validate_candidate_and_kind_commands(workflow: &Yaml) -> Result<(), Finding> 
                 &command,
             ],
         )?;
+        }
     }
     Ok(())
 }
@@ -1011,10 +1021,70 @@ fn validate_candidate_and_kind_commands(workflow: &Yaml) -> Result<(), Finding> 
 fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
     let expected: &[(&str, &[&str])] = &[
         (
+            "gates-default",
+            &[
+                "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "Reclaim runner disk before the cargo gate",
+                "uses:astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9",
+                "Run default-feature cargo gate",
+            ][..],
+        ),
+        (
+            "gates-operator",
+            &[
+                "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "Reclaim runner disk before the cargo gate",
+                "uses:astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9",
+                "Run operator delegated-auth cargo gate",
+            ][..],
+        ),
+        (
+            "gates-raft-wal",
+            &[
+                "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "Reclaim runner disk before the cargo gate",
+                "Run raft-wal cargo gates",
+            ][..],
+        ),
+        (
+            "gates-release-features",
+            &[
+                "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "Reclaim runner disk before the cargo gate",
+                "Run release feature-set cargo gate",
+            ][..],
+        ),
+        (
+            "container-smoke",
+            &[
+                "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "Log in to GHCR with read-only job access",
+                "Run standalone container smoke gates",
+            ][..],
+        ),
+        (
+            "cloud-free-config",
+            &[
+                "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "uses:ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b",
+                "Install verified Terraform 1.9.4",
+                "Install verified kubectl v1.37.0",
+                "Run cloud-free Terraform acceptance gate",
+                "Run cloud-free Kustomize acceptance gate",
+            ][..],
+        ),
+        (
+            "perf-coarse",
+            &[
+                "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "Reclaim runner disk before the cargo gate",
+                "Run coarse performance gates",
+            ][..],
+        ),
+        (
             "verify-candidate",
             &[
                 "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-                "Reclaim runner disk before the cargo gates",
                 "uses:sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6",
                 "uses:docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f",
                 "Log in to GHCR with read-only job access",
@@ -1025,14 +1095,6 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
                 "uses:actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
                 "uses:actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
                 "uses:actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
-                "uses:astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9",
-                "uses:ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b",
-                "Install verified Terraform 1.9.4",
-                "Install verified kubectl v1.37.0",
-                "Run cloud-free Terraform acceptance gate",
-                "Run cloud-free Kustomize acceptance gate",
-                "Run required Lumen product gates without GKE",
-                "Run coarse performance gates",
                 "Verify full run-scoped candidate supply chain",
             ][..],
         ),
@@ -1043,7 +1105,8 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
                 "Assert native x86_64 runner architecture",
                 "Install verified kind v0.32.0",
                 "Log in to GHCR for kind node image pulls",
-                "Run prebuilt candidate kind e2e",
+                "Run prebuilt candidate kind e2e (overlay)",
+                "Run prebuilt candidate kind e2e (operator)",
             ][..],
         ),
         (
@@ -1053,7 +1116,8 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
                 "Assert native aarch64 runner architecture",
                 "Install verified kind v0.32.0",
                 "Log in to GHCR for kind node image pulls",
-                "Run prebuilt candidate kind e2e",
+                "Run prebuilt candidate kind e2e (overlay)",
+                "Run prebuilt candidate kind e2e (operator)",
             ][..],
         ),
         (
@@ -1108,6 +1172,13 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
 
 fn validate_fail_closed_gate_conditions(workflow: &Yaml) -> Result<(), Finding> {
     for name in [
+        "gates-default",
+        "gates-operator",
+        "gates-raft-wal",
+        "gates-release-features",
+        "container-smoke",
+        "cloud-free-config",
+        "perf-coarse",
         "verify-candidate",
         "verify-libraries",
         "kind-amd64",
@@ -1132,67 +1203,110 @@ fn validate_fail_closed_gate_conditions(workflow: &Yaml) -> Result<(), Finding> 
 }
 
 fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(), Finding> {
-    let steps = field(
-        job(workflow, "verify-candidate").ok_or(Finding("GATES"))?,
-        "steps",
+    // Each cargo gate job builds one feature/profile group. Together they
+    // cover every product gate that used to run in one serial step.
+    let cargo_gates: &[(&str, &str, &[&str])] = &[
+        (
+            "gates-default",
+            "Run default-feature cargo gate",
+            &["set -euo pipefail", "cargo test --locked -p lumen"],
+        ),
+        (
+            "gates-operator",
+            "Run operator delegated-auth cargo gate",
+            &[
+                "set -euo pipefail",
+                "cargo test --locked -p lumen --features \"operator delegated-auth\"",
+            ],
+        ),
+        (
+            "gates-raft-wal",
+            "Run raft-wal cargo gates",
+            &[
+                "set -euo pipefail",
+                "cargo test --locked -p lumen --features raft-wal --test it -- legacy_3073_app::",
+                "cargo test --locked -p lumen --features raft-wal --bin lumen cluster_state_poller_converges_role_to_live_election_result",
+            ],
+        ),
+        (
+            "gates-release-features",
+            "Run release feature-set cargo gate",
+            &[
+                "set -euo pipefail",
+                "cargo test --locked -p lumen --features release --test it -- release_feature_set::",
+            ],
+        ),
+    ];
+    let mut runs = Vec::new();
+    for &(job_name, step_name, lines) in cargo_gates {
+        let step = named_step(workflow, job_name, step_name).ok_or(Finding("GATES"))?;
+        let env = field(step, "env")
+            .and_then(Yaml::as_mapping)
+            .ok_or(Finding("GATES"))?;
+        require(
+            env.len() == 1
+                && env.get(&key("CARGO_INCREMENTAL")).and_then(Yaml::as_str) == Some("0"),
+            "GATES",
+        )?;
+        let map = step.as_mapping().ok_or(Finding("GATES"))?;
+        require(
+            map.len() == 4
+                && ["name", "env", "shell", "run"]
+                    .iter()
+                    .all(|name| map.contains_key(&key(name))),
+            "GATES",
+        )?;
+        require(
+            field(step, "shell").and_then(Yaml::as_str) == Some("bash"),
+            "GATES",
+        )?;
+        let run = field(step, "run")
+            .and_then(Yaml::as_str)
+            .ok_or(Finding("GATES"))?;
+        require(exact_shell_lines(run, lines), "GATES")?;
+        runs.push(run);
+    }
+    let smoke = named_step(
+        workflow,
+        "container-smoke",
+        "Run standalone container smoke gates",
     )
-    .and_then(Yaml::as_sequence)
     .ok_or(Finding("GATES"))?;
-    let run = steps
-        .iter()
-        .find(|step| {
-            field(step, "name").and_then(Yaml::as_str)
-                == Some("Run required Lumen product gates without GKE")
-        })
-        .and_then(|step| field(step, "run"))
+    let smoke_map = smoke.as_mapping().ok_or(Finding("GATES"))?;
+    require(
+        smoke_map.len() == 3
+            && ["name", "shell", "run"]
+                .iter()
+                .all(|name| smoke_map.contains_key(&key(name))),
+        "GATES",
+    )?;
+    let smoke_run = field(smoke, "run")
         .and_then(Yaml::as_str)
         .ok_or(Finding("GATES"))?;
     require(
-        exact_shell_lines(
-            run,
-            &[
-                "set -euo pipefail",
-                "export CARGO_INCREMENTAL=0",
-                "cargo test --locked -p lumen --features operator --test it -- capacity_catalog_client::",
-                "cargo test --locked -p lumen --features operator --test it -- capacity_catalog_contract::",
-                "cargo test --locked -p lumen --features operator --test it -- operator_render::",
-                "cargo clean",
-                "df -h /",
-                "cargo test --locked -p lumen --test segment_startup_fail_closed_e2e",
-                "cargo test --locked -p lumen --test it -- cli_convention::",
-                "cargo test --locked -p lumen --test it -- release_artifacts::",
-                "cargo clean",
-                "df -h /",
-                "cargo test --locked -p lumen --features raft-wal --lib raft_sm",
-                "cargo test --locked -p lumen --features raft-wal --test it -- legacy_3073_app::",
-                "cargo test --locked -p lumen --features raft-wal --bin lumen cluster_state_poller_converges_role_to_live_election_result",
-                "cargo clean",
-                "df -h /",
-                "cargo test --locked -p lumen --test it -- release_candidate::",
-                "cargo test --locked -p lumen",
-                "cargo clean",
-                "df -h /",
-                "cargo test --locked -p lumen --features \"operator delegated-auth\"",
-                "cargo clean",
-                "df -h /",
-                "cargo test --locked -p lumen --features release --test it -- release_feature_set::",
-                "cargo clean",
-                "df -h /",
-                "bash scripts/standalone-container-smoke.sh bind",
-                "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
-            ],
-        ),
+        field(smoke, "shell").and_then(Yaml::as_str) == Some("bash")
+            && exact_shell_lines(
+                smoke_run,
+                &[
+                    "set -euo pipefail",
+                    "bash scripts/standalone-container-smoke.sh bind",
+                    "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
+                ],
+            ),
         "GATES",
     )?;
-    for gate in [
-        "https://github.com/faberline/core",
-        "--manifest-path",
-        "cargo build --locked -p lumen --features raft-wal",
-        "cargo test --locked -p lumen --features raft-wal --lib --no-run",
-        "cargo test --locked -p lumen --features raft-wal --test it --no-run",
-        "git -c core.fsmonitor=false diff --check",
-    ] {
-        require(!run.contains(gate), "LIBRARIES")?;
+    runs.push(smoke_run);
+    for run in runs {
+        for gate in [
+            "https://github.com/faberline/core",
+            "--manifest-path",
+            "cargo build --locked -p lumen --features raft-wal",
+            "cargo test --locked -p lumen --features raft-wal --lib --no-run",
+            "cargo test --locked -p lumen --features raft-wal --test it --no-run",
+            "git -c core.fsmonitor=false diff --check",
+        ] {
+            require(!run.contains(gate), "LIBRARIES")?;
+        }
     }
     Ok(())
 }
@@ -1441,7 +1555,7 @@ fn durable_workload_region(source: &str) -> Result<(&str, &str), Finding> {
 fn validate_perf_workload_ledger_source(source: &str) -> Result<(), Finding> {
     let required = [
         "input_duration: Duration::from_secs(30 * 60),",
-        "docops_per_second: 100,",
+        "docops_per_second: 60,",
         "query_qps: 10,",
         "completed_percent: 95,",
         "p99_limit: Duration::from_secs(1),",
@@ -1490,14 +1604,14 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
         "use crate::support::perf_workload_ledger;",
         "mod durable_workload {",
         "const IDLE_COLLECTIONS: usize = 181;",
-        "const HOT_DOCUMENTS: usize = 200_000;",
+        "const HOT_DOCUMENTS: usize = 100_000;",
         "const MUTATION_DOCUMENTS_PER_CLASS: usize = (INPUT_SECONDS as usize / 3) * DOCOPS_PER_SECOND;",
-        "const VECTOR_READBACK_REFERENCE_NUMBER: usize = 160_000;",
+        "const VECTOR_READBACK_REFERENCE_NUMBER: usize = 80_000;",
         "const READBACK_MISMATCH_TOKEN: &str = \"readback-mismatch\";",
         "const IDLE_DOCUMENTS_PER_COLLECTION: usize = 100;",
         "const FIELD_COUNT: usize = 14;",
         "const INPUT_SECONDS: u64 = 30 * 60;",
-        "const DOCOPS_PER_SECOND: usize = 100;",
+        "const DOCOPS_PER_SECOND: usize = 60;",
         "const QUERY_QPS: usize = 10;",
         "const DOCKER_CPUS: &str = \"2.5\";",
         "const DOCKER_MEMORY_BYTES: u64 = 16 * 1024 * 1024 * 1024;",
@@ -2071,7 +2185,7 @@ fn step_named<'a>(steps: &'a [Yaml], name: &str) -> Result<&'a Yaml, Finding> {
 /// digest, and promotion verifies their receipts (`--durable-perf-dir`).
 fn validate_durable_perf_workflow(source: &str) -> Result<(), Finding> {
     let workflow: Yaml = serde_yaml::from_str(source).map_err(|_| Finding(PERF_WORKFLOW))?;
-    let candidate = job(&workflow, "verify-candidate").ok_or(Finding(PERF_WORKFLOW))?;
+    let candidate = job(&workflow, "perf-coarse").ok_or(Finding(PERF_WORKFLOW))?;
     require(
         field(candidate, "runs-on").and_then(Yaml::as_str) == Some("ubuntu-latest")
             && field(candidate, "strategy").is_none(),
@@ -2142,7 +2256,7 @@ fn validate_durable_final_verifier(candidate: &str, promotion: &str) -> Result<(
 }
 
 fn validate_final_jobs_manifest_binding(workflow: &Yaml) -> Result<(), Finding> {
-    const JOBS: &str = "jobs:{identity:\"${{ needs.identity.result }}\",build:\"${{ needs.build.result }}\",manifest:\"${{ needs.manifest.result }}\",\"ghcr-image-and-attest\":\"${{ needs.ghcr-image-and-attest.result }}\",\"verify-candidate\":\"${{ needs.verify-candidate.result }}\",\"verify-libraries\":\"${{ needs.verify-libraries.result }}\",\"kind-amd64\":\"${{ needs.kind-amd64.result }}\",\"kind-arm64\":\"${{ needs.kind-arm64.result }}\",result:\"success\"}";
+    const JOBS: &str = "jobs:{identity:\"${{ needs.identity.result }}\",build:\"${{ needs.build.result }}\",manifest:\"${{ needs.manifest.result }}\",\"ghcr-image-and-attest\":\"${{ needs.ghcr-image-and-attest.result }}\",\"gates-default\":\"${{ needs.gates-default.result }}\",\"gates-operator\":\"${{ needs.gates-operator.result }}\",\"gates-raft-wal\":\"${{ needs.gates-raft-wal.result }}\",\"gates-release-features\":\"${{ needs.gates-release-features.result }}\",\"container-smoke\":\"${{ needs.container-smoke.result }}\",\"cloud-free-config\":\"${{ needs.cloud-free-config.result }}\",\"perf-coarse\":\"${{ needs.perf-coarse.result }}\",\"verify-candidate\":\"${{ needs.verify-candidate.result }}\",\"verify-libraries\":\"${{ needs.verify-libraries.result }}\",\"kind-amd64\":\"${{ needs.kind-amd64.result }}\",\"kind-arm64\":\"${{ needs.kind-arm64.result }}\",result:\"success\"}";
     let step = named_step(
         workflow,
         "result",
@@ -2201,6 +2315,13 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         "build",
         "ghcr-image-and-attest",
         "manifest",
+        "gates-default",
+        "gates-operator",
+        "gates-raft-wal",
+        "gates-release-features",
+        "container-smoke",
+        "cloud-free-config",
+        "perf-coarse",
         "verify-candidate",
         "verify-libraries",
         "kind-amd64",
@@ -2239,6 +2360,13 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
             "manifest",
             &["identity", "build", "ghcr-image-and-attest"][..],
         ),
+        ("gates-default", &["identity"][..]),
+        ("gates-operator", &["identity"][..]),
+        ("gates-raft-wal", &["identity"][..]),
+        ("gates-release-features", &["identity"][..]),
+        ("container-smoke", &["identity", "ghcr-image-and-attest"][..]),
+        ("cloud-free-config", &["identity"][..]),
+        ("perf-coarse", &["identity"][..]),
         (
             "verify-candidate",
             &["identity", "manifest", "ghcr-image-and-attest"][..],
@@ -2259,6 +2387,13 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
                 "build",
                 "manifest",
                 "ghcr-image-and-attest",
+                "gates-default",
+                "gates-operator",
+                "gates-raft-wal",
+                "gates-release-features",
+                "container-smoke",
+                "cloud-free-config",
+                "perf-coarse",
                 "verify-candidate",
                 "verify-libraries",
                 "kind-amd64",
@@ -2283,6 +2418,13 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
             "attestations: write\ncontents: read\nid-token: write\npackages: write",
         ),
         ("manifest", "contents: read"),
+        ("gates-default", "contents: read"),
+        ("gates-operator", "contents: read"),
+        ("gates-raft-wal", "contents: read"),
+        ("gates-release-features", "contents: read"),
+        ("container-smoke", "contents: read\npackages: read"),
+        ("cloud-free-config", "contents: read"),
+        ("perf-coarse", "contents: read"),
         (
             "verify-candidate",
             "attestations: read\ncontents: read\npackages: read",
@@ -2330,20 +2472,11 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         "the exact release tag already exists",
         "release_query=\"query",
         "the exact GitHub Release already exists",
-        "cargo test --locked -p lumen --features operator --test it -- capacity_catalog_client::",
-        "cargo test --locked -p lumen --features operator --test it -- capacity_catalog_contract::",
-        "cargo test --locked -p lumen --features operator --test it -- operator_render::",
-        "cargo test --locked -p lumen --test segment_startup_fail_closed_e2e",
-        "cargo test --locked -p lumen --test it -- cli_convention::",
-        "cargo test --locked -p lumen --test it -- release_artifacts::",
-        "cargo test --locked -p lumen --features raft-wal --lib raft_sm",
         "cargo test --locked -p lumen --features raft-wal --test it -- legacy_3073_app::",
         "cargo test --locked -p lumen --features raft-wal --bin lumen cluster_state_poller_converges_role_to_live_election_result",
-        "cargo test --locked -p lumen --test it -- release_candidate::",
         "cargo test --locked -p lumen",
         "cargo test --locked -p lumen --features \"operator delegated-auth\"",
         "cargo test --locked -p lumen --features release --test it -- release_feature_set::",
-        "cargo clean",
         "bash scripts/standalone-container-smoke.sh bind",
         "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
         RELEASE_PERF_GATE,
@@ -2360,6 +2493,8 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         "git -c core.fsmonitor=false diff --check",
         "--image \"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\"",
         "LUMEN_E2E_EXPECTED_RUNTIME_DIGEST",
+        "LUMEN_E2E_MODE=overlay LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000",
+        "LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000",
         "final-candidate-manifest.json",
         "Verify final receipt as local fixture only",
         "--mode local",
@@ -2496,7 +2631,7 @@ fn validate_verifier(source: &str, mode: u32) -> Result<(), Finding> {
         "run_url == (\"https://github.com/\" + $repo + \"/actions/runs/\" + $run_id + \"/attempts/\" + $attempt)",
         ".source_ref == \"refs/heads/main\"",
         ".workflow_ref == $workflow_ref",
-        ".jobs == {identity:\"success\",build:\"success\",manifest:\"success\",\"ghcr-image-and-attest\":\"success\",\"verify-candidate\":\"success\",\"verify-libraries\":\"success\",\"kind-amd64\":\"success\",\"kind-arm64\":\"success\",result:\"success\"}",
+        ".jobs == {identity:\"success\",build:\"success\",manifest:\"success\",\"ghcr-image-and-attest\":\"success\",\"gates-default\":\"success\",\"gates-operator\":\"success\",\"gates-raft-wal\":\"success\",\"gates-release-features\":\"success\",\"container-smoke\":\"success\",\"cloud-free-config\":\"success\",\"perf-coarse\":\"success\",\"verify-candidate\":\"success\",\"verify-libraries\":\"success\",\"kind-amd64\":\"success\",\"kind-arm64\":\"success\",result:\"success\"}",
         "archive members changed",
         "archive binary is not executable",
         "invalid SPDX 2.3 SBOM",
@@ -2589,8 +2724,8 @@ fn coarse_performance_release_workflow_is_fail_closed() {
             "durable matrix restored",
             replace_once(
                 &source,
-                "    name: verify exact candidate gates\n",
-                "    name: verify exact candidate gates\n    strategy:\n      fail-fast: false\n",
+                "    name: coarse performance gates\n",
+                "    name: coarse performance gates\n    strategy:\n      fail-fast: false\n",
             ),
         ),
         (
@@ -2726,28 +2861,28 @@ fn cloud_free_gate_mutations_fail_without_hash_oracle() {
     let without_terraform = replace_once(&source, terraform_step, "");
     assert_eq!(
         validate_workflow_semantics(&without_terraform, &dockerfile()).unwrap_err(),
-        Finding("GATE_COMMANDS"),
+        Finding("CLOUD_FREE_GATES"),
     );
     let terraform_start = source
         .find("      - name: Run cloud-free Terraform acceptance gate\n")
         .unwrap();
-    let product_start = source
-        .find("      - name: Run required Lumen product gates without GKE\n")
+    let kustomize_start = source
+        .find("      - name: Run cloud-free Kustomize acceptance gate\n")
         .unwrap();
-    assert!(terraform_start < product_start);
-    let product_end = product_start
-        + source[product_start..]
-            .find("\n      - name: Verify full run-scoped candidate supply chain\n")
+    assert!(terraform_start < kustomize_start);
+    let kustomize_end = kustomize_start
+        + source[kustomize_start..]
+            .find("\n\n  perf-coarse:\n")
             .unwrap()
         + 1;
-    let terraform_block = &source[terraform_start..product_start];
-    let product_block = &source[product_start..product_end];
+    let terraform_block = &source[terraform_start..kustomize_start];
+    let kustomize_block = &source[kustomize_start..kustomize_end];
     let moved = format!(
         "{}{}{}{}",
         &source[..terraform_start],
-        product_block,
+        kustomize_block,
         terraform_block,
-        &source[product_end..]
+        &source[kustomize_end..]
     );
     assert_eq!(
         validate_workflow_semantics(&moved, &dockerfile()).unwrap_err(),
@@ -3093,16 +3228,20 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             "{label} mutation passed"
         );
     }
-    let same_name_step = replace_once(
-        &source,
-        "      - name: Log in to GHCR with read-only job access\n        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ github.token }}\n",
-        "      - name: Log in to GHCR with read-only job access\n        shell: bash\n        run: |\n          # docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9\n          printf '#!/usr/bin/env bash\\nexit 0\\n' > scripts/verify-release-candidate.sh\n",
-    );
-    assert_ne!(same_name_step, source);
-    assert_eq!(
-        validate_workflow(&same_name_step, &dockerfile()).unwrap_err(),
-        Finding("WORKFLOW_BYTES")
-    );
+    for occurrence in 0..2 {
+        let same_name_step = replace_occurrence(
+            &source,
+            "      - name: Log in to GHCR with read-only job access\n        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ github.token }}\n",
+            "      - name: Log in to GHCR with read-only job access\n        shell: bash\n        run: |\n          # docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9\n          printf '#!/usr/bin/env bash\\nexit 0\\n' > scripts/verify-release-candidate.sh\n",
+            occurrence,
+        );
+        assert_ne!(same_name_step, source);
+        assert_eq!(
+            validate_workflow(&same_name_step, &dockerfile()).unwrap_err(),
+            Finding("WORKFLOW_BYTES"),
+            "same-name GHCR login occurrence {occurrence} passed"
+        );
+    }
     for (from, to, code) in [
         (
             "description: Exact Lumen semver without the lumen@ prefix.\n        required: true",
@@ -3126,7 +3265,7 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         ),
         ("--mode local", "--mode full", "GATES"),
         (
-            "cargo test --locked -p lumen --test it -- release_candidate::",
+            "cargo test --locked -p lumen --features release --test it -- release_feature_set::",
             "true",
             "GATES",
         ),
@@ -3371,8 +3510,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             "durable document count",
             replace_once(
                 &perf_source,
-                "const HOT_DOCUMENTS: usize = 200_000;",
-                "const HOT_DOCUMENTS: usize = 199_999;",
+                "const HOT_DOCUMENTS: usize = 100_000;",
+                "const HOT_DOCUMENTS: usize = 99_999;",
             ),
         ),
         (
@@ -3387,8 +3526,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             "durable document offer rate",
             replace_once(
                 &perf_source,
-                "const DOCOPS_PER_SECOND: usize = 100;",
-                "const DOCOPS_PER_SECOND: usize = 99;",
+                "const DOCOPS_PER_SECOND: usize = 60;",
+                "const DOCOPS_PER_SECOND: usize = 59;",
             ),
         ),
         (
@@ -3565,8 +3704,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             "ledger document offer rate",
             replace_once(
                 &ledger_source,
-                "docops_per_second: 100,",
-                "docops_per_second: 99,",
+                "docops_per_second: 60,",
+                "docops_per_second: 59,",
             ),
         ),
         (
@@ -3753,18 +3892,22 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         validate_workflow(&changed, &dockerfile()).unwrap_err(),
         Finding("GATE_COMMANDS")
     );
-    expect_workflow(
-        &source,
-        "LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\"",
-        "LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\"",
-        "GATE_COMMANDS",
-    );
-    expect_workflow(
-        &source,
-        "LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\"",
-        "LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\"",
-        "GATE_COMMANDS",
-    );
+    // Each arch runs overlay then operator, so every digest appears twice.
+    for (from, to) in [("amd64", "arm64"), ("arm64", "amd64")] {
+        for occurrence in 0..2 {
+            let changed = replace_occurrence(
+                &source,
+                &format!("LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{{{ needs.ghcr-image-and-attest.outputs.{from}_digest }}}}\""),
+                &format!("LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{{{ needs.ghcr-image-and-attest.outputs.{to}_digest }}}}\""),
+                occurrence,
+            );
+            assert_eq!(
+                validate_workflow(&changed, &dockerfile()).unwrap_err(),
+                Finding("GATE_COMMANDS"),
+                "{from} runtime digest occurrence {occurrence} accepted {to}"
+            );
+        }
+    }
     expect_workflow(
         &source,
         "schema:\"cclab.lumen.candidate-manifest.v3\"",
@@ -3832,10 +3975,28 @@ fn candidate_source_mutations_fail_with_stable_categories() {
           cargo build --locked -p lumen --features raft-wal",
         "LIBRARIES",
     );
+    // Split gate steps carry an exact key set, so a step-level condition is
+    // rejected by the gate partition before the condition scan runs.
     for (from, to) in [
         (
-            "      - name: Run required Lumen product gates without GKE\n        shell: bash",
-            "      - name: Run required Lumen product gates without GKE\n        if: false\n        shell: bash",
+            "      - name: Run raft-wal cargo gates\n        env:",
+            "      - name: Run raft-wal cargo gates\n        if: false\n        env:",
+        ),
+        (
+            "      - name: Run standalone container smoke gates\n        shell: bash",
+            "      - name: Run standalone container smoke gates\n        continue-on-error: true\n        shell: bash",
+        ),
+    ] {
+        expect_workflow(&source, from, to, "GATES");
+    }
+    for (from, to) in [
+        (
+            "  perf-coarse:\n    name: coarse performance gates",
+            "  perf-coarse:\n    name: coarse performance gates\n    if: always()",
+        ),
+        (
+            "  cloud-free-config:\n    name: cloud-free config gates",
+            "  cloud-free-config:\n    name: cloud-free config gates\n    continue-on-error: true",
         ),
         (
             "      - name: Verify full run-scoped candidate supply chain\n        env:",
@@ -3860,47 +4021,83 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     ] {
         expect_workflow(&source, from, to, "CONDITIONS");
     }
-    for occurrence in 0..2 {
-        let changed = replace_occurrence(
-            &source,
-            "      - name: Run prebuilt candidate kind e2e\n        shell: bash",
-            "      - name: Run prebuilt candidate kind e2e\n        if: false\n        shell: bash",
-            occurrence,
-        );
-        assert_eq!(
-            validate_workflow(&changed, &dockerfile()).unwrap_err(),
-            Finding("CONDITIONS"),
-            "kind YAML condition occurrence {occurrence} passed",
-        );
+    for mode in ["overlay", "operator"] {
+        for occurrence in 0..2 {
+            let changed = replace_occurrence(
+                &source,
+                &format!("      - name: Run prebuilt candidate kind e2e ({mode})\n        shell: bash"),
+                &format!(
+                    "      - name: Run prebuilt candidate kind e2e ({mode})\n        if: false\n        shell: bash"
+                ),
+                occurrence,
+            );
+            assert_eq!(
+                validate_workflow(&changed, &dockerfile()).unwrap_err(),
+                Finding("CONDITIONS"),
+                "kind {mode} YAML condition occurrence {occurrence} passed",
+            );
+        }
     }
-    for (job, gate, marker) in [
+    for (job, gate, marker, occurrence) in [
         (
             "verify-candidate",
             "Verify full run-scoped candidate supply chain",
             "scripts/verify-release-candidate.sh \\",
+            0,
+        ),
+        (
+            "gates-default",
+            "Run default-feature cargo gate",
+            "Cargo.toml",
+            0,
+        ),
+        (
+            "gates-raft-wal",
+            "Run raft-wal cargo gates",
+            "Cargo.toml",
+            0,
+        ),
+        (
+            "container-smoke",
+            "Run standalone container smoke gates",
+            "scripts/standalone-container-smoke.sh",
+            0,
+        ),
+        (
+            "perf-coarse",
+            "Run coarse performance gates",
+            "Cargo.toml",
+            0,
         ),
         (
             "kind-amd64",
-            "Run prebuilt candidate kind e2e",
+            "Run prebuilt candidate kind e2e (overlay)",
             "scripts/kind-e2e.sh",
+            0,
+        ),
+        (
+            "kind-amd64",
+            "Run prebuilt candidate kind e2e (operator)",
+            "scripts/kind-e2e.sh",
+            0,
         ),
         (
             "kind-arm64",
-            "Run prebuilt candidate kind e2e",
+            "Run prebuilt candidate kind e2e (overlay)",
             "scripts/kind-e2e.sh",
+            1,
+        ),
+        (
+            "kind-arm64",
+            "Run prebuilt candidate kind e2e (operator)",
+            "scripts/kind-e2e.sh",
+            1,
         ),
     ] {
         let insertion = format!(
             "      - name: Unrecognized overwrite step\n        shell: bash\n        run: |\n          printf '#!/usr/bin/env bash\\nexit 0\\n' > {marker}\n"
         );
         let anchor = format!("      - name: {gate}\n");
-        let occurrence = if job == "verify-candidate" {
-            0
-        } else if job == "kind-amd64" {
-            0
-        } else {
-            1
-        };
         let changed = replace_occurrence(
             &source,
             &anchor,
@@ -3919,7 +4116,7 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         "  verify-libraries:\n    name: verify service and Raft library gates\n    needs: [identity]\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${{ github.sha }}",
         "LIBRARIES",
     );
-    for occurrence in 0..2 {
+    for occurrence in 0..4 {
         let changed = replace_occurrence(
             &source,
             "          scripts/kind-e2e.sh",
@@ -3950,9 +4147,9 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     );
     let uv_setup = "      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0\n        with:\n          version: 0.12.1\n          enable-cache: false\n";
     let without_uv = replace_occurrence(&source, uv_setup, "", 0);
-    let gate_following_step = "      - name: Verify full run-scoped candidate supply chain\n";
-    let moved_uv = format!("{uv_setup}{gate_following_step}");
-    let setup_after_gate = replace_once(&without_uv, gate_following_step, &moved_uv);
+    let next_job = "\n\n  gates-operator:\n";
+    let moved_uv = format!("\n{uv_setup}{}", &next_job[1..]);
+    let setup_after_gate = replace_once(&without_uv, next_job, &moved_uv);
     assert_ne!(setup_after_gate, source);
     assert_eq!(
         validate_workflow(&setup_after_gate, &dockerfile()).unwrap_err(),
@@ -4071,7 +4268,7 @@ fn local_fixture() -> tempfile::TempDir {
         "aarch64-unknown-linux-musl",
     ];
     let artifacts_json: Vec<_> = targets.iter().map(|target| json!({"target":target,"archive":format!("lumen-{target}.tar.gz"),"archive_sha256":sha(&artifacts.join(format!("lumen-{target}.tar.gz"))),"sidecar":format!("lumen-{target}.tar.gz.sha256"),"sidecar_sha256":sha(&artifacts.join(format!("lumen-{target}.tar.gz.sha256")))})).collect();
-    let manifest = json!({"schema":"cclab.lumen.candidate-manifest.v3","repository":"faberline/lumen","workflow_path":".github/workflows/lumen-release-candidate.yml","workflow_id":42,"run_id":"7","run_attempt":"2","run_url":"https://github.com/faberline/lumen/actions/runs/7/attempts/2","source_ref":"refs/heads/main","workflow_ref":"faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main","commit":"0123456789012345678901234567890123456789","version":"0.4.27","tag":"lumen@0.4.27","candidate_tag":"release-candidate-7-2","pr":{"number":42,"url":"https://github.com/faberline/lumen/pull/42"},"image":{"repository":"ghcr.io/faberline/lumen","root_digest":format!("sha256:{}", "1".repeat(64)),"amd64_digest":format!("sha256:{}", "2".repeat(64)),"arm64_digest":format!("sha256:{}", "3".repeat(64))},"artifacts":artifacts_json,"sboms":{"amd64":{"file":"spdx-amd64.json","sha256":sha(&artifacts.join("spdx-amd64.json"))},"arm64":{"file":"spdx-arm64.json","sha256":sha(&artifacts.join("spdx-arm64.json"))}},"jobs":{"identity":"success","build":"success","manifest":"success","ghcr-image-and-attest":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success","result":"success"}});
+    let manifest = json!({"schema":"cclab.lumen.candidate-manifest.v3","repository":"faberline/lumen","workflow_path":".github/workflows/lumen-release-candidate.yml","workflow_id":42,"run_id":"7","run_attempt":"2","run_url":"https://github.com/faberline/lumen/actions/runs/7/attempts/2","source_ref":"refs/heads/main","workflow_ref":"faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main","commit":"0123456789012345678901234567890123456789","version":"0.4.27","tag":"lumen@0.4.27","candidate_tag":"release-candidate-7-2","pr":{"number":42,"url":"https://github.com/faberline/lumen/pull/42"},"image":{"repository":"ghcr.io/faberline/lumen","root_digest":format!("sha256:{}", "1".repeat(64)),"amd64_digest":format!("sha256:{}", "2".repeat(64)),"arm64_digest":format!("sha256:{}", "3".repeat(64))},"artifacts":artifacts_json,"sboms":{"amd64":{"file":"spdx-amd64.json","sha256":sha(&artifacts.join("spdx-amd64.json"))},"arm64":{"file":"spdx-arm64.json","sha256":sha(&artifacts.join("spdx-arm64.json"))}},"jobs":{"identity":"success","build":"success","manifest":"success","ghcr-image-and-attest":"success","gates-default":"success","gates-operator":"success","gates-raft-wal":"success","gates-release-features":"success","container-smoke":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success","result":"success"}});
     write_manifest(&artifacts.join("final-candidate-manifest.json"), &manifest);
     dir
 }

@@ -5,7 +5,7 @@
 # Implements the Lumen-only kind happy path: spin up a single-node kind
 # cluster, apply the `dev` overlay or operator CR, keep the serving fleet
 # on the binary's WAL auto-selection, drive the public HTTP API (:7373)
-# through schema → index 10k → search → duplicates. It then checkpoints one
+# through schema → index 100k → search → duplicates. It then checkpoints one
 # unique document, replaces the serving pod, reads the old document before any
 # new write, and finally proves that the replacement accepts a fresh write.
 #
@@ -20,6 +20,12 @@
 # Both exercise the identical Lumen-only API → restart → fresh-write path. In
 # operator mode, LUMEN_E2E_SHARD_COUNT and LUMEN_E2E_REPLICAS_PER_SHARD also
 # assert the StatefulSet storage topology.
+#
+# Image modes (LUMEN_E2E_IMAGE_MODE):
+#   local    (default) — docker build the checkout and kind load it.
+#   prebuilt           — run an exact ghcr.io/faberline/lumen@sha256 root index in
+#                        either deploy mode and prove the version, git SHA, and
+#                        runtime digest every serving pod reports.
 #
 # Requirements: kind, kubectl, docker, curl, jq, python3.
 #
@@ -67,7 +73,7 @@ fi
 PORT_LOCAL="${LUMEN_PORT_LOCAL:-17373}"
 PORT_REMOTE=7373
 NODE_PORT="${LUMEN_NODE_PORT:-30737}"
-DOC_COUNT="${LUMEN_E2E_DOC_COUNT:-10000}"
+DOC_COUNT="${LUMEN_E2E_DOC_COUNT:-100000}"
 BATCH_SIZE=1000
 
 FIXTURE_FILE=""
@@ -82,7 +88,7 @@ die() {
 }
 
 if [[ "$IMAGE_MODE" == "prebuilt" ]]; then
-  [[ "$E2E_MODE" == "operator" ]] || die "prebuilt image mode requires LUMEN_E2E_MODE=operator"
+  [[ "$E2E_MODE" == "operator" || "$E2E_MODE" == "overlay" ]] || die "prebuilt image mode requires LUMEN_E2E_MODE=operator or overlay"
   [[ -n "${LUMEN_E2E_IMAGE:-}" ]] || die "missing LUMEN_E2E_IMAGE"
   [[ ! "$IMAGE_TAG" =~ [[:space:][:cntrl:]] ]] || die "LUMEN_E2E_IMAGE contains whitespace or control characters"
   [[ "$IMAGE_TAG" =~ ^ghcr\.io/faberline/lumen@sha256:[0-9a-f]{64}$ ]] || die "invalid LUMEN_E2E_IMAGE: expected ghcr.io/faberline/lumen@sha256:<64 hex>"
@@ -730,7 +736,28 @@ assert_cluster_identity() {
     return 0
   fi
   echo "   verifying prebuilt cluster desired state and runtime image identities"
-  local op_json op_replicas op_named op_image cr_img sset_json sset_replicas sset_named sset_image ver_json
+  if [[ "$E2E_MODE" == "overlay" ]]; then
+    assert_overlay_identity
+  else
+    assert_operator_identity
+  fi
+  assert_version_identity
+}
+
+# Overlay path: the hand-written Deployment must name the pinned image and its
+# one running pod must report the root or expected platform child digest.
+assert_overlay_identity() {
+  local deploy_json deploy_replicas deploy_named deploy_image
+  deploy_json="$(kubectl -n "$NAMESPACE" get deploy/lumen -o json)"
+  deploy_replicas="$(jq -er '.spec.replicas | select(type == "number" and . > 0 and . == floor)' <<<"$deploy_json")" || die "serving Deployment replicas must be a positive integer"
+  deploy_named="$(jq '[.spec.template.spec.containers[] | select(.name == "lumen")] | length' <<<"$deploy_json")"
+  deploy_image="$(jq --arg image "$IMAGE_TAG" '[.spec.template.spec.containers[] | select(.name == "lumen" and .image == $image)] | length' <<<"$deploy_json")"
+  [[ "$deploy_named" -eq 1 && "$deploy_image" -eq 1 ]] || die "serving Deployment template must contain one named lumen container at $IMAGE_TAG"
+  assert_named_pods "$NAMESPACE" "$APP_LABEL" lumen "$deploy_replicas"
+}
+
+assert_operator_identity() {
+  local op_json op_replicas op_named op_image cr_img sset_json sset_replicas sset_named sset_image
   op_json="$(kubectl -n "$OPERATOR_NS" get deploy/lumen-operator -o json)"
   op_replicas="$(jq -er '.spec.replicas | select(type == "number" and . > 0 and . == floor)' <<<"$op_json")" || die "operator replicas must be a positive integer"
   op_named="$(jq '[.spec.template.spec.containers[] | select(.name == "operator")] | length' <<<"$op_json")"
@@ -745,6 +772,10 @@ assert_cluster_identity() {
   sset_image="$(jq --arg image "$IMAGE_TAG" '[.spec.template.spec.containers[] | select(.name == "server" and .image == $image)] | length' <<<"$sset_json")"
   [[ "$sset_named" -eq 1 && "$sset_image" -eq 1 ]] || die "StatefulSet template must contain one named server container at $IMAGE_TAG"
   assert_named_pods "$NAMESPACE" "$APP_LABEL" server "$sset_replicas"
+}
+
+assert_version_identity() {
+  local ver_json
   ver_json="$(curl -fsS --max-time 10 "http://127.0.0.1:${PORT_LOCAL}/version")"
   jq -e --arg version "$EXPECTED_VER" --arg sha "$EXPECTED_GIT_SHA" '
     (.version | type) == "string" and (.git_sha | type) == "string" and

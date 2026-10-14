@@ -93,7 +93,7 @@ validate_receipt() {
     .run_id == $run and .source_ref == "refs/heads/main" and .workflow_path == ".github/workflows/lumen-release-candidate.yml" and
     .workflow_ref == ($repo + "/.github/workflows/lumen-release-candidate.yml@refs/heads/main") and
     .run_url == ("https://github.com/" + $repo + "/actions/runs/" + .run_id + "/attempts/" + .run_attempt) and
-    .jobs == {identity:"success",build:"success",manifest:"success","ghcr-image-and-attest":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success",result:"success"} and
+    .jobs == {identity:"success",build:"success",manifest:"success","ghcr-image-and-attest":"success","gates-default":"success","gates-operator":"success","gates-raft-wal":"success","gates-release-features":"success","container-smoke":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","verify-libraries":"success","kind-amd64":"success","kind-arm64":"success",result:"success"} and
     (.image | (
       (keys | sort) == ["amd64_digest","arm64_digest","repository","root_digest"] and
       .repository == "ghcr.io/faberline/lumen" and
@@ -188,8 +188,8 @@ flatten_paginated_jobs() { jq -cs '[.[] | .jobs[]]'; }
 flatten_paginated_artifacts() { jq -cs '[.[] | .artifacts[]]'; }
 validate_candidate_job_inventory() {
   jq -e '
-    length == 13 and all(.[]; .status == "completed" and .conclusion == "success") and
-    ([.[].name] | sort == ["bind candidate inputs","build (aarch64-apple-darwin)","build (aarch64-unknown-linux-gnu)","build (aarch64-unknown-linux-musl)","build (x86_64-unknown-linux-gnu)","build (x86_64-unknown-linux-musl)","build candidate image and attest","candidate identity","final candidate receipt","kind e2e (amd64)","kind e2e (arm64)","verify exact candidate gates","verify service and Raft library gates"])
+    length == 20 and all(.[]; .status == "completed" and .conclusion == "success") and
+    ([.[].name] | sort == ["bind candidate inputs","build (aarch64-apple-darwin)","build (aarch64-unknown-linux-gnu)","build (aarch64-unknown-linux-musl)","build (x86_64-unknown-linux-gnu)","build (x86_64-unknown-linux-musl)","build candidate image and attest","candidate identity","cargo gates (default features)","cargo gates (operator delegated-auth)","cargo gates (raft-wal)","cargo gates (release feature set)","cloud-free config gates","coarse performance gates","final candidate receipt","kind e2e (amd64)","kind e2e (arm64)","standalone container smoke","verify candidate supply chain","verify service and Raft library gates"])
   ' >/dev/null || fail "candidate attempt does not contain the exact successful execution set"
 }
 

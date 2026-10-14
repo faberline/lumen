@@ -374,26 +374,23 @@ jobs:
           if-no-files-found: error
           overwrite: false
 
-  verify-candidate:
-    name: verify exact candidate gates
-    needs: [identity, manifest, ghcr-image-and-attest]
+  gates-default:
+    name: cargo gates (default features)
+    needs: [identity]
     runs-on: ubuntu-latest
     permissions:
-      attestations: read
       contents: read
-      packages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.identity.outputs.commit }}
           fetch-depth: 0
-      - name: Reclaim runner disk before the cargo gates
-        # The product gate below uses several Cargo feature and profile groups.
-        # A single shared target directory can exhaust the hosted runner even
-        # after this reclaim; run 33679658820 proved that failure mode. Delete
-        # only preinstalled toolchains this job never uses. The product gate
-        # then disables incremental output and cleans between build groups.
-        # Keep the `df -h` lines as direct free-space evidence.
+      - name: Reclaim runner disk before the cargo gate
+        # Each cargo gate job builds exactly one Cargo feature/profile group, so
+        # no `cargo clean` is needed between groups. A hosted runner can still
+        # run short of disk for one full test build; run 33679658820 proved
+        # that failure mode. Delete only preinstalled toolchains this job never
+        # uses, and keep the `df -h` lines as direct free-space evidence.
         shell: bash
         run: |
           set -euo pipefail
@@ -406,6 +403,247 @@ jobs:
             /opt/ghc \
             /opt/hostedtoolcache/CodeQL
           df -h /
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: 0.12.1
+          enable-cache: false
+      - name: Run default-feature cargo gate
+        env:
+          CARGO_INCREMENTAL: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p lumen
+
+  gates-operator:
+    name: cargo gates (operator delegated-auth)
+    needs: [identity]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - name: Reclaim runner disk before the cargo gate
+        # Each cargo gate job builds exactly one Cargo feature/profile group, so
+        # no `cargo clean` is needed between groups. A hosted runner can still
+        # run short of disk for one full test build; run 33679658820 proved
+        # that failure mode. Delete only preinstalled toolchains this job never
+        # uses, and keep the `df -h` lines as direct free-space evidence.
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: 0.12.1
+          enable-cache: false
+      - name: Run operator delegated-auth cargo gate
+        env:
+          CARGO_INCREMENTAL: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p lumen --features "operator delegated-auth"
+
+  gates-raft-wal:
+    name: cargo gates (raft-wal)
+    needs: [identity]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - name: Reclaim runner disk before the cargo gate
+        # Each cargo gate job builds exactly one Cargo feature/profile group, so
+        # no `cargo clean` is needed between groups. A hosted runner can still
+        # run short of disk for one full test build; run 33679658820 proved
+        # that failure mode. Delete only preinstalled toolchains this job never
+        # uses, and keep the `df -h` lines as direct free-space evidence.
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Run raft-wal cargo gates
+        env:
+          CARGO_INCREMENTAL: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p lumen --features raft-wal --test it -- legacy_3073_app::
+          cargo test --locked -p lumen --features raft-wal --bin lumen cluster_state_poller_converges_role_to_live_election_result
+
+  gates-release-features:
+    name: cargo gates (release feature set)
+    needs: [identity]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - name: Reclaim runner disk before the cargo gate
+        # Each cargo gate job builds exactly one Cargo feature/profile group, so
+        # no `cargo clean` is needed between groups. A hosted runner can still
+        # run short of disk for one full test build; run 33679658820 proved
+        # that failure mode. Delete only preinstalled toolchains this job never
+        # uses, and keep the `df -h` lines as direct free-space evidence.
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Run release feature-set cargo gate
+        env:
+          CARGO_INCREMENTAL: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p lumen --features release --test it -- release_feature_set::
+
+  container-smoke:
+    name: standalone container smoke
+    needs: [identity, ghcr-image-and-attest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - name: Log in to GHCR with read-only job access
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Run standalone container smoke gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/standalone-container-smoke.sh bind
+          LUMEN_STANDALONE_DURABLE_IMAGE="${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}" bash scripts/standalone-container-smoke.sh durable
+
+  cloud-free-config:
+    name: cloud-free config gates
+    needs: [identity]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.207.0
+        with:
+          ruby-version: '3.3.6'
+          bundler: none
+      - name: Install verified Terraform 1.9.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://releases.hashicorp.com/terraform/1.9.4/terraform_1.9.4_linux_amd64.zip -o /tmp/terraform.zip
+          echo '6e9b2cc741875ab906d800af3134b076489f049565e0a1dbdb6deacd91f5054c  /tmp/terraform.zip' | sha256sum -c -
+          unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin
+          sudo install -m 0755 /tmp/terraform-bin/terraform /usr/local/bin/terraform
+      - name: Install verified kubectl v1.37.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl -o /tmp/kubectl
+          echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /tmp/kubectl' | sha256sum -c -
+          chmod +x /tmp/kubectl
+          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+      - name: Run cloud-free Terraform acceptance gate
+        shell: bash
+        run: bash terraform/lumen-standalone-gke/scripts/check.sh
+      - name: Run cloud-free Kustomize acceptance gate
+        shell: bash
+        run: bash kustomize/lumen-standalone-acceptance/tests/contract.sh
+
+  perf-coarse:
+    name: coarse performance gates
+    needs: [identity]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - name: Reclaim runner disk before the cargo gate
+        # Each cargo gate job builds exactly one Cargo feature/profile group, so
+        # no `cargo clean` is needed between groups. A hosted runner can still
+        # run short of disk for one full test build; run 33679658820 proved
+        # that failure mode. Delete only preinstalled toolchains this job never
+        # uses, and keep the `df -h` lines as direct free-space evidence.
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Run coarse performance gates
+        env:
+          CARGO_INCREMENTAL: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --skip durable_workload --test-threads=1 --nocapture
+
+  verify-candidate:
+    name: verify candidate supply chain
+    needs: [identity, manifest, ghcr-image-and-attest]
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: read
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.1.3
@@ -444,75 +682,6 @@ jobs:
         with:
           name: lumen-candidate-manifest-input-${{ github.run_id }}-${{ github.run_attempt }}
           path: candidate
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: 0.12.1
-          enable-cache: false
-      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.207.0
-        with:
-          ruby-version: '3.3.6'
-          bundler: none
-      - name: Install verified Terraform 1.9.4
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL https://releases.hashicorp.com/terraform/1.9.4/terraform_1.9.4_linux_amd64.zip -o /tmp/terraform.zip
-          echo '6e9b2cc741875ab906d800af3134b076489f049565e0a1dbdb6deacd91f5054c  /tmp/terraform.zip' | sha256sum -c -
-          unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin
-          sudo install -m 0755 /tmp/terraform-bin/terraform /usr/local/bin/terraform
-      - name: Install verified kubectl v1.37.0
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl -o /tmp/kubectl
-          echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /tmp/kubectl' | sha256sum -c -
-          chmod +x /tmp/kubectl
-          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
-      - name: Run cloud-free Terraform acceptance gate
-        shell: bash
-        run: bash terraform/lumen-standalone-gke/scripts/check.sh
-      - name: Run cloud-free Kustomize acceptance gate
-        shell: bash
-        run: bash kustomize/lumen-standalone-acceptance/tests/contract.sh
-      - name: Run required Lumen product gates without GKE
-        shell: bash
-        run: |
-          set -euo pipefail
-          export CARGO_INCREMENTAL=0
-          cargo test --locked -p lumen --features operator --test it -- capacity_catalog_client::
-          cargo test --locked -p lumen --features operator --test it -- capacity_catalog_contract::
-          cargo test --locked -p lumen --features operator --test it -- operator_render::
-          cargo clean
-          df -h /
-          cargo test --locked -p lumen --test segment_startup_fail_closed_e2e
-          cargo test --locked -p lumen --test it -- cli_convention::
-          cargo test --locked -p lumen --test it -- release_artifacts::
-          cargo clean
-          df -h /
-          cargo test --locked -p lumen --features raft-wal --lib raft_sm
-          cargo test --locked -p lumen --features raft-wal --test it -- legacy_3073_app::
-          cargo test --locked -p lumen --features raft-wal --bin lumen cluster_state_poller_converges_role_to_live_election_result
-          cargo clean
-          df -h /
-          cargo test --locked -p lumen --test it -- release_candidate::
-          cargo test --locked -p lumen
-          cargo clean
-          df -h /
-          cargo test --locked -p lumen --features "operator delegated-auth"
-          cargo clean
-          df -h /
-          cargo test --locked -p lumen --features release --test it -- release_feature_set::
-          cargo clean
-          df -h /
-          bash scripts/standalone-container-smoke.sh bind
-          LUMEN_STANDALONE_DURABLE_IMAGE="${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}" bash scripts/standalone-container-smoke.sh durable
-      - name: Run coarse performance gates
-        env:
-          CARGO_INCREMENTAL: '0'
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --skip durable_workload --test-threads=1 --nocapture
       - name: Verify full run-scoped candidate supply chain
         env:
           GH_TOKEN: ${{ github.token }}
@@ -597,12 +766,24 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: Run prebuilt candidate kind e2e
+      - name: Run prebuilt candidate kind e2e (overlay)
         shell: bash
         run: |
           set -euo pipefail
           short_sha="${{ needs.identity.outputs.commit }}"
-          LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt \
+          LUMEN_E2E_MODE=overlay LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 \
+          LUMEN_E2E_IMAGE="${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}" \
+          LUMEN_E2E_EXPECTED_VERSION="${{ needs.identity.outputs.version }}" \
+          LUMEN_E2E_EXPECTED_GIT_SHA="${short_sha:0:8}" \
+          LUMEN_E2E_EXPECTED_RUNTIME_DIGEST="${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}" \
+          LUMEN_E2E_REGISTRY_CONFIG="$HOME/.docker/config.json" \
+          scripts/kind-e2e.sh
+      - name: Run prebuilt candidate kind e2e (operator)
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_sha="${{ needs.identity.outputs.commit }}"
+          LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 \
           LUMEN_E2E_IMAGE="${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}" \
           LUMEN_E2E_EXPECTED_VERSION="${{ needs.identity.outputs.version }}" \
           LUMEN_E2E_EXPECTED_GIT_SHA="${short_sha:0:8}" \
@@ -639,12 +820,24 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: Run prebuilt candidate kind e2e
+      - name: Run prebuilt candidate kind e2e (overlay)
         shell: bash
         run: |
           set -euo pipefail
           short_sha="${{ needs.identity.outputs.commit }}"
-          LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt \
+          LUMEN_E2E_MODE=overlay LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 \
+          LUMEN_E2E_IMAGE="${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}" \
+          LUMEN_E2E_EXPECTED_VERSION="${{ needs.identity.outputs.version }}" \
+          LUMEN_E2E_EXPECTED_GIT_SHA="${short_sha:0:8}" \
+          LUMEN_E2E_EXPECTED_RUNTIME_DIGEST="${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}" \
+          LUMEN_E2E_REGISTRY_CONFIG="$HOME/.docker/config.json" \
+          scripts/kind-e2e.sh
+      - name: Run prebuilt candidate kind e2e (operator)
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_sha="${{ needs.identity.outputs.commit }}"
+          LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 \
           LUMEN_E2E_IMAGE="${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}" \
           LUMEN_E2E_EXPECTED_VERSION="${{ needs.identity.outputs.version }}" \
           LUMEN_E2E_EXPECTED_GIT_SHA="${short_sha:0:8}" \
@@ -654,7 +847,7 @@ jobs:
 
   result:
     name: final candidate receipt
-    needs: [identity, build, manifest, ghcr-image-and-attest, verify-candidate, verify-libraries, kind-amd64, kind-arm64]
+    needs: [identity, build, manifest, ghcr-image-and-attest, gates-default, gates-operator, gates-raft-wal, gates-release-features, container-smoke, cloud-free-config, perf-coarse, verify-candidate, verify-libraries, kind-amd64, kind-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -707,7 +900,7 @@ jobs:
           set -euo pipefail
           cd candidate
           jq -e '.schema == "cclab.lumen.candidate-manifest.v3"' candidate-manifest.json >/dev/null
-          jq -c '. + {jobs:{identity:"${{ needs.identity.result }}",build:"${{ needs.build.result }}",manifest:"${{ needs.manifest.result }}","ghcr-image-and-attest":"${{ needs.ghcr-image-and-attest.result }}","verify-candidate":"${{ needs.verify-candidate.result }}","verify-libraries":"${{ needs.verify-libraries.result }}","kind-amd64":"${{ needs.kind-amd64.result }}","kind-arm64":"${{ needs.kind-arm64.result }}",result:"success"}}' candidate-manifest.json > final-candidate-manifest.json
+          jq -c '. + {jobs:{identity:"${{ needs.identity.result }}",build:"${{ needs.build.result }}",manifest:"${{ needs.manifest.result }}","ghcr-image-and-attest":"${{ needs.ghcr-image-and-attest.result }}","gates-default":"${{ needs.gates-default.result }}","gates-operator":"${{ needs.gates-operator.result }}","gates-raft-wal":"${{ needs.gates-raft-wal.result }}","gates-release-features":"${{ needs.gates-release-features.result }}","container-smoke":"${{ needs.container-smoke.result }}","cloud-free-config":"${{ needs.cloud-free-config.result }}","perf-coarse":"${{ needs.perf-coarse.result }}","verify-candidate":"${{ needs.verify-candidate.result }}","verify-libraries":"${{ needs.verify-libraries.result }}","kind-amd64":"${{ needs.kind-amd64.result }}","kind-arm64":"${{ needs.kind-arm64.result }}",result:"success"}}' candidate-manifest.json > final-candidate-manifest.json
           if command -v sha256sum >/dev/null 2>&1; then sha256sum final-candidate-manifest.json > final-candidate-manifest.json.sha256; else shasum -a 256 final-candidate-manifest.json > final-candidate-manifest.json.sha256; fi
       - name: Verify final receipt as local fixture only
         shell: bash
