@@ -140,7 +140,7 @@ pub(super) fn validate_catalog_references(
     root: &Path,
     manifest: &SegmentGenerationManifest,
 ) -> Result<()> {
-    validate_catalog_references_with_prior(root, manifest, None)
+    validate_catalog_references_with_prior(root, manifest, &[])
 }
 
 pub(super) fn validate_catalog_references_with_prior(
@@ -318,17 +318,17 @@ pub(super) fn validate_catalog_references_with_prior(
                 if metadata.file_type().is_symlink() || !metadata.is_file() {
                     bail!("mapped base rows must be a regular file");
                 }
-                let reader = SegmentReader::open(&target)?;
-                if reader.n_docs() != local.count
-                    || reader.applied_seq()
-                        != segment
-                            .applied_seq
-                            .ok_or_else(|| anyhow!("mapped base has no sequence"))?
-                    || reader.applied_seq() > manifest.checkpoint_sequence
-                {
+                let applied_seq = segment
+                    .applied_seq
+                    .ok_or_else(|| anyhow!("mapped base has no sequence"))?;
+                if applied_seq > manifest.checkpoint_sequence {
                     bail!("mapped base row count or sequence differs from catalog");
                 }
                 if !is_inherited_delta(root, collection, segment, prior)? {
+                    let reader = SegmentReader::open(&target)?;
+                    if reader.n_docs() != local.count || reader.applied_seq() != applied_seq {
+                        bail!("mapped base row count or sequence differs from catalog");
+                    }
                     let rows = decode_sparse_local_rows(&rows_path, local.count)?;
                     if delta_payload_sha256(&target, &rows_path)? != expected_checksum {
                         bail!("mapped base checksum differs from catalog");

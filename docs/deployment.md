@@ -67,13 +67,27 @@ scripts/verify-release-artifacts.sh \
   --commit <commit> \
   --candidate-run-id <id> \
   --mode public \
+  --durable-perf-dir <dir> \
+  --durable-perf-summary-sha256 <sha256> \
   --output /tmp/lumen-public-release.json
 ```
 
+From `lumen@0.6.1`, promotion and public verification take the durable
+performance evidence directory: sixteen qualifying cell receipts under
+`perf/`, `durable-perf-summary.json`, and its `.sha256` sidecar. The
+directory is committed as `release-evidence/lumen@<version>/`; that commit is
+the release input `durable_perf_evidence_commit`, and the summary SHA-256 is
+`durable_perf_summary_sha256`.
+`verify-durable-perf.py` checks that every receipt binds the candidate
+repository, run ID, attempt, commit, and registry image digest. The release
+publishes the summary pair and records its SHA-256 in the release notes.
+Before `lumen@0.6.1` the verifier refuses durable performance arguments.
+
 Each release image carries a keyless Cosign signature and SLSA v1 provenance on the
 root index, with per-platform SPDX 2.3 JSON SBOM attestations. The release workflow
-verifies artifacts and runs native amd64 and arm64 kind runs before publication. These
-local kind runs do not prove GKE, Regional HA, Fleet, or autoscaling.
+verifies artifacts and runs native amd64 and arm64 kind runs before publication. The
+candidate kind runs do not wait for the durable performance matrix. These local kind
+runs do not prove GKE, Regional HA, Fleet, or autoscaling.
 
 Shipped container images set `LUMEN_HOST=0.0.0.0` by default so published
 ports are reachable from the host without extra environment variables. The bare

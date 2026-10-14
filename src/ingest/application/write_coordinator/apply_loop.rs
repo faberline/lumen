@@ -8,7 +8,6 @@ use std::sync::{Arc, Mutex};
 use futures::StreamExt;
 use raft_runtime::OutcomeWindow;
 use rustc_hash::FxHashMap;
-use tokio::sync::Mutex as AsyncMutex;
 
 use crate::app::observability::metrics::labels::{apply_item_count, ApplyKind, CoordinatorStage};
 use crate::index::application::admission::record_reservation::{
@@ -45,7 +44,7 @@ impl WriteCoordinator {
         let coord = Arc::new_cyclic(|self_weak| Self {
             wal: wal.clone(),
             engine: engine.clone(),
-            local_reservations: AsyncMutex::new(FxHashMap::default()),
+            local_reservations: Default::default(),
             has_local_aof: aof.is_some(),
             capacity_relief_requested: AtomicBool::new(false),
             diagnostic_refusal_revision: AtomicU64::new(0),

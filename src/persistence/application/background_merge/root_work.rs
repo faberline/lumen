@@ -42,6 +42,19 @@ impl WorkState {
 }
 
 impl RootWork {
+    /// A checkpoint waits for this merge: it asked for capacity work while
+    /// the merge ran, or it is blocked until a merge publishes.
+    pub(in crate::persistence) fn checkpoint_waits_for_merge(&self) -> bool {
+        self.capacity_waiters
+            .load(std::sync::atomic::Ordering::Acquire)
+            != 0
+            || self
+                .state
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .requested
+    }
+
     pub(in crate::persistence) fn trace_state(&self) -> TraceState {
         let state = self.state.lock().unwrap_or_else(|p| p.into_inner());
         TraceState {
@@ -217,6 +230,15 @@ impl RootWork {
         revision: u64,
         deadline: Instant,
     ) -> Result<CapacityWait> {
+        struct Waiting<'a>(&'a std::sync::atomic::AtomicUsize);
+        impl Drop for Waiting<'_> {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+            }
+        }
+        self.capacity_waiters
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        let _waiting = Waiting(&self.capacity_waiters);
         let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
         #[cfg(test)]
         {

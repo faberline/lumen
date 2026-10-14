@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use anyhow::{anyhow, Result};
 
 use crate::index::application::checkpoint_capture::CheckpointCapture;
+use crate::index::application::engine::state_hold::StateHoldTrace;
 use crate::index::application::engine::Engine;
 use crate::index::application::live_base::{
     checkpoint_scalar_retire_matches, install_concurrent_prepared_base,
@@ -25,7 +26,9 @@ impl Engine {
         root: &std::path::Path,
         capture: &mut CheckpointCapture,
     ) -> Result<()> {
+        let mut hold = StateHoldTrace::begin("bind_checkpoint_origins", "", "write");
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
+        hold.acquired();
         for (name, identity) in &capture.collections {
             if let Some(coll) = state.collections.get_mut(name) {
                 if coll.collection_generation == identity.generation

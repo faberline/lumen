@@ -9,11 +9,17 @@ Usage: verify-release-artifacts.sh \
   --repo <owner/repo> --tag <lumen@semver> --commit <40-hex> \
   --candidate-run-id <id> --mode <candidate|fixture|public> \
   [--candidate-receipt-dir <dir> --release-assets-dir <dir> --output <path> \
-   --standalone-gke-receipt <path> --standalone-gke-receipt-sidecar <path>]
+   --standalone-gke-receipt <path> --standalone-gke-receipt-sidecar <path> \
+   --durable-perf-dir <dir> --durable-perf-summary-sha256 <64-hex>]
 
 candidate: prove the immutable tag, tag ruleset, candidate run, receipt, image,
 and existing attestations. fixture: compare supplied candidate and release bytes
 without network access. public: also verify the published GitHub Release.
+
+lumen@0.4.29 up to 0.6.0 require the standalone GKE receipt. From lumen@0.6.1
+the receipt is optional and an absent receipt is published as "not claimed";
+instead the durable performance directory (durable-perf-summary.json, its
+.sha256 sidecar and perf/*.json) must bind the candidate run and root digest.
 EOF
   exit 2
 }
@@ -54,15 +60,17 @@ aarch64-unknown-linux-musl
 EOF
 }
 
-tag_requires_standalone_gke_receipt() {
-  local version major minor patch
-  version="${TAG#lumen@}"
-  IFS=. read -r major minor patch <<<"$version"
+tag_at_least() {
+  local want_minor="$1" want_patch="$2" major minor patch
+  IFS=. read -r major minor patch <<<"${TAG#lumen@}"
   if (( 10#$major > 0 )); then return 0; fi
-  if (( 10#$minor > 4 )); then return 0; fi
-  if (( 10#$minor < 4 )); then return 1; fi
-  (( 10#$patch >= 29 ))
+  if (( 10#$minor != want_minor )); then (( 10#$minor > want_minor )); return; fi
+  (( 10#$patch >= want_patch ))
 }
+
+tag_allows_standalone_gke_receipt() { tag_at_least 4 29; }
+tag_requires_durable_perf_evidence() { tag_at_least 6 1; }
+tag_requires_standalone_gke_receipt() { tag_allows_standalone_gke_receipt && ! tag_requires_durable_perf_evidence; }
 
 host_target() {
   case "$(uname -s):$(uname -m)" in
@@ -80,7 +88,7 @@ validate_receipt() {
   read -r expected name extra <"$sidecar" || fail "cannot read final receipt sidecar"
   [[ "$expected" == "$actual" && "$name" == "${manifest##*/}" && -z "${extra:-}" ]] || fail "final receipt sidecar does not bind exact bytes"
   jq -e --arg repo "$REPO" --arg tag "$TAG" --arg version "${TAG#lumen@}" --arg commit "$COMMIT" --arg run "$CANDIDATE_RUN_ID" '
-    (keys | sort) == ((["artifacts","candidate_tag","commit","image","jobs","pr","repository","run_attempt","run_id","run_url","sboms","schema","source_ref","tag","version","workflow_id","workflow_path","workflow_ref"] + (if $version == "0.6.1" then ["performance"] else [] end)) | sort) and
+    (keys | sort) == ["artifacts","candidate_tag","commit","image","jobs","pr","repository","run_attempt","run_id","run_url","sboms","schema","source_ref","tag","version","workflow_id","workflow_path","workflow_ref"] and
     .schema == "cclab.lumen.candidate-manifest.v3" and .repository == $repo and .version == $version and .tag == $tag and .commit == $commit and
     .run_id == $run and .source_ref == "refs/heads/main" and .workflow_path == ".github/workflows/lumen-release-candidate.yml" and
     .workflow_ref == ($repo + "/.github/workflows/lumen-release-candidate.yml@refs/heads/main") and
@@ -92,8 +100,7 @@ validate_receipt() {
       ([.root_digest,.amd64_digest,.arm64_digest] | all(test("^sha256:[0-9a-f]{64}$")))
     )) and
     (.artifacts | type == "array" and length == 5 and all(.[]; .archive == ("lumen-" + .target + ".tar.gz") and .sidecar == (.archive + ".sha256") and (.archive_sha256 | test("^[0-9a-f]{64}$")) and (.sidecar_sha256 | test("^[0-9a-f]{64}$")))) and
-    (.sboms.amd64.file == "spdx-amd64.json" and (.sboms.amd64.sha256 | test("^[0-9a-f]{64}$")) and .sboms.arm64.file == "spdx-arm64.json" and (.sboms.arm64.sha256 | test("^[0-9a-f]{64}$"))) and
-    (if $version == "0.6.1" then (.performance | ((keys | sort) == ["receipts_directory","schema_version","summary_file","summary_sha256"] and .schema_version == 1 and .summary_file == "durable-perf-summary.json" and (.summary_sha256 | test("^[0-9a-f]{64}$")) and .receipts_directory == "perf")) else true end)
+    (.sboms.amd64.file == "spdx-amd64.json" and (.sboms.amd64.sha256 | test("^[0-9a-f]{64}$")) and .sboms.arm64.file == "spdx-arm64.json" and (.sboms.arm64.sha256 | test("^[0-9a-f]{64}$")))
   ' "$manifest" >/dev/null || fail "candidate final receipt contract changed"
   while IFS= read -r target; do
     archive="$(jq -er --arg t "$target" '.artifacts[] | select(.target == $t) | .archive' "$manifest")"
@@ -121,10 +128,15 @@ verify_archive_pair() {
   [[ "$mode" =~ ^-.{2}x ]] || fail "release binary is not executable: $archive"
 }
 
+expected_evidence_assets() {
+  if [[ "$STANDALONE_GKE_CLAIMED" == true ]]; then printf 'lumen-standalone-gke-receipt.json\nlumen-standalone-gke-receipt.json.sha256\n'; fi
+  if tag_requires_durable_perf_evidence; then printf 'durable-perf-summary.json\ndurable-perf-summary.json.sha256\n'; fi
+}
+
 verify_release_assets_against_receipt() {
   local receipt_dir release_dir manifest expected actual target archive sidecar host private_home unpack binary version
   receipt_dir="$1"; release_dir="$2"; manifest="$receipt_dir/final-candidate-manifest.json"
-  expected="$({ while IFS= read -r target; do printf 'lumen-%s.tar.gz\nlumen-%s.tar.gz.sha256\n' "$target" "$target"; done < <(targets); printf 'spdx-amd64.json\nspdx-arm64.json\n'; if tag_requires_standalone_gke_receipt; then printf 'lumen-standalone-gke-receipt.json\nlumen-standalone-gke-receipt.json.sha256\n'; fi; } | LC_ALL=C sort)"
+  expected="$({ while IFS= read -r target; do printf 'lumen-%s.tar.gz\nlumen-%s.tar.gz.sha256\n' "$target" "$target"; done < <(targets); printf 'spdx-amd64.json\nspdx-arm64.json\n'; expected_evidence_assets; } | LC_ALL=C sort)"
   actual="$(find "$release_dir" -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort)"
   [[ "$actual" == "$expected" ]] || fail "public release assets are not the exact receipt asset set"
   while IFS= read -r target; do
@@ -138,6 +150,7 @@ verify_release_assets_against_receipt() {
     jq -en --slurpfile candidate "$receipt_dir/spdx-${target}.json" --slurpfile release "$release_dir/spdx-${target}.json" '$candidate[0] == $release[0]' >/dev/null || fail "published SPDX bytes differ from candidate: $target"
   done
   verify_public_standalone_gke_receipt "$release_dir"
+  verify_public_durable_perf_summary "$release_dir"
   host="$(host_target)"; private_home="$(mktemp -d)"; unpack="$(mktemp -d)"
   trap 'rm -rf "${private_home:-}" "${unpack:-}"' RETURN
   tar -xzf "$release_dir/lumen-${host}.tar.gz" -C "$unpack"
@@ -175,8 +188,8 @@ flatten_paginated_jobs() { jq -cs '[.[] | .jobs[]]'; }
 flatten_paginated_artifacts() { jq -cs '[.[] | .artifacts[]]'; }
 validate_candidate_job_inventory() {
   jq -e '
-    length == 28 and all(.[]; .status == "completed" and .conclusion == "success") and
-    ([.[].name] | sort == ["bind candidate inputs","build (aarch64-apple-darwin)","build (aarch64-unknown-linux-gnu)","build (aarch64-unknown-linux-musl)","build (x86_64-unknown-linux-gnu)","build (x86_64-unknown-linux-musl)","build candidate image and attest","candidate identity","final candidate receipt","kind e2e (amd64)","kind e2e (arm64)","verify exact candidate gates (index-1-flat-cpu)","verify exact candidate gates (index-1-hnsw-cpu)","verify exact candidate gates (index-100-flat-cpu)","verify exact candidate gates (index-100-hnsw-cpu)","verify exact candidate gates (index-1000-flat-cpu)","verify exact candidate gates (index-1000-hnsw-cpu)","verify exact candidate gates (replace-1-flat-cpu)","verify exact candidate gates (replace-1-hnsw-cpu)","verify exact candidate gates (replace-32-flat-cpu)","verify exact candidate gates (replace-32-hnsw-cpu)","verify exact candidate gates (unindex-1-flat-cpu)","verify exact candidate gates (unindex-1-hnsw-cpu)","verify exact candidate gates (unindex-100-flat-cpu)","verify exact candidate gates (unindex-100-hnsw-cpu)","verify exact candidate gates (unindex-1000-flat-cpu)","verify exact candidate gates (unindex-1000-hnsw-cpu)","verify service and Raft library gates"])
+    length == 13 and all(.[]; .status == "completed" and .conclusion == "success") and
+    ([.[].name] | sort == ["bind candidate inputs","build (aarch64-apple-darwin)","build (aarch64-unknown-linux-gnu)","build (aarch64-unknown-linux-musl)","build (x86_64-unknown-linux-gnu)","build (x86_64-unknown-linux-musl)","build candidate image and attest","candidate identity","final candidate receipt","kind e2e (amd64)","kind e2e (arm64)","verify exact candidate gates","verify service and Raft library gates"])
   ' >/dev/null || fail "candidate attempt does not contain the exact successful execution set"
 }
 
@@ -215,9 +228,12 @@ verify_candidate_supply_chain() {
 
 validate_standalone_gke_receipt() {
   local receipt="$STANDALONE_GKE_RECEIPT" sidecar="$STANDALONE_GKE_RECEIPT_SIDECAR" manifest actual bytes target archive cli_sha root amd64 arm64
-  if ! tag_requires_standalone_gke_receipt; then
+  STANDALONE_GKE_RECEIPT_SHA256=""; STANDALONE_GKE_CLAIMED=false
+  if ! tag_allows_standalone_gke_receipt; then
     [[ -z "$receipt" && -z "$sidecar" ]] || fail "standalone GKE receipt is not valid before lumen@0.4.29"
-    STANDALONE_GKE_RECEIPT_SHA256=""
+    return 0
+  fi
+  if ! tag_requires_standalone_gke_receipt && [[ -z "$receipt" && -z "$sidecar" ]]; then
     return 0
   fi
   [[ -n "$receipt" && -n "$sidecar" ]] || fail "$TAG requires the standalone GKE receipt and sidecar"
@@ -257,27 +273,56 @@ validate_standalone_gke_receipt() {
   archive="$(jq -er --arg target "$target" '.artifacts[] | select(.target == $target) | .archive' "$manifest")"
   cli_sha="$(tar -xOzf "$CANDIDATE_RECEIPT_DIR/$archive" "lumen-${target}/lumen" | sha256_stdin)"
   [[ "$cli_sha" == "$(jq -er '.candidate.controller_cli.sha256' "$receipt")" ]] || fail "standalone GKE controller CLI hash does not bind candidate archive"
-  STANDALONE_GKE_RECEIPT_SHA256="$actual"
+  STANDALONE_GKE_RECEIPT_SHA256="$actual"; STANDALONE_GKE_CLAIMED=true
+}
+
+validate_durable_perf_evidence() {
+  local dir="$DURABLE_PERF_DIR" summary_sha="$DURABLE_PERF_SUMMARY_SHA256" root
+  if ! tag_requires_durable_perf_evidence; then
+    [[ -z "$dir" && -z "$summary_sha" ]] || fail "durable performance evidence is not valid before lumen@0.6.1"
+    return 0
+  fi
+  [[ -n "$dir" && "$summary_sha" =~ ^[0-9a-f]{64}$ ]] || fail "$TAG requires durable performance evidence and its summary SHA-256"
+  [[ -d "$dir" && ! -L "$dir" && -d "$dir/perf" && ! -L "$dir/perf" ]] || fail "durable performance evidence directory is invalid"
+  require_file "$dir/durable-perf-summary.json"; require_file "$dir/durable-perf-summary.json.sha256"
+  root="$(jq -er '.image.root_digest' "$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json")"
+  python3 -I "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/verify-durable-perf.py" \
+    --receipts-dir "$dir/perf" \
+    --repo "$REPO" --run-id "$CANDIDATE_RUN_ID" --run-attempt "$CANDIDATE_ATTEMPT" \
+    --commit "$COMMIT" --image "ghcr.io/faberline/lumen@${root}" \
+    --output "$dir/durable-perf-summary.json" \
+    --verify-existing --summary-sha256 "$summary_sha" \
+    || fail "durable performance evidence does not bind the candidate"
 }
 
 write_identity() {
   local manifest="$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json" identity
   identity="$(jq -nc --arg repo "$REPO" --arg tag "$TAG" --arg commit "$COMMIT" --arg candidate_run_id "$CANDIDATE_RUN_ID" --arg candidate_attempt "$CANDIDATE_ATTEMPT" --arg root "$(jq -er '.image.root_digest' "$manifest")" --arg amd64 "$(jq -er '.image.amd64_digest' "$manifest")" --arg arm64 "$(jq -er '.image.arm64_digest' "$manifest")" --arg pr "$(jq -er '.pr.url' "$manifest")" --arg candidate_url "$(jq -er '.run_url' "$manifest")" '{repository:$repo,tag:$tag,commit:$commit,candidate_run_id:$candidate_run_id,candidate_attempt:$candidate_attempt,root_digest:$root,amd64_digest:$amd64,arm64_digest:$arm64,pr_url:$pr,candidate_url:$candidate_url}')"
-  if tag_requires_standalone_gke_receipt; then
-    jq -nc --argjson identity "$identity" --arg receipt "$STANDALONE_GKE_RECEIPT_SHA256" '$identity + {standalone_gke_receipt_sha256:$receipt}' >"$OUTPUT"
-  else
-    printf '%s\n' "$identity" >"$OUTPUT"
+  if [[ "$STANDALONE_GKE_CLAIMED" == true ]]; then
+    identity="$(jq -c --arg receipt "$STANDALONE_GKE_RECEIPT_SHA256" '. + {standalone_gke_receipt_sha256:$receipt}' <<<"$identity")"
   fi
+  if tag_requires_durable_perf_evidence; then
+    identity="$(jq -c --arg perf "$DURABLE_PERF_SUMMARY_SHA256" '. + {durable_perf_summary_sha256:$perf}' <<<"$identity")"
+  fi
+  printf '%s\n' "$identity" >"$OUTPUT"
 }
 
 verify_public_standalone_gke_receipt() {
   local release_dir="$1" public_receipt public_sidecar
   public_receipt="$release_dir/lumen-standalone-gke-receipt.json"
   public_sidecar="$release_dir/lumen-standalone-gke-receipt.json.sha256"
-  tag_requires_standalone_gke_receipt || return 0
+  [[ "$STANDALONE_GKE_CLAIMED" == true ]] || return 0
   require_file "$public_receipt"; require_file "$public_sidecar"
   cmp -s "$STANDALONE_GKE_RECEIPT" "$public_receipt" || fail "public standalone GKE receipt bytes differ from verified receipt"
   cmp -s "$STANDALONE_GKE_RECEIPT_SIDECAR" "$public_sidecar" || fail "public standalone GKE receipt sidecar differs from verified receipt"
+}
+
+verify_public_durable_perf_summary() {
+  local release_dir="$1"
+  tag_requires_durable_perf_evidence || return 0
+  require_file "$release_dir/durable-perf-summary.json"; require_file "$release_dir/durable-perf-summary.json.sha256"
+  cmp -s "$DURABLE_PERF_DIR/durable-perf-summary.json" "$release_dir/durable-perf-summary.json" || fail "public durable performance summary differs from verified evidence"
+  cmp -s "$DURABLE_PERF_DIR/durable-perf-summary.json.sha256" "$release_dir/durable-perf-summary.json.sha256" || fail "public durable performance summary sidecar differs from verified evidence"
 }
 
 verify_latest_is_safe() {
@@ -312,13 +357,21 @@ verify_public_release_notes() {
     ([ $lines[] | select(. == ("- Standalone GKE receipt SHA-256: " + $receipt)) ] | length) == 1 and
     ([$lines[] | sub("^\\s+"; "")] | all(.[]; (startswith(">") | not) and (startswith("```") | not) and (startswith("~~~") | not) and (contains("<!--") | not)))
   ' <<<"$release_json" >/dev/null || fail "public GitHub Release notes do not bind exact standalone GKE receipt hash"
+  if tag_requires_durable_perf_evidence; then
+    jq -e --arg perf "$DURABLE_PERF_SUMMARY_SHA256" --argjson gke_claimed "$([[ -n "$receipt_sha256" ]] && echo true || echo false)" '
+      (.body | if type == "string" then split("\n") else error("release body is not a string") end) as $lines |
+      ([ $lines[] | select(. == ("- Durable performance summary SHA-256: " + $perf)) ] | length) == 1 and
+      ([ $lines[] | select(. == "- Standalone GKE: not claimed") ] | length) == (if $gke_claimed then 0 else 1 end) and
+      ([ $lines[] | select(startswith("- Standalone GKE receipt SHA-256: ")) ] | length) == (if $gke_claimed then 1 else 0 end)
+    ' <<<"$release_json" >/dev/null || fail "public GitHub Release notes do not bind exact durable performance and GKE claim"
+  fi
 }
 
 verify_public_release() {
   local release_json release_dir manifest root amd64 arm64 pr_url candidate_url semver image_repo expected_assets actual_assets receipt_required
   release_json="$(gh release view "$TAG" --repo "$REPO" --json assets,isDraft,tagName,targetCommitish,url,body)"
   jq -e --arg tag "$TAG" --arg commit "$COMMIT" '.tagName == $tag and .isDraft == false and .targetCommitish == $commit' <<<"$release_json" >/dev/null || fail "public GitHub Release identity changed"
-  if tag_requires_standalone_gke_receipt; then
+  if [[ "$STANDALONE_GKE_CLAIMED" == true ]]; then
     receipt_required=true
     verify_public_release_notes "$STANDALONE_GKE_RECEIPT_SHA256" <<<"$release_json"
   else
@@ -342,11 +395,11 @@ verify_public_release() {
     ($lines | index("- Compatibility: shipped Docker images default to durable segment storage at /var/lib/lumen/data; bare lumen serve stays ephemeral without --data-dir or LUMEN_DATA_DIR. A 0.4.28 segment volume upgrades one way on first 0.4.29 start; in-place downgrade is unsupported.") != null) and
     any($lines[]; test("^- Promotion run: https://github\\.com/" + $repo + "/actions/runs/[0-9]+/attempts/[0-9]+$"))
   ' <<<"$release_json" >/dev/null || fail "public GitHub Release notes do not bind exact promotion evidence"
-  expected_assets="$({ while IFS= read -r target; do printf 'lumen-%s.tar.gz\nlumen-%s.tar.gz.sha256\n' "$target" "$target"; done < <(targets); printf 'spdx-amd64.json\nspdx-arm64.json\n'; if tag_requires_standalone_gke_receipt; then printf 'lumen-standalone-gke-receipt.json\nlumen-standalone-gke-receipt.json.sha256\n'; fi; } | LC_ALL=C sort)"
+  expected_assets="$({ while IFS= read -r target; do printf 'lumen-%s.tar.gz\nlumen-%s.tar.gz.sha256\n' "$target" "$target"; done < <(targets); printf 'spdx-amd64.json\nspdx-arm64.json\n'; expected_evidence_assets; } | LC_ALL=C sort)"
   actual_assets="$(jq -r '.assets[].name' <<<"$release_json" | LC_ALL=C sort)"
   [[ "$actual_assets" == "$expected_assets" ]] || fail "public GitHub Release asset inventory is not exact"
   release_dir="$(mktemp -d)"; trap 'rm -rf "${release_dir:-}"' RETURN
-  gh release download "$TAG" --repo "$REPO" --dir "$release_dir" --pattern 'lumen-*.tar.gz' --pattern 'lumen-*.tar.gz.sha256' --pattern 'spdx-*.json' --pattern 'lumen-standalone-gke-receipt.json' --pattern 'lumen-standalone-gke-receipt.json.sha256'
+  gh release download "$TAG" --repo "$REPO" --dir "$release_dir" --pattern 'lumen-*.tar.gz' --pattern 'lumen-*.tar.gz.sha256' --pattern 'spdx-*.json' --pattern 'lumen-standalone-gke-receipt.json' --pattern 'lumen-standalone-gke-receipt.json.sha256' --pattern 'durable-perf-summary.json' --pattern 'durable-perf-summary.json.sha256'
   verify_release_assets_against_receipt "$CANDIDATE_RECEIPT_DIR" "$release_dir"
   semver="${TAG#lumen@}"; image_repo="ghcr.io/faberline/lumen"
   [[ "$(docker buildx imagetools inspect "${image_repo}:${semver}" --format '{{json .Manifest}}' | jq -er '.digest')" == "$root" ]] || fail "semver image tag does not bind candidate root"
@@ -356,13 +409,14 @@ verify_public_release() {
 
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
 
-REPO=""; TAG=""; COMMIT=""; CANDIDATE_RUN_ID=""; MODE=""; CANDIDATE_RECEIPT_DIR=""; RELEASE_ASSETS_DIR=""; OUTPUT=""; STANDALONE_GKE_RECEIPT=""; STANDALONE_GKE_RECEIPT_SIDECAR=""; STANDALONE_GKE_RECEIPT_SHA256=""
+REPO=""; TAG=""; COMMIT=""; CANDIDATE_RUN_ID=""; MODE=""; CANDIDATE_RECEIPT_DIR=""; RELEASE_ASSETS_DIR=""; OUTPUT=""; STANDALONE_GKE_RECEIPT=""; STANDALONE_GKE_RECEIPT_SIDECAR=""; STANDALONE_GKE_RECEIPT_SHA256=""; STANDALONE_GKE_CLAIMED=false; DURABLE_PERF_DIR=""; DURABLE_PERF_SUMMARY_SHA256=""
 while [[ $# -gt 0 ]]; do
   [[ $# -ge 2 ]] || usage
   case "$1" in
     --repo) REPO="$2" ;; --tag) TAG="$2" ;; --commit) COMMIT="$2" ;; --candidate-run-id) CANDIDATE_RUN_ID="$2" ;;
     --mode) MODE="$2" ;; --candidate-receipt-dir) CANDIDATE_RECEIPT_DIR="$2" ;; --release-assets-dir) RELEASE_ASSETS_DIR="$2" ;; --output) OUTPUT="$2" ;;
     --standalone-gke-receipt) STANDALONE_GKE_RECEIPT="$2" ;; --standalone-gke-receipt-sidecar) STANDALONE_GKE_RECEIPT_SIDECAR="$2" ;;
+    --durable-perf-dir) DURABLE_PERF_DIR="$2" ;; --durable-perf-summary-sha256) DURABLE_PERF_SUMMARY_SHA256="$2" ;;
     *) usage ;;
   esac
   shift 2
@@ -375,6 +429,7 @@ if [[ "$MODE" == fixture ]]; then
   validate_receipt "$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json" "$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json.sha256" "$CANDIDATE_RECEIPT_DIR"
   CANDIDATE_ATTEMPT="$(jq -er '.run_attempt' "$CANDIDATE_RECEIPT_DIR/final-candidate-manifest.json")"
   validate_standalone_gke_receipt
+  validate_durable_perf_evidence
   verify_release_assets_against_receipt "$CANDIDATE_RECEIPT_DIR" "$RELEASE_ASSETS_DIR"
   printf 'LOCAL FIXTURE ONLY: release bytes verified; this is not public release acceptance.\n'
   exit 0
@@ -386,6 +441,7 @@ verify_annotated_tag_and_ruleset
 fetch_candidate_receipt
 verify_candidate_supply_chain
 validate_standalone_gke_receipt
+validate_durable_perf_evidence
 write_identity
 if [[ "$MODE" == public ]]; then verify_public_release; fi
 printf 'PROMOTION VERIFICATION PASS: %s %s candidate=%s/%s\n' "$TAG" "$COMMIT" "$CANDIDATE_RUN_ID" "$CANDIDATE_ATTEMPT"

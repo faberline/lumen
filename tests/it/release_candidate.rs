@@ -2,15 +2,15 @@
 //!
 //! # Facets
 //!
-//! - Behavior: `tests/it/release_candidate.rs:2595` rejects each broken
-//!   sixteen-cell workflow shape, and `tests/it/release_candidate.rs:4104`
-//!   refuses a final 0.6.1 receipt without its evidence.
-//! - Security: `tests/it/release_candidate.rs:2595` carries mutable-image,
-//!   run-binding, and shared-path refusals; `tests/it/release_candidate.rs:4153`
-//!   carries missing, corrupt, and foreign receipt refusal at the workflow/script boundary.
-//! - Performance: the approved release gate is verbatim at
-//!   `tests/it/release_candidate.rs:54`; `tests/it/release_candidate.rs:1842`
-//!   requires that command and its receipt checks. This asserts wiring only,
+//! - Behavior: `tests/it/release_candidate.rs:2573` rejects each broken
+//!   coarse-gate workflow shape, and `tests/it/release_candidate.rs:4364`
+//!   refuses a 0.6.1 candidate receipt that claims CI performance evidence.
+//! - Security: `tests/it/release_candidate.rs:4466` carries missing, corrupt,
+//!   and foreign local durable receipt refusal; `tests/it/release_candidate.rs:2638`
+//!   requires promotion, not the candidate receipt, to bind that evidence.
+//! - Performance: the coarse CI gate is verbatim at
+//!   `tests/it/release_candidate.rs:53`; `tests/it/release_candidate.rs:2064`
+//!   requires that command and no durable cell in CI. This asserts wiring only,
 //!   not that a 30-minute workload has passed.
 //!
 //! The parent controller owns the workflow and verifier implementation. This
@@ -47,12 +47,12 @@ const ACTIONS: &[&str] = &[
     "anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610",
 ];
 const WORKFLOW_BYTES_SHA256: &str =
-    "42505e72fdb9f709dc2b2a68303aa9e0098b2e65a8e3de3707a5a89cd4328b95";
+    "ab25cbb208f7b81fa94b2b6675ecf0833ff8ad9fa1d897be3ec7bc518f03ac3d";
 const KIND_E2E_BYTES_SHA256: &str =
-    "18dfa225f5d216e456ec6f190e50131c964890e1a0ba26665937b210508a7eb8";
-const RELEASE_PERF_GATE: &str = "cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --test-threads=1 --nocapture";
+    "96854d9ed109c8265870265c71b4a5d314e9774abd5abc71f68af8c3f5b5c8f5";
+const RELEASE_PERF_GATE: &str = "cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --skip durable_workload --test-threads=1 --nocapture";
 const VERIFIER_BYTES_SHA256: &str =
-    "e90b7a6b80138bcaec768a79f125fc845d08c036842e1304ede145a0d1342eec";
+    "c0243c72efe11b1f93a3d542cfc0433b17b2938042117350c41299a274de95a7";
 
 fn sha256_bytes(bytes: &[u8]) -> String {
     let mut child = Command::new("shasum")
@@ -937,16 +937,11 @@ fn validate_exact_run_step(
 ) -> Result<(), Finding> {
     let step = named_step(workflow, job_name, step_name).ok_or(Finding("GATE_COMMANDS"))?;
     let map = step.as_mapping().ok_or(Finding("GATE_COMMANDS"))?;
-    let product_gated =
-        job_name == "verify-candidate" && PRODUCT_GATED_STEP_NAMES.contains(&step_name);
     require(
-        map.len() == expected_keys.len() + if product_gated { 1 } else { 0 }
+        map.len() == expected_keys.len()
             && expected_keys
                 .iter()
-                .all(|name| map.contains_key(&key(name)))
-            && (!product_gated
-                || map.get(&key("if")).and_then(Yaml::as_str)
-                    == Some("${{ matrix.product_gates }}")),
+                .all(|name| map.contains_key(&key(name))),
         "GATE_COMMANDS",
     )?;
     require(
@@ -1037,9 +1032,7 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
                 "Run cloud-free Terraform acceptance gate",
                 "Run cloud-free Kustomize acceptance gate",
                 "Run required Lumen product gates without GKE",
-                "Run qualifying durable performance cell",
-                "Upload failed durable performance evidence",
-                "Upload qualifying durable performance receipt",
+                "Run coarse performance gates",
                 "Verify full run-scoped candidate supply chain",
             ][..],
         ),
@@ -1073,8 +1066,6 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
                 "uses:actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
                 "uses:actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
                 "Verify exact preflight manifest sidecar",
-                "Download all qualifying durable performance receipts",
-                "Verify all sixteen durable performance cells",
                 "Bind all successful job conclusions into final receipt",
                 "Verify final receipt as local fixture only",
                 "uses:actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
@@ -1132,28 +1123,7 @@ fn validate_fail_closed_gate_conditions(workflow: &Yaml) -> Result<(), Finding> 
         for step in steps {
             let step = step.as_mapping().ok_or(Finding("CONDITIONS"))?;
             require(!step.contains_key(&key("continue-on-error")), "CONDITIONS")?;
-            let product_gated = name == "verify-candidate"
-                && step
-                    .get(&key("name"))
-                    .and_then(Yaml::as_str)
-                    .is_some_and(|step_name| PRODUCT_GATED_STEP_NAMES.contains(&step_name));
-            let failure_evidence = name == "verify-candidate"
-                && step.get(&key("name")).and_then(Yaml::as_str)
-                    == Some("Upload failed durable performance evidence");
-            if product_gated {
-                require(
-                    step.get(&key("if")).and_then(Yaml::as_str)
-                        == Some("${{ matrix.product_gates }}"),
-                    "CONDITIONS",
-                )?;
-            } else if failure_evidence {
-                require(
-                    step.get(&key("if")).and_then(Yaml::as_str) == Some("${{ failure() }}"),
-                    "CONDITIONS",
-                )?;
-            } else {
-                require(!step.contains_key(&key("if")), "CONDITIONS")?;
-            }
+            require(!step.contains_key(&key("if")), "CONDITIONS")?;
         }
     }
     Ok(())
@@ -1518,9 +1488,9 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
         "use crate::support::perf_workload_ledger;",
         "mod durable_workload {",
         "const IDLE_COLLECTIONS: usize = 181;",
-        "const HOT_DOCUMENTS: usize = 500_000;",
+        "const HOT_DOCUMENTS: usize = 200_000;",
         "const MUTATION_DOCUMENTS_PER_CLASS: usize = (INPUT_SECONDS as usize / 3) * DOCOPS_PER_SECOND;",
-        "const VECTOR_READBACK_REFERENCE_NUMBER: usize = 400_000;",
+        "const VECTOR_READBACK_REFERENCE_NUMBER: usize = 160_000;",
         "const READBACK_MISMATCH_TOKEN: &str = \"readback-mismatch\";",
         "const IDLE_DOCUMENTS_PER_COLLECTION: usize = 100;",
         "const FIELD_COUNT: usize = 14;",
@@ -1538,7 +1508,10 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
         "DOCKER_MEMORY,",
         "\"--memory-swap\",",
         "deltas.assert_complete_interval_evidence()?;",
-        "let report = ledger.validate().map_err(HarnessError::Workload)?;",
+        "Err(failures) => (ledger.report(), failures),",
+        "workload_case_outcome(workload_failures, post_input)",
+        "Ok(_) if !workload_failures.is_empty() => {",
+        "Err(HarnessError::Workload(workload_failures))",
         "counter_delta.checkpoints > 0,",
         "counter_delta.merges > 0,",
         "async fn post_input_restart_step(",
@@ -1626,6 +1599,9 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
                     false,
                 ),
                 ("approved_30_minute_durable_workload".into(), true),
+                ("workload_gate_failure_fails_the_cell_after_post_input_gates_pass".into(), false),
+                ("post_input_failure_wins_over_a_workload_gate_failure".into(), false),
+                ("passing_workload_gates_keep_the_post_input_outcome".into(), false),
                 (
                     "fingerprint_only_readback_cannot_pass_an_ignored_field_predicate".into(),
                     false,
@@ -1816,6 +1792,26 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
                 ),
                 (
                     "non_success_status_record_carries_status_and_a_truncated_body".into(),
+                    false,
+                ),
+                (
+                    "a_failed_metrics_scrape_costs_every_second_it_spent".into(),
+                    false,
+                ),
+                (
+                    "only_the_typed_capacity_refusal_with_retry_after_is_resendable".into(),
+                    false,
+                ),
+                (
+                    "capacity_refusal_is_resent_after_retry_after_and_counted_once".into(),
+                    false,
+                ),
+                (
+                    "untyped_429_and_exhausted_budget_are_request_errors_without_resend".into(),
+                    false,
+                ),
+                (
+                    "unindex_resends_capacity_refusal_and_requires_no_content".into(),
                     false,
                 ),
                 (
@@ -2052,19 +2048,6 @@ fn validate_scale_matrix_sources(
 
 const PERF_WORKFLOW: &str = "PERF_WORKFLOW";
 const PERF_FINAL_RECEIPT: &str = "PERF_FINAL_RECEIPT";
-const PERF_FAILURE_EVIDENCE: &str = "PERF_FAILURE_EVIDENCE";
-const PRODUCT_GATED_STEP_NAMES: &[&str] = &[
-    "Install verified Terraform 1.9.4",
-    "Install verified kubectl v1.37.0",
-    "Run cloud-free Terraform acceptance gate",
-    "Run cloud-free Kustomize acceptance gate",
-    "Run required Lumen product gates without GKE",
-    "Verify full run-scoped candidate supply chain",
-];
-
-fn yaml_u64(value: Option<&Yaml>) -> Option<u64> {
-    value.and_then(Yaml::as_u64)
-}
 
 fn exact_mapping_keys(value: &Yaml, expected: &[&str]) -> bool {
     value.as_mapping().is_some_and(|map| {
@@ -2081,395 +2064,77 @@ fn step_named<'a>(steps: &'a [Yaml], name: &str) -> Result<&'a Yaml, Finding> {
     Ok(matches[0])
 }
 
-fn durable_perf_env() -> [(&'static str, &'static str); 11] {
-    [
-        (
-            "LUMEN_PERF_IMAGE",
-            "${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}",
-        ),
-        ("LUMEN_PERF_ENDPOINT", "${{ matrix.endpoint }}"),
-        ("LUMEN_PERF_BATCH", "${{ matrix.batch }}"),
-        ("LUMEN_PERF_BACKEND", "${{ matrix.backend }}"),
-        ("LUMEN_PERF_QUALIFYING_CELL", "1"),
-        ("LUMEN_PERF_REPOSITORY", "${{ github.repository }}"),
-        ("LUMEN_PERF_RUN_ID", "${{ github.run_id }}"),
-        ("LUMEN_PERF_RUN_ATTEMPT", "${{ github.run_attempt }}"),
-        ("LUMEN_PERF_COMMIT", "${{ needs.identity.outputs.commit }}"),
-        ("LUMEN_RECOVERY_PROFILE", "1"),
-        (
-            "LUMEN_PERF_RECEIPT_PATH",
-            "${{ github.workspace }}/receipts/${{ matrix.cell_id }}.json",
-        ),
-    ]
-}
-
-fn validate_durable_perf_matrix(workflow: &Yaml, source: &str) -> Result<(), Finding> {
-    let candidate = job(workflow, "verify-candidate").ok_or(Finding(PERF_WORKFLOW))?;
+/// lumen@0.6.1 keeps only the coarse in-process perf gates in CI. The
+/// sixteen 30-minute durable cells run on a local host against the candidate
+/// digest, and promotion verifies their receipts (`--durable-perf-dir`).
+fn validate_durable_perf_workflow(source: &str) -> Result<(), Finding> {
+    let workflow: Yaml = serde_yaml::from_str(source).map_err(|_| Finding(PERF_WORKFLOW))?;
+    let candidate = job(&workflow, "verify-candidate").ok_or(Finding(PERF_WORKFLOW))?;
     require(
-        field(candidate, "runs-on").and_then(Yaml::as_str) == Some("ubuntu-latest"),
+        field(candidate, "runs-on").and_then(Yaml::as_str) == Some("ubuntu-latest")
+            && field(candidate, "strategy").is_none(),
         PERF_WORKFLOW,
     )?;
-    require(
-        field(candidate, "continue-on-error").is_none() && field(candidate, "if").is_none(),
-        PERF_WORKFLOW,
-    )?;
-    let strategy = field(candidate, "strategy").ok_or(Finding(PERF_WORKFLOW))?;
-    require(
-        exact_mapping_keys(strategy, &["fail-fast", "max-parallel", "matrix"])
-            && field(strategy, "fail-fast").and_then(Yaml::as_bool) == Some(false)
-            && yaml_u64(field(strategy, "max-parallel")) == Some(4),
-        PERF_WORKFLOW,
-    )?;
-    let include = field(
-        field(strategy, "matrix").ok_or(Finding(PERF_WORKFLOW))?,
-        "include",
-    )
-    .and_then(Yaml::as_sequence)
-    .ok_or(Finding(PERF_WORKFLOW))?;
-    let expected = perf_cell_receipt::qualifying_workflow_cells();
-    require(include.len() == expected.len(), PERF_WORKFLOW)?;
-    let mut actual = std::collections::BTreeSet::new();
-    let mut product_gates = 0_usize;
-    for row in include {
-        require(
-            exact_mapping_keys(
-                row,
-                &["endpoint", "batch", "backend", "cell_id", "product_gates"],
-            ),
-            PERF_WORKFLOW,
-        )?;
-        let endpoint = field(row, "endpoint").and_then(Yaml::as_str);
-        let batch = yaml_u64(field(row, "batch"));
-        let backend = field(row, "backend").and_then(Yaml::as_str);
-        let cell_id = field(row, "cell_id").and_then(Yaml::as_str);
-        let enabled = field(row, "product_gates").and_then(Yaml::as_bool);
-        let Some((endpoint, batch, backend, cell_id, enabled)) = endpoint
-            .zip(batch)
-            .zip(backend)
-            .zip(cell_id)
-            .zip(enabled)
-            .map(|((((endpoint, batch), backend), cell_id), enabled)| {
-                (endpoint, batch, backend, cell_id, enabled)
-            })
-        else {
-            return Err(Finding(PERF_WORKFLOW));
-        };
-        let cell = perf_cell_receipt::Cell::new(endpoint, batch, backend);
-        require(cell.id == cell_id, PERF_WORKFLOW)?;
-        if enabled {
-            product_gates += 1;
-            require(cell.id == "index-1-flat-cpu", PERF_WORKFLOW)?;
-        }
-        require(actual.insert((cell.id, enabled)), PERF_WORKFLOW)?;
+    for forbidden in [
+        "LUMEN_PERF_DIAGNOSTIC",
+        "LUMEN_PERF_QUALIFYING_CELL",
+        "LUMEN_PERF_RECEIPT_PATH",
+        "verify-durable-perf",
+        "durable-perf",
+        "matrix.cell_id",
+    ] {
+        require(!source.contains(forbidden), PERF_WORKFLOW)?;
     }
-    require(product_gates == 1, PERF_WORKFLOW)?;
-    let expected_rows = expected
-        .iter()
-        .map(|row| (row.cell.id.clone(), row.product_gates))
-        .collect::<std::collections::BTreeSet<_>>();
-    require(actual == expected_rows, PERF_WORKFLOW)?;
-
+    require(
+        source.matches(RELEASE_PERF_GATE).count() == 1,
+        PERF_WORKFLOW,
+    )?;
     let steps = field(candidate, "steps")
         .and_then(Yaml::as_sequence)
         .ok_or(Finding(PERF_WORKFLOW))?;
-    for step in steps {
-        require(field(step, "continue-on-error").is_none(), PERF_WORKFLOW)?;
-        let name = field(step, "name").and_then(Yaml::as_str);
-        let condition = field(step, "if").and_then(Yaml::as_str);
-        if PRODUCT_GATED_STEP_NAMES.contains(&name.unwrap_or_default()) {
-            require(
-                condition == Some("${{ matrix.product_gates }}"),
-                PERF_WORKFLOW,
-            )?;
-        } else if name == Some("Upload failed durable performance evidence") {
-            require(condition == Some("${{ failure() }}"), PERF_WORKFLOW)?;
-        } else {
-            require(condition.is_none(), PERF_WORKFLOW)?;
-        }
-    }
-    require(!source.contains("LUMEN_PERF_DIAGNOSTIC"), PERF_WORKFLOW)?;
-
-    let perf = step_named(steps, "Run qualifying durable performance cell")?;
+    let step = step_named(steps, "Run coarse performance gates")?;
     require(
-        exact_mapping_keys(perf, &["name", "env", "shell", "run"])
-            && field(perf, "shell").and_then(Yaml::as_str) == Some("bash"),
+        exact_mapping_keys(step, &["name", "env", "shell", "run"])
+            && field(step, "shell").and_then(Yaml::as_str) == Some("bash"),
         PERF_WORKFLOW,
     )?;
-    let environment = field(perf, "env")
+    let environment = field(step, "env")
         .and_then(Yaml::as_mapping)
         .ok_or(Finding(PERF_WORKFLOW))?;
     require(
-        environment.len() == durable_perf_env().len()
-            || (environment.len() == durable_perf_env().len() + 1
-                && environment
-                    .get(&key("CARGO_INCREMENTAL"))
-                    .and_then(Yaml::as_str)
-                    == Some("0")),
-        PERF_WORKFLOW,
-    )?;
-    for (name, value) in durable_perf_env() {
-        require(
-            environment.get(&key(name)).and_then(Yaml::as_str) == Some(value),
-            PERF_WORKFLOW,
-        )?;
-    }
-    let run = field(perf, "run")
-        .and_then(Yaml::as_str)
-        .ok_or(Finding(PERF_WORKFLOW))?;
-    let perf_lines = shell_logical_lines(run);
-    require(
-        active_line_contains(&perf_lines, "set -euo pipefail")
-            && active_line_contains(&perf_lines, "mkdir -p \"${{ github.workspace }}/receipts\"")
-            && perf_lines
-                .iter()
-                .filter(|line| line.as_str() == RELEASE_PERF_GATE)
-                .count()
-                == 1
-            && active_line_contains(&perf_lines, "test -f \"$LUMEN_PERF_RECEIPT_PATH\"")
-            && active_line_contains(&perf_lines, "test ! -L \"$LUMEN_PERF_RECEIPT_PATH\"")
-            && active_line_contains(
-                &perf_lines,
-                "find \"${{ github.workspace }}/receipts\" -mindepth 1 -maxdepth 1 | wc -l",
-            )
-            && !perf_lines.iter().any(|line| line.contains("--exact")),
-        PERF_WORKFLOW,
-    )?;
-
-    let upload = step_named(steps, "Upload qualifying durable performance receipt")?;
-    require(
-        exact_mapping_keys(upload, &["name", "uses", "with"])
-            && field(upload, "uses").and_then(Yaml::as_str)
-                == Some("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"),
-        PERF_WORKFLOW,
-    )?;
-    let upload_with = field(upload, "with")
-        .and_then(Yaml::as_mapping)
-        .ok_or(Finding(PERF_WORKFLOW))?;
-    for (name, value) in [
-        (
-            "name",
-            "lumen-durable-perf-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.cell_id }}",
-        ),
-        (
-            "path",
-            "${{ github.workspace }}/receipts/${{ matrix.cell_id }}.json",
-        ),
-        ("if-no-files-found", "error"),
-    ] {
-        require(
-            upload_with.get(&key(name)).and_then(Yaml::as_str) == Some(value),
-            PERF_WORKFLOW,
-        )?;
-    }
-    require(
-        upload_with.get(&key("overwrite")).and_then(Yaml::as_bool) == Some(false)
-            && upload_with.len() == 4,
-        PERF_WORKFLOW,
-    )
-}
-
-fn active_line_contains(lines: &[String], needle: &str) -> bool {
-    lines.iter().any(|line| line.contains(needle))
-}
-
-fn validate_durable_perf_final_binding(workflow: &Yaml) -> Result<(), Finding> {
-    let result = job(workflow, "result").ok_or(Finding(PERF_WORKFLOW))?;
-    let steps = field(result, "steps")
-        .and_then(Yaml::as_sequence)
-        .ok_or(Finding(PERF_WORKFLOW))?;
-    let downloads = steps
-        .iter()
-        .filter(|step| {
-            field(step, "uses").and_then(Yaml::as_str)
-                == Some("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093")
-                && field(step, "with")
-                    .and_then(|with| field(with, "pattern"))
-                    .and_then(Yaml::as_str)
-                    == Some("lumen-durable-perf-${{ github.run_id }}-${{ github.run_attempt }}-*")
-        })
-        .collect::<Vec<_>>();
-    require(downloads.len() == 1, PERF_WORKFLOW)?;
-    let download = downloads[0];
-    require(
-        exact_mapping_keys(download, &["name", "uses", "with"])
-            && field(download, "uses").and_then(Yaml::as_str)
-                == Some("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"),
-        PERF_WORKFLOW,
-    )?;
-    let download_with = field(download, "with")
-        .and_then(Yaml::as_mapping)
-        .ok_or(Finding(PERF_WORKFLOW))?;
-    for (name, value) in [
-        (
-            "pattern",
-            "lumen-durable-perf-${{ github.run_id }}-${{ github.run_attempt }}-*",
-        ),
-        ("path", "candidate/perf"),
-    ] {
-        require(
-            download_with.get(&key(name)).and_then(Yaml::as_str) == Some(value),
-            PERF_WORKFLOW,
-        )?;
-    }
-    require(
-        download_with
-            .get(&key("merge-multiple"))
-            .and_then(Yaml::as_bool)
-            == Some(true)
-            && download_with.len() == 3,
-        PERF_WORKFLOW,
-    )?;
-
-    let verifications = steps
-        .iter()
-        .filter(|step| {
-            field(step, "run")
+        environment.len() == 1
+            && environment
+                .get(&key("CARGO_INCREMENTAL"))
                 .and_then(Yaml::as_str)
-                .is_some_and(|run| run.contains("scripts/verify-durable-perf.py"))
-        })
-        .collect::<Vec<_>>();
-    require(verifications.len() == 1, PERF_WORKFLOW)?;
-    let verify = verifications[0];
-    require(
-        exact_mapping_keys(verify, &["name", "shell", "run"])
-            && field(verify, "shell").and_then(Yaml::as_str) == Some("bash"),
+                == Some("0"),
         PERF_WORKFLOW,
     )?;
-    let verify_run = field(verify, "run")
+    let run = field(step, "run")
         .and_then(Yaml::as_str)
         .ok_or(Finding(PERF_WORKFLOW))?;
-    let verify_lines = shell_logical_lines(verify_run);
-    let verify_command = verify_lines
-        .iter()
-        .filter(|line| line.contains("scripts/verify-durable-perf.py"))
-        .collect::<Vec<_>>();
     require(
-        verify_command.len() == 1
-            && active_line_contains(&verify_lines, "set -euo pipefail")
-            && [
-                "--receipts-dir candidate/perf",
-                "--repo \"${{ github.repository }}\"",
-                "--run-id \"${{ github.run_id }}\"",
-                "--run-attempt \"${{ github.run_attempt }}\"",
-                "--commit \"${{ needs.identity.outputs.commit }}\"",
-                "--image \"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\"",
-                "--output candidate/durable-perf-summary.json",
-            ]
-            .iter()
-            .all(|needle| verify_command[0].contains(needle)),
+        exact_shell_lines(run, &["set -euo pipefail", RELEASE_PERF_GATE]),
         PERF_WORKFLOW,
-    )?;
-
-    let bind = step_named(
-        steps,
-        "Bind all successful job conclusions into final receipt",
-    )?;
-    let bind_run = field(bind, "run")
-        .and_then(Yaml::as_str)
-        .ok_or(Finding(PERF_WORKFLOW))?;
-    let bind_lines = shell_logical_lines(bind_run);
-    for needle in [
-        "durable-perf-summary.json.sha256",
-        "[0-9a-f]{64}",
-        "performance:{schema_version:1,summary_file:\"durable-perf-summary.json\"",
-        "receipts_directory:\"perf\"}",
-        "jobs:{identity:",
-        "final-candidate-manifest.json",
-    ] {
-        require(active_line_contains(&bind_lines, needle), PERF_WORKFLOW)?;
-    }
-
-    let uploads = steps
-        .iter()
-        .filter(|step| {
-            field(step, "uses").and_then(Yaml::as_str)
-                == Some("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02")
-        })
-        .collect::<Vec<_>>();
-    require(uploads.len() == 1, PERF_WORKFLOW)?;
-    let upload_path = field(uploads[0], "with")
-        .and_then(|with| field(with, "path"))
-        .and_then(Yaml::as_str)
-        .ok_or(Finding(PERF_WORKFLOW))?;
-    for path in [
-        "candidate/perf/*.json",
-        "candidate/durable-perf-summary.json",
-        "candidate/durable-perf-summary.json.sha256",
-    ] {
-        require(
-            upload_path.lines().any(|line| line.trim() == path),
-            PERF_WORKFLOW,
-        )?;
-    }
-    Ok(())
-}
-
-fn validate_durable_perf_workflow(source: &str) -> Result<(), Finding> {
-    let workflow: Yaml = serde_yaml::from_str(source).map_err(|_| Finding(PERF_WORKFLOW))?;
-    validate_durable_perf_matrix(&workflow, source)?;
-    validate_durable_perf_final_binding(&workflow)
-}
-
-fn validate_failed_perf_evidence_upload(workflow: &Yaml) -> Result<(), Finding> {
-    let steps = field(
-        job(workflow, "verify-candidate").ok_or(Finding(PERF_FAILURE_EVIDENCE))?,
-        "steps",
-    )
-    .and_then(Yaml::as_sequence)
-    .ok_or(Finding(PERF_FAILURE_EVIDENCE))?;
-    let perf_index = steps
-        .iter()
-        .position(|step| {
-            field(step, "name").and_then(Yaml::as_str)
-                == Some("Run qualifying durable performance cell")
-        })
-        .ok_or(Finding(PERF_FAILURE_EVIDENCE))?;
-    let upload = steps
-        .get(perf_index + 1)
-        .ok_or(Finding(PERF_FAILURE_EVIDENCE))?;
-    require(
-        exact_mapping_keys(upload, &["name", "if", "uses", "with"])
-            && field(upload, "name").and_then(Yaml::as_str)
-                == Some("Upload failed durable performance evidence")
-            && field(upload, "if").and_then(Yaml::as_str) == Some("${{ failure() }}")
-            && field(upload, "uses").and_then(Yaml::as_str)
-                == Some("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"),
-        PERF_FAILURE_EVIDENCE,
-    )?;
-    let upload_with = field(upload, "with")
-        .and_then(Yaml::as_mapping)
-        .ok_or(Finding(PERF_FAILURE_EVIDENCE))?;
-    for (name, value) in [
-        (
-            "name",
-            "lumen-durable-perf-failure-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.cell_id }}",
-        ),
-        ("path", "/tmp/lumen-perf-failure-*"),
-        ("if-no-files-found", "ignore"),
-    ] {
-        require(
-            upload_with.get(&key(name)).and_then(Yaml::as_str) == Some(value),
-            PERF_FAILURE_EVIDENCE,
-        )?;
-    }
-    require(
-        upload_with.get(&key("overwrite")).and_then(Yaml::as_bool) == Some(false)
-            && upload_with.len() == 4,
-        PERF_FAILURE_EVIDENCE,
     )
 }
 
-fn validate_durable_final_verifier(source: &str) -> Result<(), Finding> {
+/// From lumen@0.6.1 the candidate receipt carries no performance block; the
+/// promotion verifier binds the local durable evidence to the candidate.
+fn validate_durable_final_verifier(candidate: &str, promotion: &str) -> Result<(), Finding> {
+    for forbidden in ["verify-durable-perf", "performance", "durable-perf-summary"] {
+        require(!candidate.contains(forbidden), PERF_FINAL_RECEIPT)?;
+    }
     for needle in [
         "verify-durable-perf.py",
         "--verify-existing",
         "--summary-sha256",
-        "performance",
-        "[0,6,1]",
+        "--durable-perf-dir",
+        "--durable-perf-summary-sha256",
         "durable-perf-summary.json",
-        "receipts_directory",
+        "tag_requires_durable_perf_evidence() { tag_at_least 6 1; }",
+        "- Standalone GKE: not claimed",
     ] {
-        require(source.contains(needle), PERF_FINAL_RECEIPT)?;
+        require(promotion.contains(needle), PERF_FINAL_RECEIPT)?;
     }
     Ok(())
 }
@@ -2579,21 +2244,11 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         ("verify-libraries", &["identity"][..]),
         (
             "kind-amd64",
-            &[
-                "identity",
-                "verify-candidate",
-                "verify-libraries",
-                "ghcr-image-and-attest",
-            ][..],
+            &["identity", "verify-libraries", "ghcr-image-and-attest"][..],
         ),
         (
             "kind-arm64",
-            &[
-                "identity",
-                "verify-candidate",
-                "verify-libraries",
-                "ghcr-image-and-attest",
-            ][..],
+            &["identity", "verify-libraries", "ghcr-image-and-attest"][..],
         ),
         (
             "result",
@@ -2798,9 +2453,6 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
 fn validate_workflow(source: &str, dockerfile: &str) -> Result<(), Finding> {
     validate_workflow_semantics(source, dockerfile)?;
     validate_durable_perf_workflow(source)?;
-    let workflow: Yaml =
-        serde_yaml::from_str(source).map_err(|_| Finding(PERF_FAILURE_EVIDENCE))?;
-    validate_failed_perf_evidence_upload(&workflow)?;
     require(
         sha256_bytes(source.as_bytes()) == WORKFLOW_BYTES_SHA256,
         "WORKFLOW_BYTES",
@@ -2919,340 +2571,70 @@ fn dockerfile() -> String {
     fs::read_to_string(root().join("Dockerfile.release")).unwrap()
 }
 
-fn durable_perf_workflow_fixture() -> String {
-    let matrix = perf_cell_receipt::qualifying_workflow_cells()
-        .into_iter()
-        .map(|row| {
-            format!(
-                "          - endpoint: {}\n            batch: {}\n            backend: {}\n            cell_id: {}\n            product_gates: {}",
-                row.cell.endpoint, row.cell.batch_size, row.cell.backend, row.cell.id, row.product_gates
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!(
-        r#"jobs:
-  verify-candidate:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        include:
-{matrix}
-    steps:
-      - name: Run cloud-free Terraform acceptance gate
-        if: ${{{{ matrix.product_gates }}}}
-        shell: bash
-        run: true
-      - name: Run cloud-free Kustomize acceptance gate
-        if: ${{{{ matrix.product_gates }}}}
-        shell: bash
-        run: true
-      - name: Run required Lumen product gates without GKE
-        if: ${{{{ matrix.product_gates }}}}
-        shell: bash
-        run: true
-      - name: Verify full run-scoped candidate supply chain
-        if: ${{{{ matrix.product_gates }}}}
-        shell: bash
-        run: true
-      - name: Run qualifying durable performance cell
-        env:
-          LUMEN_PERF_IMAGE: ${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}
-          LUMEN_PERF_ENDPOINT: ${{{{ matrix.endpoint }}}}
-          LUMEN_PERF_BATCH: ${{{{ matrix.batch }}}}
-          LUMEN_PERF_BACKEND: ${{{{ matrix.backend }}}}
-          LUMEN_PERF_QUALIFYING_CELL: "1"
-          LUMEN_PERF_REPOSITORY: ${{{{ github.repository }}}}
-          LUMEN_PERF_RUN_ID: ${{{{ github.run_id }}}}
-          LUMEN_PERF_RUN_ATTEMPT: ${{{{ github.run_attempt }}}}
-          LUMEN_PERF_COMMIT: ${{{{ needs.identity.outputs.commit }}}}
-          LUMEN_RECOVERY_PROFILE: "1"
-          LUMEN_PERF_RECEIPT_PATH: ${{{{ github.workspace }}}}/receipts/${{{{ matrix.cell_id }}}}.json
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "${{{{ github.workspace }}}}/receipts"
-          {RELEASE_PERF_GATE}
-          test -f "$LUMEN_PERF_RECEIPT_PATH"
-          test ! -L "$LUMEN_PERF_RECEIPT_PATH"
-          test "$(find "${{{{ github.workspace }}}}/receipts" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" = 1
-      - name: Upload qualifying durable performance receipt
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: lumen-durable-perf-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ matrix.cell_id }}}}
-          path: ${{{{ github.workspace }}}}/receipts/${{{{ matrix.cell_id }}}}.json
-          if-no-files-found: error
-          overwrite: false
-  result:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download qualifying durable performance receipts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          pattern: lumen-durable-perf-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-*
-          path: candidate/perf
-          merge-multiple: true
-      - name: Verify qualifying durable performance receipts
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/verify-durable-perf.py --receipts-dir candidate/perf --repo "${{{{ github.repository }}}}" --run-id "${{{{ github.run_id }}}}" --run-attempt "${{{{ github.run_attempt }}}}" --commit "${{{{ needs.identity.outputs.commit }}}}" --image "${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}" --output candidate/durable-perf-summary.json
-      - name: Bind all successful job conclusions into final receipt
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd candidate
-          summary_sha256="$(tr -d '\n' < durable-perf-summary.json.sha256)"
-          [[ "$summary_sha256" =~ ^[0-9a-f]{{64}}$ ]]
-          jq -c --arg summary_sha256 "$summary_sha256" '. + {{jobs:{{identity:"success"}},performance:{{schema_version:1,summary_file:"durable-perf-summary.json",summary_sha256:$summary_sha256,receipts_directory:"perf"}}}}' candidate-manifest.json > final-candidate-manifest.json
-      - name: Verify final receipt as local fixture only
-        shell: bash
-        run: true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: lumen-release-candidate-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
-          path: |
-            candidate/perf/*.json
-            candidate/durable-perf-summary.json
-            candidate/durable-perf-summary.json.sha256
-            candidate/final-candidate-manifest.json
-          if-no-files-found: error
-          overwrite: false
-"#
-    )
+fn promotion_verifier() -> String {
+    fs::read_to_string(root().join("scripts/verify-release-artifacts.sh")).unwrap()
 }
 
 #[test]
-fn durable_performance_release_workflow_is_fail_closed() {
-    let source = durable_perf_workflow_fixture();
-    validate_durable_perf_workflow(&source).expect("synthetic qualifying workflow");
-
-    let assert_rejected = |name: &str, changed: String| {
-        assert_eq!(
-            validate_durable_perf_workflow(&changed),
-            Err(Finding(PERF_WORKFLOW)),
-            "{name} mutation passed"
-        );
-    };
-    assert_rejected(
-        "missing matrix cell",
-        replace_once(
-            &source,
-            "          - endpoint: unindex\n            batch: 1000\n            backend: hnsw-cpu\n            cell_id: unindex-1000-hnsw-cpu\n            product_gates: false\n",
-            "",
-        ),
-    );
-    assert_rejected(
-        "duplicate matrix cell",
-        replace_once(
-            &source,
-            "cell_id: index-1-hnsw-cpu",
-            "cell_id: index-1-flat-cpu",
-        ),
-    );
-    assert_rejected(
-        "wrong batch",
-        replace_once(
-            &source,
-            "endpoint: index\n            batch: 1000\n            backend: flat-cpu",
-            "endpoint: index\n            batch: 999\n            backend: flat-cpu",
-        ),
-    );
-    assert_rejected(
-        "wrong backend",
-        replace_once(
-            &source,
-            "backend: flat-cpu\n            cell_id: index-1-flat-cpu",
-            "backend: hnsw-cpu\n            cell_id: index-1-flat-cpu",
-        ),
-    );
-    assert_rejected(
-        "no product gate child",
-        replace_once(&source, "product_gates: true", "product_gates: false"),
-    );
-    assert_rejected(
-        "two product gate children",
-        replace_once(
-            &source,
-            "cell_id: index-100-flat-cpu\n            product_gates: false",
-            "cell_id: index-100-flat-cpu\n            product_gates: true",
-        ),
-    );
-    assert_rejected(
-        "fail fast",
-        replace_once(&source, "fail-fast: false", "fail-fast: true"),
-    );
-    assert_rejected(
-        "continue on error",
-        replace_once(
-            &source,
-            "    runs-on: ubuntu-latest\n    strategy:",
-            "    runs-on: ubuntu-latest\n    continue-on-error: true\n    strategy:",
-        ),
-    );
-    assert_rejected(
-        "diagnostic selection",
-        replace_once(
-            &source,
-            "          LUMEN_PERF_QUALIFYING_CELL: \"1\"",
-            "          LUMEN_PERF_QUALIFYING_CELL: \"1\"\n          LUMEN_PERF_DIAGNOSTIC: \"1\"",
-        ),
-    );
-    assert_rejected(
-        "missing recovery profile",
-        replace_once(&source, "          LUMEN_RECOVERY_PROFILE: \"1\"\n", ""),
-    );
-    assert_rejected(
-        "wrong recovery profile zero",
-        replace_once(
-            &source,
-            "          LUMEN_RECOVERY_PROFILE: \"1\"",
-            "          LUMEN_RECOVERY_PROFILE: \"0\"",
-        ),
-    );
-    assert_rejected(
-        "wrong recovery profile value",
-        replace_once(
-            &source,
-            "          LUMEN_RECOVERY_PROFILE: \"1\"",
-            "          LUMEN_RECOVERY_PROFILE: \"2\"",
-        ),
-    );
-    assert_rejected(
-        "mutable image",
-        replace_once(
-            &source,
-            "LUMEN_PERF_IMAGE: ${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}",
-            "LUMEN_PERF_IMAGE: ${{ needs.ghcr-image-and-attest.outputs.image_repo }}:latest",
-        ),
-    );
-    assert_rejected(
-        "missing run binding",
-        replace_once(
-            &source,
-            "          LUMEN_PERF_RUN_ATTEMPT: ${{ github.run_attempt }}\n",
-            "",
-        ),
-    );
-    assert_rejected(
-        "shared receipt filename",
-        replace_once(
-            &source,
-            "LUMEN_PERF_RECEIPT_PATH: ${{ github.workspace }}/receipts/${{ matrix.cell_id }}.json",
-            "LUMEN_PERF_RECEIPT_PATH: ${{ github.workspace }}/receipts/receipt.json",
-        ),
-    );
-    assert_rejected(
-        "skipped performance gate",
-        replace_once(&source, RELEASE_PERF_GATE, "true"),
-    );
-    assert_rejected(
-        "missing aggregate",
-        replace_once(
-            &source,
-            "      - name: Verify qualifying durable performance receipts\n        shell: bash\n        run: |\n          set -euo pipefail\n          python3 scripts/verify-durable-perf.py --receipts-dir candidate/perf --repo \"${{ github.repository }}\" --run-id \"${{ github.run_id }}\" --run-attempt \"${{ github.run_attempt }}\" --commit \"${{ needs.identity.outputs.commit }}\" --image \"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" --output candidate/durable-perf-summary.json\n",
-            "",
-        ),
-    );
-    assert_rejected(
-        "missing final performance binding",
-        replace_once(
-            &source,
-            ",performance:{schema_version:1,summary_file:\"durable-perf-summary.json\",summary_sha256:$summary_sha256,receipts_directory:\"perf\"}",
-            "",
-        ),
-    );
-    assert_rejected(
-        "raw receipt artifact omitted",
-        replace_once(&source, "            candidate/perf/*.json\n", ""),
-    );
-
-    validate_durable_perf_workflow(&workflow())
-        .expect("the checked-in release workflow must run every qualifying cell");
-}
-
-#[test]
-fn durable_performance_receipt_paths_are_absolute_and_consistent() {
-    let source = durable_perf_workflow_fixture();
-    validate_durable_perf_workflow(&source)
-        .expect("synthetic receipt paths are absolute and consistent");
-
-    let assert_rejected = |name: &str, changed: String| {
-        assert_eq!(
-            validate_durable_perf_workflow(&changed),
-            Err(Finding(PERF_WORKFLOW)),
-            "{name} mutation passed"
-        );
-    };
-    assert_rejected(
-        "relative receipt output",
-        replace_once(
-            &source,
-            "LUMEN_PERF_RECEIPT_PATH: ${{ github.workspace }}/receipts/${{ matrix.cell_id }}.json",
-            "LUMEN_PERF_RECEIPT_PATH: receipts/${{ matrix.cell_id }}.json",
-        ),
-    );
-    assert_rejected(
-        "relative receipt directory",
-        replace_once(
-            &source,
-            "mkdir -p \"${{ github.workspace }}/receipts\"",
-            "mkdir -p receipts",
-        ),
-    );
-    assert_rejected(
-        "relative receipt count check",
-        replace_once(
-            &source,
-            "find \"${{ github.workspace }}/receipts\" -mindepth 1 -maxdepth 1 | wc -l",
-            "find receipts -mindepth 1 -maxdepth 1 | wc -l",
-        ),
-    );
-    assert_rejected(
-        "relative receipt upload",
-        replace_once(
-            &source,
-            "path: ${{ github.workspace }}/receipts/${{ matrix.cell_id }}.json",
-            "path: receipts/${{ matrix.cell_id }}.json",
-        ),
-    );
-
-    validate_durable_perf_workflow(&workflow())
-        .expect("the checked-in workflow uses absolute receipt paths consistently");
-}
-
-#[test]
-fn failed_perf_cell_evidence_upload_is_failure_only_and_scoped() {
+fn coarse_performance_release_workflow_is_fail_closed() {
     let source = workflow();
-    let workflow: Yaml = serde_yaml::from_str(&source).expect("candidate workflow YAML");
-    validate_failed_perf_evidence_upload(&workflow)
-        .expect("a failed durable performance cell uploads only its bounded evidence bundle");
+    validate_durable_perf_workflow(&source)
+        .expect("the checked-in workflow runs only the coarse perf gates");
 
-    for (name, from, to) in [
+    const STEP: &str = "      - name: Run coarse performance gates\n        env:\n          CARGO_INCREMENTAL: '0'\n";
+    for (name, changed) in [
         (
-            "successful cell upload",
-            "if: ${{ failure() }}",
-            "if: ${{ success() }}",
+            "durable matrix restored",
+            replace_once(
+                &source,
+                "    name: verify exact candidate gates\n",
+                "    name: verify exact candidate gates\n    strategy:\n      fail-fast: false\n",
+            ),
         ),
         (
-            "workspace upload",
-            "path: /tmp/lumen-perf-failure-*",
-            "path: ${{ github.workspace }}",
+            "qualifying cell in CI",
+            replace_once(
+                &source,
+                STEP,
+                &format!("{STEP}          LUMEN_PERF_QUALIFYING_CELL: '1'\n"),
+            ),
         ),
         (
-            "unscoped artifact name",
-            "name: lumen-durable-perf-failure-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.cell_id }}",
-            "name: lumen-durable-perf-failure-evidence",
+            "extra env",
+            replace_once(&source, STEP, &format!("{STEP}          RUST_LOG: debug\n")),
+        ),
+        (
+            "conditional step",
+            replace_once(
+                &source,
+                "      - name: Run coarse performance gates\n",
+                "      - name: Run coarse performance gates\n        if: ${{ always() }}\n",
+            ),
+        ),
+        (
+            "durable workload not skipped",
+            replace_once(&source, " --skip durable_workload", ""),
+        ),
+        (
+            "duplicate gate",
+            replace_once(
+                &source,
+                RELEASE_PERF_GATE,
+                &format!("{RELEASE_PERF_GATE}\n          {RELEASE_PERF_GATE}"),
+            ),
+        ),
+        (
+            "durable summary uploaded",
+            replace_once(
+                &source,
+                "            candidate/final-candidate-manifest.json\n",
+                "            candidate/final-candidate-manifest.json\n            candidate/durable-perf-summary.json\n",
+            ),
         ),
     ] {
-        let changed = replace_once(&source, from, to);
-        let changed: Yaml =
-            serde_yaml::from_str(&changed).expect("mutated candidate workflow YAML");
         assert_eq!(
-            validate_failed_perf_evidence_upload(&changed),
-            Err(Finding(PERF_FAILURE_EVIDENCE)),
+            validate_durable_perf_workflow(&changed),
+            Err(Finding(PERF_WORKFLOW)),
             "{name} mutation passed"
         );
     }
@@ -3260,26 +2642,32 @@ fn failed_perf_cell_evidence_upload_is_failure_only_and_scoped() {
 
 #[test]
 fn durable_final_receipt_verifier_is_fail_closed() {
-    let (source, _) = verifier();
-    validate_durable_final_verifier(&source)
-        .expect("the final candidate verifier must bind durable performance receipts");
+    let (candidate, _) = verifier();
+    let promotion = promotion_verifier();
+    validate_durable_final_verifier(&candidate, &promotion)
+        .expect("durable evidence must move from the candidate receipt to promotion");
 
-    let fixture = "verify-durable-perf.py --verify-existing --summary-sha256 performance [0,6,1] durable-perf-summary.json receipts_directory";
-    validate_durable_final_verifier(fixture).expect("synthetic final verifier contract");
     for needle in [
         "--verify-existing",
         "--summary-sha256",
-        "performance",
-        "[0,6,1]",
-        "durable-perf-summary.json",
-        "receipts_directory",
+        "--durable-perf-dir",
+        "tag_requires_durable_perf_evidence() { tag_at_least 6 1; }",
+        "- Standalone GKE: not claimed",
     ] {
         assert_eq!(
-            validate_durable_final_verifier(&fixture.replacen(needle, "removed", 1)),
+            validate_durable_final_verifier(&candidate, &promotion.replace(needle, "removed")),
             Err(Finding(PERF_FINAL_RECEIPT)),
-            "final receipt verifier accepted missing {needle}"
+            "promotion verifier accepted missing {needle}"
         );
     }
+    assert_eq!(
+        validate_durable_final_verifier(
+            &format!("{candidate}\nverify_performance_evidence() {{ :; }}\n"),
+            &promotion
+        ),
+        Err(Finding(PERF_FINAL_RECEIPT)),
+        "candidate verifier accepted a performance block"
+    );
 }
 
 #[test]
@@ -3332,7 +2720,7 @@ fn cloud_free_gate_mutations_fail_without_hash_oracle() {
         "bash kustomize/lumen-standalone-acceptance/tests/other.sh",
         "GATE_COMMANDS",
     );
-    let terraform_step = "      - name: Install verified Terraform 1.9.4\n        if: ${{ matrix.product_gates }}\n        shell: bash\n        run: |\n          set -euo pipefail\n          curl -fsSL https://releases.hashicorp.com/terraform/1.9.4/terraform_1.9.4_linux_amd64.zip -o /tmp/terraform.zip\n          echo '6e9b2cc741875ab906d800af3134b076489f049565e0a1dbdb6deacd91f5054c  /tmp/terraform.zip' | sha256sum -c -\n          unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin\n          sudo install -m 0755 /tmp/terraform-bin/terraform /usr/local/bin/terraform\n";
+    let terraform_step = "      - name: Install verified Terraform 1.9.4\n        shell: bash\n        run: |\n          set -euo pipefail\n          curl -fsSL https://releases.hashicorp.com/terraform/1.9.4/terraform_1.9.4_linux_amd64.zip -o /tmp/terraform.zip\n          echo '6e9b2cc741875ab906d800af3134b076489f049565e0a1dbdb6deacd91f5054c  /tmp/terraform.zip' | sha256sum -c -\n          unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin\n          sudo install -m 0755 /tmp/terraform-bin/terraform /usr/local/bin/terraform\n";
     let without_terraform = replace_once(&source, terraform_step, "");
     assert_eq!(
         validate_workflow_semantics(&without_terraform, &dockerfile()).unwrap_err(),
@@ -3792,6 +3180,11 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             RELEASE_PERF_GATE.replace("--nocapture", ""),
             "GATES",
         ),
+        (
+            "missing durable skip",
+            RELEASE_PERF_GATE.replace("--skip durable_workload ", ""),
+            "GATES",
+        ),
         ("comment", format!("# {RELEASE_PERF_GATE}"), PERF_WORKFLOW),
         (
             "quoted prose",
@@ -3976,8 +3369,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             "durable document count",
             replace_once(
                 &perf_source,
-                "const HOT_DOCUMENTS: usize = 500_000;",
-                "const HOT_DOCUMENTS: usize = 499_999;",
+                "const HOT_DOCUMENTS: usize = 200_000;",
+                "const HOT_DOCUMENTS: usize = 199_999;",
             ),
         ),
         (
@@ -4396,8 +3789,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     );
     expect_workflow(
         &source,
-        "  kind-amd64:\n    name: kind e2e (amd64)\n    needs: [identity, verify-candidate, verify-libraries, ghcr-image-and-attest]",
-        "  kind-amd64:\n    name: kind e2e (amd64)\n    needs: [identity, verify-candidate, ghcr-image-and-attest]",
+        "  kind-amd64:\n    name: kind e2e (amd64)\n    needs: [identity, verify-libraries, ghcr-image-and-attest]",
+        "  kind-amd64:\n    name: kind e2e (amd64)\n    needs: [identity, ghcr-image-and-attest]",
         "GRAPH",
     );
     expect_workflow(
@@ -4439,12 +3832,12 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     );
     for (from, to) in [
         (
-            "      - name: Run required Lumen product gates without GKE\n        if: ${{ matrix.product_gates }}\n        shell: bash",
+            "      - name: Run required Lumen product gates without GKE\n        shell: bash",
             "      - name: Run required Lumen product gates without GKE\n        if: false\n        shell: bash",
         ),
         (
-            "      - name: Verify full run-scoped candidate supply chain\n        if: ${{ matrix.product_gates }}\n        env:",
-            "      - name: Verify full run-scoped candidate supply chain\n        if: ${{ matrix.product_gates }}\n        continue-on-error: true\n        env:",
+            "      - name: Verify full run-scoped candidate supply chain\n        env:",
+            "      - name: Verify full run-scoped candidate supply chain\n        continue-on-error: true\n        env:",
         ),
         (
             "  kind-amd64:\n    name: kind e2e (amd64)",
@@ -4779,7 +4172,7 @@ fn durable_perf_fixture_binding() -> perf_cell_receipt::Binding {
     }
 }
 
-fn durable_perf_fixture_measurement() -> perf_cell_receipt::Measurement {
+pub(crate) fn durable_perf_fixture_measurement() -> perf_cell_receipt::Measurement {
     perf_cell_receipt::Measurement {
         input_duration_ms: 1_800_000,
         observed_input_elapsed_ms: 1_800_000,
@@ -4793,6 +4186,10 @@ fn durable_perf_fixture_measurement() -> perf_cell_receipt::Measurement {
         requests_completed_per_second_milli: 10_000,
         request_errors: 0,
         client_cancellations: 0,
+        capacity_refusals: 0,
+        capacity_refused_requests: 0,
+        metric_sample_seconds: 1_800,
+        metric_sample_missed_seconds: 0,
         items_offered: 2_520_000,
         items_completed: 2_520_000,
         items_failed: 0,
@@ -4866,17 +4263,36 @@ fn run_durable_perf_verifier(dir: &Path) -> Output {
         .expect("run local durable receipt verifier")
 }
 
-fn bind_durable_perf_summary(dir: &Path) {
-    let summary = dir.join("durable-perf-summary.json");
-    let manifest_path = dir.join("final-candidate-manifest.json");
-    let mut manifest: Value = serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
-    manifest["performance"] = json!({
-        "schema_version": 1,
-        "summary_file": "durable-perf-summary.json",
-        "summary_sha256": sha(&summary),
-        "receipts_directory": "perf",
-    });
-    write_manifest(&manifest_path, &manifest);
+/// The exact check promotion runs on the local durable evidence directory.
+fn run_durable_perf_verify_existing(dir: &Path, summary_sha256: &str) -> Output {
+    Command::new("python3")
+        .arg("-I")
+        .arg(root().join("scripts/verify-durable-perf.py"))
+        .args([
+            "--receipts-dir",
+            dir.join("perf").to_str().unwrap(),
+            "--repo",
+            "faberline/lumen",
+            "--run-id",
+            "7",
+            "--run-attempt",
+            "2",
+            "--commit",
+            "0123456789012345678901234567890123456789",
+            "--image",
+            &durable_perf_fixture_binding().image_reference,
+            "--output",
+            dir.join("durable-perf-summary.json").to_str().unwrap(),
+            "--verify-existing",
+            "--summary-sha256",
+            summary_sha256,
+        ])
+        .output()
+        .expect("run local durable receipt verifier")
+}
+
+fn durable_perf_summary_sha256(dir: &Path) -> String {
+    sha(&dir.join("durable-perf-summary.json"))
 }
 
 fn set_durable_perf_restart_duration(dir: &Path, duration_ms: u64) {
@@ -4907,7 +4323,6 @@ fn forge_durable_perf_aggregate(dir: &Path) {
         format!("{}\n", sha(&summary_path)),
     )
     .unwrap();
-    bind_durable_perf_summary(dir);
 }
 
 fn add_valid_durable_perf_evidence(dir: &Path) {
@@ -4936,7 +4351,6 @@ fn add_valid_durable_perf_evidence(dir: &Path) {
         "build a valid local durable summary: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    bind_durable_perf_summary(dir);
 }
 
 fn final_v061_with_durable_perf_fixture() -> tempfile::TempDir {
@@ -4946,20 +4360,40 @@ fn final_v061_with_durable_perf_fixture() -> tempfile::TempDir {
     fixture
 }
 
+fn durable_perf_evidence_is_valid(dir: &Path) -> bool {
+    run_durable_perf_verify_existing(dir, &durable_perf_summary_sha256(dir))
+        .status
+        .success()
+}
+
 #[test]
-fn final_v061_receipt_refuses_to_omit_durable_performance_evidence() {
+fn final_v061_candidate_receipt_carries_no_durable_performance_block() {
     let fixture = local_fixture();
     set_fixture_version(fixture.path(), "0.6.1");
     let output = run_local_version(fixture.path(), "0.6.1");
     assert!(
+        output.status.success(),
+        "a final 0.6.1 candidate receipt must verify without CI performance evidence: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let path = fixture.path().join("final-candidate-manifest.json");
+    let mut manifest: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    manifest["performance"] = json!({
+        "schema_version": 1,
+        "summary_file": "durable-perf-summary.json",
+        "summary_sha256": "0".repeat(64),
+        "receipts_directory": "perf",
+    });
+    write_manifest(&path, &manifest);
+    let output = run_local_version(fixture.path(), "0.6.1");
+    assert!(
         !output.status.success(),
-        "a final 0.6.1 receipt without sixteen durable performance receipts passed: {}",
-        String::from_utf8_lossy(&output.stdout)
+        "a candidate receipt claiming CI performance evidence passed"
     );
     assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("final candidate manifest requires durable performance evidence"),
-        "missing-performance refusal: {}",
+        String::from_utf8_lossy(&output.stderr).contains("candidate manifest keys changed"),
+        "performance block refusal: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }
@@ -4999,9 +4433,8 @@ fn durable_perf_restart_duration_accepts_exactly_thirty_seconds() {
         "restart_duration_ms=30000 must remain a qualifying receipt: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    bind_durable_perf_summary(fixture.path());
     assert!(
-        run_local_version(fixture.path(), "0.6.1").status.success(),
+        durable_perf_evidence_is_valid(fixture.path()),
         "a locally verified receipt with restart_duration_ms=30000 must remain valid"
     );
 }
@@ -5024,26 +4457,35 @@ fn final_v061_receipt_refuses_forged_aggregate_with_one_overdue_restart() {
     let fixture = final_v061_with_durable_perf_fixture();
     set_durable_perf_restart_duration(fixture.path(), 30_001);
     forge_durable_perf_aggregate(fixture.path());
-    let output = run_local_version(fixture.path(), "0.6.1");
+    let output = run_durable_perf_verify_existing(
+        fixture.path(),
+        &durable_perf_summary_sha256(fixture.path()),
+    );
     assert!(
         !output.status.success(),
-        "local final verifier accepted a forged sixteen-cell aggregate with one restart_duration_ms=30001: {}",
+        "promotion verifier accepted a forged sixteen-cell aggregate with one restart_duration_ms=30001: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }
 
 #[test]
-fn final_v061_receipt_binds_all_raw_durable_performance_evidence() {
+fn local_v061_durable_evidence_binds_all_raw_receipts() {
     let fixture = final_v061_with_durable_perf_fixture();
     assert!(
-        run_local_version(fixture.path(), "0.6.1").status.success(),
-        "a complete sixteen-cell receipt must be locally verifiable"
+        durable_perf_evidence_is_valid(fixture.path()),
+        "a complete sixteen-cell local evidence directory must verify"
     );
 
     fn negative(name: &str, mutate: fn(&Path), needle: &str) {
         let fixture = final_v061_with_durable_perf_fixture();
+        let summary_sha256 = durable_perf_summary_sha256(fixture.path());
         mutate(fixture.path());
-        let output = run_local_version(fixture.path(), "0.6.1");
+        let summary_sha256 = if name == "promotion summary hash" {
+            "0".repeat(64)
+        } else {
+            summary_sha256
+        };
+        let output = run_durable_perf_verify_existing(fixture.path(), &summary_sha256);
         assert!(!output.status.success(), "{name} mutation passed");
         assert!(
             String::from_utf8_lossy(&output.stderr).contains(needle),
@@ -5055,12 +4497,12 @@ fn final_v061_receipt_binds_all_raw_durable_performance_evidence() {
     negative(
         "missing receipt",
         |dir| fs::remove_file(dir.join("perf/index-1-flat-cpu.json")).unwrap(),
-        "durable performance evidence verification failed",
+        "expected exactly 16 receipt files, got 15",
     );
     negative(
         "corrupt summary",
         |dir| fs::write(dir.join("durable-perf-summary.json"), "{}\n").unwrap(),
-        "durable performance evidence verification failed",
+        "existing aggregate SHA-256 does not match --summary-sha256",
     );
     negative(
         "corrupt summary sidecar",
@@ -5071,17 +4513,12 @@ fn final_v061_receipt_binds_all_raw_durable_performance_evidence() {
             )
             .unwrap()
         },
-        "durable performance evidence verification failed",
+        "existing aggregate sidecar does not bind its exact bytes",
     );
     negative(
-        "manifest summary hash",
-        |dir| {
-            let path = dir.join("final-candidate-manifest.json");
-            let mut manifest: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-            manifest["performance"]["summary_sha256"] = json!("0".repeat(64));
-            write_manifest(&path, &manifest);
-        },
-        "durable performance evidence verification failed",
+        "promotion summary hash",
+        |_| {},
+        "existing aggregate SHA-256 does not match --summary-sha256",
     );
     negative(
         "foreign receipt binding",
@@ -5091,7 +4528,7 @@ fn final_v061_receipt_binds_all_raw_durable_performance_evidence() {
             receipt["binding"]["run_id"] = json!("foreign-run");
             fs::write(&path, serde_json::to_vec(&receipt).unwrap()).unwrap();
         },
-        "durable performance evidence verification failed",
+        "receipt binding does not match command-line binding",
     );
 }
 

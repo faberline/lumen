@@ -217,3 +217,76 @@ fn select_staged_delta_window_uses_smallest_adjacent_pair() {
         vec![2, 3]
     );
 }
+
+/// One new delta per checkpoint against one pair fold per merge only holds a
+/// deep stack's depth. A stack at half the layer bound folds the cheapest
+/// run of four adjacent deltas; a shallower stack still folds one pair.
+#[test]
+fn select_staged_delta_window_widens_for_a_deep_stack() {
+    fn catalog(root: &Path, sizes: &[usize]) -> CollectionCatalog {
+        std::fs::write(root.join("base.lseg"), vec![b'b'; 1000]).unwrap();
+        let mut segments = vec![SegmentReference {
+            role: SegmentRole::Field,
+            field: Some("f".to_owned()),
+            ordinal: 0,
+            kind: SegmentKind::Base,
+            format: SegmentFormat::LsegV1,
+            path: "base.lseg".to_owned(),
+            local_rows: None,
+            applied_seq: None,
+            payload_sha256: None,
+        }];
+        for (index, bytes) in sizes.iter().enumerate() {
+            let ordinal = index as u32 + 1;
+            let path = format!("delta-{ordinal}.lseg");
+            std::fs::write(root.join(&path), vec![b'd'; *bytes]).unwrap();
+            segments.push(SegmentReference {
+                role: SegmentRole::Field,
+                field: Some("f".to_owned()),
+                ordinal,
+                kind: SegmentKind::Delta,
+                format: SegmentFormat::LsegV1,
+                path,
+                local_rows: None,
+                applied_seq: None,
+                payload_sha256: None,
+            });
+        }
+        CollectionCatalog {
+            collection_id: "deep".to_owned(),
+            collection_generation: 1,
+            schema_version: 1,
+            data_version: 1,
+            schema: serde_json::json!({}),
+            segments,
+        }
+    }
+    fn ordinals(root: &Path, sizes: &[usize]) -> Vec<u32> {
+        let selected = select_staged_delta_window(root, &[catalog(root, sizes)]).unwrap();
+        assert_eq!(selected.len(), 1);
+        assert!(!selected[0].includes_base);
+        selected[0]
+            .inputs
+            .iter()
+            .map(|segment| segment.ordinal)
+            .collect()
+    }
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    assert_eq!(
+        ordinals(root, &[20, 20, 20, 1, 2, 20, 20]),
+        vec![4, 5],
+        "a stack below half the layer bound folds one pair"
+    );
+    assert_eq!(
+        ordinals(root, &[20, 20, 20, 1, 2, 3, 4, 20]),
+        vec![4, 5, 6, 7],
+        "a stack at half the layer bound folds the cheapest run of four"
+    );
+    assert_eq!(
+        ordinals(root, &[9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 1, 1]),
+        vec![13, 14, 15, 16],
+        "a stack at the layer bound still folds a window that fits it"
+    );
+}

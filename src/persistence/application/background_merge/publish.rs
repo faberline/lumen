@@ -12,24 +12,51 @@ use crate::persistence::domain::generation_manifest::{SegmentReference, SegmentR
 use crate::persistence::domain::merge_rebase;
 use crate::persistence::infrastructure::segment_rdb_store::compacted_fields::compact_staged_delta_windows;
 use crate::persistence::infrastructure::segment_rdb_store::compaction::confined;
-use crate::persistence::infrastructure::segment_rdb_store::generation_validation::validate_generation_layout_with_prior;
+use crate::persistence::infrastructure::segment_rdb_store::generation_validation::{
+    validate_generation_layout_with_prior, verify_merge_outputs,
+};
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::{
     read_generation_manifest, write_generation_manifest,
 };
 use crate::persistence::infrastructure::segment_rdb_store::merge_selection::select_staged_delta_window;
 use crate::persistence::infrastructure::segment_rdb_store::{
-    telemetry, GenerationRecord, GenerationStaging, MergePhase, SegmentRdbStore, StagingSelection,
+    flush_staged_filesystem, telemetry, GenerationRecord, GenerationStaging, MergePhase,
+    SegmentRdbStore, StagingSelection,
 };
 use anyhow::{anyhow, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// Longest a merge publication yields to write pressure. Publication holds the
+/// save gate for seconds, and a checkpoint queued behind it cannot release
+/// pending change bytes, so writes are refused while it waits.
+const PUBLICATION_YIELD_LIMIT: Duration = Duration::from_secs(15);
+const PUBLICATION_YIELD_POLL: Duration = Duration::from_millis(20);
+
 impl SegmentRdbStore {
+    /// Wait while only a checkpoint can relieve write capacity, unless a
+    /// checkpoint is itself waiting for this merge. Return the time yielded.
+    fn yield_publication_to_write_pressure(&self, engine: &Engine) -> Duration {
+        let started = Instant::now();
+        while engine.write_capacity_pressed()
+            && !self.background.checkpoint_waits_for_merge()
+            && started.elapsed() < PUBLICATION_YIELD_LIMIT
+        {
+            std::thread::sleep(PUBLICATION_YIELD_POLL);
+        }
+        started.elapsed()
+    }
+
     pub(in crate::persistence) fn merge_one(&self, engine: &Arc<Engine>) -> Result<MergeOutcome> {
         let job_started = Instant::now();
         let mut costs = MergeStepCosts::default();
         let mut save_gate_held = Duration::ZERO;
+        let mut publication_yielded = Duration::ZERO;
+        let mut commit_elapsed = Duration::ZERO;
+        let mut bind_elapsed = Duration::ZERO;
+        let mut verify_outputs_elapsed = Duration::ZERO;
+        let mut output_flush_elapsed = Duration::ZERO;
         let mut compacted_fields = 0u64;
         if self
             .publication_fence
@@ -207,10 +234,43 @@ impl SegmentRdbStore {
                 };
                 merges.push((selection, output));
             }
+            // Verify the outputs where they were written, outside the save
+            // gate. Every checkpoint waits on that gate, and reading each
+            // merged field again while holding it is work proportional to
+            // the field, not to the publication.
+            let verify_outputs_started = Instant::now();
+            let mut verified_outputs = prior.clone();
+            for (selection, output) in &merges {
+                verified_outputs = merge_rebase::rebase_manifest(
+                    &verified_outputs,
+                    selection,
+                    merge_rebase::VerifiedOutput {
+                        field: output.output.clone(),
+                        vector_sidecar: output.vector_eids.clone(),
+                    },
+                )
+                .map_err(|refusal| {
+                    anyhow!("merge output does not rebase onto its source: {refusal:?}")
+                })?;
+            }
+            verified_outputs
+                .collections
+                .retain(|collection| collection.collection_id == collection_id);
+            verify_merge_outputs(&scratch_path, &verified_outputs, (&source.path, &prior))
+                .context("verify background merge outputs in scratch")?;
+            verify_outputs_elapsed = verify_outputs_started.elapsed();
+            // Write the merged outputs back before taking the save gate. The
+            // commit's own syncs still decide durability; this only keeps the
+            // outputs' bulk writeback from being paid while every checkpoint
+            // waits on the gate.
+            let output_flush_started = Instant::now();
+            let _ = flush_staged_filesystem(&scratch_path);
+            output_flush_elapsed = output_flush_started.elapsed();
             engine.prepare_checkpoint_compactions(&mut capture)?;
             self.background
                 .pin_readers(source.name.as_str().to_owned(), &capture);
             self.merge_observer.observe(MergePhase::BeforePublish)?;
+            publication_yielded = self.yield_publication_to_write_pressure(engine);
             let guard = self.save_gate.lock_owned();
             let save_gate_acquired = Instant::now();
             if self
@@ -320,7 +380,13 @@ impl SegmentRdbStore {
                 previous: Some(latest.name.clone()),
             };
             let validate_started = Instant::now();
-            validate_generation_layout_with_prior(&record, Some((&latest.path, &latest_manifest)))?;
+            validate_generation_layout_with_prior(
+                &record,
+                &[
+                    (latest.path.as_path(), &latest_manifest),
+                    (scratch_path.as_path(), &verified_outputs),
+                ],
+            )?;
             costs.record(
                 crate::app::observability::metrics::labels::MergeStep::ValidateLayout,
                 validate_started.elapsed(),
@@ -349,6 +415,7 @@ impl SegmentRdbStore {
             capture.collections = identities(&manifest);
             let mut owner_publication = None;
             let mut capture_publish_elapsed = Duration::ZERO;
+            let commit_started = Instant::now();
             let commit = staged.commit_with_publication_guard(&self.generations, || {
                 owner_publication = self
                     .publication_fence
@@ -373,6 +440,7 @@ impl SegmentRdbStore {
                 drop(publication);
                 Ok(pin)
             });
+            commit_elapsed = commit_started.elapsed();
             if let Err(error) = commit {
                 if error.class() == storage_durable::CommitFailureClass::CommitUncertain {
                     engine.capture_barrier.apply().mark_uncertain();
@@ -391,7 +459,9 @@ impl SegmentRdbStore {
             binding
                 .validate_publish(captured_stamp)
                 .map_err(anyhow::Error::msg)?;
+            let bind_started = Instant::now();
             engine.bind_background_merge(&self.root.join(record.name.as_str()), &mut capture)?;
+            bind_elapsed = bind_started.elapsed();
             drop(binding);
             drop(owner_publication);
             for (_, output) in &merges {
@@ -427,6 +497,26 @@ impl SegmentRdbStore {
                 save_gate_held,
                 compacted_fields,
             );
+            if crate::persistence::infrastructure::segment_rdb_store::diagnostic::checkpoint_diagnostic_enabled() {
+                use crate::app::observability::metrics::labels::MergeStep;
+                let ms = |elapsed: Duration| elapsed.as_secs_f64() * 1000.0;
+                tracing::info!(
+                    event = "segment_merge_diagnostic_published",
+                    total_ms = ms(job_started.elapsed()),
+                    compact_ms = ms(costs.elapsed(MergeStep::Compact)),
+                    yielded_ms = ms(publication_yielded),
+                    verify_outputs_ms = ms(verify_outputs_elapsed),
+                    output_flush_ms = ms(output_flush_elapsed),
+                    save_gate_held_ms = ms(save_gate_held),
+                    link_generation_ms = ms(costs.elapsed(MergeStep::LinkGeneration)),
+                    validate_layout_ms = ms(costs.elapsed(MergeStep::ValidateLayout)),
+                    inherit_files_ms = ms(costs.elapsed(MergeStep::InheritFiles)),
+                    commit_ms = ms(commit_elapsed),
+                    bind_ms = ms(bind_elapsed),
+                    fields = compacted_fields,
+                    "background merge published"
+                );
+            }
         }
         result
     }

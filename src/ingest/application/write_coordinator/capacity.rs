@@ -153,20 +153,24 @@ impl WriteCoordinator {
                     // `wait_reserve_record_ram` for no genuine waiter.
                     continue;
                 }
-                let mut ledger = coord.local_reservations.lock().await;
                 // Select without copying the pending ledger into a second buffer.
                 // One attempt per tick lets the waiting head take released capacity.
-                if let Some(seq) = ledger
-                    .iter()
-                    .max_by_key(|(&seq, reservation)| (reservation.bytes(), std::cmp::Reverse(seq)))
-                    .map(|(&seq, _)| seq)
-                {
+                let staging = coord.local_reservations.begin_staging(|ledger| {
+                    ledger
+                        .iter()
+                        .max_by_key(|(&seq, reservation)| {
+                            (reservation.bytes(), std::cmp::Reverse(seq))
+                        })
+                        .map(|(&seq, _)| seq)
+                });
+                if let Some(staging) = staging {
+                    let seq = staging.seq();
                     match coord.wal.stage_source(seq).await {
                         Ok(Some(proof)) if proof.sequence() == seq => {
-                            // No apply worker can take this reservation while the ledger
-                            // is locked. Its decoded delivery and normalized data do not
+                            // No apply worker can take this reservation while it is
+                            // staging. Its decoded delivery and normalized data do not
                             // exist yet. The source payload is now gone as well.
-                            drop(ledger.remove(&seq));
+                            drop(staging.remove());
                         }
                         Ok(None) => {}
                         Ok(Some(_)) => {

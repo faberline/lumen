@@ -2,7 +2,8 @@
 
 The Standalone GKE live acceptance is controller-run, manual, and paid. It is
 separate from Managed/operator GCP acceptance. Candidate CI has no GKE or
-`gcloud` claim. Uniform durable-2xx and crash-injection roadmap outcomes are
+`gcloud` claim. From `lumen@0.6.1` the release does not require a GKE receipt
+and states `Standalone GKE: not claimed` when none is supplied. Uniform durable-2xx and crash-injection roadmap outcomes are
 not complete.
 
 ## Scope

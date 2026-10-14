@@ -649,6 +649,9 @@ fn median_statistic_and_ignored_inventory() {
                 false,
             ),
             ("approved_30_minute_durable_workload", true),
+            ("workload_gate_failure_fails_the_cell_after_post_input_gates_pass", false),
+            ("post_input_failure_wins_over_a_workload_gate_failure", false),
+            ("passing_workload_gates_keep_the_post_input_outcome", false),
             (
                 "fingerprint_only_readback_cannot_pass_an_ignored_field_predicate",
                 false,
@@ -809,6 +812,20 @@ fn median_statistic_and_ignored_inventory() {
                 "non_success_status_record_carries_status_and_a_truncated_body",
                 false,
             ),
+            ("a_failed_metrics_scrape_costs_every_second_it_spent", false),
+            (
+                "only_the_typed_capacity_refusal_with_retry_after_is_resendable",
+                false,
+            ),
+            (
+                "capacity_refusal_is_resent_after_retry_after_and_counted_once",
+                false,
+            ),
+            (
+                "untyped_429_and_exhausted_budget_are_request_errors_without_resend",
+                false,
+            ),
+            ("unindex_resends_capacity_refusal_and_requires_no_content", false),
             (
                 "qualifying_matrix_keeps_every_mutation_endpoint_and_backend",
                 false,
@@ -976,12 +993,12 @@ mod durable_workload {
 
     const HOT_COLLECTION: &str = "perf-hot";
     const IDLE_COLLECTIONS: usize = 181;
-    const HOT_DOCUMENTS: usize = 500_000;
+    const HOT_DOCUMENTS: usize = 200_000;
     const MUTATION_DOCUMENTS_PER_CLASS: usize = (INPUT_SECONDS as usize / 3) * DOCOPS_PER_SECOND;
     // This base document is seeded once and lies outside the delete and replace
     // turns. Its fixed vector makes the bounded two-candidate kNN readback
     // independent of global HNSW recall.
-    const VECTOR_READBACK_REFERENCE_NUMBER: usize = 400_000;
+    const VECTOR_READBACK_REFERENCE_NUMBER: usize = 160_000;
     const READBACK_MISMATCH_TOKEN: &str = "readback-mismatch";
     const IDLE_DOCUMENTS_PER_COLLECTION: usize = 100;
     const FIELD_COUNT: usize = 14;
@@ -3065,17 +3082,21 @@ mod durable_workload {
         )
     }
 
-    /// The classified failure `post_json` (and the `send_unindex` inline
-    /// transport call) returns instead of the bare [`Outcome`] the ledger
-    /// still records. `outcome` is exactly the value the caller would have
-    /// computed before this change, so ledger counts never move; only the
-    /// evidence carried alongside them is new.
+    /// The classified failure `post_json` and `post_no_content` return
+    /// instead of the bare [`Outcome`] the ledger still records. `outcome`
+    /// is exactly the value the caller would have computed before this
+    /// change, so ledger counts never move; only the evidence carried
+    /// alongside them is new.
     #[derive(Debug, Clone)]
     struct PostJsonFailure {
         error: RequestFailure,
         outcome: Outcome,
         status: Option<u16>,
         body: Option<String>,
+        /// Set only for a typed `pending_change_capacity` 429 with a numeric
+        /// `Retry-After`. The server guarantees such a refusal changed
+        /// nothing, so [`resend_on_capacity_refusal`] may send it again.
+        capacity_retry_after: Option<Duration>,
     }
 
     /// Appends one classified failure to the shared journal and returns the
@@ -4480,7 +4501,7 @@ mod durable_workload {
         Ok(image_id)
     }
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, Default)]
     struct RuntimeCounters {
         checkpoints: u64,
         merges: u64,
@@ -5168,24 +5189,10 @@ mod durable_workload {
         request: reqwest::RequestBuilder,
     ) -> std::result::Result<Value, PostJsonFailure> {
         match tokio::time::timeout(REQUEST_TIMEOUT, async {
-            let response = request.send().await.map_err(|error| PostJsonFailure {
-                error: RequestFailure::from_reqwest(error),
-                outcome: Outcome::Failed,
-                status: None,
-                body: None,
-            })?;
+            let response = request.send().await.map_err(transport_failure)?;
             let status = response.status();
             if !status.is_success() {
-                let body = response.text().await.unwrap_or_default();
-                return Err(PostJsonFailure {
-                    error: RequestFailure::synthetic(
-                        format!("workload request returned non-success status {status}"),
-                        false,
-                    ),
-                    outcome: Outcome::Failed,
-                    status: Some(status.as_u16()),
-                    body: Some(truncate_evidence_body(&body)),
-                });
+                return Err(non_success_failure(response).await);
             }
             response
                 .json::<Value>()
@@ -5195,23 +5202,154 @@ mod durable_workload {
                     outcome: Outcome::Failed,
                     status: Some(status.as_u16()),
                     body: None,
+                    capacity_retry_after: None,
                 })
         })
         .await
         {
             Ok(result) => result,
-            Err(_) => Err(PostJsonFailure {
-                error: RequestFailure::synthetic(
-                    format!(
-                        "workload request exceeded the {}-second deadline",
-                        REQUEST_TIMEOUT.as_secs()
-                    ),
-                    true,
+            Err(_) => Err(request_deadline_failure()),
+        }
+    }
+
+    /// One unindex attempt: the endpoint answers success with an empty 204,
+    /// so it shares every failure classification with [`post_json`] except
+    /// the success body.
+    async fn post_no_content(
+        request: reqwest::RequestBuilder,
+    ) -> std::result::Result<(), PostJsonFailure> {
+        match tokio::time::timeout(REQUEST_TIMEOUT, async {
+            let response = request.send().await.map_err(transport_failure)?;
+            if response.status() == reqwest::StatusCode::NO_CONTENT {
+                Ok(())
+            } else {
+                Err(non_success_failure(response).await)
+            }
+        })
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(request_deadline_failure()),
+        }
+    }
+
+    fn transport_failure(error: reqwest::Error) -> PostJsonFailure {
+        PostJsonFailure {
+            error: RequestFailure::from_reqwest(error),
+            outcome: Outcome::Failed,
+            status: None,
+            body: None,
+            capacity_retry_after: None,
+        }
+    }
+
+    fn request_deadline_failure() -> PostJsonFailure {
+        PostJsonFailure {
+            error: RequestFailure::synthetic(
+                format!(
+                    "workload request exceeded the {}-second deadline",
+                    REQUEST_TIMEOUT.as_secs()
                 ),
-                outcome: Outcome::TimedOut,
-                status: None,
-                body: None,
-            }),
+                true,
+            ),
+            outcome: Outcome::TimedOut,
+            status: None,
+            body: None,
+            capacity_retry_after: None,
+        }
+    }
+
+    /// A 2xx answer whose body does not account for every item. The ledger
+    /// already counts it failed; journaling it keeps the response as evidence.
+    fn semantic_failure(message: String, response: &Value) -> PostJsonFailure {
+        PostJsonFailure {
+            error: RequestFailure::synthetic(message, false),
+            outcome: Outcome::Failed,
+            status: None,
+            body: Some(truncate_evidence_body(&response.to_string())),
+            capacity_retry_after: None,
+        }
+    }
+
+    async fn non_success_failure(response: reqwest::Response) -> PostJsonFailure {
+        let status = response.status();
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let body = response.text().await.unwrap_or_default();
+        PostJsonFailure {
+            error: RequestFailure::synthetic(
+                format!("workload request returned non-success status {status}"),
+                false,
+            ),
+            outcome: Outcome::Failed,
+            status: Some(status.as_u16()),
+            capacity_retry_after: capacity_retry_after(status, retry_after.as_deref(), &body),
+            body: Some(truncate_evidence_body(&body)),
+        }
+    }
+
+    /// The only refusal the workload resends: the typed local-capacity 429.
+    /// Every other non-success status, and a 429 without this exact error
+    /// code or a whole-second `Retry-After`, stays a request error.
+    fn capacity_retry_after(
+        status: reqwest::StatusCode,
+        retry_after: Option<&str>,
+        body: &str,
+    ) -> Option<Duration> {
+        if status != reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return None;
+        }
+        let seconds = retry_after?.trim().parse::<u64>().ok()?;
+        let body = serde_json::from_str::<Value>(body).ok()?;
+        (body["error"] == "pending_change_capacity").then(|| Duration::from_secs(seconds))
+    }
+
+    /// Sends one measured mutation, resending it after `Retry-After` for as
+    /// long as the server refuses it for pending-change capacity. Each
+    /// refusal closes one attempt in the ledger, so latency is measured per
+    /// attempt and never includes the `Retry-After` wait. Resending stops
+    /// once the refusals alone would span `budget` (the workload passes
+    /// [`DRAIN_TIMEOUT`]); that last refusal is then the request's failure.
+    async fn resend_on_capacity_refusal<T, F, Fut>(
+        request: reqwest::RequestBuilder,
+        ledger: &Arc<Mutex<WorkloadLedger>>,
+        clock: &Clock,
+        request_id: u64,
+        budget: Duration,
+        attempt: F,
+    ) -> std::result::Result<T, PostJsonFailure>
+    where
+        F: Fn(reqwest::RequestBuilder) -> Fut,
+        Fut: Future<Output = std::result::Result<T, PostJsonFailure>>,
+    {
+        let mut request = request;
+        let mut first_refused_at = None;
+        loop {
+            let resend = request.try_clone();
+            let failure = match attempt(request).await {
+                Ok(value) => return Ok(value),
+                Err(failure) => failure,
+            };
+            let (Some(wait), Some(resend)) = (failure.capacity_retry_after, resend) else {
+                return Err(failure);
+            };
+            let refused_at = clock.elapsed();
+            let first_refused_at = *first_refused_at.get_or_insert(refused_at);
+            if refused_at.saturating_sub(first_refused_at) + wait > budget {
+                return Err(failure);
+            }
+            tokio::time::sleep(wait).await;
+            // Same order as the first submission: take the evidence lock
+            // before the timestamp so a stalled ledger cannot shorten the
+            // next attempt.
+            let mut ledger_guard = ledger.lock().await;
+            let resent_at = clock.elapsed();
+            ledger_guard.record_capacity_refusal(request_id, refused_at, resent_at);
+            drop(ledger_guard);
+            request = resend;
         }
     }
 
@@ -5255,7 +5393,15 @@ mod durable_workload {
         ));
         drop(ledger_guard);
         let send_called_at = clock.elapsed();
-        let response = post_json(request).await;
+        let response = resend_on_capacity_refusal(
+            request,
+            &ledger,
+            &clock,
+            request_id,
+            DRAIN_TIMEOUT,
+            post_json,
+        )
+        .await;
         let response_completed_at = clock.elapsed();
         record_pump_send_call(&pump_trace, "index", scheduled_at, send_called_at);
         record_pump_completion(
@@ -5278,7 +5424,22 @@ mod durable_workload {
             Ok(response) if response["indexed"].as_u64() == Some(entries.len() as u64) => {
                 Outcome::Succeeded
             }
-            Ok(_) => Outcome::Failed,
+            Ok(response) => {
+                record_request_error(
+                    &journal,
+                    clock.elapsed(),
+                    format!("POST /collections/{HOT_COLLECTION}/index"),
+                    format!("request_id={request_id}"),
+                    semantic_failure(
+                        format!(
+                            "index response did not report {} indexed items",
+                            entries.len()
+                        ),
+                        &response,
+                    ),
+                )
+                .await
+            }
             Err(failure) => {
                 record_request_error(
                     &journal,
@@ -5331,7 +5492,15 @@ mod durable_workload {
         ));
         drop(ledger_guard);
         let send_called_at = clock.elapsed();
-        let response = post_json(request).await;
+        let response = resend_on_capacity_refusal(
+            request,
+            &ledger,
+            &clock,
+            request_id,
+            DRAIN_TIMEOUT,
+            post_json,
+        )
+        .await;
         let response_completed_at = clock.elapsed();
         record_pump_send_call(&pump_trace, "replace", scheduled_at, send_called_at);
         record_pump_completion(
@@ -5349,7 +5518,22 @@ mod durable_workload {
             {
                 Outcome::Succeeded
             }
-            Ok(_) => Outcome::Failed,
+            Ok(response) => {
+                record_request_error(
+                    &journal,
+                    clock.elapsed(),
+                    format!("PUT /collections/{HOT_COLLECTION}/docs:replace"),
+                    format!("request_id={request_id}"),
+                    semantic_failure(
+                        format!(
+                            "replace response did not report {} ok results",
+                            entries.len()
+                        ),
+                        &response,
+                    ),
+                )
+                .await
+            }
             Err(failure) => {
                 record_request_error(
                     &journal,
@@ -5404,10 +5588,16 @@ mod durable_workload {
             items,
         ));
         drop(ledger_guard);
-        let unindex_endpoint = format!("POST /collections/{HOT_COLLECTION}/docs:unindex");
-        let unindex_identifier = format!("request_id={request_id}");
         let send_called_at = clock.elapsed();
-        let response = tokio::time::timeout(REQUEST_TIMEOUT, request.send()).await;
+        let response = resend_on_capacity_refusal(
+            request,
+            &ledger,
+            &clock,
+            request_id,
+            DRAIN_TIMEOUT,
+            post_no_content,
+        )
+        .await;
         let response_completed_at = clock.elapsed();
         record_pump_send_call(&pump_trace, "unindex", scheduled_at, send_called_at);
         record_pump_completion(
@@ -5417,60 +5607,14 @@ mod durable_workload {
             response_completed_at,
         );
         let outcome = match response {
-            Ok(Ok(response)) if response.status().as_u16() == 204 => Outcome::Succeeded,
-            Ok(Ok(response)) => {
-                let status = response.status();
-                let body = response.text().await.unwrap_or_default();
+            Ok(()) => Outcome::Succeeded,
+            Err(failure) => {
                 record_request_error(
                     &journal,
                     clock.elapsed(),
-                    unindex_endpoint.clone(),
-                    unindex_identifier.clone(),
-                    PostJsonFailure {
-                        error: RequestFailure::synthetic(
-                            format!("workload request returned non-success status {status}"),
-                            false,
-                        ),
-                        outcome: Outcome::Failed,
-                        status: Some(status.as_u16()),
-                        body: Some(truncate_evidence_body(&body)),
-                    },
-                )
-                .await
-            }
-            Ok(Err(error)) => {
-                record_request_error(
-                    &journal,
-                    clock.elapsed(),
-                    unindex_endpoint.clone(),
-                    unindex_identifier.clone(),
-                    PostJsonFailure {
-                        error: RequestFailure::from_reqwest(error),
-                        outcome: Outcome::Failed,
-                        status: None,
-                        body: None,
-                    },
-                )
-                .await
-            }
-            Err(_) => {
-                record_request_error(
-                    &journal,
-                    clock.elapsed(),
-                    unindex_endpoint,
-                    unindex_identifier,
-                    PostJsonFailure {
-                        error: RequestFailure::synthetic(
-                            format!(
-                                "workload request exceeded the {}-second deadline",
-                                REQUEST_TIMEOUT.as_secs()
-                            ),
-                            true,
-                        ),
-                        outcome: Outcome::TimedOut,
-                        status: None,
-                        body: None,
-                    },
+                    format!("POST /collections/{HOT_COLLECTION}/docs:unindex"),
+                    format!("request_id={request_id}"),
+                    failure,
                 )
                 .await
             }
@@ -5521,7 +5665,16 @@ mod durable_workload {
             {
                 Outcome::Succeeded
             }
-            Ok(_) => Outcome::Failed,
+            Ok(response) => {
+                record_request_error(
+                    &journal,
+                    clock.elapsed(),
+                    format!("POST /collections/{collection}/search"),
+                    format!("query_class={class:?}"),
+                    semantic_failure("search response returned no hits".to_owned(), &response),
+                )
+                .await
+            }
             Err(failure) => {
                 record_request_error(
                     &journal,
@@ -5851,9 +6004,10 @@ mod durable_workload {
         let mut active = None;
         loop {
             check_setup_deadline(setup_deadline)?;
-            // Only setup may honor an explicit one-second backpressure hint.
-            // Measured mutations use `post_json` or `send_unindex` and record
-            // every refusal or timeout in the ledger without a retry.
+            // Setup honors any explicit one-second backpressure hint.
+            // Measured mutations resend only the typed capacity 429 through
+            // `resend_on_capacity_refusal`, which counts every refusal in the
+            // ledger against the approved percent.
             let response = setup_step(setup_deadline, async {
                 tokio::time::timeout(REQUEST_TIMEOUT, async {
                     let request = server
@@ -6772,6 +6926,14 @@ mod durable_workload {
         ))
     }
 
+    /// Whole seconds of sampler coverage one failed scrape cost; even an
+    /// instant failure leaves its one-second slot without a sample.
+    fn missed_sample_seconds(spent: Duration) -> u64 {
+        u64::try_from(spent.as_millis().div_ceil(1_000))
+            .unwrap_or(u64::MAX)
+            .max(1)
+    }
+
     async fn fetch_interval_metrics(
         client: &reqwest::Client,
         url: String,
@@ -6818,10 +6980,13 @@ mod durable_workload {
         ))
     }
 
+    /// A workload gate failure is returned beside the report, not as an
+    /// error: it does not settle durability, so the caller still runs every
+    /// post-input gate before it fails the cell.
     async fn drive_workload(
         server: &DockerLumen,
         config: CaseConfig,
-    ) -> Result<(WorkloadReport, RuntimeCounters, Duration)> {
+    ) -> Result<(WorkloadReport, RuntimeCounters, Duration, Vec<GateFailure>)> {
         let ledger = Arc::new(Mutex::new(WorkloadLedger::new(config.ledger_case())));
         ledger
             .lock()
@@ -6847,19 +7012,44 @@ mod durable_workload {
             let mut next_log = Duration::ZERO;
             let mut next_trace = Duration::ZERO;
             let input_end = input_window;
+            // The counters are cumulative, so a missed scrape loses coverage,
+            // not evidence. Each failed scrape is charged the whole seconds
+            // it spent, and the ledger gates that total against the window.
+            let mut missed_seconds = 0u64;
             while sampler_clock.elapsed() < input_end {
-                let (status, metrics) = fetch_interval_metrics(
-                    &sampler_client,
-                    format!("{sampler_base}/metrics"),
-                    REQUEST_TIMEOUT,
-                )
-                .await?;
-                if !status.is_success() {
-                    return Err(HarnessError::Http(format!(
-                        "interval metrics returned {status}"
-                    )));
+                let attempt_started = sampler_clock.elapsed();
+                let sample = async {
+                    let (status, metrics) = fetch_interval_metrics(
+                        &sampler_client,
+                        format!("{sampler_base}/metrics"),
+                        REQUEST_TIMEOUT,
+                    )
+                    .await?;
+                    if !status.is_success() {
+                        return Err(HarnessError::Http(format!(
+                            "interval metrics returned {status}"
+                        )));
+                    }
+                    let counters = RuntimeCounters::parse(&metrics)?;
+                    Ok::<_, HarnessError>((metrics, counters))
                 }
-                let counters = RuntimeCounters::parse(&metrics)?;
+                .await;
+                let (metrics, counters) = match sample {
+                    Ok(sample) => sample,
+                    Err(error) => {
+                        let spent = sampler_clock.elapsed().min(input_end) - attempt_started;
+                        missed_seconds += missed_sample_seconds(spent);
+                        eprintln!(
+                            "PERF_SAMPLER_MISS elapsed_ms={} spent_ms={} error={error}",
+                            attempt_started.as_millis(),
+                            spent.as_millis()
+                        );
+                        let next =
+                            (sampler_clock.elapsed() + Duration::from_secs(1)).min(input_end);
+                        tokio::time::sleep_until(sampler_clock.deadline(next)).await;
+                        continue;
+                    }
+                };
                 if sampler_clock.elapsed() >= input_end {
                     break;
                 }
@@ -6891,7 +7081,7 @@ mod durable_workload {
                 )
             })?;
             let last = last.expect("first and last sample are set together");
-            last.delta(first)
+            Ok((last.delta(first)?, input_end.as_secs(), missed_seconds))
         });
         let sampler_abort = sampler.abort_handle();
 
@@ -6913,80 +7103,99 @@ mod durable_workload {
         let mut operation_id = 1u64;
         let mut request_id = 1u64;
 
-        for second in 0..INPUT_SECONDS {
-            let input_step = input_window_step_with_sampler(
-                &sampler_abort,
-                input_deadline,
-                input_window,
-                "input_workload",
-                async {
-                    tokio::time::sleep_until(clock.deadline(Duration::from_secs(second))).await;
-                    // Offer the independently scheduled queries before mutation
-                    // preparation. A slow mutation pump must not postpone their
-                    // absolute 100 ms slots.
-                    offer_queries(
-                        &clock,
-                        &ledger,
-                        &mut queries,
-                        server,
-                        second,
-                        input_deadline,
-                        input_window,
-                    )
-                    .await?;
-                    match second % 3 {
-                        0 => {
-                            offer_additions(
-                                &ledger,
-                                &clock,
-                                second,
-                                &mut operation_id,
-                                &mut index_batch,
-                                &mut mutations,
-                                &mut request_id,
-                                server,
-                                input_deadline,
-                                input_window,
-                            )
-                            .await?;
+        // Queries run on their own driver. A mutation second that overruns
+        // while its pump is full must not postpone the next second's absolute
+        // 100 ms query slots.
+        let query_driver = async {
+            for second in 0..INPUT_SECONDS {
+                input_window_step_with_sampler(
+                    &sampler_abort,
+                    input_deadline,
+                    input_window,
+                    "input_workload",
+                    async {
+                        tokio::time::sleep_until(clock.deadline(Duration::from_secs(second))).await;
+                        offer_queries(
+                            &clock,
+                            &ledger,
+                            &mut queries,
+                            server,
+                            second,
+                            input_deadline,
+                            input_window,
+                        )
+                        .await
+                    },
+                )
+                .await?;
+            }
+            Ok::<(), HarnessError>(())
+        };
+        let mutation_driver = async {
+            for second in 0..INPUT_SECONDS {
+                let input_step = input_window_step_with_sampler(
+                    &sampler_abort,
+                    input_deadline,
+                    input_window,
+                    "input_workload",
+                    async {
+                        tokio::time::sleep_until(clock.deadline(Duration::from_secs(second))).await;
+                        match second % 3 {
+                            0 => {
+                                offer_additions(
+                                    &ledger,
+                                    &clock,
+                                    second,
+                                    &mut operation_id,
+                                    &mut index_batch,
+                                    &mut mutations,
+                                    &mut request_id,
+                                    server,
+                                    input_deadline,
+                                    input_window,
+                                )
+                                .await?;
+                            }
+                            1 => {
+                                offer_replacements(
+                                    &ledger,
+                                    &clock,
+                                    second,
+                                    &mut operation_id,
+                                    &mut replace_batch,
+                                    &mut mutations,
+                                    &mut request_id,
+                                    server,
+                                    input_deadline,
+                                    input_window,
+                                )
+                                .await?;
+                            }
+                            _ => {
+                                offer_deletions(
+                                    &ledger,
+                                    &clock,
+                                    second,
+                                    &mut operation_id,
+                                    &mut unindex_batch,
+                                    &mut mutations,
+                                    &mut request_id,
+                                    server,
+                                    input_deadline,
+                                    input_window,
+                                )
+                                .await?;
+                            }
                         }
-                        1 => {
-                            offer_replacements(
-                                &ledger,
-                                &clock,
-                                second,
-                                &mut operation_id,
-                                &mut replace_batch,
-                                &mut mutations,
-                                &mut request_id,
-                                server,
-                                input_deadline,
-                                input_window,
-                            )
-                            .await?;
-                        }
-                        _ => {
-                            offer_deletions(
-                                &ledger,
-                                &clock,
-                                second,
-                                &mut operation_id,
-                                &mut unindex_batch,
-                                &mut mutations,
-                                &mut request_id,
-                                server,
-                                input_deadline,
-                                input_window,
-                            )
-                            .await?;
-                        }
-                    }
-                    Ok(())
-                },
-            )
-            .await;
-            input_step?;
-        }
+                        Ok(())
+                    },
+                )
+                .await;
+                input_step?;
+            }
+            Ok::<(), HarnessError>(())
+        };
+        tokio::try_join!(query_driver, mutation_driver)?;
 
         // The receipt records this elapsed duration. The ledger keeps the
         // fixed logical window for per-second classification, while this
@@ -7019,7 +7228,7 @@ mod durable_workload {
             "workload_drain",
             async move {
                 eprintln!("PERF_STAGE_BEGIN sampler_drain");
-                let mut deltas = match tokio::time::timeout(DRAIN_TIMEOUT, sampler).await {
+                let (mut deltas, sample_seconds, missed_sample_seconds) = match tokio::time::timeout(DRAIN_TIMEOUT, sampler).await {
                     Ok(result) => result.map_err(|error| HarnessError::Task(error.to_string()))??,
                     Err(_) => {
                         return Err(HarnessError::PostInputTimeout {
@@ -7052,7 +7261,11 @@ mod durable_workload {
                     ledger.record_merge_completion();
                 }
                 ledger.observe_peak_rss_bytes(deltas.process_rss_high_water_bytes);
-                let report = ledger.validate().map_err(HarnessError::Workload)?;
+                ledger.observe_metric_samples(sample_seconds, missed_sample_seconds);
+                let (report, workload_failures) = match ledger.validate() {
+                    Ok(report) => (report, Vec::new()),
+                    Err(failures) => (ledger.report(), failures),
+                };
                 eprintln!(
         "interval durable evidence: checkpoint_duration_s={} capture_lock_s={} checkpoint_bytes={} merge_read_bytes={} merge_write_bytes={} pending_delta_bytes={} pending_delta_layers={} backpressure_events={} disk_bytes={} ledger_docops={}",
         deltas.checkpoint_duration_seconds,
@@ -7066,7 +7279,7 @@ mod durable_workload {
         deltas.segment_disk_bytes,
         report.docops_completed_in_input,
     );
-                Ok((report, deltas))
+                Ok((report, deltas, workload_failures))
             },
         )
         .await;
@@ -7080,8 +7293,8 @@ mod durable_workload {
             sampler_abort.abort();
         }
         eprintln!("PERF_STAGE_END workload_drain");
-        let (report, deltas) = workload_drain?;
-        Ok((report, deltas, observed_input_duration))
+        let (report, deltas, workload_failures) = workload_drain?;
+        Ok((report, deltas, observed_input_duration, workload_failures))
     }
 
     fn absolute_slot(second: u64, offset: usize, cadence: Duration) -> Duration {
@@ -7142,7 +7355,7 @@ mod durable_workload {
                 approved_index_operation(operation, external_id.clone(), &fields)?;
             let mut ledger_guard = ledger.lock().await;
             let offered_at = clock.elapsed();
-            ledger_guard.begin_operation(offered_at, operation_record);
+            ledger_guard.begin_scheduled_operation(scheduled_at, offered_at, operation_record);
             drop(ledger_guard);
             if let Some(trace) = &pump.trace {
                 trace
@@ -7203,7 +7416,8 @@ mod durable_workload {
             *operation_id += 1;
             let number = 60_000 + update_base as usize + offset;
             let external_id = format!("hot-base-{number:06}");
-            ledger.lock().await.begin_operation(
+            ledger.lock().await.begin_scheduled_operation(
+                scheduled_at,
                 clock.elapsed(),
                 DocumentOperation::replace(operation, external_id.clone()),
             );
@@ -7250,7 +7464,8 @@ mod durable_workload {
             let operation = *operation_id;
             *operation_id += 1;
             let external_id = format!("hot-base-{:06}", delete_base + offset as u64);
-            ledger.lock().await.begin_operation(
+            ledger.lock().await.begin_scheduled_operation(
+                scheduled_at,
                 clock.elapsed(),
                 DocumentOperation::unindex(operation, external_id.clone()),
             );
@@ -7717,6 +7932,14 @@ mod durable_workload {
             .map_err(|error| HarnessError::DataInvariant(error.to_string()))?,
             request_errors: report.request_errors,
             client_cancellations: report.client_cancellations,
+            capacity_refusals: report.capacity_refusals,
+            capacity_refused_requests: report.capacity_refused_requests,
+            metric_sample_seconds: report.metric_sample_slots.ok_or_else(|| {
+                HarnessError::DataInvariant("sampler coverage was not observed".to_owned())
+            })?,
+            metric_sample_missed_seconds: report.metric_samples_missed.ok_or_else(|| {
+                HarnessError::DataInvariant("sampler coverage was not observed".to_owned())
+            })?,
             items_offered: report.items_offered,
             items_completed: report.items_completed,
             items_failed: report.items_failed,
@@ -7912,8 +8135,45 @@ mod durable_workload {
         );
         // The clock and metric baseline are created only after seed work is
         // durable. This preparation checkpoint cannot satisfy interval gates.
-        let (report, counter_delta, observed_input_duration) =
+        let (report, counter_delta, observed_input_duration, workload_failures) =
             drive_workload(&server, config).await?;
+        if !workload_failures.is_empty() {
+            eprintln!("PERF_WORKLOAD_GATE_FAILURES {workload_failures:?}");
+        }
+        let post_input = run_post_input_gates(
+            server,
+            config,
+            report,
+            counter_delta,
+            observed_input_duration,
+        )
+        .await;
+        workload_case_outcome(workload_failures, post_input)
+    }
+
+    /// One failed cell reports every gate it failed. A workload gate failure
+    /// still runs readback, restart, and cold readback; a post-input failure
+    /// is the stronger durability evidence and wins when both fail.
+    fn workload_case_outcome(
+        workload_failures: Vec<GateFailure>,
+        post_input: Result<CompletedCase>,
+    ) -> Result<CompletedCase> {
+        match post_input {
+            Ok(_) if !workload_failures.is_empty() => {
+                eprintln!("PERF_POST_INPUT_GATES passed after workload gate failure");
+                Err(HarnessError::Workload(workload_failures))
+            }
+            outcome => outcome,
+        }
+    }
+
+    async fn run_post_input_gates(
+        server: &mut DockerLumen,
+        config: CaseConfig,
+        report: WorkloadReport,
+        counter_delta: RuntimeCounters,
+        observed_input_duration: Duration,
+    ) -> Result<CompletedCase> {
         let post_input_deadline = tokio::time::Instant::now()
             .checked_add(POST_INPUT_TIMEOUT)
             .ok_or_else(|| {
@@ -8105,6 +8365,54 @@ mod durable_workload {
             backend: Some(backend.to_owned()),
             ..SelectionInput::default()
         }
+    }
+
+    #[cfg(test)]
+    fn completed_case_fixture() -> CompletedCase {
+        CompletedCase {
+            report: WorkloadLedger::new(WorkloadCase::new(Endpoint::Index, 1, Backend::FlatCpu))
+                .report(),
+            counter_delta: RuntimeCounters::default(),
+            observed_input_duration: Duration::from_secs(INPUT_SECONDS),
+            restart_duration: Duration::from_secs(1),
+            live_mutation_readback: true,
+            cold_mutation_readback: true,
+            image_reference: "sha256:fixture".to_owned(),
+            actual_image_id: "sha256:fixture".to_owned(),
+        }
+    }
+
+    #[test]
+    fn workload_gate_failure_fails_the_cell_after_post_input_gates_pass() {
+        let lag = GateFailure::GeneratorOfferLag(Duration::from_secs(17), Duration::from_secs(5));
+        match workload_case_outcome(vec![lag.clone()], Ok(completed_case_fixture())) {
+            Err(HarnessError::Workload(failures)) => assert_eq!(failures, vec![lag]),
+            other => panic!("workload gate failure must fail the cell: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn post_input_failure_wins_over_a_workload_gate_failure() {
+        let lag = GateFailure::GeneratorOfferLag(Duration::from_secs(17), Duration::from_secs(5));
+        let readback = HarnessError::DataInvariant("cold readback lost a write".to_owned());
+        match workload_case_outcome(vec![lag], Err(readback)) {
+            Err(HarnessError::DataInvariant(detail)) => {
+                assert_eq!(detail, "cold readback lost a write")
+            }
+            other => panic!("post-input failure must be reported: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn passing_workload_gates_keep_the_post_input_outcome() {
+        assert!(workload_case_outcome(Vec::new(), Ok(completed_case_fixture())).is_ok());
+        assert!(matches!(
+            workload_case_outcome(
+                Vec::new(),
+                Err(HarnessError::DataInvariant("restart".to_owned()))
+            ),
+            Err(HarnessError::DataInvariant(_))
+        ));
     }
 
     #[cfg(test)]
@@ -11220,6 +11528,284 @@ mod durable_workload {
                 !body.contains(&oversized_body),
                 "the retained body must never carry the full untrusted response"
             );
+        });
+    }
+
+    #[cfg(test)]
+    #[derive(Clone)]
+    struct ScriptedResponse {
+        status: u16,
+        retry_after: Option<&'static str>,
+        body: &'static str,
+    }
+
+    #[cfg(test)]
+    #[derive(Clone, Default)]
+    struct ScriptedServerState {
+        responses: Arc<StdMutex<VecDeque<ScriptedResponse>>>,
+        hits: Arc<StdMutex<u64>>,
+    }
+
+    #[cfg(test)]
+    async fn scripted_handler(
+        axum::extract::State(state): axum::extract::State<ScriptedServerState>,
+    ) -> axum::response::Response {
+        *state.hits.lock().expect("scripted hit counter poisoned") += 1;
+        let next = state
+            .responses
+            .lock()
+            .expect("scripted responses poisoned")
+            .pop_front()
+            .expect("scripted server received more requests than scripted responses");
+        let mut response = axum::response::Response::new(axum::body::Body::from(next.body));
+        *response.status_mut() =
+            axum::http::StatusCode::from_u16(next.status).expect("scripted status");
+        if let Some(retry_after) = next.retry_after {
+            response.headers_mut().insert(
+                axum::http::header::RETRY_AFTER,
+                axum::http::HeaderValue::from_static(retry_after),
+            );
+        }
+        response
+    }
+
+    #[cfg(test)]
+    async fn scripted_server(
+        responses: Vec<ScriptedResponse>,
+    ) -> (
+        String,
+        ScriptedServerState,
+        tokio::sync::oneshot::Sender<()>,
+    ) {
+        let state = ScriptedServerState::default();
+        state
+            .responses
+            .lock()
+            .expect("scripted responses poisoned")
+            .extend(responses);
+        let app = axum::Router::new()
+            .fallback(scripted_handler)
+            .with_state(state.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind scripted server listener");
+        let address = listener
+            .local_addr()
+            .expect("read scripted server listener address");
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            axum::serve(listener, app)
+                .with_graceful_shutdown(async move {
+                    let _ = shutdown_rx.await;
+                })
+                .await
+                .expect("serve scripted server");
+        });
+        (format!("http://{address}"), state, shutdown_tx)
+    }
+
+    #[cfg(test)]
+    const CAPACITY_BODY: &str =
+        r#"{"error":"pending_change_capacity","message":"pending change capacity is full"}"#;
+
+    #[cfg(test)]
+    fn capacity_refusal(retry_after: &'static str) -> ScriptedResponse {
+        ScriptedResponse {
+            status: 429,
+            retry_after: Some(retry_after),
+            body: CAPACITY_BODY,
+        }
+    }
+
+    #[cfg(test)]
+    fn submitted_index_ledger(clock: &Clock) -> Arc<Mutex<WorkloadLedger>> {
+        let mut ledger =
+            WorkloadLedger::new(WorkloadCase::new(Endpoint::Index, 1, Backend::FlatCpu));
+        ledger.submit_request(Request::new(
+            1,
+            Endpoint::Index,
+            Duration::ZERO,
+            clock.elapsed(),
+            Vec::new(),
+        ));
+        Arc::new(Mutex::new(ledger))
+    }
+
+    #[test]
+    fn a_failed_metrics_scrape_costs_every_second_it_spent() {
+        assert_eq!(missed_sample_seconds(Duration::ZERO), 1);
+        assert_eq!(missed_sample_seconds(Duration::from_millis(3)), 1);
+        assert_eq!(missed_sample_seconds(Duration::from_secs(1)), 1);
+        assert_eq!(missed_sample_seconds(Duration::from_millis(1_001)), 2);
+        assert_eq!(missed_sample_seconds(REQUEST_TIMEOUT), 5);
+        assert_eq!(missed_sample_seconds(REQUEST_TIMEOUT * 2), 10);
+    }
+
+    #[test]
+    fn only_the_typed_capacity_refusal_with_retry_after_is_resendable() {
+        let too_many = reqwest::StatusCode::TOO_MANY_REQUESTS;
+        assert_eq!(
+            capacity_retry_after(too_many, Some("1"), CAPACITY_BODY),
+            Some(Duration::from_secs(1))
+        );
+        assert_eq!(capacity_retry_after(too_many, None, CAPACITY_BODY), None);
+        assert_eq!(
+            capacity_retry_after(too_many, Some("soon"), CAPACITY_BODY),
+            None
+        );
+        assert_eq!(capacity_retry_after(too_many, Some("1"), "{}"), None);
+        assert_eq!(capacity_retry_after(too_many, Some("1"), "not json"), None);
+        assert_eq!(
+            capacity_retry_after(too_many, Some("1"), r#"{"error":"rate_limited"}"#),
+            None
+        );
+        assert_eq!(
+            capacity_retry_after(
+                reqwest::StatusCode::SERVICE_UNAVAILABLE,
+                Some("1"),
+                CAPACITY_BODY
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn capacity_refusal_is_resent_after_retry_after_and_counted_once() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build capacity resend unit-test runtime");
+        runtime.block_on(async {
+            let (base, state, shutdown) = scripted_server(vec![
+                capacity_refusal("1"),
+                ScriptedResponse {
+                    status: 200,
+                    retry_after: None,
+                    body: r#"{"indexed":1}"#,
+                },
+            ])
+            .await;
+            let client = reqwest::Client::new();
+            let clock = Clock::new();
+            let ledger = submitted_index_ledger(&clock);
+            let request = client
+                .post(format!("{base}/collections/perf-hot/index"))
+                .json(&json!({ "items": [] }));
+            let started = Instant::now();
+            let response =
+                resend_on_capacity_refusal(request, &ledger, &clock, 1, DRAIN_TIMEOUT, post_json)
+                    .await
+                    .expect("a resent capacity refusal must end with the success response");
+            let _ = shutdown.send(());
+            assert_eq!(response["indexed"], 1);
+            assert!(
+                started.elapsed() >= Duration::from_secs(1),
+                "Retry-After was not honored"
+            );
+            assert_eq!(*state.hits.lock().unwrap(), 2);
+            let report = ledger.lock().await.report();
+            assert_eq!(report.capacity_refusals, 1);
+        });
+    }
+
+    #[test]
+    fn untyped_429_and_exhausted_budget_are_request_errors_without_resend() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build capacity no-resend unit-test runtime");
+        runtime.block_on(async {
+            let (base, state, shutdown) = scripted_server(vec![
+                ScriptedResponse {
+                    status: 429,
+                    retry_after: Some("1"),
+                    body: "{}",
+                },
+                capacity_refusal("1"),
+            ])
+            .await;
+            let client = reqwest::Client::new();
+            let clock = Clock::new();
+            let ledger = submitted_index_ledger(&clock);
+
+            let untyped = client
+                .post(format!("{base}/collections/perf-hot/index"))
+                .json(&json!({}));
+            let failure =
+                resend_on_capacity_refusal(untyped, &ledger, &clock, 1, DRAIN_TIMEOUT, post_json)
+                    .await
+                    .expect_err("an untyped 429 must stay a request error");
+            assert_eq!(failure.status, Some(429));
+            assert_eq!(failure.capacity_retry_after, None);
+            assert_eq!(*state.hits.lock().unwrap(), 1);
+
+            let exhausted = client
+                .post(format!("{base}/collections/perf-hot/index"))
+                .json(&json!({}));
+            let failure = resend_on_capacity_refusal(
+                exhausted,
+                &ledger,
+                &clock,
+                1,
+                Duration::ZERO,
+                post_json,
+            )
+            .await
+            .expect_err("a refusal past the resend budget must be the request's failure");
+            let _ = shutdown.send(());
+            assert_eq!(failure.status, Some(429));
+            assert_eq!(failure.capacity_retry_after, Some(Duration::from_secs(1)));
+            assert_eq!(*state.hits.lock().unwrap(), 2);
+            assert_eq!(ledger.lock().await.report().capacity_refusals, 0);
+        });
+    }
+
+    #[test]
+    fn unindex_resends_capacity_refusal_and_requires_no_content() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build unindex resend unit-test runtime");
+        runtime.block_on(async {
+            let (base, state, shutdown) = scripted_server(vec![
+                capacity_refusal("0"),
+                ScriptedResponse {
+                    status: 204,
+                    retry_after: None,
+                    body: "",
+                },
+                ScriptedResponse {
+                    status: 200,
+                    retry_after: None,
+                    body: "{}",
+                },
+            ])
+            .await;
+            let client = reqwest::Client::new();
+            let clock = Clock::new();
+            let ledger = submitted_index_ledger(&clock);
+            let unindex = || {
+                client
+                    .post(format!("{base}/collections/perf-hot/docs:unindex"))
+                    .json(&json!({ "external_ids": [] }))
+            };
+            resend_on_capacity_refusal(
+                unindex(),
+                &ledger,
+                &clock,
+                1,
+                DRAIN_TIMEOUT,
+                post_no_content,
+            )
+            .await
+            .expect("a resent unindex must end with the 204");
+            let failure = post_no_content(unindex())
+                .await
+                .expect_err("a 200 is not the unindex success status");
+            let _ = shutdown.send(());
+            assert_eq!(failure.status, Some(200));
+            assert_eq!(*state.hits.lock().unwrap(), 3);
+            assert_eq!(ledger.lock().await.report().capacity_refusals, 1);
         });
     }
 

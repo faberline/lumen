@@ -116,6 +116,12 @@ lumen --test it -- perf_gate:: --ignored --test-threads=1 --nocapture`) has a lo
 driver, `scripts/durable-perf-local.sh`: `build` makes a
 source-bound image from `Dockerfile`, `cell <endpoint> <batch>
 <backend>` runs one diagnostic cell, `matrix` runs all sixteen and resumes past
-cells already green, and `status` prints the receipts. Every local run is
-diagnostic only; qualifying receipts come from the
-`lumen-release-candidate` workflow and `verify-durable-perf.py`.
+cells already green, and `status` prints the receipts. These runs are
+diagnostic only. The `lumen-release-candidate` workflow runs the remaining
+`perf_gate::` tests with `--skip durable_workload`; it does not run the
+thirty-minute cells. From `lumen@0.6.1`, qualifying receipts come from
+`qualify-matrix`: it runs the sixteen cells on a clean checkout at the
+candidate commit against the candidate registry digest, binds each receipt to
+the candidate run ID and attempt, and writes the `verify-durable-perf.py`
+summary. That evidence directory and its summary SHA-256 are release inputs.
+No mode accepts `CARGO_PROFILE_*` overrides.

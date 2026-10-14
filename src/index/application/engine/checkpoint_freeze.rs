@@ -9,6 +9,7 @@ use anyhow::{anyhow, bail, Result};
 use crate::index::application::checkpoint_capture::{
     CheckpointCapture, CheckpointCollectionIdentity,
 };
+use crate::index::application::engine::state_hold::StateHoldTrace;
 use crate::index::application::engine::Engine;
 use crate::index::application::frozen_checkpoint::{
     FrozenCheckpoint, FrozenCollectionFiles, FrozenField,
@@ -129,7 +130,9 @@ impl Engine {
         root: &std::path::Path,
         capture: &mut CheckpointCapture,
     ) -> Result<()> {
+        let mut hold = StateHoldTrace::begin("bind_background_merge", "", "write");
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
+        hold.acquired();
         for (name, identity) in &capture.collections {
             let Some(coll) = state.collections.get_mut(name) else {
                 continue;
@@ -191,7 +194,9 @@ impl Engine {
         &self,
         reuse_root: Option<&std::path::Path>,
     ) -> Result<FrozenCheckpoint> {
+        let mut hold = StateHoldTrace::begin("freeze_checkpoint_collections", "", "read");
         let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
+        hold.acquired();
         let mut capture = CheckpointCapture {
             prepared: BTreeMap::new(),
             prepared_deltas: BTreeMap::new(),

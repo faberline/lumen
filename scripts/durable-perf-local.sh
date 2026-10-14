@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Local NON-QUALIFYING driver for the durable performance matrix.
+# Local driver for the durable performance matrix.
 #
 # Wraps the existing contract of tests/it/perf_gate.rs
-# (perf_gate::durable_workload::approved_30_minute_durable_workload in diagnostic mode)
-# so a whole local run is one command that leaves receipts behind. It never
-# produces acceptance evidence: qualifying receipts require a registry digest
-# (LUMEN_PERF_IMAGE=repo@sha256:...) and are only written by the
-# lumen-release-candidate workflow, which verify-durable-perf.py then judges.
+# (perf_gate::durable_workload::approved_30_minute_durable_workload) so a whole
+# local run is one command that leaves receipts behind. `build`, `cell`,
+# `matrix`, and `status` are diagnostic only. `qualify` and `qualify-matrix`
+# write schema-v1 qualifying receipts for one candidate run: they require the
+# candidate registry digest (LUMEN_PERF_IMAGE=repo@sha256:...) and a clean
+# checkout at the candidate commit, and verify-durable-perf.py judges the
+# sixteen receipts. Every mode refuses CARGO_PROFILE_* overrides, so the load
+# client always uses the repository [profile.release].
 #
 # Usage:
 #   scripts/durable-perf-local.sh build
@@ -21,6 +24,15 @@
 #       any cell is red.
 #   scripts/durable-perf-local.sh status
 #       print the cell receipts of the selected build as a table.
+#   scripts/durable-perf-local.sh qualify <endpoint> <batch> <backend>
+#       run one qualifying cell. Requires LUMEN_PERF_IMAGE (the candidate
+#       ghcr.io/faberline/lumen@sha256:<root digest>), LUMEN_PERF_RUN_ID,
+#       LUMEN_PERF_RUN_ATTEMPT, and LUMEN_PERF_COMMIT (HEAD of a clean
+#       checkout); LUMEN_PERF_REPOSITORY defaults to faberline/lumen. The
+#       harness writes the receipt only when every gate passes.
+#   scripts/durable-perf-local.sh qualify-matrix
+#       run every qualifying cell that has no receipt yet, in order, continuing
+#       past failures, then run verify-durable-perf.py once all sixteen exist.
 #
 # Layout: $LUMEN_PERF_LOCAL_ROOT (default /tmp/lumen-durable-perf-local)
 #   <ts>/source.sha256 build.log image-id.txt image-inspect.json
@@ -28,10 +40,18 @@
 #   here so perf_gate's lumen-perf-failure-* directories land next to the log)
 #   <ts>/summary.json          written by `matrix`
 #   latest -> <ts>             updated by `build`
+#   qualify/<run_id>-<attempt>/perf/<cell>.json   qualifying receipts
+#   qualify/<run_id>-<attempt>/logs/<cell>.log    and failure bundles
+#   qualify/<run_id>-<attempt>/durable-perf-summary.json(.sha256)
+#       written by verify-durable-perf.py; this directory is the
+#       --durable-perf-dir of the release verifier.
 #
 # Signals for a monitor: every finished cell prints one line
 #   CELL <cell> exit=<n> duration_s=<n> bundle=<path|->
 # and `matrix` ends with MATRIX exit=<n> red=<k> summary=<path>.
+# Qualifying cells print QUALIFY <cell> exit=<n> duration_s=<n> bundle=<path|->,
+# and `qualify-matrix` ends with QUALIFY-MATRIX exit=<n> red=<k> dir=<path>
+# after EVIDENCE dir=<path> summary_sha256=<64hex> when all sixteen pass.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,6 +71,12 @@ MATRIX_CELLS=(
 )
 
 die() { printf 'refused: %s\n' "$*" >&2; exit 2; }
+
+release_profile_only() {
+  local overrides
+  overrides="$(env | cut -d= -f1 | grep '^CARGO_PROFILE_' || true)"
+  [ -z "$overrides" ] || die "CARGO_PROFILE_* overrides are not allowed: $(printf '%s' "$overrides" | tr '\n' ' ')"
+}
 now_utc() { date -u +%Y%m%dT%H%M%SZ; }
 epoch() { date +%s; }
 
@@ -98,6 +124,7 @@ build_dir() {
 
 cmd_build() {
   lane_is_idle
+  release_profile_only
   command -v docker >/dev/null || die "docker is required"
   local ts dir tag before after code image
   ts="$(now_utc)"
@@ -148,7 +175,7 @@ run_cell() {
   set +e
   (
     cd "$REPO_ROOT" && \
-    env TMPDIR="$cells" \
+    env -u LUMEN_PERF_QUALIFYING_CELL -u LUMEN_PERF_RECEIPT_PATH TMPDIR="$cells" \
       LUMEN_PERF_DIAGNOSTIC=1 \
       LUMEN_PERF_IMAGE="$image" \
       LUMEN_PERF_ENDPOINT="$endpoint" \
@@ -181,6 +208,7 @@ PY
 cmd_cell() {
   [ $# -eq 3 ] || die "usage: $0 cell <index|replace|unindex> <batch> <flat-cpu|hnsw-cpu>"
   lane_is_idle
+  release_profile_only
   local dir
   dir="$(build_dir)"
   run_cell "$dir" "$1" "$2" "$3"
@@ -193,6 +221,7 @@ cell_is_green() {
 
 cmd_matrix() {
   lane_is_idle
+  release_profile_only
   local dir cell endpoint batch backend red=0 skipped=0 code
   dir="$(build_dir)"
   for cell in "${MATRIX_CELLS[@]}"; do
@@ -231,6 +260,107 @@ PY
   [ "$red" -eq 0 ]
 }
 
+qualify_env() {
+  release_profile_only
+  : "${LUMEN_PERF_REPOSITORY:=faberline/lumen}"
+  [[ "${LUMEN_PERF_IMAGE:-}" =~ ^[^@[:space:]]+@sha256:[0-9a-f]{64}$ ]] \
+    || die "LUMEN_PERF_IMAGE must be the candidate repo@sha256:<64hex>"
+  [[ "${LUMEN_PERF_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]] || die "LUMEN_PERF_RUN_ID must be the candidate run ID"
+  [[ "${LUMEN_PERF_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]*$ ]] || die "LUMEN_PERF_RUN_ATTEMPT must be the candidate run attempt"
+  [[ "${LUMEN_PERF_COMMIT:-}" =~ ^[0-9a-f]{40}$ ]] || die "LUMEN_PERF_COMMIT must be a full commit SHA"
+  local head dirty
+  head="$(cd "$REPO_ROOT" && "${GIT[@]}" rev-parse HEAD)"
+  [ "$head" = "$LUMEN_PERF_COMMIT" ] || die "checkout HEAD $head is not LUMEN_PERF_COMMIT $LUMEN_PERF_COMMIT"
+  dirty="$(cd "$REPO_ROOT" && "${GIT[@]}" status --porcelain)"
+  [ -z "$dirty" ] || die "checkout has local changes; qualifying cells compile the candidate commit only"
+  QUALIFY_DIR="$ROOT/qualify/$LUMEN_PERF_RUN_ID-$LUMEN_PERF_RUN_ATTEMPT"
+  mkdir -p "$QUALIFY_DIR/perf" "$QUALIFY_DIR/logs"
+  QUALIFY_DIR="$(cd "$QUALIFY_DIR" && pwd -P)"
+  docker pull --quiet "$LUMEN_PERF_IMAGE" >/dev/null || die "cannot pull $LUMEN_PERF_IMAGE"
+}
+
+run_qualifying_cell() {
+  # run_qualifying_cell <endpoint> <batch> <backend>
+  local endpoint="$1" batch="$2" backend="$3"
+  local cell="$endpoint-$batch-$backend" receipt log started ended code bundle
+  receipt="$QUALIFY_DIR/perf/$cell.json"
+  log="$QUALIFY_DIR/logs/$cell.log"
+  [ ! -e "$receipt" ] || die "$receipt already exists"
+  started="$(epoch)"
+  set +e
+  (
+    cd "$REPO_ROOT" && \
+    env -u LUMEN_PERF_DIAGNOSTIC -u LUMEN_PERF_RECOVERY_OBSERVATION_SECS TMPDIR="$QUALIFY_DIR/logs" \
+      LUMEN_PERF_QUALIFYING_CELL=1 \
+      LUMEN_RECOVERY_PROFILE=1 \
+      LUMEN_PERF_IMAGE="$LUMEN_PERF_IMAGE" \
+      LUMEN_PERF_REPOSITORY="$LUMEN_PERF_REPOSITORY" \
+      LUMEN_PERF_RUN_ID="$LUMEN_PERF_RUN_ID" \
+      LUMEN_PERF_RUN_ATTEMPT="$LUMEN_PERF_RUN_ATTEMPT" \
+      LUMEN_PERF_COMMIT="$LUMEN_PERF_COMMIT" \
+      LUMEN_PERF_RECEIPT_PATH="$receipt" \
+      LUMEN_PERF_ENDPOINT="$endpoint" \
+      LUMEN_PERF_BATCH="$batch" \
+      LUMEN_PERF_BACKEND="$backend" \
+      cargo test --release --locked -p lumen --test it -- \
+        --ignored --exact "$WORKLOAD_TEST" --test-threads=1 --nocapture
+  ) >"$log" 2>&1
+  code=$?
+  set -e
+  ended="$(epoch)"
+  if [ "$code" -eq 0 ] && { [ ! -f "$receipt" ] || [ -L "$receipt" ]; }; then
+    printf 'cell %s exited 0 without a regular receipt file\n' "$cell" >&2
+    code=1
+  fi
+  if [ "$code" -ne 0 ] && [ -e "$receipt" ]; then
+    mv "$receipt" "$QUALIFY_DIR/logs/$cell.rejected-$(now_utc).json"
+  fi
+  bundle="$(grep -o 'PERF_FAILURE_EVIDENCE path=[^ ]*' "$log" | tail -n1 | cut -d= -f2- || true)"
+  printf 'QUALIFY %s exit=%s duration_s=%s bundle=%s\n' "$cell" "$code" "$((ended - started))" "${bundle:--}"
+  return "$code"
+}
+
+verify_qualifying_dir() {
+  local summary="$QUALIFY_DIR/durable-perf-summary.json"
+  [ ! -e "$summary" ] || die "$summary already exists"
+  python3 -I "$SCRIPT_DIR/verify-durable-perf.py" \
+    --receipts-dir "$QUALIFY_DIR/perf" \
+    --repo "$LUMEN_PERF_REPOSITORY" --run-id "$LUMEN_PERF_RUN_ID" --run-attempt "$LUMEN_PERF_RUN_ATTEMPT" \
+    --commit "$LUMEN_PERF_COMMIT" --image "$LUMEN_PERF_IMAGE" \
+    --output "$summary"
+  printf 'EVIDENCE dir=%s summary_sha256=%s\n' "$QUALIFY_DIR" "$(cut -d' ' -f1 "$summary.sha256")"
+}
+
+cmd_qualify() {
+  [ $# -eq 3 ] || die "usage: $0 qualify <index|replace|unindex> <batch> <flat-cpu|hnsw-cpu>"
+  lane_is_idle
+  qualify_env
+  run_qualifying_cell "$1" "$2" "$3"
+}
+
+cmd_qualify_matrix() {
+  lane_is_idle
+  qualify_env
+  local cell endpoint batch backend red=0 code
+  for cell in "${MATRIX_CELLS[@]}"; do
+    if [ -f "$QUALIFY_DIR/perf/$cell.json" ]; then
+      printf 'SKIP %s already has a qualifying receipt\n' "$cell"
+      continue
+    fi
+    endpoint="${cell%%-*}"
+    backend="${cell#*-*-}"
+    batch="${cell#*-}"; batch="${batch%%-*}"
+    if run_qualifying_cell "$endpoint" "$batch" "$backend"; then code=0; else code=$?; fi
+    [ "$code" -eq 0 ] || red=$((red + 1))
+  done
+  if [ "$red" -ne 0 ]; then
+    printf 'QUALIFY-MATRIX exit=1 red=%s dir=%s\n' "$red" "$QUALIFY_DIR"
+    return 1
+  fi
+  verify_qualifying_dir
+  printf 'QUALIFY-MATRIX exit=0 red=0 dir=%s\n' "$QUALIFY_DIR"
+}
+
 cmd_status() {
   local dir
   dir="$(build_dir)"
@@ -261,7 +391,13 @@ main() {
       fi
       cmd_matrix "$@" ;;
     status) cmd_status "$@" ;;
-    *) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+    qualify) cmd_qualify "$@" ;;
+    qualify-matrix)
+      if command -v caffeinate >/dev/null && [ -z "${LUMEN_PERF_NO_CAFFEINATE:-}" ]; then
+        exec caffeinate -dimsu env LUMEN_PERF_NO_CAFFEINATE=1 "$0" qualify-matrix "$@"
+      fi
+      cmd_qualify_matrix "$@" ;;
+    *) sed -n '2,54p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
   esac
 }
 main "$@"

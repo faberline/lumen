@@ -13,19 +13,27 @@ on:
         type: string
       standalone_gke_receipt_b64:
         description: Base64 of the sanitized lumen-standalone-gke-receipt.json bytes.
-        required: true
+        required: false
         type: string
       standalone_gke_receipt_sha256:
         description: Lowercase SHA-256 of the sanitized lumen-standalone-gke-receipt.json bytes.
-        required: true
+        required: false
         type: string
       standalone_gke_receipt_sidecar_b64:
         description: Base64 of the exact lumen-standalone-gke-receipt.json.sha256 sidecar bytes.
-        required: true
+        required: false
         type: string
       standalone_gke_receipt_sidecar_sha256:
         description: Lowercase SHA-256 of the exact lumen-standalone-gke-receipt.json.sha256 sidecar bytes.
-        required: true
+        required: false
+        type: string
+      durable_perf_evidence_commit:
+        description: Commit whose release-evidence/lumen@<version>/ tree holds the local durable performance evidence (lumen@0.6.1 and later).
+        required: false
+        type: string
+      durable_perf_summary_sha256:
+        description: Lowercase SHA-256 of that durable-perf-summary.json (lumen@0.6.1 and later).
+        required: false
         type: string
 
 concurrency:
@@ -50,6 +58,7 @@ jobs:
       candidate_url: ${{ steps.contract.outputs.candidate_url }}
       pr_url: ${{ steps.contract.outputs.pr_url }}
       standalone_gke_receipt_sha256: ${{ steps.contract.outputs.standalone_gke_receipt_sha256 }}
+      durable_perf_summary_sha256: ${{ steps.contract.outputs.durable_perf_summary_sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -82,6 +91,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "$STANDALONE_GKE_RECEIPT_B64$STANDALONE_GKE_RECEIPT_SHA256$STANDALONE_GKE_RECEIPT_SIDECAR_B64$STANDALONE_GKE_RECEIPT_SIDECAR_SHA256" ]]; then
+            { echo "receipt="; echo "sidecar="; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           mkdir -p gke-receipt
           decode_exact() {
             local encoded="$1" expected="$2" output="$3" actual
@@ -97,6 +110,23 @@ jobs:
             echo "receipt=$PWD/gke-receipt/lumen-standalone-gke-receipt.json"
             echo "sidecar=$PWD/gke-receipt/lumen-standalone-gke-receipt.json.sha256"
           } >> "$GITHUB_OUTPUT"
+      - name: Fetch exact durable performance evidence
+        id: durable_perf
+        env:
+          DURABLE_PERF_EVIDENCE_COMMIT: ${{ inputs.durable_perf_evidence_commit }}
+          DURABLE_PERF_SUMMARY_SHA256: ${{ inputs.durable_perf_summary_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$DURABLE_PERF_EVIDENCE_COMMIT$DURABLE_PERF_SUMMARY_SHA256" ]]; then
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$DURABLE_PERF_EVIDENCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "durable performance evidence commit is invalid" >&2; exit 1; }
+          git fetch --no-tags --depth 1 origin "$DURABLE_PERF_EVIDENCE_COMMIT"
+          mkdir -p durable-perf
+          git archive "$DURABLE_PERF_EVIDENCE_COMMIT" "release-evidence/lumen@${{ inputs.version }}" | tar -x -C durable-perf --strip-components=2
+          echo "dir=$PWD/durable-perf" >> "$GITHUB_OUTPUT"
       - name: Verify tag ruleset, candidate receipt, and supply chain
         env:
           GH_TOKEN: ${{ github.token }}
@@ -111,15 +141,18 @@ jobs:
             --mode candidate \
             --standalone-gke-receipt "${{ steps.gke_receipt.outputs.receipt }}" \
             --standalone-gke-receipt-sidecar "${{ steps.gke_receipt.outputs.sidecar }}" \
+            --durable-perf-dir "${{ steps.durable_perf.outputs.dir }}" \
+            --durable-perf-summary-sha256 "${{ inputs.durable_perf_summary_sha256 }}" \
             --output promotion-contract.json
       - name: Export immutable candidate contract
         id: contract
         shell: bash
         run: |
           set -euo pipefail
-          jq -e --arg commit "$GITHUB_SHA" --arg run "${{ inputs.candidate_run_id }}" --arg receipt "${{ inputs.standalone_gke_receipt_sha256 }}" '
+          jq -e --arg commit "$GITHUB_SHA" --arg run "${{ inputs.candidate_run_id }}" --arg receipt "${{ inputs.standalone_gke_receipt_sha256 }}" --arg perf "${{ inputs.durable_perf_summary_sha256 }}" '
             .commit == $commit and .candidate_run_id == $run and
-            .standalone_gke_receipt_sha256 == $receipt and
+            (.standalone_gke_receipt_sha256 // "") == $receipt and
+            (.durable_perf_summary_sha256 // "") == $perf and
             ([.root_digest,.amd64_digest,.arm64_digest] | all(test("^sha256:[0-9a-f]{64}$")))
           ' promotion-contract.json >/dev/null
           {
@@ -129,7 +162,8 @@ jobs:
             echo "candidate_attempt=$(jq -r .candidate_attempt promotion-contract.json)"
             echo "candidate_url=$(jq -r .candidate_url promotion-contract.json)"
             echo "pr_url=$(jq -r .pr_url promotion-contract.json)"
-            echo "standalone_gke_receipt_sha256=$(jq -r .standalone_gke_receipt_sha256 promotion-contract.json)"
+            echo "standalone_gke_receipt_sha256=$(jq -r '.standalone_gke_receipt_sha256 // ""' promotion-contract.json)"
+            echo "durable_perf_summary_sha256=$(jq -r '.durable_perf_summary_sha256 // ""' promotion-contract.json)"
           } >> "$GITHUB_OUTPUT"
 
   publish-release:
@@ -166,6 +200,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "$STANDALONE_GKE_RECEIPT_B64$STANDALONE_GKE_RECEIPT_SHA256$STANDALONE_GKE_RECEIPT_SIDECAR_B64$STANDALONE_GKE_RECEIPT_SIDECAR_SHA256" ]]; then
+            { echo "receipt="; echo "sidecar="; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           mkdir -p gke-receipt
           decode_exact() {
             local encoded="$1" expected="$2" output="$3" actual
@@ -181,6 +219,23 @@ jobs:
             echo "receipt=$PWD/gke-receipt/lumen-standalone-gke-receipt.json"
             echo "sidecar=$PWD/gke-receipt/lumen-standalone-gke-receipt.json.sha256"
           } >> "$GITHUB_OUTPUT"
+      - name: Fetch exact durable performance evidence
+        id: durable_perf
+        env:
+          DURABLE_PERF_EVIDENCE_COMMIT: ${{ inputs.durable_perf_evidence_commit }}
+          DURABLE_PERF_SUMMARY_SHA256: ${{ inputs.durable_perf_summary_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$DURABLE_PERF_EVIDENCE_COMMIT$DURABLE_PERF_SUMMARY_SHA256" ]]; then
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$DURABLE_PERF_EVIDENCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "durable performance evidence commit is invalid" >&2; exit 1; }
+          git fetch --no-tags --depth 1 origin "$DURABLE_PERF_EVIDENCE_COMMIT"
+          mkdir -p durable-perf
+          git archive "$DURABLE_PERF_EVIDENCE_COMMIT" "release-evidence/lumen@${{ inputs.version }}" | tar -x -C durable-perf --strip-components=2
+          echo "dir=$PWD/durable-perf" >> "$GITHUB_OUTPUT"
       - name: Re-query exact candidate immediately before stable writes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -195,13 +250,16 @@ jobs:
             --mode candidate \
             --standalone-gke-receipt "${{ steps.gke_receipt.outputs.receipt }}" \
             --standalone-gke-receipt-sidecar "${{ steps.gke_receipt.outputs.sidecar }}" \
+            --durable-perf-dir "${{ steps.durable_perf.outputs.dir }}" \
+            --durable-perf-summary-sha256 "${{ inputs.durable_perf_summary_sha256 }}" \
             --output promotion-contract.json
           jq -e \
             --arg root "${{ needs.verify-inputs.outputs.root_digest }}" \
             --arg amd64 "${{ needs.verify-inputs.outputs.amd64_digest }}" \
             --arg arm64 "${{ needs.verify-inputs.outputs.arm64_digest }}" \
             --arg receipt "${{ needs.verify-inputs.outputs.standalone_gke_receipt_sha256 }}" \
-            '.root_digest == $root and .amd64_digest == $amd64 and .arm64_digest == $arm64 and .standalone_gke_receipt_sha256 == $receipt' \
+            --arg perf "${{ needs.verify-inputs.outputs.durable_perf_summary_sha256 }}" \
+            '.root_digest == $root and .amd64_digest == $amd64 and .arm64_digest == $arm64 and (.standalone_gke_receipt_sha256 // "") == $receipt and (.durable_perf_summary_sha256 // "") == $perf' \
             promotion-contract.json >/dev/null
       - name: Exit safely if this exact public release already exists
         id: existing_release
@@ -228,6 +286,8 @@ jobs:
             --mode public \
             --standalone-gke-receipt "${{ steps.gke_receipt.outputs.receipt }}" \
             --standalone-gke-receipt-sidecar "${{ steps.gke_receipt.outputs.sidecar }}" \
+            --durable-perf-dir "${{ steps.durable_perf.outputs.dir }}" \
+            --durable-perf-summary-sha256 "${{ inputs.durable_perf_summary_sha256 }}" \
             --output promotion-contract.json
       - name: Download exact candidate release bytes
         if: steps.existing_release.outputs.exists == 'false'
@@ -317,9 +377,22 @@ jobs:
         if: steps.existing_release.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
+          STANDALONE_GKE_RECEIPT_SHA256: ${{ needs.verify-inputs.outputs.standalone_gke_receipt_sha256 }}
+          DURABLE_PERF_SUMMARY_SHA256: ${{ needs.verify-inputs.outputs.durable_perf_summary_sha256 }}
         shell: bash
         run: |
           set -euo pipefail
+          assets=(candidate/lumen-*.tar.gz candidate/lumen-*.tar.gz.sha256 candidate/spdx-amd64.json candidate/spdx-arm64.json)
+          if [[ -n "$STANDALONE_GKE_RECEIPT_SHA256" ]]; then
+            evidence="- Standalone GKE receipt SHA-256: $STANDALONE_GKE_RECEIPT_SHA256"
+            assets+=(gke-receipt/lumen-standalone-gke-receipt.json gke-receipt/lumen-standalone-gke-receipt.json.sha256)
+          else
+            evidence="- Standalone GKE: not claimed"
+          fi
+          if [[ -n "$DURABLE_PERF_SUMMARY_SHA256" ]]; then
+            evidence+=$'\n'"- Durable performance summary SHA-256: $DURABLE_PERF_SUMMARY_SHA256"
+            assets+=(durable-perf/durable-perf-summary.json durable-perf/durable-perf-summary.json.sha256)
+          fi
           cat > release-notes.md <<EOF
           # lumen@${{ inputs.version }}
 
@@ -330,14 +403,14 @@ jobs:
           - Root index digest: ${{ needs.verify-inputs.outputs.root_digest }}
           - linux/amd64 digest: ${{ needs.verify-inputs.outputs.amd64_digest }}
           - linux/arm64 digest: ${{ needs.verify-inputs.outputs.arm64_digest }}
-          - Standalone GKE receipt SHA-256: ${{ needs.verify-inputs.outputs.standalone_gke_receipt_sha256 }}
+          ${evidence}
           - Release path: landed main -> untagged candidate verification -> protected annotated tag -> promotion of the same candidate digest.
           - Placement path: a non-empty nodeSelector with the default initialMachineType skips the legacy capacity catalog.
           - Legacy placement path: an empty selector, tolerations-only placement, or a non-default initialMachineType still requires lumen-system/lumen-capacity-catalog.
           - Compatibility: shipped Docker images default to durable segment storage at /var/lib/lumen/data; bare lumen serve stays ephemeral without --data-dir or LUMEN_DATA_DIR. A 0.4.28 segment volume upgrades one way on first 0.4.29 start; in-place downgrade is unsupported.
           EOF
           gh release create "lumen@${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "lumen@${{ inputs.version }}" --notes-file release-notes.md \
-            candidate/lumen-*.tar.gz candidate/lumen-*.tar.gz.sha256 candidate/spdx-amd64.json candidate/spdx-arm64.json gke-receipt/lumen-standalone-gke-receipt.json gke-receipt/lumen-standalone-gke-receipt.json.sha256
+            "${assets[@]}"
       - name: Publicly verify immutable tag, release bytes, and promoted image
         if: steps.existing_release.outputs.exists == 'false'
         env:
@@ -353,4 +426,6 @@ jobs:
             --mode public \
             --standalone-gke-receipt "${{ steps.gke_receipt.outputs.receipt }}" \
             --standalone-gke-receipt-sidecar "${{ steps.gke_receipt.outputs.sidecar }}" \
+            --durable-perf-dir "${{ steps.durable_perf.outputs.dir }}" \
+            --durable-perf-summary-sha256 "${{ inputs.durable_perf_summary_sha256 }}" \
             --output promotion-contract.json

@@ -57,8 +57,27 @@ mod shutdown;
 mod spec;
 mod standalone;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    let mut runtime = tokio::runtime::Builder::new_multi_thread();
+    // A CPU-limited container reports its quota as available parallelism: a
+    // 2.5-CPU pod gets two reactor workers. One request that blocks a worker
+    // then halves the server's capacity to poll searches and `/metrics`.
+    // `TOKIO_WORKER_THREADS` keeps its usual meaning when it is set.
+    if std::env::var_os("TOKIO_WORKER_THREADS").is_none() {
+        runtime.worker_threads(reactor_worker_threads());
+    }
+    runtime.enable_all().build()?.block_on(run())
+}
+
+/// At least four reactor workers, or one per available CPU when more.
+fn reactor_worker_threads() -> usize {
+    std::thread::available_parallelism()
+        .map(|parallelism| parallelism.get())
+        .unwrap_or(1)
+        .max(4)
+}
+
+async fn run() -> Result<()> {
     lumen::tls::install_default_crypto_provider();
     let cli = Cli::parse();
     match cli.cmd {

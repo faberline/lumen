@@ -48,6 +48,9 @@ pub(in crate::persistence) struct WorkState {
 pub(in crate::persistence) struct RootWork {
     pub(in crate::persistence) state: Mutex<WorkState>,
     pub(in crate::persistence) changed: Condvar,
+    /// Checkpoints blocked until a merge frees segment capacity. A merge
+    /// publishes for them without yielding to write pressure.
+    capacity_waiters: std::sync::atomic::AtomicUsize,
 }
 
 /// One point-in-time view of the root-local merge scheduler. It is copied

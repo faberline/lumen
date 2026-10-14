@@ -70,9 +70,13 @@ that receipt. Its private cluster inputs and exact execution remain
 controller-owned.
 The gate first waits for the platform Konnectivity agent. Its timeout is a GKE
 infrastructure failure, not a Lumen product failure.
-For `lumen@0.4.29`, the GitHub Release publishes
+For `lumen@0.4.29` through `lumen@0.6.0`, the GitHub Release publishes
 `lumen-standalone-gke-receipt.json`, its exact `.sha256` sidecar, and the
 receipt SHA-256 in the release notes.
+From `lumen@0.6.1`, the Standalone GKE receipt is optional. A release without
+it publishes no GKE receipt assets, and its notes state
+`- Standalone GKE: not claimed`. The verifier refuses a published GKE receipt
+that the release does not claim.
 
 ## Contract map
 

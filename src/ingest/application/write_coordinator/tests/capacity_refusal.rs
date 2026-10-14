@@ -326,15 +326,23 @@ async fn local_capacity_refusal_starts_checkpoint_owner_without_committed_waiter
 
 #[tokio::test(flavor = "current_thread")]
 async fn http_full_admission_returns_429_within_five_seconds_without_wal_publish() {
-    check_http_full_admission(false).await;
+    check_http_full_admission(false, std::time::Duration::ZERO).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn http_full_admission_recovers_after_observed_refusal_before_five_seconds() {
-    check_http_full_admission(true).await;
+    check_http_full_admission(true, std::time::Duration::ZERO).await;
 }
 
-async fn check_http_full_admission(release_after_refusal: bool) {
+/// The client's request timeout starts before the server reads a bulk body.
+/// A body that takes two seconds to arrive must still get its refusal inside
+/// the five-second bound, so the relief wait is measured from arrival.
+#[tokio::test(flavor = "current_thread")]
+async fn http_full_admission_counts_body_receive_inside_five_seconds() {
+    check_http_full_admission(false, std::time::Duration::from_secs(2)).await;
+}
+
+async fn check_http_full_admission(release_after_refusal: bool, body_delay: std::time::Duration) {
     use crate::access::application::auth_config::AuthConfig;
     use crate::app::http::{app_state::AppState, router::router};
     use crate::persistence::application::capacity::worker::Owner;
@@ -401,7 +409,13 @@ async fn check_http_full_admission(release_after_refusal: bool) {
         .method("POST")
         .uri("/collections/u/index")
         .header("content-type", "application/json")
-        .body(axum::body::Body::from(serde_json::to_vec(&req).unwrap()))
+        .body(axum::body::Body::from_stream(futures::stream::once({
+            let body = serde_json::to_vec(&req).unwrap();
+            async move {
+                tokio::time::sleep(body_delay).await;
+                Ok::<_, std::io::Error>(body)
+            }
+        })))
         .unwrap();
     let before = engine.metrics().segment_backpressure_total.get();
     let started = Instant::now();

@@ -184,7 +184,8 @@ async fn future_local_reservation_cannot_starve_earlier_external_record() {
             // Teardown only: unblock a broken implementation so the Tokio
             // runtime does not wait forever for its native capacity waiter.
             // The acceptance boolean was captured before this intervention.
-            drop(coord.local_reservations.lock().await.remove(&2));
+            let stalled = coord.local_reservations.lock().reservations.remove(&2);
+            drop(stalled);
             match delivered_outcome.take() {
                 Some(outcome) => outcome,
                 None => tokio::time::timeout(std::time::Duration::from_secs(3), &mut submitted)
@@ -254,8 +255,9 @@ async fn cancelled_local_submit_keeps_its_reservation_until_apply_finishes() {
     .expect("submit must publish after pre-admission");
     wait_for_reserved(&budget).await;
     {
-        let ledger = coord.local_reservations.lock().await;
+        let ledger = coord.local_reservations.lock();
         let local = ledger
+            .reservations
             .get(&1)
             .expect("cancelled local submit must retain its composite reservation");
         assert!(
