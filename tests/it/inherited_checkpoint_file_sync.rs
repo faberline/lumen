@@ -1073,6 +1073,8 @@ fn incremental_checkpoint_skips_only_durable_inherited_payloads() {
         run_incremental_child(root, handshake);
         return;
     }
+
+    let _load = crate::support::test_load::heavy_slot();
     run_isolated_case(INCREMENTAL_CASE, INCREMENTAL_TEST);
 }
 
@@ -1092,5 +1094,7 @@ fn one_field_background_merge_skips_only_durable_inherited_payloads() {
         run_merge_child(root, handshake);
         return;
     }
+
+    let _load = crate::support::test_load::heavy_slot();
     run_isolated_case(MERGE_CASE, MERGE_TEST);
 }

@@ -409,6 +409,7 @@ async fn precommit_capacity_refusal_increments_segment_backpressure_once() {
     if child_enters() {
         precommit_capacity_refusal_body().await;
     } else {
+        let _load = crate::support::test_load::heavy_slot();
         run_isolated_child().await;
     }
 }

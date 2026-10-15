@@ -769,6 +769,8 @@ async fn current_pointer_io_releases_apply_and_preserves_durable_cuts() {
         }
         return;
     }
+
+    let _load = crate::support::test_load::heavy_slot();
     tokio::task::spawn_blocking(run_isolated_child)
         .await
         .expect("current-publication child controller must join");
@@ -1194,7 +1196,10 @@ fn run_isolated_background_merge_child() {
             .env("TMPDIR", &child_tmp)
             .env("TEMP", &child_tmp)
             .env("TMP", &child_tmp)
-            .arg(crate::support::exact_case(module_path!(), BACKGROUND_TEST_NAME))
+            .arg(crate::support::exact_case(
+                module_path!(),
+                BACKGROUND_TEST_NAME,
+            ))
             .arg("--exact")
             .arg("--nocapture")
             .arg("--test-threads=1")
@@ -1275,6 +1280,8 @@ async fn background_merge_current_pointer_io_releases_apply_and_preserves_durabl
         run_background_merge_pointer_io_case(step).await;
         return;
     }
+
+    let _load = crate::support::test_load::heavy_slot();
     tokio::task::spawn_blocking(run_isolated_background_merge_child)
         .await
         .expect("background-merge child controller must join");

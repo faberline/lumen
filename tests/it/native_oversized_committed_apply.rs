@@ -380,6 +380,7 @@ async fn checkpoint_now(server: &TestServer) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn native_committed_oversized_scalar_index_applies_persists_and_cold_reopens() {
+    let _load = crate::support::test_load::exclusive_process_budget();
     let fixture = fixture();
 
     let create_sequence =

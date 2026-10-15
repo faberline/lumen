@@ -1078,6 +1078,7 @@ async fn oversized_committed_hash_aof_replays_suffixes_checkpoints_and_cold_open
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("oversized committed Hash AOF fixture root");
     let aof_path = root.path().join("oversized-hash.aof");
     append_base_prefix(&aof_path);

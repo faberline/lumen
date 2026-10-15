@@ -836,5 +836,6 @@ async fn committed_staged_text_stage_directory_failure_retains_source_and_never_
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     run_isolated_case().await;
 }

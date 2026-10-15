@@ -793,6 +793,7 @@ async fn native_committed_generic_apply_makes_capacity_progress_before_any_calle
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("create run-scoped committed native capacity root");
     run_isolated_child(root.path()).await;
 }

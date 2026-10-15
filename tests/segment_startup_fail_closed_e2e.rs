@@ -124,6 +124,8 @@ impl LumenProcess {
                 "json",
             ])
             .env("LUMEN_AUTH", "off")
+            // The production reactor floor, not one worker per host CPU.
+            .env("TOKIO_WORKER_THREADS", "4")
             .env_remove("RUST_LOG")
             .env_remove("LUMEN_LOG_FORMAT")
             .stdout(Stdio::from(

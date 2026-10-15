@@ -886,6 +886,7 @@ async fn oversized_committed_unicode_token_aof_replays_normalizes_and_cold_opens
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("oversized Unicode Text AOF fixture root");
     let aof_path = root.path().join("oversized-unicode-token.aof");
     append_base_prefix(&aof_path);

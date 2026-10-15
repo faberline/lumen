@@ -15,7 +15,7 @@ use std::path::Path;
 use std::process::{Command, Output};
 #[cfg(feature = "backup")]
 use std::thread::{self, JoinHandle};
-#[cfg(all(feature = "backup", feature = "delegated-auth"))]
+#[cfg(feature = "backup")]
 use std::time::{Duration, Instant};
 
 fn run(args: &[&str]) -> Output {
@@ -55,11 +55,51 @@ fn compose(path: &Path, port: &str, managed: bool) {
     .unwrap();
 }
 
+// The Compose CLI only talks to `127.0.0.1:7373` (`src/bin/lumen/standalone.rs`),
+// so its fake server cannot take an ephemeral port.
+#[cfg(feature = "backup")]
+const COMPOSE_ADDR: &str = "127.0.0.1:7373";
+#[cfg(feature = "backup")]
+const COMPOSE_FAKE_DEADLINE: Duration = Duration::from_secs(10);
+
+#[cfg(feature = "backup")]
+fn bind_compose_addr() -> std::net::TcpListener {
+    let deadline = Instant::now() + COMPOSE_FAKE_DEADLINE;
+    loop {
+        match std::net::TcpListener::bind(COMPOSE_ADDR) {
+            Ok(listener) => return listener,
+            Err(error)
+                if error.kind() == std::io::ErrorKind::AddrInUse && Instant::now() < deadline =>
+            {
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(error) => panic!(
+                "bind {COMPOSE_ADDR} for the fake Compose Lumen; another process may hold it: {error}"
+            ),
+        }
+    }
+}
+
 #[cfg(feature = "backup")]
 fn serve_once(status: u16, body: &'static [u8]) -> JoinHandle<Vec<u8>> {
-    let listener = std::net::TcpListener::bind("127.0.0.1:7373").unwrap();
+    let listener = bind_compose_addr();
+    listener.set_nonblocking(true).unwrap();
     thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
+        // A CLI that never connects fails the join instead of hanging it.
+        let deadline = Instant::now() + COMPOSE_FAKE_DEADLINE;
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::WouldBlock
+                        && Instant::now() < deadline =>
+                {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("the CLI never reached {COMPOSE_ADDR}: {error}"),
+            }
+        };
+        stream.set_nonblocking(false).unwrap();
         let mut request = vec![0; 16 * 1024];
         let size = stream.read(&mut request).unwrap();
         let reason = match status {
@@ -719,6 +759,34 @@ fn gke_restore_rejects_invalid_snapshot_before_config_or_network_io() {
     assert!(!pid_file.exists());
 }
 
+/// Kills the interrupted CLI and its stalled fake `kubectl` when the case
+/// panics before it reaps them.
+#[cfg(all(feature = "backup", feature = "delegated-auth"))]
+struct InterruptCleanup {
+    child: Option<std::process::Child>,
+    kubectl_pid_file: std::path::PathBuf,
+}
+
+#[cfg(all(feature = "backup", feature = "delegated-auth"))]
+impl Drop for InterruptCleanup {
+    fn drop(&mut self) {
+        if let Some(child) = self.child.as_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        // After a passing case the fake has exited and its pid may be reused.
+        if !thread::panicking() {
+            return;
+        }
+        if let Ok(pid) = fs::read_to_string(&self.kubectl_pid_file) {
+            let _ = Command::new("/bin/kill")
+                .args(["-KILL", pid.trim()])
+                .stderr(std::process::Stdio::null())
+                .status();
+        }
+    }
+}
+
 #[cfg(all(feature = "backup", feature = "delegated-auth"))]
 #[test]
 fn gke_backup_ctrl_c_reaps_stalled_port_forward() {
@@ -734,7 +802,7 @@ fn gke_backup_ctrl_c_reaps_stalled_port_forward() {
     let (api_url, _api_thread) = fake_apiserver();
     write_kubeconfig(&kubeconfig, &api_url);
     let output_path = tmp.path().join("backup.json");
-    let mut child = run_gke_command(
+    let spawned = run_gke_command(
         tmp.path(),
         &bin_dir,
         &kubeconfig,
@@ -752,7 +820,13 @@ fn gke_backup_ctrl_c_reaps_stalled_port_forward() {
     .stderr(std::process::Stdio::piped())
     .spawn()
     .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut cleanup = InterruptCleanup {
+        child: Some(spawned),
+        kubectl_pid_file: pid_file.clone(),
+    };
+    let child = cleanup.child.as_mut().unwrap();
+    // Generous for a loaded host; the loop ends as soon as the fake starts.
+    let deadline = Instant::now() + Duration::from_secs(30);
     let pid = loop {
         if let Ok(text) = fs::read_to_string(&pid_file) {
             if let Ok(pid) = text.trim().parse::<u32>() {
@@ -774,7 +848,7 @@ fn gke_backup_ctrl_c_reaps_stalled_port_forward() {
         }
         thread::sleep(Duration::from_millis(20));
     }
-    let output = child.wait_with_output().unwrap();
+    let output = cleanup.child.take().unwrap().wait_with_output().unwrap();
     assert!(!output.status.success(), "{output:?}");
     assert!(String::from_utf8_lossy(&output.stderr).contains("interrupted"));
     assert!(!Command::new("/bin/kill")

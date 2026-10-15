@@ -51,6 +51,10 @@ impl LumenProcess {
                 "json",
             ])
             .env("LUMEN_AUTH", "off")
+            .env(
+                "TOKIO_WORKER_THREADS",
+                crate::support::test_load::SERVE_WORKER_THREADS,
+            )
             .env_remove("RUST_LOG")
             .env_remove("LUMEN_LOG_FORMAT")
             .env_remove("LUMEN_OTLP_ENDPOINT")

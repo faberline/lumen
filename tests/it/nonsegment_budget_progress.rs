@@ -84,6 +84,7 @@ fn assert_noop_checkpoint(process: &LumenProcess, mode: &str) {
 
 #[test]
 fn cbor_server_crosses_capacity_with_retries_and_restores_latest_rdb() {
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("CBOR budget root");
     // Leave time for the fixture to cross the early budget threshold before
     // either periodic writer fires. The final CBOR snapshot still uses the
@@ -126,6 +127,7 @@ fn cbor_server_crosses_capacity_with_retries_and_restores_latest_rdb() {
 
 #[test]
 fn memory_only_server_crosses_capacity_without_permanent_429_and_keeps_checkpoint_noop() {
+    let _load = crate::support::test_load::heavy_slot();
     let mut process = LumenProcess::spawn(None, ServeMode::MemoryOnly, 300);
     process.wait_until_ready(300);
     create_keyword_collection(&process);

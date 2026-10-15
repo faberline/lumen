@@ -673,6 +673,7 @@ async fn aof_recovered_catalog_layer_cap_replay_makes_capacity_progress_and_cold
         return;
     }
 
+    let _load = crate::support::test_load::exclusive_process_budget();
     let root = tempfile::tempdir().expect("AOF recovered catalog-cap fixture root");
     let aof_path = root.path().join("aof.log");
     let observer = Arc::new(RejectCatalogMerge::new());

@@ -7,6 +7,7 @@ pub mod indexing_durable_fixture;
 pub mod perf_cell_receipt;
 pub mod perf_workload_ledger;
 pub mod serve_budget_support;
+pub mod test_load;
 
 /// The libtest name of one case in this binary, for cases that rerun
 /// themselves in a child process with `<name> --exact`. `module_path` is the

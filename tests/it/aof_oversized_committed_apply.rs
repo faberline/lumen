@@ -505,6 +505,7 @@ fn assert_complete_truncated_frame_is_refused_before_watermark(root: &Path) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn oversized_committed_scalar_aof_replays_with_strict_suffix_checkpoint_and_cold_open() {
+    let _load = crate::support::test_load::exclusive_process_budget();
     let root = tempfile::tempdir().expect("oversized committed scalar AOF fixture root");
     let aof_path = root.path().join("aof.log");
     let giant_frame = write_oversized_prefix(&aof_path);

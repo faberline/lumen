@@ -935,5 +935,7 @@ fn covered_trim_releases_later_http_append_and_retains_exact_suffix() {
             .block_on(run_covered_trim_case());
         return;
     }
+
+    let _load = crate::support::test_load::heavy_slot();
     run_isolated_child();
 }

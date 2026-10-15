@@ -642,6 +642,7 @@ fn assert_complete_corrupt_text_frame_is_refused(root: &Path) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn oversized_committed_text_aof_replays_suffixes_checkpoints_and_cold_opens() {
+    let _load = crate::support::test_load::exclusive_process_budget();
     let root = tempfile::tempdir().expect("oversized committed Text AOF fixture root");
     let aof_path = root.path().join("oversized-text.aof");
     let oversized_frame_start = append_real_oversized_prefix(&aof_path);

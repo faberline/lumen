@@ -179,6 +179,10 @@ fn serve_startup(env: &[(&str, &str)]) -> (bool, bool, String) {
         "embedded",
     ])
     .env_remove("RUST_LOG")
+    .env(
+        "TOKIO_WORKER_THREADS",
+        crate::support::test_load::SERVE_WORKER_THREADS,
+    )
     .env_remove("LUMEN_AUTH_NAMESPACE")
     .env_remove("POD_NAMESPACE")
     .stdout(Stdio::piped())
@@ -204,6 +208,12 @@ fn serve_startup(env: &[(&str, &str)]) -> (bool, bool, String) {
         }
     }
 
+    if status.is_none() {
+        // Stop a server that kept running before reading its stderr, which
+        // only reaches EOF when the process exits.
+        let _ = child.kill();
+        let _ = child.wait();
+    }
     let mut stderr = String::new();
     if let Some(err) = child.stderr.take() {
         for line in BufReader::new(err).lines().map_while(Result::ok) {
@@ -212,13 +222,9 @@ fn serve_startup(env: &[(&str, &str)]) -> (bool, bool, String) {
         }
     }
 
-    let status = match status {
-        Some(s) => s,
-        None => {
-            let _ = child.kill();
-            panic!("required auth kept running instead of refusing to start:\n{stderr}");
-        }
-    };
+    let status = status.unwrap_or_else(|| {
+        panic!("required auth kept running instead of refusing to start:\n{stderr}")
+    });
     (status.success(), ever_bound, stderr)
 }
 

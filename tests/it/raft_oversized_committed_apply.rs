@@ -525,6 +525,7 @@ fn assert_truncated_fast_record_is_refused() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn retained_oversized_fast_index_replays_atomically_within_budget_and_cold_reopens() {
+    let _load = crate::support::test_load::exclusive_process_budget();
     let root = tempfile::tempdir().expect("oversized committed Raft fixture root");
     let raft_root = root.path().join("raft");
     retain_commands_in_real_raft_store(&raft_root).await;
