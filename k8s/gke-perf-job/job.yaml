@@ -1,0 +1,76 @@
+# One qualifying cell. scripts/gke-perf/cell.sh runs
+# perf_gate::durable_workload::approved_30_minute_durable_workload against
+# lumen-perf-0 and prints the receipt (or the failure evidence) to stdout
+# between markers; the aw run keeps this pod's log as evidence, and the verify
+# job of gke-perf.yml takes the receipt from there.
+#
+# The client runs on its own node (pool lumen-perf-client), so it never takes
+# CPU from the measured server. No retry: a second attempt would be a second
+# measurement of the same cell.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lumen-perf-cell
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: lumen-perf-cell
+    spec:
+      restartPolicy: Never
+      serviceAccountName: lumen-perf-client
+      enableServiceLinks: false
+      nodeSelector:
+        faberline.dev/pool: lumen-perf-client
+      tolerations:
+        - key: faberline.dev/pool
+          operator: Equal
+          value: lumen-perf-client
+          effect: NoSchedule
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cell
+          image: lumen-perf-client
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/lumen-perf-cell"]
+          envFrom:
+            - configMapRef:
+                name: gke-test-env
+          env:
+            - name: LUMEN_PERF_RUNTIME
+              value: kubernetes
+            - name: LUMEN_PERF_KUBE_POD
+              value: lumen-perf-0
+            - name: LUMEN_PERF_KUBE_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: HOME
+              value: /work
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              memory: 8Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: work
+          emptyDir:
+            sizeLimit: 2Gi

@@ -1600,6 +1600,48 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
                     "restart_command_timeout_kills_and_reaps_a_stuck_child".into(),
                     false,
                 ),
+                (
+                    "kube_runtime_selection_defaults_to_docker_and_validates_targets".into(),
+                    false,
+                ),
+                (
+                    "kube_expected_server_env_matches_docker_run_environment".into(),
+                    false,
+                ),
+                ("kube_quantities_parse_only_exact_units".into(), false),
+                ("kube_pod_base_uses_the_pod_ip".into(), false),
+                (
+                    "kube_pod_inspection_accepts_the_docker_equivalent_pod".into(),
+                    false,
+                ),
+                (
+                    "kube_gke_perf_overlay_passes_the_pod_contract".into(),
+                    false,
+                ),
+                (
+                    "kube_pod_inspection_rejects_each_contract_drift".into(),
+                    false,
+                ),
+                (
+                    "kube_kubectl_args_put_the_namespace_before_the_subcommand".into(),
+                    false,
+                ),
+                (
+                    "kube_evidence_collects_logs_previous_logs_and_pod_json".into(),
+                    false,
+                ),
+                (
+                    "kube_restart_progress_requires_one_in_place_restart".into(),
+                    false,
+                ),
+                (
+                    "kube_restart_script_terms_then_kills_a_stuck_server".into(),
+                    false,
+                ),
+                (
+                    "kube_restart_script_refuses_ambiguous_processes".into(),
+                    false,
+                ),
                 ("approved_30_minute_durable_workload".into(), true),
                 ("workload_gate_failure_fails_the_cell_after_post_input_gates_pass".into(), false),
                 ("post_input_failure_wins_over_a_workload_gate_failure".into(), false),

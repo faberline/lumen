@@ -59,6 +59,7 @@ mod efficiency_lumen_claim_elastic_disk_tier;
 mod feature_gated_targets_are_registered;
 mod field_query_correctness_contract;
 mod generated_clients_crud_e2e;
+mod gke_perf_evidence;
 mod hash_hamming;
 mod hnsw_ef_recall;
 mod hnsw_shutdown_cache;

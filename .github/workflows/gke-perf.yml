@@ -1,0 +1,369 @@
+name: lumen-gke-perf
+
+# The qualifying durable performance matrix on the shared GKE test cluster.
+# Each cell is one call of the faberline/aw gke-test workflow: it deploys
+# k8s/overlays/gke-perf (StatefulSet lumen-perf on the lumen-perf pool) with
+# the candidate image, then runs k8s/gke-perf-job, whose client pod runs
+# scripts/gke-perf/cell.sh against that pod (LUMEN_PERF_RUNTIME=kubernetes).
+# The cell prints its receipt into the client pod log, which the aw run keeps
+# as evidence; the verify job takes the receipts back out and, for the full
+# matrix, judges them with scripts/verify-durable-perf.py.
+#
+# Every receipt binds the candidate run, its attempt, its commit, and its root
+# image digest, the same values `scripts/durable-perf-local.sh qualify` uses.
+# The dispatch commit must be the candidate commit, so the harness that runs
+# is the harness that was tested. Cells run one at a time: aw serializes the
+# calls of one repository, and the cells must not share a node.
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Run ID of the successful lumen-release-candidate run for this commit.
+        required: true
+        type: string
+      cells:
+        description: Cells to run, space or comma separated. Empty runs all sixteen; only the full matrix is verified.
+        required: false
+        type: string
+        default: ''
+
+permissions: {}
+
+concurrency:
+  group: lumen-gke-perf
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: bind the candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      image: ${{ steps.bind.outputs.image }}
+      run_id: ${{ steps.bind.outputs.run_id }}
+      run_attempt: ${{ steps.bind.outputs.run_attempt }}
+      commit: ${{ steps.bind.outputs.commit }}
+      cells: ${{ steps.cells.outputs.cells }}
+      cell_names: ${{ steps.cells.outputs.cell_names }}
+      full: ${{ steps.cells.outputs.full }}
+    steps:
+      - name: Refuse any ref except the main workflow
+        env:
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]] || { echo 'gke-perf is workflow_dispatch only' >&2; exit 1; }
+          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo 'gke-perf must dispatch from main' >&2; exit 1; }
+          [[ "$WORKFLOW_REF" == "${GITHUB_REPOSITORY}/.github/workflows/gke-perf.yml@refs/heads/main" ]] || { echo 'gke-perf workflow ref must be main' >&2; exit 1; }
+          [[ "$GITHUB_REPOSITORY" == faberline/lumen ]] || { echo 'gke-perf runs only in faberline/lumen' >&2; exit 1; }
+      - name: Select the cells
+        id: cells
+        env:
+          CELLS: ${{ inputs.cells }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          all=(
+            index-1-flat-cpu index-1-hnsw-cpu
+            index-100-flat-cpu index-100-hnsw-cpu
+            index-1000-flat-cpu index-1000-hnsw-cpu
+            unindex-1-flat-cpu unindex-1-hnsw-cpu
+            unindex-100-flat-cpu unindex-100-hnsw-cpu
+            unindex-1000-flat-cpu unindex-1000-hnsw-cpu
+            replace-1-flat-cpu replace-1-hnsw-cpu
+            replace-32-flat-cpu replace-32-hnsw-cpu
+          )
+          read -r -a requested <<<"${CELLS//,/ }"
+          if [ "${#requested[@]}" -eq 0 ]; then
+            requested=("${all[@]}")
+          fi
+          declare -A seen=()
+          for cell in "${requested[@]}"; do
+            [[ " ${all[*]} " == *" $cell "* ]] || { echo "unknown cell $cell" >&2; exit 1; }
+            [ -z "${seen[$cell]:-}" ] || { echo "cell $cell is repeated" >&2; exit 1; }
+            seen[$cell]=1
+          done
+          selected=()
+          for cell in "${all[@]}"; do
+            [ -z "${seen[$cell]:-}" ] || selected+=("$cell")
+          done
+          cells="$(printf '%s\n' "${selected[@]}" | jq -Rnc '[inputs | capture("^(?<endpoint>[a-z]+)-(?<batch>[0-9]+)-(?<backend>[a-z]+-cpu)$") as $c | {cell: "\($c.endpoint)-\($c.batch)-\($c.backend)", endpoint: $c.endpoint, batch: $c.batch, backend: $c.backend}]')"
+          [ "$(jq length <<<"$cells")" -eq "${#selected[@]}" ] || { echo 'cell names did not parse' >&2; exit 1; }
+          full=false
+          [ "${#selected[@]}" -ne "${#all[@]}" ] || full=true
+          {
+            printf 'cells=%s\n' "$cells"
+            printf 'cell_names=%s\n' "${selected[*]}"
+            printf 'full=%s\n' "$full"
+          } >>"$GITHUB_OUTPUT"
+          printf 'CELLS %s full=%s\n' "${selected[*]}" "$full"
+      - name: Prove the candidate run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo 'candidate_run_id must be a run ID' >&2; exit 1; }
+          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}")"
+          workflow="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/lumen-release-candidate.yml" --jq '.id')"
+          jq -e --arg commit "$GITHUB_SHA" --argjson workflow "$workflow" '
+            .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success" and
+            .head_branch == "main" and .head_sha == $commit and .workflow_id == $workflow and
+            .head_repository.full_name == "faberline/lumen"
+          ' <<<"$run" >/dev/null || { echo 'candidate run is not a successful main candidate of this commit' >&2; exit 1; }
+          attempt="$(jq -er '.run_attempt' <<<"$run")"
+          [[ "$attempt" =~ ^[1-9][0-9]*$ ]] || { echo 'candidate run attempt is invalid' >&2; exit 1; }
+          printf 'attempt=%s\n' "$attempt" >>"$GITHUB_OUTPUT"
+      - name: Download the candidate receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ATTEMPT: ${{ steps.run.outputs.attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/candidate"
+          gh run download "$CANDIDATE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "lumen-release-candidate-${CANDIDATE_RUN_ID}-${CANDIDATE_ATTEMPT}" --dir "$RUNNER_TEMP/candidate"
+      - name: Bind the candidate image
+        id: bind
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ATTEMPT: ${{ steps.run.outputs.attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/candidate"
+          manifest="$dir/final-candidate-manifest.json"
+          [[ -f "$manifest" && ! -L "$manifest" && -f "$manifest.sha256" && ! -L "$manifest.sha256" ]] || { echo 'candidate receipt bytes are incomplete' >&2; exit 1; }
+          read -r expected name extra <"$manifest.sha256" || { echo 'cannot read the candidate receipt sidecar' >&2; exit 1; }
+          actual="$(sha256sum "$manifest" | cut -d' ' -f1)"
+          [[ "$expected" == "$actual" && "$name" == final-candidate-manifest.json && -z "${extra:-}" ]] || { echo 'candidate receipt sidecar does not bind its bytes' >&2; exit 1; }
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg commit "$GITHUB_SHA" --arg run "$CANDIDATE_RUN_ID" --arg attempt "$CANDIDATE_ATTEMPT" '
+            .schema == "cclab.lumen.candidate-manifest.v3" and .repository == $repo and .commit == $commit and
+            .run_id == $run and .run_attempt == $attempt and .source_ref == "refs/heads/main" and
+            .workflow_path == ".github/workflows/lumen-release-candidate.yml" and
+            .workflow_ref == ($repo + "/.github/workflows/lumen-release-candidate.yml@refs/heads/main") and
+            .image.repository == "ghcr.io/faberline/lumen" and (.image.root_digest | test("^sha256:[0-9a-f]{64}$")) and
+            (.jobs | type == "object" and length > 0 and all(.[]; . == "success"))
+          ' "$manifest" >/dev/null || { echo 'candidate receipt does not bind this commit and run' >&2; exit 1; }
+          image="ghcr.io/faberline/lumen@$(jq -er '.image.root_digest' "$manifest")"
+          {
+            printf 'image=%s\n' "$image"
+            printf 'run_id=%s\n' "$CANDIDATE_RUN_ID"
+            printf 'run_attempt=%s\n' "$CANDIDATE_ATTEMPT"
+            printf 'commit=%s\n' "$GITHUB_SHA"
+          } >>"$GITHUB_OUTPUT"
+          printf 'CANDIDATE run=%s attempt=%s commit=%s image=%s manifest_sha256=%s\n' \
+            "$CANDIDATE_RUN_ID" "$CANDIDATE_ATTEMPT" "$GITHUB_SHA" "$image" "$actual"
+
+  client-image:
+    name: build the client image
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+    steps:
+      - name: Refuse Cargo profile overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          overrides="$(env | cut -d= -f1 | grep '^CARGO_PROFILE_' || true)"
+          [ -z "$overrides" ] || { echo "CARGO_PROFILE_* overrides are not allowed: $overrides" >&2; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+      - name: Reclaim runner disk before the release test build
+        # The release `it` binary is a full LTO test build; keep the `df -h`
+        # lines as direct free-space evidence.
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Name the client image
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'tag=ghcr.io/faberline/lumen-perf-client:sha-%s\n' "${GITHUB_SHA::12}" >>"$GITHUB_OUTPUT"
+      - name: Build and push the client image
+        id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: scripts/gke-perf/client.Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Pin the client image by digest
+        id: ref
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'client image digest is missing' >&2; exit 1; }
+          printf 'image=%s@%s\n' "$TAG" "$DIGEST" >>"$GITHUB_OUTPUT"
+          printf 'CLIENT %s@%s\n' "$TAG" "$DIGEST"
+
+  cell:
+    name: ${{ matrix.cell }}
+    needs: [resolve, client-image]
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include: ${{ fromJSON(needs.resolve.outputs.cells) }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    uses: faberline/aw/.github/workflows/gke-test.yml@main
+    with:
+      image: ${{ needs.resolve.outputs.image }}
+      overlay: k8s/overlays/gke-perf
+      test-job: k8s/gke-perf-job
+      test-image: ${{ needs.client-image.outputs.image }}
+      test-image-name: lumen-perf-client
+      evidence-suffix: ${{ matrix.cell }}
+      ttl-minutes: 180
+      test-env: |
+        LUMEN_PERF_CELL=${{ matrix.cell }}
+        LUMEN_PERF_ENDPOINT=${{ matrix.endpoint }}
+        LUMEN_PERF_BATCH=${{ matrix.batch }}
+        LUMEN_PERF_BACKEND=${{ matrix.backend }}
+        LUMEN_PERF_IMAGE=${{ needs.resolve.outputs.image }}
+        LUMEN_PERF_REPOSITORY=${{ github.repository }}
+        LUMEN_PERF_RUN_ID=${{ needs.resolve.outputs.run_id }}
+        LUMEN_PERF_RUN_ATTEMPT=${{ needs.resolve.outputs.run_attempt }}
+        LUMEN_PERF_COMMIT=${{ needs.resolve.outputs.commit }}
+
+  verify:
+    name: verify the receipts
+    needs: [resolve, client-image, cell]
+    if: ${{ always() && needs.resolve.result == 'success' && needs.client-image.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+      - name: Download this attempt's cell evidence
+        # A missing artifact fails its cell in the next step, by name.
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: gke-test-evidence-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/evidence
+      - name: Take the receipts out of the evidence
+        id: extract
+        env:
+          CELLS: ${{ needs.resolve.outputs.cell_names }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/gke-perf"
+          mkdir -p "$RUNNER_TEMP/evidence" "$out/perf" "$out/failures"
+          set +e
+          python3 -I scripts/gke-perf/extract-receipts.py \
+            --evidence-dir "$RUNNER_TEMP/evidence" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --cells "$CELLS" \
+            --output-dir "$out/perf" --failures-dir "$out/failures"
+          code=$?
+          set -e
+          printf 'code=%s\n' "$code" >>"$GITHUB_OUTPUT"
+      - name: Verify the full matrix
+        id: verify
+        if: ${{ steps.extract.outputs.code == '0' && needs.resolve.outputs.full == 'true' }}
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ needs.resolve.outputs.run_id }}
+          RUN_ATTEMPT: ${{ needs.resolve.outputs.run_attempt }}
+          COMMIT: ${{ needs.resolve.outputs.commit }}
+          IMAGE: ${{ needs.resolve.outputs.image }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/gke-perf"
+          python3 -I scripts/verify-durable-perf.py \
+            --receipts-dir "$out/perf" \
+            --repo "$REPOSITORY" --run-id "$RUN_ID" --run-attempt "$RUN_ATTEMPT" \
+            --commit "$COMMIT" --image "$IMAGE" \
+            --output "$out/durable-perf-summary.json"
+          printf 'EVIDENCE summary_sha256=%s\n' "$(cut -d' ' -f1 "$out/durable-perf-summary.json.sha256")"
+      - name: Record the binding
+        if: ${{ always() }}
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ needs.resolve.outputs.run_id }}
+          RUN_ATTEMPT: ${{ needs.resolve.outputs.run_attempt }}
+          COMMIT: ${{ needs.resolve.outputs.commit }}
+          IMAGE: ${{ needs.resolve.outputs.image }}
+          CLIENT_IMAGE: ${{ needs.client-image.outputs.image }}
+          CELLS: ${{ needs.resolve.outputs.cell_names }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/gke-perf"
+          jq -n --arg repository "$REPOSITORY" --arg run_id "$RUN_ID" --arg run_attempt "$RUN_ATTEMPT" \
+            --arg commit "$COMMIT" --arg image "$IMAGE" --arg client_image "$CLIENT_IMAGE" --arg cells "$CELLS" \
+            --arg gke_perf_run "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}" '
+            {repository: $repository, candidate: {run_id: $run_id, run_attempt: $run_attempt, commit: $commit, image: $image},
+             client_image: $client_image, cells: ($cells | split(" ")), gke_perf_run: $gke_perf_run}
+          ' >"$RUNNER_TEMP/gke-perf/binding.json"
+      - name: Upload the receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lumen-gke-perf-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gke-perf
+          if-no-files-found: error
+          retention-days: 90
+      - name: Fail unless every selected cell passed
+        if: ${{ always() }}
+        env:
+          EXTRACT: ${{ steps.extract.outputs.code }}
+          VERIFY: ${{ steps.verify.outcome }}
+          FULL: ${{ needs.resolve.outputs.full }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "$EXTRACT" = 0 ] || { echo "receipt extraction failed with code ${EXTRACT:-<none>}" >&2; exit 1; }
+          if [ "$FULL" = true ]; then
+            [ "$VERIFY" = success ] || { echo "verify-durable-perf.py did not pass ($VERIFY)" >&2; exit 1; }
+          else
+            echo 'partial matrix: receipts extracted, not verified as release evidence'
+          fi

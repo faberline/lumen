@@ -1,0 +1,34 @@
+# What the harness in attach mode does with kubectl, in this namespace only:
+# read lumen-perf-0 (spec, status, logs) and exec the restarter container.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lumen-perf-client
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: lumen-perf-client
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # kubectl 1.30+ opens exec over WebSocket (GET); older ones POST (create).
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: lumen-perf-client
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: lumen-perf-client
+subjects:
+  - kind: ServiceAccount
+    name: lumen-perf-client

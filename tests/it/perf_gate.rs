@@ -648,6 +648,18 @@ fn median_statistic_and_ignored_inventory() {
                 "restart_command_timeout_kills_and_reaps_a_stuck_child",
                 false,
             ),
+            ("kube_runtime_selection_defaults_to_docker_and_validates_targets", false),
+            ("kube_expected_server_env_matches_docker_run_environment", false),
+            ("kube_quantities_parse_only_exact_units", false),
+            ("kube_pod_base_uses_the_pod_ip", false),
+            ("kube_pod_inspection_accepts_the_docker_equivalent_pod", false),
+            ("kube_gke_perf_overlay_passes_the_pod_contract", false),
+            ("kube_pod_inspection_rejects_each_contract_drift", false),
+            ("kube_kubectl_args_put_the_namespace_before_the_subcommand", false),
+            ("kube_evidence_collects_logs_previous_logs_and_pod_json", false),
+            ("kube_restart_progress_requires_one_in_place_restart", false),
+            ("kube_restart_script_terms_then_kills_a_stuck_server", false),
+            ("kube_restart_script_refuses_ambiguous_processes", false),
             ("approved_30_minute_durable_workload", true),
             ("workload_gate_failure_fails_the_cell_after_post_input_gates_pass", false),
             ("post_input_failure_wins_over_a_workload_gate_failure", false),
@@ -1778,6 +1790,9 @@ mod durable_workload {
         // paths. It is written only with a failed run's evidence bundle.
         restart_failure_trace: Arc<Mutex<Option<RestartFailureTrace>>>,
         readyz_readiness_trace: Arc<std::sync::Mutex<Option<ReadyzReadinessTrace>>>,
+        // Set only for `LUMEN_PERF_RUNTIME=kubernetes`, where the harness
+        // attaches to an overlay-deployed pod instead of owning a container.
+        kubernetes: Option<AttachedKubeServer>,
     }
 
     #[derive(Clone, Debug)]
@@ -2189,6 +2204,29 @@ mod durable_workload {
     #[async_trait]
     trait EvidenceCommandRunner {
         async fn run(&mut self, args: Vec<String>) -> std::result::Result<String, String>;
+
+        /// The server evidence files and the commands that fill them.
+        fn server_evidence_commands(&self, container: &str) -> Vec<(&'static str, Vec<String>)> {
+            docker_server_evidence_commands(container)
+        }
+    }
+
+    fn docker_server_evidence_commands(container: &str) -> Vec<(&'static str, Vec<String>)> {
+        vec![
+            (
+                "docker-logs.txt",
+                vec![
+                    "logs".to_owned(),
+                    "--tail".to_owned(),
+                    EVIDENCE_LOG_TAIL_LINES.to_owned(),
+                    container.to_owned(),
+                ],
+            ),
+            (
+                "docker-inspect.json",
+                vec!["inspect".to_owned(), container.to_owned()],
+            ),
+        ]
     }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -2323,12 +2361,23 @@ mod durable_workload {
         stdout: BoundedEvidence,
         stderr: BoundedEvidence,
     ) -> std::result::Result<String, String> {
+        command_result_for("docker", rendered, succeeded, status, stdout, stderr)
+    }
+
+    fn command_result_for(
+        program: &str,
+        rendered: &str,
+        succeeded: bool,
+        status: &str,
+        stdout: BoundedEvidence,
+        stderr: BoundedEvidence,
+    ) -> std::result::Result<String, String> {
         let streams = render_command_streams(&stdout, &stderr);
         if succeeded {
             Ok(streams)
         } else {
             Err(format!(
-                "docker {rendered} exited with {status}:\n{streams}"
+                "{program} {rendered} exited with {status}:\n{streams}"
             ))
         }
     }
@@ -2370,34 +2419,43 @@ mod durable_workload {
     #[async_trait]
     impl EvidenceCommandRunner for DockerEvidenceCommandRunner {
         async fn run(&mut self, args: Vec<String>) -> std::result::Result<String, String> {
-            let rendered = args.join(" ");
             let retention = docker_evidence_retention(&args);
-            let mut command = tokio::process::Command::new("docker");
-            command.args(&args);
-            command.stdout(Stdio::piped());
-            command.stderr(Stdio::piped());
-            command.kill_on_drop(true);
-            let (status, stdout, stderr) = tokio::time::timeout(REQUEST_TIMEOUT, async {
-                let child = command
-                    .spawn()
-                    .map_err(|error| format!("cannot start docker {rendered}: {error}"))?;
-                collect_docker_output(child, retention).await
-            })
-            .await
-            .map_err(|_| {
-                format!(
-                    "docker {rendered} exceeded the {}-second evidence collection deadline",
-                    REQUEST_TIMEOUT.as_secs()
-                )
-            })??;
-            command_result(
-                &rendered,
-                status.success(),
-                &status.to_string(),
-                stdout,
-                stderr,
-            )
+            run_evidence_command("docker", args, retention).await
         }
+    }
+
+    async fn run_evidence_command(
+        program: &'static str,
+        args: Vec<String>,
+        retention: EvidenceRetention,
+    ) -> std::result::Result<String, String> {
+        let rendered = args.join(" ");
+        let mut command = tokio::process::Command::new(program);
+        command.args(&args);
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+        command.kill_on_drop(true);
+        let (status, stdout, stderr) = tokio::time::timeout(REQUEST_TIMEOUT, async {
+            let child = command
+                .spawn()
+                .map_err(|error| format!("cannot start {program} {rendered}: {error}"))?;
+            collect_docker_output(child, retention).await
+        })
+        .await
+        .map_err(|_| {
+            format!(
+                "{program} {rendered} exceeded the {}-second evidence collection deadline",
+                REQUEST_TIMEOUT.as_secs()
+            )
+        })??;
+        command_result_for(
+            program,
+            &rendered,
+            status.success(),
+            &status.to_string(),
+            stdout,
+            stderr,
+        )
     }
 
     #[derive(Debug)]
@@ -2487,23 +2545,9 @@ mod durable_workload {
             runner: &mut R,
             container: &str,
         ) {
-            self.record_result(
-                "docker-logs.txt",
-                runner
-                    .run(vec![
-                        "logs".to_owned(),
-                        "--tail".to_owned(),
-                        EVIDENCE_LOG_TAIL_LINES.to_owned(),
-                        container.to_owned(),
-                    ])
-                    .await,
-            );
-            self.record_result(
-                "docker-inspect.json",
-                runner
-                    .run(vec!["inspect".to_owned(), container.to_owned()])
-                    .await,
-            );
+            for (name, args) in runner.server_evidence_commands(container) {
+                self.record_result(name, runner.run(args).await);
+            }
         }
     }
 
@@ -3447,6 +3491,10 @@ mod durable_workload {
                 optional_env(RECOVERY_OBSERVATION_ENV)?.as_deref(),
                 diagnostic,
             )?;
+            if let Some(target) = kube_target_from_environment()? {
+                return Self::attach_kubernetes(target, image, diagnostic, recovery_observation)
+                    .await;
+            }
             let nonce = format!(
                 "{}-{}",
                 std::process::id(),
@@ -3488,6 +3536,7 @@ mod durable_workload {
                     interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
                     restart_failure_trace: Arc::new(Mutex::new(None)),
                     readyz_readiness_trace: Arc::new(std::sync::Mutex::new(None)),
+                    kubernetes: None,
                 })
             })() {
                 Ok(server) => server,
@@ -3501,6 +3550,85 @@ mod durable_workload {
                 server.finish_failure(&error).await;
                 return Err(error);
             }
+            if let Err(error) = server.wait_ready().await {
+                server.finish_failure(&error).await;
+                return Err(error);
+            }
+            eprintln!(
+                "approved workload image reference={} actual_image_id={}",
+                server.image_reference, server.image_id
+            );
+            Ok(server)
+        }
+
+        /// Attaches to the overlay pod. `inspect_kube_pod` replaces
+        /// `assert_docker_limits`, and cleanup stays disarmed.
+        async fn attach_kubernetes(
+            target: KubeTarget,
+            image: String,
+            diagnostic: bool,
+            recovery_observation: Option<Duration>,
+        ) -> Result<Self> {
+            let attached = async {
+                if !is_repository_digest(&image) {
+                    return Err(HarnessError::UnpinnedImage(image.clone()));
+                }
+                let expected_env = expected_server_env(
+                    env::var("LUMEN_RECOVERY_PROFILE").ok().as_deref(),
+                    diagnostic,
+                );
+                let pod = kube_pod_json(&target).await?;
+                let observation = inspect_kube_pod(&pod, &image, &expected_env)?;
+                if !observation.running || observation.restart_count != 0 {
+                    return Err(HarnessError::Startup(format!(
+                        "server pod {} must be in its first running container; running={} restart_count={}",
+                        target.pod, observation.running, observation.restart_count
+                    )));
+                }
+                let image_id = kube_actual_image_id(&observation, &image)?;
+                let pod_ip = observation
+                    .pod_ip
+                    .as_deref()
+                    .ok_or_else(|| kube_pod_invalid("has no pod IP"))?;
+                let base = kube_pod_base(pod_ip)?;
+                eprintln!(
+                    "PERF_KUBE_ATTACH pod={} namespace={} claim={} uid={} base={}",
+                    target.pod,
+                    target.namespace.as_deref().unwrap_or("<current>"),
+                    observation.claim,
+                    observation.uid,
+                    base
+                );
+                Ok(Self {
+                    container: target.pod.clone(),
+                    volume: observation.claim.clone(),
+                    base,
+                    client: reqwest::Client::builder()
+                        .timeout(REQUEST_TIMEOUT)
+                        .build()
+                        .map_err(HarnessError::request_failure)?,
+                    image_reference: image.clone(),
+                    image_id,
+                    cleanup_armed: false,
+                    seed_diagnostic: diagnostic,
+                    recovery_observation,
+                    request_error_journal: Arc::new(Mutex::new(RequestErrorJournal::default())),
+                    interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
+                    restart_failure_trace: Arc::new(Mutex::new(None)),
+                    readyz_readiness_trace: Arc::new(std::sync::Mutex::new(None)),
+                    kubernetes: Some(AttachedKubeServer {
+                        target: target.clone(),
+                    }),
+                })
+            }
+            .await;
+            let mut server = match attached {
+                Ok(server) => server,
+                Err(error) => {
+                    finish_attached_startup_failure(&target, &error).await;
+                    return Err(error);
+                }
+            };
             if let Err(error) = server.wait_ready().await {
                 server.finish_failure(&error).await;
                 return Err(error);
@@ -3611,6 +3739,19 @@ mod durable_workload {
         }
 
         async fn finish_failure(&mut self, error: &HarnessError) {
+            if let Some(attached) = &self.kubernetes {
+                let mut evidence_runner = KubeEvidenceCommandRunner {
+                    target: attached.target.clone(),
+                };
+                self.finish_failure_with(
+                    error,
+                    &env::temp_dir(),
+                    &mut evidence_runner,
+                    &mut AttachedCleanupCommandRunner,
+                )
+                .await;
+                return;
+            }
             let mut evidence_runner = DockerEvidenceCommandRunner;
             let mut cleanup_runner = DockerCleanupCommandRunner;
             self.finish_failure_with(
@@ -3745,6 +3886,12 @@ mod durable_workload {
         }
 
         async fn restart_and_wait_ready(&mut self) -> Result<Duration> {
+            if let Some(attached) = &self.kubernetes {
+                let target = attached.target.clone();
+                let before = kube_observe(&target).await?;
+                let mut runner = KubeRestartCommandRunner { target, before };
+                return self.restart_and_wait_ready_with(&mut runner).await;
+            }
             self.restart_and_wait_ready_with(&mut DockerRestartCommandRunner)
                 .await
         }
@@ -3886,7 +4033,7 @@ mod durable_workload {
                         "published-port lookup exhausted the startup budget".to_owned(),
                     ));
                 }
-                let base = published_loopback_base(&output)?;
+                let base = runner.endpoint_base(&output)?;
                 eprintln!(
                     "PERF_RESTART_ENDPOINT container={} previous={} current={}",
                     self.container, self.base, base
@@ -4001,7 +4148,7 @@ mod durable_workload {
                         output
                     }
                 };
-            let base = match published_loopback_base(&output) {
+            let base = match runner.endpoint_base(&output) {
                 Ok(base) => base,
                 Err(error) => {
                     emit(&mut diagnostics, &readiness, "published-port", "error");
@@ -4174,6 +4321,11 @@ mod durable_workload {
     trait RestartCommandRunner {
         async fn restart(&mut self, container: &str) -> Result<()>;
         async fn published_port(&mut self, container: &str) -> Result<String>;
+
+        /// Turns the `published_port` output into the server base URL.
+        fn endpoint_base(&self, output: &str) -> Result<String> {
+            published_loopback_base(output)
+        }
 
         async fn process_state(&mut self, _container: &str) -> DockerProcessState {
             DockerProcessState {
@@ -4503,6 +4655,1083 @@ mod durable_workload {
         )));
         }
         Ok(image_id)
+    }
+
+    // `LUMEN_PERF_RUNTIME=kubernetes` attaches to a pod that the gke-perf
+    // overlay deployed. The harness does not create the server. It checks
+    // that the pod matches the Docker contract above, restarts the server
+    // container in place, and collects evidence. Namespace teardown owns
+    // cleanup.
+    const PERF_RUNTIME_ENV: &str = "LUMEN_PERF_RUNTIME";
+    const KUBE_POD_ENV: &str = "LUMEN_PERF_KUBE_POD";
+    const KUBE_NAMESPACE_ENV: &str = "LUMEN_PERF_KUBE_NAMESPACE";
+    const KUBE_DEFAULT_POD: &str = "lumen-perf-0";
+    const KUBE_SERVER_CONTAINER: &str = "lumen";
+    const KUBE_RESTARTER_CONTAINER: &str = "restarter";
+    const KUBE_DATA_MOUNT: &str = "/var/lib/lumen/data";
+    const KUBE_SERVER_PORT: u16 = 7373;
+    const KUBE_CPU_MILLI: u64 = 2500;
+    const KUBE_RESTART_POLL: Duration = Duration::from_millis(200);
+    // 100 ticks of 0.1 s match the 10-second grace of `docker restart`.
+    const KUBE_RESTART_GRACE_TICKS: u32 = 100;
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    struct KubeTarget {
+        pod: String,
+        namespace: Option<String>,
+    }
+
+    impl KubeTarget {
+        /// The namespace flag goes first so that `exec ... -- cmd` stays the
+        /// final part of the command line.
+        fn kubectl_args<S: AsRef<str>>(&self, args: &[S]) -> Vec<String> {
+            let mut rendered = Vec::with_capacity(args.len() + 1);
+            if let Some(namespace) = &self.namespace {
+                rendered.push(format!("--namespace={namespace}"));
+            }
+            rendered.extend(args.iter().map(|arg| arg.as_ref().to_owned()));
+            rendered
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct AttachedKubeServer {
+        target: KubeTarget,
+    }
+
+    fn is_kube_dns_label(value: &str) -> bool {
+        !value.is_empty()
+            && value.len() <= 63
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+            && !value.starts_with('-')
+            && !value.ends_with('-')
+    }
+
+    fn kube_target(
+        runtime: Option<&str>,
+        pod: Option<&str>,
+        namespace: Option<&str>,
+    ) -> Result<Option<KubeTarget>> {
+        match runtime.unwrap_or("docker") {
+            "docker" => {
+                if pod.is_some() || namespace.is_some() {
+                    return Err(HarnessError::InvalidSelection(format!(
+                        "{KUBE_POD_ENV} and {KUBE_NAMESPACE_ENV} apply only with {PERF_RUNTIME_ENV}=kubernetes"
+                    )));
+                }
+                Ok(None)
+            }
+            "kubernetes" => {
+                let pod = pod.unwrap_or(KUBE_DEFAULT_POD);
+                if !is_kube_dns_label(pod) {
+                    return Err(HarnessError::InvalidSelection(format!(
+                        "{KUBE_POD_ENV} must be a DNS label; got {pod:?}"
+                    )));
+                }
+                if let Some(namespace) = namespace.filter(|value| !is_kube_dns_label(value)) {
+                    return Err(HarnessError::InvalidSelection(format!(
+                        "{KUBE_NAMESPACE_ENV} must be a DNS label; got {namespace:?}"
+                    )));
+                }
+                Ok(Some(KubeTarget {
+                    pod: pod.to_owned(),
+                    namespace: namespace.map(str::to_owned),
+                }))
+            }
+            other => Err(HarnessError::InvalidSelection(format!(
+                "{PERF_RUNTIME_ENV} must be docker or kubernetes; got {other:?}"
+            ))),
+        }
+    }
+
+    fn kube_target_from_environment() -> Result<Option<KubeTarget>> {
+        kube_target(
+            optional_env(PERF_RUNTIME_ENV)?.as_deref(),
+            optional_env(KUBE_POD_ENV)?.as_deref(),
+            optional_env(KUBE_NAMESPACE_ENV)?.as_deref(),
+        )
+    }
+
+    /// The server environment is the `-e` set that `docker run` would pass,
+    /// so the overlay cannot drift from the local contract.
+    fn expected_server_env(
+        recovery_profile: Option<&str>,
+        diagnostic: bool,
+    ) -> BTreeMap<String, String> {
+        docker_run_args("container", "volume", "image", recovery_profile, diagnostic)
+            .windows(2)
+            .filter(|pair| pair[0] == "-e")
+            .filter_map(|pair| pair[1].split_once('='))
+            .map(|(name, value)| (name.to_owned(), value.to_owned()))
+            .collect()
+    }
+
+    fn kube_cpu_milli(quantity: &str) -> Option<u64> {
+        let all_digits =
+            |value: &str| !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit());
+        if let Some(milli) = quantity.strip_suffix('m') {
+            return all_digits(milli).then(|| milli.parse().ok()).flatten();
+        }
+        let (whole, fraction) = quantity.split_once('.').unwrap_or((quantity, ""));
+        if !all_digits(whole) || fraction.len() > 3 || !fraction.bytes().all(|b| b.is_ascii_digit())
+        {
+            return None;
+        }
+        let fraction = format!("{fraction:0<3}").parse::<u64>().ok()?;
+        whole
+            .parse::<u64>()
+            .ok()?
+            .checked_mul(1000)?
+            .checked_add(fraction)
+    }
+
+    fn kube_memory_bytes(quantity: &str) -> Option<u64> {
+        let (digits, multiplier) = [
+            ("Ki", 1_u64 << 10),
+            ("Mi", 1 << 20),
+            ("Gi", 1 << 30),
+            ("Ti", 1 << 40),
+        ]
+        .into_iter()
+        .find_map(|(suffix, multiplier)| {
+            quantity
+                .strip_suffix(suffix)
+                .map(|digits| (digits, multiplier))
+        })
+        .unwrap_or((quantity, 1));
+        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        digits.parse::<u64>().ok()?.checked_mul(multiplier)
+    }
+
+    fn kube_pod_base(pod_ip: &str) -> Result<String> {
+        match pod_ip.parse::<std::net::IpAddr>() {
+            Ok(std::net::IpAddr::V4(ip)) if !ip.is_unspecified() => {
+                Ok(format!("http://{ip}:{KUBE_SERVER_PORT}"))
+            }
+            Ok(std::net::IpAddr::V6(ip)) if !ip.is_unspecified() => {
+                Ok(format!("http://[{ip}]:{KUBE_SERVER_PORT}"))
+            }
+            _ => Err(HarnessError::Startup(format!(
+                "cannot use pod IP {pod_ip:?} as the server endpoint"
+            ))),
+        }
+    }
+
+    fn kube_pod_invalid(detail: impl Display) -> HarnessError {
+        HarnessError::DataInvariant(format!("kubernetes server pod {detail}"))
+    }
+
+    fn kube_named<'a>(pod: &'a Value, pointer: &str, name: &str) -> Option<&'a Value> {
+        pod.pointer(pointer)?
+            .as_array()?
+            .iter()
+            .find(|entry| entry.get("name").and_then(Value::as_str) == Some(name))
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    struct KubePodObservation {
+        uid: String,
+        pod_ip: Option<String>,
+        claim: String,
+        running: bool,
+        restart_count: u64,
+        container_id: Option<String>,
+        image_id: Option<String>,
+    }
+
+    fn observe_kube_pod(pod: &Value) -> Result<KubePodObservation> {
+        let text = |value: Option<&Value>| {
+            value
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+        };
+        let uid = text(pod.pointer("/metadata/uid"))
+            .ok_or_else(|| kube_pod_invalid("has no metadata.uid"))?;
+        let container = kube_named(pod, "/spec/containers", KUBE_SERVER_CONTAINER)
+            .ok_or_else(|| kube_pod_invalid("has no lumen container"))?;
+        let volume = container
+            .get("volumeMounts")
+            .and_then(Value::as_array)
+            .and_then(|mounts| {
+                mounts.iter().find(|mount| {
+                    mount.get("mountPath").and_then(Value::as_str) == Some(KUBE_DATA_MOUNT)
+                })
+            })
+            .and_then(|mount| mount.get("name"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| kube_pod_invalid(format!("does not mount {KUBE_DATA_MOUNT}")))?;
+        let claim = text(
+            kube_named(pod, "/spec/volumes", volume)
+                .and_then(|volume| volume.pointer("/persistentVolumeClaim/claimName")),
+        )
+        .ok_or_else(|| {
+            kube_pod_invalid(format!(
+                "data volume {volume} is not a persistentVolumeClaim"
+            ))
+        })?;
+        let status = kube_named(pod, "/status/containerStatuses", KUBE_SERVER_CONTAINER);
+        Ok(KubePodObservation {
+            uid,
+            pod_ip: text(pod.pointer("/status/podIP")),
+            claim,
+            running: status
+                .and_then(|status| status.pointer("/state/running"))
+                .is_some(),
+            restart_count: status
+                .and_then(|status| status.get("restartCount"))
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+            container_id: text(status.and_then(|status| status.get("containerID"))),
+            image_id: text(status.and_then(|status| status.get("imageID"))),
+        })
+    }
+
+    /// Checks the pod against the same contract that `docker run` and
+    /// `assert_docker_limits` enforce locally.
+    fn inspect_kube_pod(
+        pod: &Value,
+        image_reference: &str,
+        expected_env: &BTreeMap<String, String>,
+    ) -> Result<KubePodObservation> {
+        let observation = observe_kube_pod(pod)?;
+        let container = kube_named(pod, "/spec/containers", KUBE_SERVER_CONTAINER)
+            .ok_or_else(|| kube_pod_invalid("has no lumen container"))?;
+        let image = container.get("image").and_then(Value::as_str);
+        if image != Some(image_reference) {
+            return Err(kube_pod_invalid(format!(
+                "runs image {image:?}; expected {image_reference}"
+            )));
+        }
+        let quantity = |pointer: &str| container.pointer(pointer).and_then(Value::as_str);
+        let cpu = [
+            quantity("/resources/requests/cpu"),
+            quantity("/resources/limits/cpu"),
+        ];
+        let memory = [
+            quantity("/resources/requests/memory"),
+            quantity("/resources/limits/memory"),
+        ];
+        if cpu
+            .iter()
+            .any(|value| value.and_then(kube_cpu_milli) != Some(KUBE_CPU_MILLI))
+            || memory
+                .iter()
+                .any(|value| value.and_then(kube_memory_bytes) != Some(DOCKER_MEMORY_BYTES))
+        {
+            return Err(HarnessError::DockerLimits(format!(
+                "expected lumen requests and limits cpu={KUBE_CPU_MILLI}m memory={DOCKER_MEMORY_BYTES}; got cpu={cpu:?} memory={memory:?}"
+            )));
+        }
+        let qos = pod.pointer("/status/qosClass").and_then(Value::as_str);
+        if qos != Some("Guaranteed") {
+            return Err(HarnessError::DockerLimits(format!(
+                "expected qosClass Guaranteed; got {qos:?}"
+            )));
+        }
+        if pod
+            .pointer("/spec/shareProcessNamespace")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return Err(kube_pod_invalid(
+                "must share its process namespace with the restarter",
+            ));
+        }
+        if kube_named(pod, "/spec/containers", KUBE_RESTARTER_CONTAINER).is_none() {
+            return Err(kube_pod_invalid("has no restarter container"));
+        }
+        let present = |field: &str| container.get(field).is_some_and(|value| !value.is_null());
+        if present("command") {
+            return Err(kube_pod_invalid("overrides the lumen entrypoint"));
+        }
+        if present("args") && container.get("args") != Some(&json!(["serve"])) {
+            return Err(kube_pod_invalid(format!(
+                "passes lumen args {}; expected none or [\"serve\"]",
+                container["args"]
+            )));
+        }
+        if container
+            .get("envFrom")
+            .and_then(Value::as_array)
+            .is_some_and(|sources| !sources.is_empty())
+        {
+            return Err(kube_pod_invalid("loads lumen env from envFrom"));
+        }
+        // Docker has no health restart. A liveness or startup probe could
+        // restart the server outside the one measured restart.
+        if present("livenessProbe") {
+            return Err(kube_pod_invalid("has a lumen liveness probe"));
+        }
+        if present("startupProbe") {
+            return Err(kube_pod_invalid("has a lumen startup probe"));
+        }
+        let mut actual_env = BTreeMap::new();
+        for entry in container
+            .get("env")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let name = entry
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| kube_pod_invalid("has an unnamed lumen env entry"))?;
+            if entry.get("valueFrom").is_some() {
+                return Err(kube_pod_invalid(format!("sets {name} from valueFrom")));
+            }
+            // The API server omits an empty literal value.
+            let value = entry.get("value").and_then(Value::as_str).unwrap_or("");
+            if actual_env
+                .insert(name.to_owned(), value.to_owned())
+                .is_some()
+            {
+                return Err(kube_pod_invalid(format!("sets {name} twice")));
+            }
+        }
+        if &actual_env != expected_env {
+            return Err(kube_pod_invalid(format!(
+                "lumen env {actual_env:?} differs from the docker run contract {expected_env:?}"
+            )));
+        }
+        Ok(observation)
+    }
+
+    /// The kubelet reports the digest the runtime pulled. It must be the
+    /// requested digest, which then stands in for Docker's local image ID.
+    fn kube_actual_image_id(
+        observation: &KubePodObservation,
+        image_reference: &str,
+    ) -> Result<String> {
+        let expected = image_reference
+            .rsplit_once('@')
+            .filter(|(repository, digest)| !repository.is_empty() && is_sha256_identifier(digest))
+            .map(|(_, digest)| digest)
+            .ok_or_else(|| HarnessError::UnpinnedImage(image_reference.to_owned()))?;
+        let image_id = observation
+            .image_id
+            .as_deref()
+            .ok_or_else(|| kube_pod_invalid("reports no lumen imageID"))?;
+        let digest = image_id
+            .rsplit_once('@')
+            .map_or(image_id, |(_, digest)| digest);
+        if digest != expected {
+            return Err(kube_pod_invalid(format!(
+                "ran imageID {image_id}; expected digest {expected} from {image_reference}"
+            )));
+        }
+        Ok(digest.to_owned())
+    }
+
+    async fn kubectl_capture(args: Vec<String>, timeout: Duration) -> Result<String> {
+        let failure = |detail: String| HarnessError::Command {
+            program: "kubectl",
+            args: args.clone(),
+            detail,
+        };
+        let mut command = tokio::process::Command::new("kubectl");
+        command
+            .args(&args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        let (status, stdout, stderr) = tokio::time::timeout(timeout, async {
+            let child = command.spawn().map_err(|error| error.to_string())?;
+            collect_docker_output(child, EvidenceRetention::Prefix).await
+        })
+        .await
+        .map_err(|_| failure(format!("exceeded the {timeout:?} deadline")))?
+        .map_err(&failure)?;
+        if !status.success() || stdout.truncated {
+            return Err(failure(format!(
+                "status={status}: {}",
+                render_command_streams(&stdout, &stderr)
+            )));
+        }
+        String::from_utf8(stdout.retained).map_err(|error| failure(error.to_string()))
+    }
+
+    async fn kube_pod_json(target: &KubeTarget) -> Result<Value> {
+        let output = kubectl_capture(
+            target.kubectl_args(&["get", "pod", target.pod.as_str(), "-o", "json"]),
+            REQUEST_TIMEOUT,
+        )
+        .await?;
+        serde_json::from_str(&output)
+            .map_err(|error| kube_pod_invalid(format!("JSON from kubectl is invalid: {error}")))
+    }
+
+    async fn kube_observe(target: &KubeTarget) -> Result<KubePodObservation> {
+        observe_kube_pod(&kube_pod_json(target).await?)
+    }
+
+    /// Sends SIGTERM to the one lumen process, then SIGKILL after the grace
+    /// ticks, like `docker restart`. The kubelet then restarts the container
+    /// in place on the same pod, IP and claim.
+    fn kube_restart_script(grace_ticks: u32) -> String {
+        format!(
+            "pids=$(pidof lumen) || {{ echo 'no lumen process' >&2; exit 3; }}\n\
+             set -- $pids\n\
+             if [ \"$#\" -ne 1 ]; then echo \"expected one lumen process, got: $pids\" >&2; exit 3; fi\n\
+             pid=$1\n\
+             kill -TERM \"$pid\" || exit 4\n\
+             ticks=0\n\
+             while kill -0 \"$pid\" 2>/dev/null; do\n\
+             if [ \"$ticks\" -eq {grace_ticks} ]; then kill -KILL \"$pid\" 2>/dev/null; fi\n\
+             ticks=$((ticks + 1))\n\
+             sleep 0.1\n\
+             done\n"
+        )
+    }
+
+    /// Returns the pod IP once exactly one in-place restart has produced a
+    /// running container. Any other change to the pod fails the restart.
+    fn kube_restart_progress(
+        before: &KubePodObservation,
+        now: &KubePodObservation,
+    ) -> Result<Option<String>> {
+        if now.uid != before.uid {
+            return Err(kube_pod_invalid(format!(
+                "was replaced during restart: uid {} became {}",
+                before.uid, now.uid
+            )));
+        }
+        if now.claim != before.claim {
+            return Err(kube_pod_invalid(format!(
+                "changed claim during restart: {} became {}",
+                before.claim, now.claim
+            )));
+        }
+        if now.restart_count < before.restart_count || now.restart_count > before.restart_count + 1
+        {
+            return Err(kube_pod_invalid(format!(
+                "restart count went from {} to {}; expected one restart",
+                before.restart_count, now.restart_count
+            )));
+        }
+        if now.restart_count == before.restart_count
+            || !now.running
+            || now.container_id.is_none()
+            || now.container_id == before.container_id
+        {
+            return Ok(None);
+        }
+        if now.image_id != before.image_id {
+            return Err(kube_pod_invalid(format!(
+                "changed imageID during restart: {:?} became {:?}",
+                before.image_id, now.image_id
+            )));
+        }
+        match (&before.pod_ip, &now.pod_ip) {
+            (Some(before_ip), Some(now_ip)) if before_ip == now_ip => Ok(Some(now_ip.clone())),
+            _ => Err(kube_pod_invalid(format!(
+                "changed pod IP during restart: {:?} became {:?}",
+                before.pod_ip, now.pod_ip
+            ))),
+        }
+    }
+
+    fn kube_process_state(pod: &Value) -> DockerProcessState {
+        let Some(status) = kube_named(pod, "/status/containerStatuses", KUBE_SERVER_CONTAINER)
+        else {
+            return DockerProcessState {
+                detail: "pod_status_has_no_lumen_container".to_owned(),
+            };
+        };
+        let field = |name: &str| status.get(name).cloned().unwrap_or(Value::Null);
+        DockerProcessState {
+            detail: bounded_restart_diagnostic_error(format!(
+                "restart_count={} state={} last_state={}",
+                field("restartCount"),
+                field("state"),
+                field("lastState"),
+            )),
+        }
+    }
+
+    struct KubeRestartCommandRunner {
+        target: KubeTarget,
+        // Observed before the timed restart starts, so the lookup does not
+        // count toward the restart budget.
+        before: KubePodObservation,
+    }
+
+    #[async_trait]
+    impl RestartCommandRunner for KubeRestartCommandRunner {
+        async fn restart(&mut self, _container: &str) -> Result<()> {
+            if !self.before.running || self.before.restart_count != 0 {
+                return Err(kube_pod_invalid(format!(
+                    "was not in its first running container before restart: running={} restart_count={}",
+                    self.before.running, self.before.restart_count
+                )));
+            }
+            let script = kube_restart_script(KUBE_RESTART_GRACE_TICKS);
+            kubectl_capture(
+                self.target.kubectl_args(&[
+                    "exec",
+                    self.target.pod.as_str(),
+                    "-c",
+                    KUBE_RESTARTER_CONTAINER,
+                    "--",
+                    "sh",
+                    "-c",
+                    script.as_str(),
+                ]),
+                STARTUP_TIMEOUT,
+            )
+            .await
+            .map(|_| ())
+        }
+
+        async fn published_port(&mut self, _container: &str) -> Result<String> {
+            loop {
+                let now = kube_observe(&self.target).await?;
+                if let Some(pod_ip) = kube_restart_progress(&self.before, &now)? {
+                    return Ok(pod_ip);
+                }
+                tokio::time::sleep(KUBE_RESTART_POLL).await;
+            }
+        }
+
+        fn endpoint_base(&self, output: &str) -> Result<String> {
+            kube_pod_base(output)
+        }
+
+        async fn process_state(&mut self, _container: &str) -> DockerProcessState {
+            match kube_pod_json(&self.target).await {
+                Ok(pod) => kube_process_state(&pod),
+                Err(error) => DockerProcessState {
+                    detail: format!("inspect_error={}", bounded_restart_diagnostic_error(error)),
+                },
+            }
+        }
+    }
+
+    fn kube_server_evidence_commands(pod: &str) -> Vec<(&'static str, Vec<String>)> {
+        let logs = |previous: bool| {
+            let mut args = vec![
+                "logs".to_owned(),
+                pod.to_owned(),
+                "-c".to_owned(),
+                KUBE_SERVER_CONTAINER.to_owned(),
+            ];
+            if previous {
+                args.push("--previous".to_owned());
+            }
+            args.extend(["--tail".to_owned(), EVIDENCE_LOG_TAIL_LINES.to_owned()]);
+            args
+        };
+        vec![
+            ("kubectl-logs.txt", logs(false)),
+            ("kubectl-logs-previous.txt", logs(true)),
+            (
+                "kubectl-pod.json",
+                vec![
+                    "get".to_owned(),
+                    "pod".to_owned(),
+                    pod.to_owned(),
+                    "-o".to_owned(),
+                    "json".to_owned(),
+                ],
+            ),
+        ]
+    }
+
+    struct KubeEvidenceCommandRunner {
+        target: KubeTarget,
+    }
+
+    #[async_trait]
+    impl EvidenceCommandRunner for KubeEvidenceCommandRunner {
+        async fn run(&mut self, args: Vec<String>) -> std::result::Result<String, String> {
+            // Retention is chosen from the subcommand before the namespace
+            // flag is prepended.
+            let retention = docker_evidence_retention(&args);
+            run_evidence_command("kubectl", self.target.kubectl_args(&args), retention).await
+        }
+
+        fn server_evidence_commands(&self, container: &str) -> Vec<(&'static str, Vec<String>)> {
+            kube_server_evidence_commands(container)
+        }
+    }
+
+    /// Namespace teardown deletes the attached pod and its claim.
+    struct AttachedCleanupCommandRunner;
+
+    impl CleanupCommandRunner for AttachedCleanupCommandRunner {
+        fn run_cleanup(&mut self, _args: Vec<String>) {}
+    }
+
+    /// Collects evidence when attach fails before a server value exists.
+    async fn finish_attached_startup_failure(target: &KubeTarget, error: &HarnessError) {
+        let evidence = match FailureEvidenceDirectory::create(&target.pod, "attached", error) {
+            Ok(evidence) => evidence,
+            Err(capture_error) => {
+                eprintln!("PERF_FAILURE_EVIDENCE_ERROR {capture_error}");
+                return;
+            }
+        };
+        finish_failed_docker_run(
+            &evidence,
+            &mut KubeEvidenceCommandRunner {
+                target: target.clone(),
+            },
+            &mut UnavailableFailureProbe,
+            &mut AttachedCleanupCommandRunner,
+            &target.pod,
+            "attached",
+            "no request-error journal: failure occurred before the workload client existed\n",
+            None,
+        )
+        .await;
+    }
+
+    const KUBE_TEST_IMAGE: &str =
+        "ghcr.io/faberline/lumen@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    fn kube_pod_fixture() -> Value {
+        let env = expected_server_env(Some("1"), false)
+            .into_iter()
+            .map(|(name, value)| json!({"name": name, "value": value}))
+            .collect::<Vec<_>>();
+        json!({
+            "metadata": {"uid": "uid-1"},
+            "spec": {
+                "shareProcessNamespace": true,
+                "containers": [
+                    {
+                        "name": "lumen",
+                        "image": KUBE_TEST_IMAGE,
+                        "args": ["serve"],
+                        "env": env,
+                        "resources": {
+                            "requests": {"cpu": "2500m", "memory": "16Gi"},
+                            "limits": {"cpu": "2500m", "memory": "16Gi"}
+                        },
+                        "volumeMounts": [{"name": "data", "mountPath": "/var/lib/lumen/data"}]
+                    },
+                    {"name": "restarter", "image": "busybox"}
+                ],
+                "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": "data-lumen-perf-0"}}]
+            },
+            "status": {
+                "qosClass": "Guaranteed",
+                "podIP": "10.4.0.7",
+                "containerStatuses": [{
+                    "name": "lumen",
+                    "restartCount": 0,
+                    "state": {"running": {"startedAt": "2026-10-15T00:00:00Z"}},
+                    "containerID": "containerd://one",
+                    "imageID": KUBE_TEST_IMAGE
+                }]
+            }
+        })
+    }
+
+    #[test]
+    fn kube_runtime_selection_defaults_to_docker_and_validates_targets() {
+        assert_eq!(kube_target(None, None, None).unwrap(), None);
+        assert_eq!(kube_target(Some("docker"), None, None).unwrap(), None);
+        assert_eq!(
+            kube_target(Some("kubernetes"), None, None).unwrap(),
+            Some(KubeTarget {
+                pod: KUBE_DEFAULT_POD.to_owned(),
+                namespace: None,
+            })
+        );
+        assert_eq!(
+            kube_target(
+                Some("kubernetes"),
+                Some("lumen-perf-1"),
+                Some("lumen-run-7")
+            )
+            .unwrap(),
+            Some(KubeTarget {
+                pod: "lumen-perf-1".to_owned(),
+                namespace: Some("lumen-run-7".to_owned()),
+            })
+        );
+        for (runtime, pod, namespace) in [
+            (Some(""), None, None),
+            (Some("podman"), None, None),
+            (Some("docker"), Some("lumen-perf-0"), None),
+            (None, None, Some("lumen")),
+            (Some("kubernetes"), Some("Lumen"), None),
+            (Some("kubernetes"), Some("-lumen"), None),
+            (Some("kubernetes"), None, Some("a b")),
+            (Some("kubernetes"), None, Some("")),
+        ] {
+            assert!(
+                kube_target(runtime, pod, namespace).is_err(),
+                "{runtime:?} {pod:?} {namespace:?} must be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn kube_expected_server_env_matches_docker_run_environment() {
+        let env = expected_server_env(Some("1"), false);
+        assert_eq!(
+            env.iter()
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect::<Vec<_>>(),
+            [
+                "LUMEN_AUTH=off",
+                "LUMEN_DATA_DIR=/var/lib/lumen/data",
+                "LUMEN_PERSISTENCE=segment",
+                "LUMEN_RECOVERY_PROFILE=1",
+                "LUMEN_SNAPSHOT_SECS=15",
+                "LUMEN_WAL=embedded",
+            ]
+        );
+        let diagnostic = expected_server_env(None, true);
+        assert!(diagnostic.contains_key("LUMEN_PERF_DIAGNOSTIC"));
+        assert!(!diagnostic.contains_key("LUMEN_RECOVERY_PROFILE"));
+    }
+
+    #[test]
+    fn kube_quantities_parse_only_exact_units() {
+        assert_eq!(kube_cpu_milli("2500m"), Some(2500));
+        assert_eq!(kube_cpu_milli("2.5"), Some(2500));
+        assert_eq!(kube_cpu_milli("3"), Some(3000));
+        for invalid in ["", "m", "2.5m", "2.5005", "-1", "1e3", "two"] {
+            assert_eq!(kube_cpu_milli(invalid), None, "{invalid}");
+        }
+        assert_eq!(kube_memory_bytes("16Gi"), Some(DOCKER_MEMORY_BYTES));
+        assert_eq!(kube_memory_bytes("16384Mi"), Some(DOCKER_MEMORY_BYTES));
+        assert_eq!(kube_memory_bytes("17179869184"), Some(DOCKER_MEMORY_BYTES));
+        for invalid in ["", "Gi", "16G", "16e9", "1.5Gi", "99999999999Ti"] {
+            assert_eq!(kube_memory_bytes(invalid), None, "{invalid}");
+        }
+    }
+
+    #[test]
+    fn kube_pod_base_uses_the_pod_ip() {
+        assert_eq!(kube_pod_base("10.4.0.7").unwrap(), "http://10.4.0.7:7373");
+        assert_eq!(kube_pod_base("fd00::7").unwrap(), "http://[fd00::7]:7373");
+        for invalid in ["", "0.0.0.0", "::", "lumen-perf", "10.4.0.7:7373"] {
+            assert!(kube_pod_base(invalid).is_err(), "{invalid}");
+        }
+    }
+
+    #[test]
+    fn kube_pod_inspection_accepts_the_docker_equivalent_pod() {
+        let pod = kube_pod_fixture();
+        let expected = expected_server_env(Some("1"), false);
+        let observation = inspect_kube_pod(&pod, KUBE_TEST_IMAGE, &expected).unwrap();
+        assert_eq!(
+            observation,
+            KubePodObservation {
+                uid: "uid-1".to_owned(),
+                pod_ip: Some("10.4.0.7".to_owned()),
+                claim: "data-lumen-perf-0".to_owned(),
+                running: true,
+                restart_count: 0,
+                container_id: Some("containerd://one".to_owned()),
+                image_id: Some(KUBE_TEST_IMAGE.to_owned()),
+            }
+        );
+        assert_eq!(
+            kube_actual_image_id(&observation, KUBE_TEST_IMAGE).unwrap(),
+            KUBE_TEST_IMAGE.rsplit_once('@').unwrap().1
+        );
+        let mut no_args = pod.clone();
+        no_args["spec"]["containers"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("args");
+        inspect_kube_pod(&no_args, KUBE_TEST_IMAGE, &expected).unwrap();
+    }
+
+    /// The GKE overlay is the pod the harness attaches to, so the manifest
+    /// itself must pass the same contract, as the StatefulSet controller and
+    /// `kustomize edit set image lumen=...` turn it into a pod.
+    #[test]
+    fn kube_gke_perf_overlay_passes_the_pod_contract() {
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("k8s/overlays/gke-perf/statefulset.yaml");
+        let statefulset: Value = serde_yaml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let mut spec = statefulset["spec"]["template"]["spec"].clone();
+        assert_eq!(spec["containers"][0]["image"], "lumen");
+        spec["containers"][0]["image"] = json!(KUBE_TEST_IMAGE);
+        let claim = statefulset["spec"]["volumeClaimTemplates"][0]["metadata"]["name"]
+            .as_str()
+            .unwrap();
+        spec["volumes"] = json!([{
+            "name": claim,
+            "persistentVolumeClaim": {"claimName": format!("{claim}-lumen-perf-0")}
+        }]);
+        let mut pod = kube_pod_fixture();
+        pod["spec"] = spec;
+        let expected = expected_server_env(Some("1"), false);
+        let observation = inspect_kube_pod(&pod, KUBE_TEST_IMAGE, &expected).unwrap();
+        assert_eq!(observation.claim, "data-lumen-perf-0");
+        assert!(pod["spec"]["containers"][1]["image"]
+            .as_str()
+            .unwrap()
+            .contains("@sha256:"));
+    }
+
+    #[test]
+    fn kube_pod_inspection_rejects_each_contract_drift() {
+        let expected = expected_server_env(Some("1"), false);
+        let other_digest =
+            "ghcr.io/faberline/lumen@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let mutations: [(&str, fn(&mut Value)); 17] = [
+            ("image", |pod| {
+                pod["spec"]["containers"][0]["image"] = json!("ghcr.io/faberline/lumen:latest")
+            }),
+            ("cpu limit", |pod| {
+                pod["spec"]["containers"][0]["resources"]["limits"]["cpu"] = json!("2")
+            }),
+            ("cpu request", |pod| {
+                pod["spec"]["containers"][0]["resources"]["requests"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("cpu");
+            }),
+            ("memory", |pod| {
+                pod["spec"]["containers"][0]["resources"]["requests"]["memory"] = json!("8Gi")
+            }),
+            ("qos", |pod| pod["status"]["qosClass"] = json!("Burstable")),
+            ("extra env", |pod| {
+                pod["spec"]["containers"][0]["env"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(json!({"name": "RUST_LOG", "value": "debug"}));
+            }),
+            ("missing env", |pod| {
+                pod["spec"]["containers"][0]["env"]
+                    .as_array_mut()
+                    .unwrap()
+                    .pop();
+            }),
+            ("envFrom", |pod| {
+                pod["spec"]["containers"][0]["envFrom"] = json!([{"configMapRef": {"name": "x"}}])
+            }),
+            ("valueFrom", |pod| {
+                pod["spec"]["containers"][0]["env"][0] =
+                    json!({"name": "LUMEN_AUTH", "valueFrom": {}})
+            }),
+            ("emptyDir", |pod| {
+                pod["spec"]["volumes"][0] = json!({"name": "data", "emptyDir": {}})
+            }),
+            ("shared pid", |pod| {
+                pod["spec"]["shareProcessNamespace"] = json!(false)
+            }),
+            ("restarter", |pod| {
+                pod["spec"]["containers"].as_array_mut().unwrap().pop();
+            }),
+            ("command", |pod| {
+                pod["spec"]["containers"][0]["command"] = json!(["/bin/sh"])
+            }),
+            ("args", |pod| {
+                pod["spec"]["containers"][0]["args"] = json!(["serve", "--debug"])
+            }),
+            ("liveness", |pod| {
+                pod["spec"]["containers"][0]["livenessProbe"] = json!({"httpGet": {}})
+            }),
+            ("startup", |pod| {
+                pod["spec"]["containers"][0]["startupProbe"] = json!({"httpGet": {}})
+            }),
+            ("uid", |pod| {
+                pod["metadata"].as_object_mut().unwrap().remove("uid");
+            }),
+        ];
+        for (label, mutate) in mutations {
+            let mut pod = kube_pod_fixture();
+            mutate(&mut pod);
+            assert!(
+                inspect_kube_pod(&pod, KUBE_TEST_IMAGE, &expected).is_err(),
+                "{label} drift must be refused"
+            );
+        }
+        let mut pod = kube_pod_fixture();
+        pod["status"]["containerStatuses"][0]["imageID"] = json!(other_digest);
+        let observation = inspect_kube_pod(&pod, KUBE_TEST_IMAGE, &expected).unwrap();
+        assert!(kube_actual_image_id(&observation, KUBE_TEST_IMAGE).is_err());
+        assert!(kube_actual_image_id(&observation, "ghcr.io/faberline/lumen:latest").is_err());
+        assert!(inspect_kube_pod(
+            &kube_pod_fixture(),
+            KUBE_TEST_IMAGE,
+            &expected_server_env(Some("1"), true)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn kube_kubectl_args_put_the_namespace_before_the_subcommand() {
+        let scoped = KubeTarget {
+            pod: "lumen-perf-0".to_owned(),
+            namespace: Some("lumen-run-7".to_owned()),
+        };
+        assert_eq!(
+            scoped.kubectl_args(&["exec", "lumen-perf-0", "--", "sh"]),
+            [
+                "--namespace=lumen-run-7",
+                "exec",
+                "lumen-perf-0",
+                "--",
+                "sh"
+            ]
+        );
+        let unscoped = KubeTarget {
+            namespace: None,
+            ..scoped
+        };
+        assert_eq!(unscoped.kubectl_args(&["get", "pod"]), ["get", "pod"]);
+    }
+
+    #[test]
+    fn kube_evidence_collects_logs_previous_logs_and_pod_json() {
+        let commands = kube_server_evidence_commands("lumen-perf-0");
+        let rendered = commands
+            .iter()
+            .map(|(name, args)| format!("{name}: {}", args.join(" ")))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            rendered,
+            [
+                "kubectl-logs.txt: logs lumen-perf-0 -c lumen --tail 2000",
+                "kubectl-logs-previous.txt: logs lumen-perf-0 -c lumen --previous --tail 2000",
+                "kubectl-pod.json: get pod lumen-perf-0 -o json",
+            ]
+        );
+        for (_, args) in &commands[..2] {
+            assert_eq!(docker_evidence_retention(args), EvidenceRetention::Tail);
+        }
+        assert_eq!(
+            docker_evidence_retention(&commands[2].1),
+            EvidenceRetention::Prefix
+        );
+        assert_eq!(
+            DockerEvidenceCommandRunner
+                .server_evidence_commands("c")
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>(),
+            ["docker-logs.txt", "docker-inspect.json"]
+        );
+    }
+
+    #[test]
+    fn kube_restart_progress_requires_one_in_place_restart() {
+        type Change = fn(&mut KubePodObservation);
+        let before = observe_kube_pod(&kube_pod_fixture()).unwrap();
+        let after = |change: Change| {
+            let mut now = before.clone();
+            now.restart_count = 1;
+            now.container_id = Some("containerd://two".to_owned());
+            change(&mut now);
+            kube_restart_progress(&before, &now)
+        };
+        let unchanged: Change = |_| {};
+        assert_eq!(after(unchanged).unwrap(), Some("10.4.0.7".to_owned()));
+        assert_eq!(kube_restart_progress(&before, &before).unwrap(), None);
+        let pending: [Change; 3] = [
+            |now| now.running = false,
+            |now| now.container_id = None,
+            |now| now.container_id = Some("containerd://one".to_owned()),
+        ];
+        for change in pending {
+            assert_eq!(after(change).unwrap(), None);
+        }
+        let refused: [(&str, Change); 6] = [
+            ("uid", |now| now.uid = "uid-2".to_owned()),
+            ("claim", |now| now.claim = "other".to_owned()),
+            ("two restarts", |now| now.restart_count = 2),
+            ("pod ip", |now| now.pod_ip = Some("10.4.0.8".to_owned())),
+            ("no pod ip", |now| now.pod_ip = None),
+            ("image", |now| now.image_id = Some("other".to_owned())),
+        ];
+        for (label, change) in refused {
+            assert!(
+                after(change).is_err(),
+                "{label} change must fail the restart"
+            );
+        }
+    }
+
+    fn kube_restart_script_fixture(pids: &str) -> PathBuf {
+        let root = env::temp_dir().join(format!(
+            "lumen-perf-kube-restart-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).expect("create fake pidof directory");
+        let pidof = root.join("pidof");
+        fs::write(&pidof, format!("#!/bin/sh\necho {pids}\n")).expect("write fake pidof");
+        let status = Command::new("chmod")
+            .args(["+x", pidof.to_str().unwrap()])
+            .status()
+            .expect("chmod fake pidof");
+        assert!(status.success());
+        root
+    }
+
+    fn run_kube_restart_script(fake_bin: &Path, grace_ticks: u32) -> std::process::Output {
+        let path = format!(
+            "{}:{}",
+            fake_bin.display(),
+            env::var("PATH").unwrap_or_default()
+        );
+        Command::new("sh")
+            .args(["-c", &kube_restart_script(grace_ticks)])
+            .env("PATH", path)
+            .output()
+            .expect("run restart script")
+    }
+
+    #[test]
+    fn kube_restart_script_terms_then_kills_a_stuck_server() {
+        // The subshell is orphaned, so init reaps it and `kill -0` can see
+        // it exit. It ignores SIGTERM, so only the SIGKILL fallback stops it.
+        let spawned = Command::new("sh")
+            .args([
+                "-c",
+                "(trap '' TERM; exec sleep 30) >/dev/null 2>&1 & echo $!",
+            ])
+            .output()
+            .expect("spawn TERM-ignoring process");
+        let pid = String::from_utf8(spawned.stdout).unwrap().trim().to_owned();
+        assert!(!pid.is_empty() && pid.bytes().all(|b| b.is_ascii_digit()));
+        let fake_bin = kube_restart_script_fixture(&pid);
+        let started = Instant::now();
+        let output = run_kube_restart_script(&fake_bin, 5);
+        let elapsed = started.elapsed();
+        let alive = Command::new("kill")
+            .args(["-0", &pid])
+            .stderr(Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+        if alive {
+            let _ = Command::new("kill").args(["-KILL", &pid]).status();
+        }
+        let _ = fs::remove_dir_all(&fake_bin);
+        assert!(output.status.success(), "restart script failed: {output:?}");
+        assert!(!alive, "the stuck process must be killed");
+        assert!(
+            elapsed >= Duration::from_millis(400) && elapsed < Duration::from_secs(10),
+            "SIGKILL must follow the grace ticks, elapsed={elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn kube_restart_script_refuses_ambiguous_processes() {
+        let fake_bin = kube_restart_script_fixture("999999 999998");
+        let output = run_kube_restart_script(&fake_bin, 5);
+        let _ = fs::remove_dir_all(&fake_bin);
+        assert_eq!(output.status.code(), Some(3), "{output:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("expected one lumen process"));
     }
 
     #[derive(Debug, Clone, Copy, Default)]
@@ -8631,6 +9860,7 @@ mod durable_workload {
             interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
             restart_failure_trace: Arc::new(Mutex::new(None)),
             readyz_readiness_trace: Arc::new(std::sync::Mutex::new(None)),
+            kubernetes: None,
         }));
         (server, shutdown_tx)
     }
@@ -9364,6 +10594,7 @@ mod durable_workload {
                 interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
                 restart_failure_trace: Arc::new(Mutex::new(None)),
                 readyz_readiness_trace: Arc::new(std::sync::Mutex::new(None)),
+                kubernetes: None,
             };
             let timeout = Duration::from_millis(25);
             let deadline = tokio::time::Instant::now() + timeout;
@@ -10708,6 +11939,7 @@ mod durable_workload {
                 interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
                 restart_failure_trace: Arc::new(Mutex::new(None)),
                 readyz_readiness_trace: Arc::new(std::sync::Mutex::new(None)),
+                kubernetes: None,
             },
             requests,
             task,
@@ -10765,6 +11997,7 @@ mod durable_workload {
                 interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
                 restart_failure_trace: Arc::new(Mutex::new(None)),
                 readyz_readiness_trace: Arc::new(std::sync::Mutex::new(None)),
+                kubernetes: None,
             },
             requests,
             task,
@@ -10824,6 +12057,7 @@ mod durable_workload {
                 interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
                 restart_failure_trace: Arc::new(Mutex::new(None)),
                 readyz_readiness_trace: Arc::new(std::sync::Mutex::new(None)),
+                kubernetes: None,
             },
             requests,
             task,
@@ -12757,6 +13991,7 @@ mod durable_workload {
             interval_trace: Arc::new(Mutex::new(IntervalTrace::default())),
             restart_failure_trace: Arc::new(Mutex::new(None)),
             readyz_readiness_trace: Arc::new(StdMutex::new(None)),
+            kubernetes: None,
         }
     }
 
