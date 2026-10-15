@@ -11,7 +11,7 @@
 #   - Deployment/lumen, Deployment/lumen-operator, Lumen/lumen-op, and the
 #     operator's StatefulSet/lumen-op all ask for IMAGE;
 #   - every serving and operator pod runs IMAGE's root index or its
-#     linux/amd64 child digest, and sits on a pool-lumen node;
+#     linux/amd64 child digest, and sits on a pool-lumen-server node;
 #   - each mode's /version answers in the Job's log, before and after the
 #     restart, report EXPECTED_VERSION and EXPECTED_GIT_SHA;
 #   - the Job's log ends each mode it ran with a pass result.
@@ -57,7 +57,7 @@ OPERATOR_LABEL="app.kubernetes.io/name=lumen-operator"
 OVERLAY_LABEL="app=lumen,role=server"
 OPERATOR_SERVING_LABEL="app.kubernetes.io/name=lumen,app.kubernetes.io/instance=${LUMEN_CR_NAME},app.kubernetes.io/component=server"
 POOL_KEY="faberline.dev/pool"
-POOL_VALUE="lumen"
+POOL_VALUE="lumen-server"
 
 [[ "$NAMESPACE" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "invalid NAMESPACE: $NAMESPACE"
 [[ "$RUN_LABEL" =~ ^[A-Za-z0-9][-A-Za-z0-9]*$ ]] || die "invalid RUN_LABEL: $RUN_LABEL"
@@ -161,7 +161,7 @@ assert_template_image() {
       ' >/dev/null || die "$ref must run one $container container at $IMAGE"
 }
 
-# assert_pods <label> <container> <replicas>: the pods run IMAGE on pool-lumen.
+# assert_pods <label> <container> <replicas>: the pods run IMAGE on pool-lumen-server.
 assert_pods() {
   local label="$1" container="$2" desired="$3" pods runtime_id normalized node
   pods="$(kubectl -n "$NAMESPACE" get pods -l "$label" -o json)"

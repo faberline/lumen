@@ -1,4 +1,4 @@
-# kind-e2e's operator-mode CR on pool-lumen. A non-empty nodeSelector with the
+# kind-e2e's operator-mode CR on pool-lumen-server. A non-empty nodeSelector with the
 # default initialMachineType takes the native placement path: the operator
 # keeps this selector and these tolerations as written and never reads the
 # GCE capacity catalog.
@@ -19,11 +19,11 @@ spec:
   auth: disabled
   placement:
     nodeSelector:
-      faberline.dev/pool: lumen
+      faberline.dev/pool: lumen-server
     tolerations:
       - key: faberline.dev/pool
         operator: Equal
-        value: lumen
+        value: lumen-server
         effect: NoSchedule
   serving:
     cpu: "1"

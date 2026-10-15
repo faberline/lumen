@@ -1,7 +1,7 @@
 # lumen on Faberline's shared GKE test cluster (faberline-test).
 #
 # faberline/aw's reusable gke-test workflow deploys k8s/overlays/gke-test with
-# the image under test on pool-lumen, runs the in-cluster test Job
+# the image under test on pool-lumen-server, runs the in-cluster test Job
 # k8s/gke-test-job on pool-lumen-client (kind-e2e.sh's overlay and operator
 # checks through the Services, no port-forward), then runs
 # scripts/gke-test/verify.sh on the runner to tie the pods and /version to the

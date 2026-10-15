@@ -47,7 +47,7 @@ LUMEN_CR_NAME="lumen-op"
 LEGACY_CR_NAME="lumen-op-legacy-missing-catalog"
 OPERATOR_DEPLOYMENT="lumen-operator"
 POOL_KEY="faberline.dev/pool"
-POOL_VALUE="lumen"
+POOL_VALUE="lumen-server"
 PULL_SECRET="ghcr-pull"
 EXPECTED_STORAGE_PODS=1
 PORT=7373
@@ -258,7 +258,7 @@ record_version() {
 # Placement
 # ---------------------------------------------------------------------------
 
-# A workload's pod template must schedule onto pool-lumen and pull from GHCR.
+# A workload's pod template must schedule onto pool-lumen-server and pull from GHCR.
 assert_pool_placement() {
   local what="$1" workload_json="$2"
   jq -e --arg key "$POOL_KEY" --arg value "$POOL_VALUE" --arg secret "$PULL_SECRET" '
@@ -302,7 +302,7 @@ assert_overlay_shape() {
   assert_pool_placement "Deployment/lumen" "$deploy_json"
   kubectl -n "$NAMESPACE" get pvc/lumen-data -o json | jq -e '.status.phase == "Bound"' >/dev/null \
     || die "lumen-data PVC is not bound"
-  echo "   overlay Deployment runs LUMEN_WAL=embedded on the bound lumen-data PVC in pool-lumen"
+  echo "   overlay Deployment runs LUMEN_WAL=embedded on the bound lumen-data PVC in pool-lumen-server"
 }
 
 # ---------------------------------------------------------------------------
