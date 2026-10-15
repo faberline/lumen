@@ -1147,6 +1147,7 @@ async fn oversized_committed_replace_aof_replays_checkpoints_and_cold_opens() {
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("oversized committed ReplaceDocs AOF fixture root");
     let aof_path = root.path().join("oversized-replace.aof");
     append_base_prefix(&aof_path);

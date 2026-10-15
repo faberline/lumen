@@ -40,6 +40,7 @@ use std::time::{Duration, Instant};
 
 #[test]
 fn idle_segment_sigterm_drains_before_default_grace_and_cold_restarts() {
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("segment graceful-shutdown root");
     let original_sequences = write_large_aof_tail(root.path());
     let mut process = LumenProcess::spawn(Some(root.path()), ServeMode::Segment, 300);
@@ -86,6 +87,7 @@ fn idle_segment_sigterm_drains_before_default_grace_and_cold_restarts() {
 
 #[test]
 fn segment_aof_replay_over_budget_charges_during_bootstrap_and_cold_restarts() {
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("segment replay budget root");
     let original_sequences = write_large_aof_tail(root.path());
     assert_eq!(
@@ -150,6 +152,7 @@ fn segment_aof_replay_over_budget_charges_during_bootstrap_and_cold_restarts() {
 
 #[test]
 fn multi_generation_segment_checkpoint_recovers_a_retained_aof_tail_before_readyz_deadline() {
+    let _load = crate::support::test_load::heavy_slot();
     const BASE_ORDINALS: [usize; 3] = [0, LARGE_VALUE_COUNT / 2, LARGE_VALUE_COUNT - 1];
     const TAIL_ORDINALS: [usize; 2] = [LARGE_VALUE_COUNT, LARGE_VALUE_COUNT + 1];
 
@@ -627,6 +630,7 @@ mod large_aof_codec_compatibility {
 
     #[test]
     fn complete_large_fast_cbor_and_legacy_json_aof_frames_replay_live_and_cold() {
+        let _load = crate::support::test_load::heavy_slot();
         let root = tempfile::tempdir().expect("large AOF compatibility root");
         let original_sequences = write_large_compatibility_aof(root.path());
 

@@ -1646,6 +1646,7 @@ mod local_oversized_record_capacity {
         if child_enters() {
             oversized_local_index_refuses_before_wal_publish_body().await;
         } else {
+            let _load = crate::support::test_load::heavy_slot();
             run_isolated_child().await;
         }
     }

@@ -2,11 +2,7 @@
 
 use std::{fs, io::Write, path::PathBuf, process::Command};
 
-const EXPECTED_DOCKERFILES: &[&str] = &[
-    "Dockerfile",
-    "Dockerfile.release",
-    "Dockerfile.test",
-];
+const EXPECTED_DOCKERFILES: &[&str] = &["Dockerfile", "Dockerfile.release", "Dockerfile.test"];
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1231,15 +1227,15 @@ fn validate_compose_contract(source: &str) -> Result<(), String> {
 
 #[test]
 fn test_checked_in_compose_satisfies_durability_contract() {
-    let source = std::fs::read_to_string(repo_root().join("compose.yaml"))
-        .expect("read compose file");
+    let source =
+        std::fs::read_to_string(repo_root().join("compose.yaml")).expect("read compose file");
     validate_compose_contract(&source).expect("compose durability contract must hold");
 }
 
 #[test]
 fn test_negative_compose_durability_mutations() {
-    let source = std::fs::read_to_string(repo_root().join("compose.yaml"))
-        .expect("read compose file");
+    let source =
+        std::fs::read_to_string(repo_root().join("compose.yaml")).expect("read compose file");
     let mount = "      - lumen-data:/var/lib/lumen/data\n";
     for replacement in [
         "      - /var/lib/lumen/data\n",
@@ -1500,10 +1496,7 @@ fn test_negative_fixture_inventory_mismatch() {
     ));
 
     let mut extra = missing;
-    extra.extend([
-        "Dockerfile.test".into(),
-        "Dockerfile.extra".into(),
-    ]);
+    extra.extend(["Dockerfile.test".into(), "Dockerfile.extra".into()]);
     assert!(matches!(
         validate_inventory(&extra),
         Err(DockerfileValidationError::InventoryMismatch(_, _))
@@ -1630,6 +1623,10 @@ async fn test_bare_process_defaults_to_localhost() {
 
     let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_lumen"));
     cmd.args(["serve", "--port", &port.to_string()])
+        .env(
+            "TOKIO_WORKER_THREADS",
+            crate::support::test_load::SERVE_WORKER_THREADS,
+        )
         .env_remove("LUMEN_HOST")
         .env_remove("RUST_LOG")
         .env("LUMEN_AUTH", "off")

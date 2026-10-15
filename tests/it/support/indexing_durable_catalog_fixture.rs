@@ -31,8 +31,8 @@ pub(crate) use lumen::wal::{MemWal, SharedWal, WalLog};
 pub(crate) use super::indexing_durable_fixture as durable_fixture;
 
 pub(crate) use durable_fixture::{
-    checkpoint, create_schema, fixture, hit_ids, http_search, post_index, recover_from_checkpoint,
-    local_checkpoint_sink, sorted_hit_ids, Fixture, COLLECTION,
+    checkpoint, create_schema, fixture, hit_ids, http_search, local_checkpoint_sink, post_index,
+    recover_from_checkpoint, sorted_hit_ids, Fixture, COLLECTION,
 };
 
 pub(crate) const COMMON: &str = "common";
@@ -142,7 +142,10 @@ pub(crate) fn collection(snapshot: &SnapshotV1) -> &lumen::storage::CollectionSn
 /// representation on the wire: `from_snapshot` rebuilds the inverted index from
 /// it, so the `terms` map this helper used to return alongside was a second
 /// copy the reader discarded on arrival.
-pub(crate) fn keyword_forward<'a>(snapshot: &'a SnapshotV1, field: &str) -> &'a HashMap<String, String> {
+pub(crate) fn keyword_forward<'a>(
+    snapshot: &'a SnapshotV1,
+    field: &str,
+) -> &'a HashMap<String, String> {
     let index = collection(snapshot)
         .fields
         .get(field)
@@ -162,7 +165,10 @@ pub(crate) fn keyword_postings(snapshot: &SnapshotV1, field: &str, value: &str) 
         .count()
 }
 
-pub(crate) fn number_forward<'a>(snapshot: &'a SnapshotV1, field: &str) -> &'a HashMap<String, f64> {
+pub(crate) fn number_forward<'a>(
+    snapshot: &'a SnapshotV1,
+    field: &str,
+) -> &'a HashMap<String, f64> {
     let index = collection(snapshot)
         .fields
         .get(field)
@@ -425,7 +431,6 @@ pub(crate) fn assert_queries(engine: &Arc<Engine>) {
     }
 }
 
-
 pub(crate) async fn stage1_v2_root_with_predecessor() -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("v2 catalog fixture directory");
     let root = dir.path().join("segments");
@@ -499,7 +504,11 @@ pub(crate) fn stage1_duplicate_first_segment(manifest: &mut Value) {
     segments.push(duplicate);
 }
 
-pub(crate) fn stage1_assert_current_refuses_catalog_input(root: &Path, expected: &str, mutation: &str) {
+pub(crate) fn stage1_assert_current_refuses_catalog_input(
+    root: &Path,
+    expected: &str,
+    mutation: &str,
+) {
     let current_before = std::fs::read(root.join("CURRENT")).expect("read CURRENT before refusal");
     let store = SegmentRdbStore::new(root).expect("reopen corrupted v2 checkpoint root");
     let opened = store.load_current_generation();
@@ -520,7 +529,6 @@ pub(crate) fn stage1_assert_current_refuses_catalog_input(root: &Path, expected:
     );
 }
 
-
 pub(crate) fn stage1_catalog_collection_mut(manifest: &mut Value) -> &mut Value {
     manifest
         .get_mut("collections")
@@ -530,7 +538,10 @@ pub(crate) fn stage1_catalog_collection_mut(manifest: &mut Value) -> &mut Value 
         .expect("one catalogued collection")
 }
 
-pub(crate) fn stage1_catalog_segment_with_role_mut<'a>(manifest: &'a mut Value, role: &str) -> &'a mut Value {
+pub(crate) fn stage1_catalog_segment_with_role_mut<'a>(
+    manifest: &'a mut Value,
+    role: &str,
+) -> &'a mut Value {
     stage1_catalog_collection_mut(manifest)
         .get_mut("segments")
         .and_then(Value::as_array_mut)
@@ -560,7 +571,6 @@ pub(crate) fn stage1_assert_current_refuses_catalog_shape(root: &Path, mutation:
     );
 }
 
-
 pub(crate) const STAGE1_REUSE_STABLE: &str = "reuse-stable";
 pub(crate) const STAGE1_REUSE_CHANGED: &str = "reuse-changed";
 pub(crate) const STAGE1_EPOCH_COLLECTION: &str = "reuse-epoch";
@@ -583,7 +593,12 @@ pub(crate) async fn stage1_reuse_put_keyword_collection(server: &TestServer, col
         .assert_status_ok();
 }
 
-pub(crate) async fn stage1_reuse_index(server: &TestServer, collection: &str, external_id: &str, value: &str) {
+pub(crate) async fn stage1_reuse_index(
+    server: &TestServer,
+    collection: &str,
+    external_id: &str,
+    value: &str,
+) {
     server
         .post(&format!("/collections/{collection}/index"))
         .json(&json!({ "items": [stage1_reuse_item(external_id, value)] }))
@@ -626,7 +641,11 @@ pub(crate) fn stage1_assert_delta_sequence_order(
     );
 }
 
-pub(crate) async fn stage1_reuse_term_ids(server: &TestServer, collection: &str, value: &str) -> Vec<String> {
+pub(crate) async fn stage1_reuse_term_ids(
+    server: &TestServer,
+    collection: &str,
+    value: &str,
+) -> Vec<String> {
     let response = server
         .post(&format!("/collections/{collection}/search"))
         .json(&json!({
@@ -675,7 +694,10 @@ pub(crate) fn stage1_reuse_current_name(root: &Path) -> String {
         .to_owned()
 }
 
-pub(crate) fn stage1_reuse_catalog_collection<'a>(manifest: &'a Value, collection_id: &str) -> &'a Value {
+pub(crate) fn stage1_reuse_catalog_collection<'a>(
+    manifest: &'a Value,
+    collection_id: &str,
+) -> &'a Value {
     manifest["collections"]
         .as_array()
         .expect("v2 catalog collections array")
@@ -690,7 +712,10 @@ pub(crate) fn stage1_reuse_collection_u64(collection: &Value, field: &str) -> u6
         .unwrap_or_else(|| panic!("catalog {field} must be an unsigned integer"))
 }
 
-pub(crate) fn stage1_reuse_cold_load_named(root: &Path, generation_name: &str) -> (Arc<Engine>, u64) {
+pub(crate) fn stage1_reuse_cold_load_named(
+    root: &Path,
+    generation_name: &str,
+) -> (Arc<Engine>, u64) {
     let current_path = root.join("CURRENT");
     let active_current = std::fs::read(&current_path).expect("read active CURRENT");
     std::fs::write(&current_path, format!("generation:{generation_name}\n"))
@@ -809,7 +834,6 @@ pub(crate) fn stage1_reuse_assert_not_hardlinked_collection(
     }
 }
 
-
 // Append after the frozen stage1 oracle in
 // tests/it/indexing_durable_oracle.rs (base sha256:
 // 940ac59d8f5f18e28e7822e4d2d4f53e10fda37045e952aec385728ed357993e).
@@ -822,7 +846,10 @@ pub(crate) fn stage1_reuse_assert_not_hardlinked_collection(
 pub(crate) const STAGE1_CATALOG_LEFT: &str = "catalog-integrity-left";
 pub(crate) const STAGE1_CATALOG_RIGHT: &str = "catalog-integrity-right";
 
-pub(crate) fn stage1_catalog_collection_mut_by_id<'a>(manifest: &'a mut Value, id: &str) -> &'a mut Value {
+pub(crate) fn stage1_catalog_collection_mut_by_id<'a>(
+    manifest: &'a mut Value,
+    id: &str,
+) -> &'a mut Value {
     manifest["collections"]
         .as_array_mut()
         .expect("v2 catalog collections array")
@@ -831,7 +858,11 @@ pub(crate) fn stage1_catalog_collection_mut_by_id<'a>(manifest: &'a mut Value, i
         .unwrap_or_else(|| panic!("catalog must contain {id}"))
 }
 
-pub(crate) fn stage1_catalog_segment_matches(segment: &Value, role: &str, field: Option<&str>) -> bool {
+pub(crate) fn stage1_catalog_segment_matches(
+    segment: &Value,
+    role: &str,
+    field: Option<&str>,
+) -> bool {
     segment["role"].as_str() == Some(role)
         && match field {
             Some(field) => segment["field"].as_str() == Some(field),
@@ -852,7 +883,11 @@ pub(crate) fn stage1_catalog_segment_mut<'a>(
         .unwrap_or_else(|| panic!("catalog must contain {role}/{field:?} segment"))
 }
 
-pub(crate) fn stage1_catalog_remove_segment(collection: &mut Value, role: &str, field: Option<&str>) {
+pub(crate) fn stage1_catalog_remove_segment(
+    collection: &mut Value,
+    role: &str,
+    field: Option<&str>,
+) {
     let segments = collection["segments"]
         .as_array_mut()
         .expect("catalog segments array");
@@ -877,7 +912,8 @@ pub(crate) fn stage1_catalog_max_collection_generation(manifest: &Value) -> u64 
         .expect("non-empty catalog")
 }
 
-pub(crate) async fn stage1_catalog_root_with_two_keyword_collections() -> (tempfile::TempDir, PathBuf) {
+pub(crate) async fn stage1_catalog_root_with_two_keyword_collections(
+) -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("two-collection catalog fixture directory");
     let root = dir.path().join("segments");
     let store = SegmentRdbStore::new(&root).expect("open two-collection catalog root");
@@ -897,7 +933,6 @@ pub(crate) async fn stage1_catalog_root_with_two_keyword_collections() -> (tempf
         .expect("write two-collection v2 base generation");
     (dir, root)
 }
-
 
 pub(crate) fn stage1_keyword_delta_local_rows<'a>(delta: &'a Value) -> &'a Map<String, Value> {
     let local_rows = delta["local_rows"].as_object();

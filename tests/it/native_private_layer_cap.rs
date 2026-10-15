@@ -918,6 +918,8 @@ async fn native_borrowed_scalar_private_layer_cap_maintains_before_progress_and_
         configured_capacity_case().await;
         return;
     }
+
+    let _load = crate::support::test_load::heavy_slot();
     run_isolated_case(CONFIGURED_CASE, CONFIGURED_TEST_NAME).await;
 }
 
@@ -927,5 +929,7 @@ async fn native_borrowed_scalar_private_layer_cap_lazily_maintains_and_cold_reop
         lazy_capacity_case().await;
         return;
     }
+
+    let _load = crate::support::test_load::heavy_slot();
     run_isolated_case(LAZY_CASE, LAZY_TEST_NAME).await;
 }

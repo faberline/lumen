@@ -44,8 +44,7 @@ use lumen::segment_rdb::SegmentRdbStore;
 use lumen::storage::Engine;
 use lumen::wal::{MemWal, SharedWal};
 use serde_json::{json, Value};
-use std::sync::{Arc, Mutex, OnceLock};
-use tokio::sync::Mutex as AsyncMutex;
+use std::sync::{Arc, Mutex};
 
 const COLLECTION: &str = "oversized-unicode-ngram";
 const FIELD: &str = "body";
@@ -70,15 +69,6 @@ const EXPECTED_NGRAM_WINDOWS: usize = 2 * NORMALIZED_SCALARS - 3;
 // satisfied by another test's earlier staging work.
 const TEXT_STAGE_ROWS_METRIC: &str = "lumen_text_row_stage_rows_total";
 const TEXT_STAGE_INPUT_BYTES_METRIC: &str = "lumen_text_row_stage_input_bytes_total";
-
-// ChangeBudget is process-wide. These two large-row tests each use a fresh
-// Engine, but must not overlap their pending-budget measurements in one test
-// process.
-static OVERSIZED_TEXT_PENDING_GAUGE_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
-
-fn oversized_text_pending_gauge_lock() -> &'static AsyncMutex<()> {
-    OVERSIZED_TEXT_PENDING_GAUGE_LOCK.get_or_init(|| AsyncMutex::new(()))
-}
 
 struct OversizedTextFixture {
     _dir: tempfile::TempDir,
@@ -322,7 +312,9 @@ async fn assert_text_semantics(server: &TestServer, cjk_probe: &str, phase: &str
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn oversized_unicode_ngram_text_is_staged_bounded_and_cold_recoverable() {
-    let _pending_gauge_lock = oversized_text_pending_gauge_lock().lock().await;
+    // ChangeBudget is process-wide: no other case may overlap these
+    // pending-budget measurements.
+    let _load = crate::support::test_load::exclusive_process_budget();
     let fixture = oversized_text_fixture();
     fixture
         .server
@@ -484,7 +476,9 @@ async fn assert_field_match_ids(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn oversized_text_prepared_rows_preserve_update_stale_partial_error_and_replace_deletion() {
-    let _pending_gauge_lock = oversized_text_pending_gauge_lock().lock().await;
+    // ChangeBudget is process-wide: no other case may overlap these
+    // pending-budget measurements.
+    let _load = crate::support::test_load::exclusive_process_budget();
     let fixture = oversized_text_fixture();
     fixture
         .server
@@ -711,7 +705,9 @@ async fn oversized_text_prepared_rows_preserve_update_stale_partial_error_and_re
 #[cfg(feature = "jieba")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn jieba_dictionary_oversized_row_stages_without_changing_live_or_cold_tokens() {
-    let _pending_gauge_lock = oversized_text_pending_gauge_lock().lock().await;
+    // ChangeBudget is process-wide: no other case may overlap these
+    // pending-budget measurements.
+    let _load = crate::support::test_load::exclusive_process_budget();
     let fixture = oversized_text_fixture();
     fixture
         .server

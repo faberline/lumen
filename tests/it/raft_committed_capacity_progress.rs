@@ -752,6 +752,7 @@ async fn raft_committed_generic_apply_makes_capacity_progress_before_any_caller_
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("create run-scoped committed Raft capacity root");
     create_schema_checkpoint(root.path());
     run_isolated_child(root.path()).await;

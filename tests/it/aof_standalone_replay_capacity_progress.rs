@@ -932,6 +932,7 @@ async fn standalone_aof_replay_makes_capacity_progress_before_any_caller_checkpo
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     for case in CapacityCase::ALL {
         let root = tempfile::tempdir().expect("create run-scoped AOF capacity root");
         let schema_aof = root.path().join("schema.aof");

@@ -1180,6 +1180,7 @@ async fn oversized_committed_vector_aof_replays_flat_hnsw_sq_checkpoints_and_col
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("oversized committed Vector AOF fixture root");
     let aof_path = root.path().join("oversized-vector.aof");
     append_base_prefix(&aof_path);

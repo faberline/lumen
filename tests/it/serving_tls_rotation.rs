@@ -84,6 +84,8 @@ fn client(ca_pem: &str, port: u16) -> reqwest::Client {
         .tls_built_in_root_certs(false)
         .add_root_certificate(reqwest::Certificate::from_pem(ca_pem.as_bytes()).unwrap())
         .resolve(SERVICE_DNS[0], format!("127.0.0.1:{port}").parse().unwrap())
+        // The Service name is not in a host's NO_PROXY; the socket is loopback.
+        .no_proxy()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap()

@@ -124,6 +124,10 @@ impl LumenProcess {
             // Make the child test the production default, even when the
             // surrounding test runner has configured a different grace.
             .env_remove("LUMEN_GRACE_SECS")
+            .env(
+                "TOKIO_WORKER_THREADS",
+                crate::support::test_load::SERVE_WORKER_THREADS,
+            )
             .env_remove("RUST_LOG")
             .env_remove("LUMEN_LOG_FORMAT")
             .stdout(Stdio::from(

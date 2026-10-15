@@ -679,6 +679,7 @@ fn run_case(setup: Setup) {
 
 #[test]
 fn committed_private_scalar_layers_survive_a_paused_checkpoint_and_cold_reopen() {
+    let _load = crate::support::test_load::exclusive_process_budget();
     for setup in [Setup::EmptyAtCapture, Setup::ReusedCatalogAtCapture] {
         run_case(setup);
     }

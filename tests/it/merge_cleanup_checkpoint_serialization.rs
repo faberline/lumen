@@ -576,5 +576,6 @@ fn background_merge_cleanup_waits_for_checkpoint_save_gate() {
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     run_isolated_case();
 }

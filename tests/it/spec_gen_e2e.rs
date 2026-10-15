@@ -572,6 +572,10 @@ impl ChildGuard {
             ])
             .env("LUMEN_AUTH", "off")
             .env("LUMEN_LOG_FORMAT", "json")
+            .env(
+                "TOKIO_WORKER_THREADS",
+                crate::support::test_load::SERVE_WORKER_THREADS,
+            )
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()

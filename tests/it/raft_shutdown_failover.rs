@@ -375,6 +375,10 @@ impl LumenProcess {
                 "info",
             ])
             .env("LUMEN_AUTH", "off")
+            .env(
+                "TOKIO_WORKER_THREADS",
+                crate::support::test_load::SERVE_WORKER_THREADS,
+            )
             .env("POD_NAME", "lumen-0")
             .env("SHARD_COUNT", "1")
             .env("REPLICAS_PER_SHARD", "1")

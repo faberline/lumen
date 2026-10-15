@@ -1057,6 +1057,7 @@ async fn raft_committed_oversized_replace_applies_checkpoints_and_cold_opens() {
         return;
     }
 
+    let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("foreign committed Raft ReplaceDocs fixture root");
     run_isolated_child(root.path()).await;
 }
