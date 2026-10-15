@@ -380,6 +380,10 @@ fn auth_delegator_binding_is_cluster_scoped_and_unowned() {
     assert!(meta.get("namespace").is_none(), "got {binding}");
     assert_eq!(meta["labels"]["lumen.dev/owner-namespace"], "acme");
     assert_eq!(
+        meta["labels"]["faberline.dev/owner-namespace"], "acme",
+        "the shared GKE test cluster's teardown and reaper select on this key"
+    );
+    assert_eq!(
         meta["labels"]["app.kubernetes.io/managed-by"],
         "lumen-operator"
     );

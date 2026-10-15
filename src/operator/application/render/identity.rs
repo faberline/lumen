@@ -8,7 +8,7 @@ use service_k8s::render::rbac;
 
 use crate::operator::application::render::{
     instance, namespace, serving_service_account_name, APP, AUTH_DELEGATION_COMPONENT,
-    AUTH_DELEGATOR_ROLE, MANAGER, OWNER_NAMESPACE_LABEL,
+    AUTH_DELEGATOR_ROLE, FABERLINE_OWNER_NAMESPACE_LABEL, MANAGER, OWNER_NAMESPACE_LABEL,
 };
 use crate::operator::domain::lumen_spec::Lumen;
 
@@ -37,7 +37,8 @@ pub fn auth_delegator_binding_name(lumen: &Lumen) -> String {
 /// in [`super::reconcile`] can use to prove lumen rendered a binding before
 /// deleting it. `lumen.dev/owner-namespace` exists because the recommended
 /// label set has no way to say which namespace an object belongs *to* when the
-/// object itself has none.
+/// object itself has none; `faberline.dev/owner-namespace` repeats it for the
+/// shared test cluster's cleanup, which does not know lumen's own key.
 ///
 /// [`super::reconcile`]: crate::operator::application::reconcile
 pub fn auth_delegator_labels(lumen: &Lumen) -> std::collections::BTreeMap<String, String> {
@@ -54,6 +55,10 @@ pub fn auth_delegator_labels(lumen: &Lumen) -> std::collections::BTreeMap<String
     );
     labels.insert("app.kubernetes.io/part-of".to_string(), APP.to_string());
     labels.insert(OWNER_NAMESPACE_LABEL.to_string(), namespace(lumen));
+    labels.insert(
+        FABERLINE_OWNER_NAMESPACE_LABEL.to_string(),
+        namespace(lumen),
+    );
     labels
 }
 
