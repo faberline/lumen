@@ -56,9 +56,12 @@ spec:
             # kubectl keeps its discovery cache under $HOME.
             - name: HOME
               value: /work
+          # 250m fits an e2-medium (about 940m allocatable, part of it taken
+          # by GKE's DaemonSets); 500m never scheduled. No CPU limit, so the
+          # Job still bursts on the otherwise idle client node.
           resources:
             requests:
-              cpu: 500m
+              cpu: 250m
               memory: 1Gi
             limits:
               memory: 2Gi
