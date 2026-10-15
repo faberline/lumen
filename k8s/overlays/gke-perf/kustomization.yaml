@@ -1,0 +1,23 @@
+# One durable performance cell on the shared GKE test cluster
+# (faberline/aw docs/standards/test-cluster.md). `.github/workflows/gke-perf.yml`
+# deploys it once per cell into a fresh namespace, so every cell gets a fresh
+# PVC. The test Job in k8s/gke-perf-job attaches to lumen-perf-0 with
+# LUMEN_PERF_RUNTIME=kubernetes; tests/it/perf_gate.rs checks this pod against
+# the `docker run` contract before it measures anything.
+#
+# The run sets the image with `kustomize edit set image lumen=<repo@sha256>`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lumen
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: lumen
+      app.kubernetes.io/part-of: lumen
+      app.kubernetes.io/component: perf-server
+    includeSelectors: false
+
+resources:
+  - service.yaml
+  - statefulset.yaml

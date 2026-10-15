@@ -1,0 +1,120 @@
+# The measured server. It mirrors `docker_run_args` in tests/it/perf_gate.rs:
+# - lumen requests == limits, 2500m and 16Gi (`--cpus 2.5 --memory 16g`), so
+#   the pod is QoS Guaranteed;
+# - the env below and nothing else, no command, args, envFrom, or valueFrom;
+# - the data directory on a fresh volume (here a PVC per namespace).
+# No liveness or startup probe: Docker never restarts the container on its
+# own, and the harness counts exactly one restart, the measured one.
+#
+# The restart: the harness runs a script in the restarter container that
+# sends SIGTERM to lumen, then SIGKILL after 10 s, through the shared process
+# namespace. The kubelet restarts the container in place on the same pod, IP,
+# and PVC, like `docker restart`. Both containers run as uid 65532, which lets
+# the restarter signal lumen without any capability.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: lumen-perf
+  labels:
+    app: lumen-perf
+spec:
+  replicas: 1
+  serviceName: lumen-perf
+  selector:
+    matchLabels:
+      app: lumen-perf
+  template:
+    metadata:
+      labels:
+        app: lumen-perf
+    spec:
+      nodeSelector:
+        faberline.dev/pool: lumen-perf
+      tolerations:
+        - key: faberline.dev/pool
+          operator: Equal
+          value: lumen-perf
+          effect: NoSchedule
+      imagePullSecrets:
+        - name: ghcr-pull
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      shareProcessNamespace: true
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: lumen
+          image: lumen
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 7373
+              protocol: TCP
+          env:
+            - name: LUMEN_AUTH
+              value: "off"
+            - name: LUMEN_WAL
+              value: embedded
+            - name: LUMEN_PERSISTENCE
+              value: segment
+            - name: LUMEN_DATA_DIR
+              value: /var/lib/lumen/data
+            - name: LUMEN_SNAPSHOT_SECS
+              value: "15"
+            - name: LUMEN_RECOVERY_PROFILE
+              value: "1"
+          resources:
+            requests:
+              cpu: 2500m
+              memory: 16Gi
+            limits:
+              cpu: 2500m
+              memory: 16Gi
+          # Only gates the rollout before the test Job starts; it never
+          # restarts anything.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/lumen/data
+        - name: restarter
+          image: mirror.gcr.io/library/busybox:1.36.1@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+          imagePullPolicy: IfNotPresent
+          command: ["sleep", "2147483647"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard-rwo
+        resources:
+          requests:
+            storage: 100Gi

@@ -1,0 +1,24 @@
+# The client of one durable performance cell on the shared GKE test cluster.
+# The aw run (faberline/aw docs/standards/test-cluster.md) applies this folder
+# after k8s/overlays/gke-perf is rolled out, in the same namespace, and passes
+# only when the Job completes.
+#
+# The run sets, per call of `.github/workflows/gke-perf.yml`:
+# - the namespace (`kustomize edit set namespace`);
+# - the client image (`kustomize edit set image lumen-perf-client=...`);
+# - the ConfigMap gke-test-env from test-env: the cell and candidate binding.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lumen
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: lumen
+      app.kubernetes.io/part-of: lumen
+      app.kubernetes.io/component: perf-client
+    includeSelectors: false
+
+resources:
+  - rbac.yaml
+  - job.yaml

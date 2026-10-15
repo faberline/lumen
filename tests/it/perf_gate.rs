@@ -653,6 +653,7 @@ fn median_statistic_and_ignored_inventory() {
             ("kube_quantities_parse_only_exact_units", false),
             ("kube_pod_base_uses_the_pod_ip", false),
             ("kube_pod_inspection_accepts_the_docker_equivalent_pod", false),
+            ("kube_gke_perf_overlay_passes_the_pod_contract", false),
             ("kube_pod_inspection_rejects_each_contract_drift", false),
             ("kube_kubectl_args_put_the_namespace_before_the_subcommand", false),
             ("kube_evidence_collects_logs_previous_logs_and_pod_json", false),
@@ -4961,10 +4962,13 @@ mod durable_workload {
         {
             return Err(kube_pod_invalid("loads lumen env from envFrom"));
         }
-        // Docker has no health restart. A liveness probe could restart the
-        // server outside the one measured restart.
+        // Docker has no health restart. A liveness or startup probe could
+        // restart the server outside the one measured restart.
         if present("livenessProbe") {
             return Err(kube_pod_invalid("has a lumen liveness probe"));
+        }
+        if present("startupProbe") {
+            return Err(kube_pod_invalid("has a lumen startup probe"));
         }
         let mut actual_env = BTreeMap::new();
         for entry in container
@@ -5444,12 +5448,41 @@ mod durable_workload {
         inspect_kube_pod(&no_args, KUBE_TEST_IMAGE, &expected).unwrap();
     }
 
+    /// The GKE overlay is the pod the harness attaches to, so the manifest
+    /// itself must pass the same contract, as the StatefulSet controller and
+    /// `kustomize edit set image lumen=...` turn it into a pod.
+    #[test]
+    fn kube_gke_perf_overlay_passes_the_pod_contract() {
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("k8s/overlays/gke-perf/statefulset.yaml");
+        let statefulset: Value = serde_yaml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let mut spec = statefulset["spec"]["template"]["spec"].clone();
+        assert_eq!(spec["containers"][0]["image"], "lumen");
+        spec["containers"][0]["image"] = json!(KUBE_TEST_IMAGE);
+        let claim = statefulset["spec"]["volumeClaimTemplates"][0]["metadata"]["name"]
+            .as_str()
+            .unwrap();
+        spec["volumes"] = json!([{
+            "name": claim,
+            "persistentVolumeClaim": {"claimName": format!("{claim}-lumen-perf-0")}
+        }]);
+        let mut pod = kube_pod_fixture();
+        pod["spec"] = spec;
+        let expected = expected_server_env(Some("1"), false);
+        let observation = inspect_kube_pod(&pod, KUBE_TEST_IMAGE, &expected).unwrap();
+        assert_eq!(observation.claim, "data-lumen-perf-0");
+        assert!(pod["spec"]["containers"][1]["image"]
+            .as_str()
+            .unwrap()
+            .contains("@sha256:"));
+    }
+
     #[test]
     fn kube_pod_inspection_rejects_each_contract_drift() {
         let expected = expected_server_env(Some("1"), false);
         let other_digest =
             "ghcr.io/faberline/lumen@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let mutations: [(&str, fn(&mut Value)); 16] = [
+        let mutations: [(&str, fn(&mut Value)); 17] = [
             ("image", |pod| {
                 pod["spec"]["containers"][0]["image"] = json!("ghcr.io/faberline/lumen:latest")
             }),
@@ -5502,6 +5535,9 @@ mod durable_workload {
             }),
             ("liveness", |pod| {
                 pod["spec"]["containers"][0]["livenessProbe"] = json!({"httpGet": {}})
+            }),
+            ("startup", |pod| {
+                pod["spec"]["containers"][0]["startupProbe"] = json!({"httpGet": {}})
             }),
             ("uid", |pod| {
                 pod["metadata"].as_object_mut().unwrap().remove("uid");

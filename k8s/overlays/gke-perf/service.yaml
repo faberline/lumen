@@ -1,0 +1,17 @@
+# Governing Service of the StatefulSet. The harness talks to the pod IP, which
+# survives the in-place container restart, so this is only for pod DNS.
+apiVersion: v1
+kind: Service
+metadata:
+  name: lumen-perf
+  labels:
+    app: lumen-perf
+spec:
+  clusterIP: None
+  selector:
+    app: lumen-perf
+  ports:
+    - name: http
+      port: 7373
+      targetPort: http
+      protocol: TCP
