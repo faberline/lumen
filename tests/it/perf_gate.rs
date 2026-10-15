@@ -723,6 +723,10 @@ fn median_statistic_and_ignored_inventory() {
             ),
             ("seed_checkpoint_requires_one_persisted_drained_publication", false),
             ("seed_checkpoint_honors_setup_and_body_deadlines", false),
+            (
+                "flat_restart_checkpoint_requires_one_persisted_drained_publication",
+                false,
+            ),
             ("request_deadline_is_the_approved_five_seconds", false),
             (
                 "post_input_workload_drain_deadline_returns_promptly",
@@ -5785,23 +5789,69 @@ mod durable_workload {
             }
             // Persisted deltas can remain on disk. Only pending change charges
             // must be zero, so fixture work cannot enter the measured window.
-            for name in [
-                "lumen_pending_change_active_bytes",
-                "lumen_pending_change_frozen_bytes",
-                "lumen_pending_change_reserved_bytes",
-            ] {
-                let bytes = prometheus_counter(&metrics, name)?;
-                if bytes != 0 {
-                    return Err(HarnessError::DataInvariant(format!(
-                        "seed checkpoint left pending work: {name}={bytes}"
-                    )));
-                }
-            }
+            assert_pending_change_drained(&metrics, "seed checkpoint")?;
             eprintln!("PERF_SEED_CHECKPOINT persisted=true active_bytes=0 frozen_bytes=0 reserved_bytes=0");
             Ok(metrics)
         })
         .await
         .map_err(|_| timeout())?
+    }
+
+    fn assert_pending_change_drained(metrics: &str, checkpoint: &str) -> Result<()> {
+        for name in [
+            "lumen_pending_change_active_bytes",
+            "lumen_pending_change_frozen_bytes",
+            "lumen_pending_change_reserved_bytes",
+        ] {
+            let bytes = prometheus_counter(metrics, name)?;
+            if bytes != 0 {
+                return Err(HarnessError::DataInvariant(format!(
+                    "{checkpoint} left pending work: {name}={bytes}"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Flat-cpu reopens every row from the segment payload, so the restart
+    /// attestation requires `embedding.bytes=0`. Periodic checkpoints can
+    /// leave the final acknowledged writes in the AOF tail, and replaying that
+    /// tail makes those rows resident again. One awaited checkpoint after the
+    /// measured drain commits them, so the flat restart reopens only
+    /// checkpointed rows. HNSW cells keep their AOF tail: the cache seal syncs
+    /// the AOF and does not checkpoint.
+    async fn checkpoint_flat_restart(client: &reqwest::Client, base: &str) -> Result<()> {
+        let response = client
+            .post(format!("{base}/admin/checkpoint"))
+            .json(&json!({}))
+            .send()
+            .await
+            .map_err(HarnessError::request_failure)?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(HarnessError::Http(format!(
+                "flat restart checkpoint returned {status}"
+            )));
+        }
+        let response = response
+            .json::<Value>()
+            .await
+            .map_err(HarnessError::request_failure)?;
+        if response.get("persisted").and_then(Value::as_bool) != Some(true) {
+            return Err(HarnessError::DataInvariant(
+                "flat restart checkpoint did not confirm persisted=true".to_owned(),
+            ));
+        }
+        let (status, metrics) =
+            fetch_interval_metrics(client, format!("{base}/metrics"), REQUEST_TIMEOUT).await?;
+        if !status.is_success() {
+            return Err(HarnessError::Http(format!(
+                "flat restart checkpoint metrics returned {status}"
+            )));
+        }
+        assert_pending_change_drained(&metrics, "flat restart checkpoint")?;
+        eprintln!("PERF_FLAT_RESTART_CHECKPOINT persisted=true active_bytes=0 frozen_bytes=0 reserved_bytes=0");
+        Ok(())
     }
 
     fn parse_hnsw_cache_seal_receipt(value: Value) -> Result<HnswCacheSealReceipt> {
@@ -8223,12 +8273,26 @@ mod durable_workload {
             .await?;
             eprintln!("PERF_CACHE_SEAL_RECEIPT {}", cache_seal_receipt_line(&receipt));
             eprintln!("PERF_STAGE_END hnsw_cache_seal");
+        } else {
+            eprintln!("PERF_STAGE_BEGIN flat_restart_checkpoint");
+            // Like the cache seal, this request is bounded only by the shared
+            // post-input deadline, not the workload client's five seconds.
+            let checkpoint_client = reqwest::Client::new();
+            post_input_step(
+                post_input_deadline,
+                POST_INPUT_TIMEOUT,
+                "flat_restart_checkpoint",
+                checkpoint_flat_restart(&checkpoint_client, &server.base),
+            )
+            .await?;
+            eprintln!("PERF_STAGE_END flat_restart_checkpoint");
         }
         eprintln!("PERF_STAGE_BEGIN restart");
         let restart_elapsed = server.post_input_restart_step(post_input_deadline).await?;
         eprintln!("PERF_STAGE_END restart");
         // The restart opens the segment payload after the measured checkpoint
-        // and merge work. This is the first post-restart data-plane observation:
+        // and merge work; a flat cell also committed its AOF tail just above.
+        // This is the first post-restart data-plane observation:
         // it runs before any cold semantic or kNN readback can change a lazy
         // vector footprint, and no mutation follows the measured drain.
         eprintln!("PERF_STAGE_BEGIN vector_attestation");
@@ -9636,6 +9700,93 @@ mod durable_workload {
                     "a timed-out checkpoint is never retried"
                 );
             }
+        });
+    }
+
+    #[test]
+    fn flat_restart_checkpoint_requires_one_persisted_drained_publication() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let client = reqwest::Client::new();
+            let drained = "lumen_pending_change_active_bytes 0\nlumen_pending_change_frozen_bytes 0\nlumen_pending_change_reserved_bytes 0\n";
+            let mut cases = vec![
+                (200, r#"{"persisted":true}"#, drained.to_owned(), true, 2),
+                (429, r#"{"persisted":true}"#, drained.to_owned(), false, 1),
+                (503, r#"{"persisted":true}"#, drained.to_owned(), false, 1),
+                (200, r#"{"persisted":false}"#, drained.to_owned(), false, 1),
+                (200, r#"{"persisted":"true"}"#, drained.to_owned(), false, 1),
+                (200, "not-json", drained.to_owned(), false, 1),
+                (200, r#"{"persisted":true}"#, String::new(), false, 2),
+            ];
+            for metric in ["active", "frozen", "reserved"] {
+                cases.push((
+                    200,
+                    r#"{"persisted":true}"#,
+                    drained.replace(&format!("{metric}_bytes 0"), &format!("{metric}_bytes 1")),
+                    false,
+                    2,
+                ));
+            }
+            for (status, body, metrics, succeeds, expected_calls) in cases {
+                let (base, calls, task) = fake_seed_checkpoint_server(
+                    reqwest::StatusCode::from_u16(status).unwrap(),
+                    body,
+                    metrics.clone(),
+                    false,
+                    false,
+                )
+                .await;
+                let result = checkpoint_flat_restart(&client, &base).await;
+                task.abort();
+                assert_eq!(
+                    result.is_ok(), succeeds,
+                    "status={status} body={body} metrics={metrics}: {result:?}"
+                );
+                let calls = calls.lock().unwrap();
+                assert_eq!(
+                    calls.len(), expected_calls,
+                    "checkpoint cannot be skipped or retried"
+                );
+                assert_eq!(calls[0], "checkpoint");
+                if expected_calls == 2 {
+                    assert_eq!(calls[1], "metrics", "drain is checked only after publication");
+                }
+            }
+
+            // A delayed checkpoint fails at the shared post-input deadline.
+            let (base, calls, task) = fake_seed_checkpoint_server(
+                reqwest::StatusCode::OK,
+                r#"{"persisted":true}"#,
+                drained.to_owned(),
+                true,
+                false,
+            )
+            .await;
+            let timeout = Duration::from_millis(25);
+            let started = Instant::now();
+            let result = post_input_step(
+                tokio::time::Instant::now() + timeout,
+                timeout,
+                "flat_restart_checkpoint",
+                checkpoint_flat_restart(&client, &base),
+            )
+            .await;
+            task.abort();
+            assert!(started.elapsed() < Duration::from_secs(1), "the deadline must stop promptly");
+            assert!(
+                matches!(
+                    result,
+                    Err(HarnessError::PostInputTimeout {
+                        stage: "flat_restart_checkpoint",
+                        ..
+                    })
+                ),
+                "{result:?}"
+            );
+            assert_eq!(calls.lock().unwrap().len(), 1, "a timed-out checkpoint is never retried");
         });
     }
 

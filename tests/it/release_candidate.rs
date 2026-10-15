@@ -1701,6 +1701,11 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
                     false,
                 ),
                 (
+                    "flat_restart_checkpoint_requires_one_persisted_drained_publication"
+                        .into(),
+                    false,
+                ),
+                (
                     "request_deadline_is_the_approved_five_seconds".into(),
                     false,
                 ),
