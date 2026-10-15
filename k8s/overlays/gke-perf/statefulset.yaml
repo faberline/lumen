@@ -29,11 +29,11 @@ spec:
         app: lumen-perf
     spec:
       nodeSelector:
-        faberline.dev/pool: lumen-perf
+        faberline.dev/pool: lumen-perf-server
       tolerations:
         - key: faberline.dev/pool
           operator: Equal
-          value: lumen-perf
+          value: lumen-perf-server
           effect: NoSchedule
       imagePullSecrets:
         - name: ghcr-pull

@@ -2,7 +2,7 @@ name: lumen-gke-perf
 
 # The qualifying durable performance matrix on the shared GKE test cluster.
 # Each cell is one call of the faberline/aw gke-test workflow: it deploys
-# k8s/overlays/gke-perf (StatefulSet lumen-perf on the lumen-perf pool) with
+# k8s/overlays/gke-perf (StatefulSet lumen-perf on the lumen-perf-server pool) with
 # the candidate image, then runs k8s/gke-perf-job, whose client pod runs
 # scripts/gke-perf/cell.sh against that pod (LUMEN_PERF_RUNTIME=kubernetes).
 # The cell prints its receipt into the client pod log, which the aw run keeps
