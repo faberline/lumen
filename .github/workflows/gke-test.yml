@@ -1,12 +1,18 @@
 # lumen on Faberline's shared GKE test cluster (faberline-test).
 #
 # faberline/aw's reusable gke-test workflow deploys k8s/overlays/gke-test with
-# the image under test on pool-lumen-server, runs the in-cluster test Job
-# k8s/gke-test-job on pool-lumen-client (kind-e2e.sh's overlay and operator
-# checks through the Services, no port-forward), then runs
-# scripts/gke-test/verify.sh on the runner to tie the pods and /version to the
-# image. It uploads the evidence artifact gke-test-evidence-<run_id>-<attempt>
-# and tears the namespace down. aw owns the cluster, both pools, and the
+# the image under test on pool-lumen-server, runs the in-cluster test Job of
+# one suite on pool-lumen-client (kind-e2e.sh's checks through the Services, no
+# port-forward), then runs scripts/gke-test/verify.sh on the runner to tie the
+# pods and /version to the image. It uploads the evidence artifact
+# gke-test-evidence-<run_id>-<attempt>-<suite> and tears the namespace down.
+#
+# Suites (aw docs/standards/test-cluster.md "Test suites"), one call each, one
+# at a time, each on a fresh deploy:
+#   overlay   k8s/gke-test-job/overlay   the direct-install Deployment
+#   operator  k8s/gke-test-job/operator  the operator and its Lumen CRs
+# A pull request runs all of them; a dispatch or a workflow_call can pick one.
+# aw owns the cluster, both pools, and the
 # gke-test-lumen service account (infra/gke-test/pools.yaml in faberline/aw);
 # nothing here creates cloud resources.
 #
@@ -42,6 +48,11 @@ on:
           sha-<git12> tag in `image`.
         required: false
         default: ""
+      suite:
+        description: Suite to run; all runs every suite, one at a time.
+        type: choice
+        options: [all, overlay, operator]
+        default: all
   workflow_call:
     inputs:
       image:
@@ -63,6 +74,11 @@ on:
           image index.
         required: false
         default: ""
+        type: string
+      suite:
+        description: all, overlay, or operator.
+        required: false
+        default: all
         type: string
 
 permissions:
@@ -88,6 +104,7 @@ jobs:
     outputs:
       image: ${{ steps.identity.outputs.image }}
       test-command: ${{ steps.identity.outputs.test_command }}
+      suites: ${{ steps.identity.outputs.suites }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Log in to GHCR
@@ -104,6 +121,8 @@ jobs:
           INPUT_VERSION: ${{ inputs.expected-version }}
           INPUT_GIT_SHA: ${{ inputs.expected-git-sha }}
           INPUT_RUNTIME_DIGEST: ${{ inputs.expected-runtime-digest }}
+          # A pull request has no inputs, so it runs all suites.
+          INPUT_SUITE: ${{ inputs.suite || 'all' }}
         run: |
           set -euo pipefail
           die() { echo "::error::$*" >&2; exit 1; }
@@ -131,10 +150,17 @@ jobs:
           [[ "$runtime_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "no single linux/amd64 child digest for $image"
           [[ "$runtime_digest" != "$root_digest" ]] || die "runtime child digest must differ from the root index digest"
 
+          case "$INPUT_SUITE" in
+            all) suites='["overlay","operator"]' ;;
+            overlay|operator) suites="[\"${INPUT_SUITE}\"]" ;;
+            *) die "suite must be all, overlay, or operator, got: $INPUT_SUITE" ;;
+          esac
+
           test_command="EXPECTED_VERSION=${version} EXPECTED_GIT_SHA=${git_sha} EXPECTED_RUNTIME_DIGEST=${runtime_digest} scripts/gke-test/verify.sh"
           {
             echo "image=${image}"
             echo "test_command=${test_command}"
+            echo "suites=${suites}"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### lumen gke-test identity"
@@ -144,13 +170,21 @@ jobs:
             echo "version:        ${version}"
             echo "git_sha:        ${git_sha}"
             echo "runtime_digest: ${runtime_digest}"
+            echo "suites:         ${suites}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
   gke-test:
-    name: GKE e2e (overlay + operator)
+    name: GKE e2e (${{ matrix.suite }})
     needs: resolve
     if: ${{ !cancelled() && needs.resolve.result == 'success' }}
+    # One call at a time: the repository's concurrency group in aw keeps only
+    # one waiting run. fail-fast off runs the other suites when one fails.
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.resolve.outputs.suites) }}
     permissions:
       id-token: write
       contents: read
@@ -160,5 +194,6 @@ jobs:
       image: ${{ needs.resolve.outputs.image }}
       image-name: ghcr.io/faberline/lumen
       namespace: lumen
-      test-job: k8s/gke-test-job
-      test-command: ${{ needs.resolve.outputs.test-command }}
+      test-job: k8s/gke-test-job/${{ matrix.suite }}
+      test-command: EXPECTED_SUITE=${{ matrix.suite }} ${{ needs.resolve.outputs.test-command }}
+      evidence-suffix: ${{ matrix.suite }}

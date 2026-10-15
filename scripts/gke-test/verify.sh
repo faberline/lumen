@@ -2,10 +2,10 @@
 # lumen — image identity check after the GKE e2e Job, on the runner.
 #
 # faberline/aw's reusable gke-test workflow deploys k8s/overlays/gke-test with
-# IMAGE, runs k8s/gke-test-job (Job/lumen-e2e: both deploy paths, the 100k-doc
-# fixture, search, duplicates, and the durable restart oracle, all from
-# pool-lumen-client through the Services), and runs this script once that Job
-# has completed. The Job cannot know which image it is testing, so this script
+# IMAGE, runs one suite of k8s/gke-test-job (Job/lumen-e2e: the suite's deploy
+# path, the 100k-doc fixture, search, duplicates, and the durable restart
+# oracle, all from pool-lumen-client through the Services), and runs this
+# script once that Job has completed. The Job cannot know which image it is testing, so this script
 # proves the pods it exercised were that image:
 #
 #   - Deployment/lumen, Deployment/lumen-operator, Lumen/lumen-op, and the
@@ -14,7 +14,8 @@
 #     linux/amd64 child digest, and sits on a pool-lumen-server node;
 #   - each mode's /version answers in the Job's log, before and after the
 #     restart, report EXPECTED_VERSION and EXPECTED_GIT_SHA;
-#   - the Job's log ends each mode it ran with a pass result.
+#   - the Job's log ends each mode it ran with a pass result, and it ran
+#     exactly the suite's mode.
 #
 # It reads the cluster and the Job's log only. No API traffic leaves the
 # cluster, so nothing here uses a port-forward. Cluster-scoped objects the
@@ -31,6 +32,7 @@
 #   EXPECTED_VERSION          must equal Cargo.toml's version
 #   EXPECTED_GIT_SHA          8 lowercase hex, as /version reports it
 #   EXPECTED_RUNTIME_DIGEST   the linux/amd64 child digest of IMAGE
+#   EXPECTED_SUITE            overlay or operator, the suite's mode
 #
 # Requirements: kubectl, jq.
 
@@ -69,6 +71,8 @@ EXPECTED_GIT_SHA="${EXPECTED_GIT_SHA:-}"
 [[ "$EXPECTED_GIT_SHA" =~ ^[0-9a-f]{8}$ ]] || die "invalid EXPECTED_GIT_SHA: expected 8 lowercase hex"
 EXPECTED_RUNTIME_DIGEST="${EXPECTED_RUNTIME_DIGEST:-}"
 [[ "$EXPECTED_RUNTIME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || die "invalid EXPECTED_RUNTIME_DIGEST: expected sha256:<64 hex>"
+EXPECTED_SUITE="${EXPECTED_SUITE:-}"
+[[ "$EXPECTED_SUITE" == "overlay" || "$EXPECTED_SUITE" == "operator" ]] || die "invalid EXPECTED_SUITE: expected overlay or operator"
 ROOT_DIGEST="${IMAGE##*@}"
 [[ "$EXPECTED_RUNTIME_DIGEST" != "$ROOT_DIGEST" ]] || die "runtime child digest must differ from root index digest"
 
@@ -84,10 +88,10 @@ summary() {
   [[ -s "$EVIDENCE_JSON" ]] || echo '[]' > "$EVIDENCE_JSON"
   jq -n --arg run_label "$RUN_LABEL" --arg namespace "$NAMESPACE" --arg image "$IMAGE" \
     --arg version "$EXPECTED_VER" --arg git_sha "$EXPECTED_GIT_SHA" \
-    --arg runtime_digest "$EXPECTED_RUNTIME_DIGEST" --argjson modes "$MODES" \
+    --arg runtime_digest "$EXPECTED_RUNTIME_DIGEST" --arg suite "$EXPECTED_SUITE" --argjson modes "$MODES" \
     --argjson exit_code "$ec" --slurpfile evidence "$EVIDENCE_JSON" \
-    '{schema:"faberline.lumen.gke-test-verify.v2",run_label:$run_label,namespace:$namespace,image:$image,
-      expected:{version:$version,git_sha:$git_sha,runtime_digest:$runtime_digest},
+    '{schema:"faberline.lumen.gke-test-verify.v3",run_label:$run_label,namespace:$namespace,image:$image,
+      suite:$suite,expected:{version:$version,git_sha:$git_sha,runtime_digest:$runtime_digest},
       modes:$modes,job_evidence:$evidence[0],
       result:(if $exit_code == 0 then "pass" else "fail" end),exit_code:$exit_code}' \
     > "${VERIFY_DIR}/summary.json"
@@ -99,7 +103,7 @@ trap summary EXIT
 # The Job's own report
 # ---------------------------------------------------------------------------
 
-# k8s/gke-test-job/e2e.sh prints `LUMEN_E2E_EVIDENCE<TAB>mode<TAB>name<TAB>json`.
+# k8s/gke-test-job/base/e2e.sh prints `LUMEN_E2E_EVIDENCE<TAB>mode<TAB>name<TAB>json`.
 # Keep those lines as one JSON array and refuse a log that is not a complete
 # pass.
 read_job_evidence() {
@@ -114,6 +118,8 @@ read_job_evidence() {
   ' "$JOB_LOG" > "$EVIDENCE_JSON" || die "Job/${JOB_NAME} log holds a malformed evidence line"
   MODES="$(jq -c '[.[] | select(.mode == "setup" and .name == "result" and .data.result == "pass") | .data.modes[]] | unique' "$EVIDENCE_JSON")"
   jq -e 'length > 0' <<<"$MODES" >/dev/null || die "Job/${JOB_NAME} log has no final pass result"
+  jq -e --arg suite "$EXPECTED_SUITE" '. == [$suite]' <<<"$MODES" >/dev/null \
+    || die "Job/${JOB_NAME} ran modes $(jq -c . <<<"$MODES"), want only the suite ${EXPECTED_SUITE}"
   local mode
   for mode in $(jq -r '.[]' <<<"$MODES"); do
     jq -e --arg mode "$mode" 'any(.[]; .mode == $mode and .name == "result" and .data.result == "pass")' "$EVIDENCE_JSON" >/dev/null \

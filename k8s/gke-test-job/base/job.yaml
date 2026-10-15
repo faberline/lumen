@@ -1,5 +1,6 @@
 # One attempt, on pool-lumen-client. A retry would re-index into the same
-# servers and hide the first failure, so a failed pod fails the run.
+# servers and hide the first failure, so a failed pod fails the run. Each
+# suite folder sets LUMEN_E2E_MODES.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -56,8 +57,6 @@ spec:
                   fieldPath: metadata.name
             - name: LUMEN_E2E_DOC_COUNT
               value: "100000"
-            - name: LUMEN_E2E_MODES
-              value: "overlay operator"
             - name: WORK_DIR
               value: /work
             # kubectl keeps its discovery cache under $HOME.

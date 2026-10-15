@@ -1,0 +1,26 @@
+# GKE e2e suite `overlay`: e2e.sh in ../base for the direct-install
+# Deployment `lumen`, reached at http://lumen:7373.
+# One call of faberline/aw's gke-test workflow, on a freshly deployed
+# k8s/overlays/gke-test (.github/workflows/gke-test.yml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lumen
+
+resources:
+  - ../base
+
+patches:
+  - patch: |-
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: lumen-e2e
+      spec:
+        template:
+          spec:
+            containers:
+              - name: e2e
+                env:
+                  - name: LUMEN_E2E_MODES
+                    value: overlay

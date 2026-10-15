@@ -4,8 +4,9 @@
 # docs/standards/test-cluster.md).
 #
 # aw's run.sh applies k8s/overlays/gke-test, waits for its rollouts, then
-# applies this folder and waits for the Job. This script runs kind-e2e.sh's
-# checks for both deploy paths in the Job's namespace, in order:
+# applies one suite folder (../overlay or ../operator) and waits for the Job.
+# This script runs kind-e2e.sh's checks for the deploy paths in
+# LUMEN_E2E_MODES, in the Job's namespace, in order:
 #
 #   overlay   the direct-install Deployment `lumen` (labels app=lumen,role=server),
 #             reached at http://lumen:7373
@@ -29,7 +30,7 @@
 #   NAMESPACE             the Job's namespace (downward API)
 #   POD_NAME              the Job pod's name, used in the oracle document ids
 #   LUMEN_E2E_DOC_COUNT   fixture size (default 100000)
-#   LUMEN_E2E_MODES       "overlay operator" (default) or one of them
+#   LUMEN_E2E_MODES       the suite: "overlay" or "operator"; default both
 #
 # Requirements: kubectl (in-cluster ServiceAccount), curl, jq.
 

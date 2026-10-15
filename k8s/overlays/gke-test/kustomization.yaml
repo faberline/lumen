@@ -3,9 +3,10 @@ kind: Kustomization
 
 # lumen on Faberline's shared GKE test cluster (faberline-test, pool-lumen-server),
 # deployed by faberline/aw's reusable gke-test workflow, exercised by the
-# in-cluster Job in ../../gke-test-job (on pool-lumen-client, through the
-# Services), and tied to the image by scripts/gke-test/verify.sh. Both
-# kind-e2e deploy paths share this one namespace and run in one workflow call:
+# in-cluster Job of one suite in ../../gke-test-job (on pool-lumen-client,
+# through the Services), and tied to the image by scripts/gke-test/verify.sh.
+# Each suite is its own workflow call on a fresh deploy of this overlay, which
+# holds both kind-e2e deploy paths in one namespace:
 #
 #   overlay   the direct-install Deployment `lumen` from ../../base, shaped
 #             like ../dev, with a data PVC for the durable restart oracle.
