@@ -78,7 +78,7 @@ pub(super) fn backup_cron_job(lumen: &Lumen, cx: &RenderCtx<'_>) -> Option<Value
         .image_pull_policy
         .clone()
         .unwrap_or_else(|| "IfNotPresent".to_string());
-    Some(render::cron_job(render::CronJob {
+    let mut cron = render::cron_job(render::CronJob {
         cx,
         name: &cron_name,
         component: BACKUP_COMPONENT,
@@ -96,5 +96,10 @@ pub(super) fn backup_cron_job(lumen: &Lumen, cx: &RenderCtx<'_>) -> Option<Value
         memory: "128Mi",
         successful_jobs_history_limit: 3,
         failed_jobs_history_limit: 3,
-    }))
+    });
+    if !lumen.spec.image_pull_secrets.is_empty() {
+        cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["imagePullSecrets"] =
+            json!(lumen.spec.image_pull_secrets);
+    }
+    Some(cron)
 }

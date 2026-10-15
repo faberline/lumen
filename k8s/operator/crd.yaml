@@ -91,6 +91,18 @@ spec:
                 description: Image pull policy. Defaults to `IfNotPresent`.
                 nullable: true
                 type: string
+              imagePullSecrets:
+                description: Secrets in the instance's namespace used to pull `image`, copied to `spec.template.spec.imagePullSecrets` of every pod the operator renders (the serving StatefulSet and the optional backup CronJob). Empty means the node's own registry credentials, as before.
+                items:
+                  description: A Secret named in the instance's namespace, mirroring the Kubernetes `v1.LocalObjectReference`.
+                  properties:
+                    name:
+                      description: Name of a Secret of type `kubernetes.io/dockerconfigjson` in the instance's namespace.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               logFormat:
                 default: pretty
                 description: 'Log output format: `json` (prod/staging) or `pretty` (dev).'
@@ -634,6 +646,18 @@ spec:
                     description: Image pull policy. Defaults to `IfNotPresent`.
                     nullable: true
                     type: string
+                  imagePullSecrets:
+                    description: Secrets in the instance's namespace used to pull `image`, copied to `spec.template.spec.imagePullSecrets` of every pod the operator renders (the serving StatefulSet and the optional backup CronJob). Empty means the node's own registry credentials, as before.
+                    items:
+                      description: A Secret named in the instance's namespace, mirroring the Kubernetes `v1.LocalObjectReference`.
+                      properties:
+                        name:
+                          description: Name of a Secret of type `kubernetes.io/dockerconfigjson` in the instance's namespace.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
                   logFormat:
                     default: pretty
                     description: 'Log output format: `json` (prod/staging) or `pretty` (dev).'

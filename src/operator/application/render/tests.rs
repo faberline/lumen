@@ -17,6 +17,7 @@ fn single_replica() -> Lumen {
         LumenSpec {
             image: "registry.example.invalid/lumen:test".into(),
             image_pull_policy: None,
+            image_pull_secrets: Vec::new(),
             placement: PlacementSpec::default(),
             shard_count: 1,
             shard_map: ShardMapSpec::default(),

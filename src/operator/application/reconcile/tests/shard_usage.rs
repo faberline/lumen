@@ -99,6 +99,7 @@ fn pod_metrics_urls_covers_every_storage_pod_by_headless_dns() {
     let spec = LumenSpec {
         image: "lumen:latest".into(),
         image_pull_policy: None,
+        image_pull_secrets: Vec::new(),
         placement: Default::default(),
         shard_count: 2,
         shard_map: ShardMapSpec::default(),

@@ -243,6 +243,7 @@ fn initial_lumen(max_shard_bytes: Option<u64>, blocking_condition: Option<&str>)
     let spec = LumenSpec {
         image: "lumen:latest".into(),
         image_pull_policy: None,
+        image_pull_secrets: Vec::new(),
         placement: Default::default(),
         shard_count: 1,
         shard_map: ShardMapSpec {

@@ -1,0 +1,19 @@
+# Every pod template lands on pool-lumen of the shared faberline-test cluster
+# and pulls from GHCR with the run's ghcr-pull Secret (aw
+# docs/standards/test-cluster.md). Patched as JSON 6902 `add`s so the
+# same file applies to any Deployment.
+- op: add
+  path: /spec/template/spec/nodeSelector
+  value:
+    faberline.dev/pool: lumen
+- op: add
+  path: /spec/template/spec/tolerations
+  value:
+    - key: faberline.dev/pool
+      operator: Equal
+      value: lumen
+      effect: NoSchedule
+- op: add
+  path: /spec/template/spec/imagePullSecrets
+  value:
+    - name: ghcr-pull

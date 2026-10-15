@@ -79,6 +79,7 @@ fn test_lumen(name: &str, ns: &str, machine_type: &str) -> Lumen {
     let spec = LumenSpec {
         image: "lumen:latest".into(),
         image_pull_policy: None,
+        image_pull_secrets: Vec::new(),
         placement: PlacementSpec {
             initial_machine_type: machine_type.to_string(),
             ..Default::default()

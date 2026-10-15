@@ -177,6 +177,7 @@ mod tests {
         let spec = LumenSpec {
             image: "lumen:latest".into(),
             image_pull_policy: None,
+            image_pull_secrets: Vec::new(),
             placement: Default::default(),
             shard_count: shards,
             shard_map: ShardMapSpec::default(),

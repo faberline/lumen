@@ -32,6 +32,7 @@ fn test_spec() -> LumenSpec {
     LumenSpec {
         image: "lumen:latest".into(),
         image_pull_policy: None,
+        image_pull_secrets: Vec::new(),
         placement: PlacementSpec::default(),
         shard_count: 1,
         shard_map: ShardMapSpec::default(),

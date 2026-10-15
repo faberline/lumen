@@ -211,6 +211,9 @@ pub(super) fn serving_statefulset(
     // Keep Kubernetes' legacy Service env injection from replacing the
     // ConfigMap-backed numeric `LUMEN_PORT` with a `tcp://...` value.
     let mut sts = render::service_statefulset_with_service_links(serving_plan, false);
+    if !lumen.spec.image_pull_secrets.is_empty() {
+        sts["spec"]["template"]["spec"]["imagePullSecrets"] = json!(lumen.spec.image_pull_secrets);
+    }
     if lumen.spec.replicas_per_shard <= 1 {
         if let Some(spec) = sts["spec"].as_object_mut() {
             let replicas = if lumen.spec.shard_count > 1 {
