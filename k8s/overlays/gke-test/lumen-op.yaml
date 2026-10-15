@@ -25,7 +25,9 @@ spec:
         operator: Equal
         value: lumen-server
         effect: NoSchedule
+  # Small requests: the pod gets its own node by anti-affinity (the
+  # Deployments here repel it), and the operator sets no limits.
   serving:
-    cpu: "1"
-    memory: 4Gi
+    cpu: 250m
+    memory: 512Mi
     raftStorage: 4Gi

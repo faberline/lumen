@@ -17,3 +17,15 @@
   path: /spec/template/spec/imagePullSecrets
   value:
     - name: ghcr-pull
+# One pod per node (aw docs/standards/test-cluster.md): the empty selector
+# matches every pod of the namespace. It replaces the base's server-only
+# anti-affinity and the operator's preferred spread. Required anti-affinity
+# is symmetric, so the operator-rendered StatefulSet pod, which keeps the
+# operator's own server anti-affinity, still never shares a node with these.
+- op: add
+  path: /spec/template/spec/affinity
+  value:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - topologyKey: kubernetes.io/hostname
+          labelSelector: {}
