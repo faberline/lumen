@@ -2,9 +2,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # lumen on Faberline's shared GKE test cluster (faberline-test, pool-lumen),
-# deployed by faberline/aw's reusable gke-test workflow and checked by
-# scripts/gke-test/verify.sh. Both kind-e2e deploy paths share this one
-# namespace and run in one workflow call:
+# deployed by faberline/aw's reusable gke-test workflow, exercised by the
+# in-cluster Job in ../../gke-test-job (on pool-lumen-client, through the
+# Services), and tied to the image by scripts/gke-test/verify.sh. Both
+# kind-e2e deploy paths share this one namespace and run in one workflow call:
 #
 #   overlay   the direct-install Deployment `lumen` from ../../base, shaped
 #             like ../dev, with a data PVC for the durable restart oracle.

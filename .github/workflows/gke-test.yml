@@ -1,12 +1,14 @@
-# lumen on Faberline's shared GKE test cluster (faberline-test, pool-lumen).
+# lumen on Faberline's shared GKE test cluster (faberline-test).
 #
 # faberline/aw's reusable gke-test workflow deploys k8s/overlays/gke-test with
-# the image under test, runs scripts/gke-test/verify.sh (kind-e2e.sh's overlay
-# and operator checks over port-forward), uploads the evidence artifact
-# gke-test-evidence-<run_id>-<attempt>, and tears the namespace down. aw owns
-# the cluster, pool-lumen, and the gke-test-lumen service account
-# (infra/gke-test/pools.yaml in faberline/aw); nothing here creates cloud
-# resources.
+# the image under test on pool-lumen, runs the in-cluster test Job
+# k8s/gke-test-job on pool-lumen-client (kind-e2e.sh's overlay and operator
+# checks through the Services, no port-forward), then runs
+# scripts/gke-test/verify.sh on the runner to tie the pods and /version to the
+# image. It uploads the evidence artifact gke-test-evidence-<run_id>-<attempt>
+# and tears the namespace down. aw owns the cluster, both pools, and the
+# gke-test-lumen service account (infra/gke-test/pools.yaml in faberline/aw);
+# nothing here creates cloud resources.
 #
 # Image sources:
 #   pull_request / dispatch without `image`  builds sha-<git12> with
@@ -24,7 +26,6 @@ on:
       - "Dockerfile.test"
       - "k8s/**"
       - "scripts/gke-test/**"
-      - "scripts/load-fixture.py"
       - "src/compat/operator/**"
       - "src/operator/**"
   workflow_dispatch:
@@ -159,4 +160,5 @@ jobs:
       image: ${{ needs.resolve.outputs.image }}
       image-name: ghcr.io/faberline/lumen
       namespace: lumen
+      test-job: k8s/gke-test-job
       test-command: ${{ needs.resolve.outputs.test-command }}

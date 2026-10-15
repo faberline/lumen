@@ -19,3 +19,13 @@ patches:
       kind: Namespace
       metadata:
         name: lumen-system
+  # One operator replica. The shipped two are for leader-election failover;
+  # on the shared cluster two would each need their own pool-lumen node
+  # (aw's one-per-node rule), and the e2e never kills the operator.
+  - target:
+      kind: Deployment
+      name: lumen-operator
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
