@@ -1,0 +1,199 @@
+# lumen on Faberline's shared GKE test cluster (faberline-test).
+#
+# faberline/aw's reusable gke-test workflow deploys k8s/overlays/gke-test with
+# the image under test on pool-lumen-server, runs the in-cluster test Job of
+# one suite on pool-lumen-client (kind-e2e.sh's checks through the Services, no
+# port-forward), then runs scripts/gke-test/verify.sh on the runner to tie the
+# pods and /version to the image. It uploads the evidence artifact
+# gke-test-evidence-<run_id>-<attempt>-<suite> and tears the namespace down.
+#
+# Suites (aw docs/standards/test-cluster.md "Test suites"), one call each, one
+# at a time, each on a fresh deploy:
+#   overlay   k8s/gke-test-job/overlay   the direct-install Deployment
+#   operator  k8s/gke-test-job/operator  the operator and its Lumen CRs
+# A pull request runs all of them; a dispatch or a workflow_call can pick one.
+# aw owns the cluster, both pools, and the
+# gke-test-lumen service account (infra/gke-test/pools.yaml in faberline/aw);
+# nothing here creates cloud resources.
+#
+# Image sources:
+#   pull_request / dispatch without `image`  builds sha-<git12> with
+#                                            lumen-test-image.yml
+#   dispatch or workflow_call with `image`   tests that image as given
+# Either way the image is pinned to ghcr.io/faberline/lumen@sha256:<root> and
+# verify.sh checks /version and every pod's runtime digest against it.
+name: gke-test
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gke-test.yml"
+      - ".github/workflows/lumen-test-image.yml"
+      - "Dockerfile.test"
+      - "k8s/**"
+      - "scripts/gke-test/**"
+      - "src/compat/operator/**"
+      - "src/operator/**"
+  workflow_dispatch:
+    inputs:
+      image:
+        description: >-
+          ghcr.io/faberline/lumen image pinned by digest. Empty builds this
+          ref with lumen-test-image.yml.
+        required: false
+        default: ""
+      expected-git-sha:
+        description: >-
+          8 lowercase hex /version must report. Empty derives it from a
+          sha-<git12> tag in `image`.
+        required: false
+        default: ""
+      suite:
+        description: Suite to run; all runs every suite, one at a time.
+        type: choice
+        options: [all, overlay, operator]
+        default: all
+  workflow_call:
+    inputs:
+      image:
+        description: ghcr.io/faberline/lumen root index pinned by digest.
+        required: true
+        type: string
+      expected-version:
+        description: Version /version must report. Empty means Cargo.toml's.
+        required: false
+        default: ""
+        type: string
+      expected-git-sha:
+        description: 8 lowercase hex /version must report.
+        required: true
+        type: string
+      expected-runtime-digest:
+        description: >-
+          linux/amd64 child digest of `image`. Empty resolves it from the
+          image index.
+        required: false
+        default: ""
+        type: string
+      suite:
+        description: all, overlay, or operator.
+        required: false
+        default: all
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: build test image
+    if: inputs.image == ''
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/lumen-test-image.yml
+
+  resolve:
+    name: resolve image identity
+    needs: image
+    if: ${{ !cancelled() && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      image: ${{ steps.identity.outputs.image }}
+      test-command: ${{ steps.identity.outputs.test_command }}
+      suites: ${{ steps.identity.outputs.suites }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Pin the image and its expected identity
+        id: identity
+        shell: bash
+        env:
+          RAW_IMAGE: ${{ inputs.image || needs.image.outputs.image }}
+          INPUT_VERSION: ${{ inputs.expected-version }}
+          INPUT_GIT_SHA: ${{ inputs.expected-git-sha }}
+          INPUT_RUNTIME_DIGEST: ${{ inputs.expected-runtime-digest }}
+          # A pull request has no inputs, so it runs all suites.
+          INPUT_SUITE: ${{ inputs.suite || 'all' }}
+        run: |
+          set -euo pipefail
+          die() { echo "::error::$*" >&2; exit 1; }
+          [[ "$RAW_IMAGE" =~ ^ghcr\.io/faberline/lumen(:([A-Za-z0-9_][A-Za-z0-9_.-]{0,127}))?@(sha256:[0-9a-f]{64})$ ]] \
+            || die "image must be ghcr.io/faberline/lumen[:tag]@sha256:<64 hex>, got: $RAW_IMAGE"
+          tag="${BASH_REMATCH[2]}"
+          root_digest="${BASH_REMATCH[3]}"
+          image="ghcr.io/faberline/lumen@${root_digest}"
+
+          version="${INPUT_VERSION:-$(grep '^version = ' Cargo.toml | head -n1 | cut -d'"' -f2)}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] || die "invalid expected version: $version"
+
+          git_sha="$INPUT_GIT_SHA"
+          if [[ -z "$git_sha" && "$tag" =~ ^sha-([0-9a-f]{12})$ ]]; then
+            git_sha="${BASH_REMATCH[1]:0:8}"
+          fi
+          [[ "$git_sha" =~ ^[0-9a-f]{8}$ ]] || die "expected git sha must be 8 lowercase hex (give expected-git-sha or a sha-<git12> tag), got: ${git_sha:-<empty>}"
+
+          runtime_digest="$INPUT_RUNTIME_DIGEST"
+          if [[ -z "$runtime_digest" ]]; then
+            runtime_digest="$(docker buildx imagetools inspect --raw "$image" | jq -r '
+              [.manifests[]? | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest] |
+              if length == 1 then .[0] else empty end')"
+          fi
+          [[ "$runtime_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "no single linux/amd64 child digest for $image"
+          [[ "$runtime_digest" != "$root_digest" ]] || die "runtime child digest must differ from the root index digest"
+
+          case "$INPUT_SUITE" in
+            all) suites='["overlay","operator"]' ;;
+            overlay|operator) suites="[\"${INPUT_SUITE}\"]" ;;
+            *) die "suite must be all, overlay, or operator, got: $INPUT_SUITE" ;;
+          esac
+
+          test_command="EXPECTED_VERSION=${version} EXPECTED_GIT_SHA=${git_sha} EXPECTED_RUNTIME_DIGEST=${runtime_digest} scripts/gke-test/verify.sh"
+          {
+            echo "image=${image}"
+            echo "test_command=${test_command}"
+            echo "suites=${suites}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### lumen gke-test identity"
+            echo
+            echo '```text'
+            echo "image:          ${image}"
+            echo "version:        ${version}"
+            echo "git_sha:        ${git_sha}"
+            echo "runtime_digest: ${runtime_digest}"
+            echo "suites:         ${suites}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  gke-test:
+    name: GKE e2e (${{ matrix.suite }})
+    needs: resolve
+    if: ${{ !cancelled() && needs.resolve.result == 'success' }}
+    # One call at a time: the repository's concurrency group in aw keeps only
+    # one waiting run. fail-fast off runs the other suites when one fails.
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.resolve.outputs.suites) }}
+    permissions:
+      id-token: write
+      contents: read
+      packages: read
+    uses: faberline/aw/.github/workflows/gke-test.yml@main
+    with:
+      image: ${{ needs.resolve.outputs.image }}
+      image-name: ghcr.io/faberline/lumen
+      namespace: lumen
+      test-job: k8s/gke-test-job/${{ matrix.suite }}
+      test-command: EXPECTED_SUITE=${{ matrix.suite }} ${{ needs.resolve.outputs.test-command }}
+      evidence-suffix: ${{ matrix.suite }}

@@ -1,0 +1,88 @@
+# One attempt, on pool-lumen-client. A retry would re-index into the same
+# servers and hide the first failure, so a failed pod fails the run. Each
+# suite folder sets LUMEN_E2E_MODES.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lumen-e2e
+  labels:
+    app: lumen-e2e
+spec:
+  backoffLimit: 0
+  # Below run.sh's TEST_JOB_TIMEOUT for ttl-minutes 90 (75m), so the Job
+  # reports Failed itself and its pod's log still says where it stopped.
+  activeDeadlineSeconds: 4200
+  template:
+    metadata:
+      labels:
+        app: lumen-e2e
+    spec:
+      restartPolicy: Never
+      serviceAccountName: lumen-e2e
+      nodeSelector:
+        faberline.dev/pool: lumen-client
+      tolerations:
+        - key: faberline.dev/pool
+          operator: Equal
+          value: lumen-client
+          effect: NoSchedule
+      imagePullSecrets:
+        - name: ghcr-pull
+      # One pod per node; the empty selector matches every pod of the
+      # namespace.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector: {}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: e2e
+          # kubectl, bash, curl, and jq; pinned to the linux multi-arch index.
+          image: docker.io/alpine/k8s:1.33.4@sha256:b0523f0a244ddc4c8e055aa335c040d3d78b3ead5528f4544395f7f9f69c7b68
+          command: ["bash", "/opt/lumen-e2e/e2e.sh"]
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: LUMEN_E2E_DOC_COUNT
+              value: "100000"
+            - name: WORK_DIR
+              value: /work
+            # kubectl keeps its discovery cache under $HOME.
+            - name: HOME
+              value: /work
+          # Small requests and no limits: the Job has the client node to
+          # itself. 500m never scheduled on an e2-medium.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: script
+              mountPath: /opt/lumen-e2e
+              readOnly: true
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: script
+          configMap:
+            name: lumen-e2e-script
+        - name: work
+          emptyDir:
+            sizeLimit: 1Gi

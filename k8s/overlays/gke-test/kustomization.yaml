@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# lumen on Faberline's shared GKE test cluster (faberline-test, pool-lumen-server),
+# deployed by faberline/aw's reusable gke-test workflow, exercised by the
+# in-cluster Job of one suite in ../../gke-test-job (on pool-lumen-client,
+# through the Services), and tied to the image by scripts/gke-test/verify.sh.
+# Each suite is its own workflow call on a fresh deploy of this overlay, which
+# holds both kind-e2e deploy paths in one namespace:
+#
+#   overlay   the direct-install Deployment `lumen` from ../../base, shaped
+#             like ../dev, with a data PVC for the durable restart oracle.
+#   operator  the shipped operator (moved into this namespace) and the
+#             Lumen CR `lumen-op`, plus `lumen-op-legacy-missing-catalog`,
+#             which must fail on the missing capacity catalog.
+#
+# aw's run.sh runs `kustomize edit set image ghcr.io/faberline/lumen=<IMAGE>`
+# before building; the REPLACE_ME tag below fails the build if it does not.
+namespace: lumen
+
+resources:
+  - ../../base
+  - operator
+  - data-pvc.yaml
+  - lumen-op.yaml
+  - lumen-op-legacy-missing-catalog.yaml
+
+# Lets the image substitution reach the Lumen CRs' spec.image too.
+configurations:
+  - kustomizeconfig.yaml
+
+images:
+  - name: ghcr.io/faberline/lumen
+    newTag: REPLACE_ME
+
+patches:
+  # The ../dev ConfigMap values: 1 shard, pretty logs, auth off.
+  - target:
+      kind: ConfigMap
+      name: lumen-config
+    patch: |-
+      - op: replace
+        path: /data/SHARD_COUNT
+        value: "1"
+      - op: replace
+        path: /data/LUMEN_LOG_FORMAT
+        value: "pretty"
+      - op: add
+        path: /data/LUMEN_AUTH
+        value: "off"
+  - target:
+      kind: Deployment
+      name: lumen
+    path: lumen-deployment.yaml
+  # Both Deployments (lumen and lumen-operator) go to pool-lumen-server.
+  - target:
+      kind: Deployment
+    path: pool-placement.yaml

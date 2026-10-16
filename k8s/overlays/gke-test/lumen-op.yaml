@@ -1,0 +1,33 @@
+# kind-e2e's operator-mode CR on pool-lumen-server. A non-empty nodeSelector with the
+# default initialMachineType takes the native placement path: the operator
+# keeps this selector and these tolerations as written and never reads the
+# GCE capacity catalog.
+apiVersion: lumen.dev/v1alpha1
+kind: Lumen
+metadata:
+  name: lumen-op
+spec:
+  image: ghcr.io/faberline/lumen:0.6.1
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets:
+    - name: ghcr-pull
+  shardCount: 1
+  replicasPerShard: 1
+  voterCount: 1
+  logFormat: pretty
+  # auth defaults to required; this rig has no client identity to present.
+  auth: disabled
+  placement:
+    nodeSelector:
+      faberline.dev/pool: lumen-server
+    tolerations:
+      - key: faberline.dev/pool
+        operator: Equal
+        value: lumen-server
+        effect: NoSchedule
+  # Small requests: the pod gets its own node by anti-affinity (the
+  # Deployments here repel it), and the operator sets no limits.
+  serving:
+    cpu: 250m
+    memory: 512Mi
+    raftStorage: 4Gi

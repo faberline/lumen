@@ -21,6 +21,7 @@ fn spec(shard_count: u32, replicas_per_shard: u32, max_shard_bytes: Option<u64>)
     LumenSpec {
         image: "lumen:latest".into(),
         image_pull_policy: None,
+        image_pull_secrets: Vec::new(),
         placement: Default::default(),
         shard_count,
         shard_map: ShardMapSpec {

@@ -1,0 +1,33 @@
+# The direct-install Deployment as kind-e2e's overlay mode runs it: ../dev's
+# auth-off wiring, embedded WAL, and a claim at the image's LUMEN_DATA_DIR so
+# the durable restart oracle has something to restart from. Small requests
+# and no limits: anti-affinity gives the pod its own node, and the pod uses
+# all of it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumen
+spec:
+  template:
+    spec:
+      containers:
+        - name: lumen
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          env:
+            - name: LUMEN_WAL
+              value: embedded
+            - name: LUMEN_AUTH
+              valueFrom:
+                configMapKeyRef:
+                  name: lumen-config
+                  key: LUMEN_AUTH
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/lumen/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: lumen-data

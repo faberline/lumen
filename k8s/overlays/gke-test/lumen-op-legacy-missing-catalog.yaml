@@ -1,0 +1,20 @@
+# No placement: the legacy capacity-catalog path. There is no catalog in this
+# namespace, so the operator must refuse with a ReconcileFailed Event naming
+# it, and never render a pod.
+apiVersion: lumen.dev/v1alpha1
+kind: Lumen
+metadata:
+  name: lumen-op-legacy-missing-catalog
+spec:
+  image: ghcr.io/faberline/lumen:0.6.1
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets:
+    - name: ghcr-pull
+  shardCount: 1
+  replicasPerShard: 1
+  voterCount: 1
+  logFormat: pretty
+  auth: disabled
+  serving:
+    cpu: "1"
+    memory: 1Gi

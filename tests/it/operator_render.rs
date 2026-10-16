@@ -54,8 +54,9 @@ use std::collections::BTreeMap;
 
 use kube::api::ObjectMeta;
 use lumen::operator::crd::{
-    AuthMode, LogFormat, LumenStatus, PlacementSpec, ReshardPhase, ReshardPolicy,
-    ReshardWorkflowSpec, ServingBootstrapSpec, ServingSpec, ShardMapSpec, Toleration,
+    AuthMode, LocalObjectReference, LogFormat, LumenStatus, PlacementSpec, ReshardPhase,
+    ReshardPolicy, ReshardWorkflowSpec, ServingBackupSpec, ServingBootstrapSpec, ServingSpec,
+    ShardMapSpec, Toleration,
 };
 use lumen::operator::render::{
     auth_delegator_binding, auth_delegator_binding_name, auth_delegator_labels, prunes, render,
@@ -83,6 +84,7 @@ fn dev_spec() -> LumenSpec {
     LumenSpec {
         image: "lumen:latest".into(),
         image_pull_policy: None,
+        image_pull_secrets: Vec::new(),
         placement: PlacementSpec::default(),
         shard_count: 1,
         shard_map: ShardMapSpec::default(),
@@ -108,6 +110,7 @@ fn prod_spec() -> LumenSpec {
     LumenSpec {
         image: "registry.example.com/lumen:1.2.3".into(),
         image_pull_policy: Some("Always".into()),
+        image_pull_secrets: Vec::new(),
         placement: PlacementSpec::default(),
         shard_count: 6,
         shard_map: ShardMapSpec::default(),
@@ -376,6 +379,10 @@ fn auth_delegator_binding_is_cluster_scoped_and_unowned() {
     assert!(meta.get("ownerReferences").is_none(), "got {binding}");
     assert!(meta.get("namespace").is_none(), "got {binding}");
     assert_eq!(meta["labels"]["lumen.dev/owner-namespace"], "acme");
+    assert_eq!(
+        meta["labels"]["faberline.dev/owner-namespace"], "acme",
+        "the shared GKE test cluster's teardown and reaper select on this key"
+    );
     assert_eq!(
         meta["labels"]["app.kubernetes.io/managed-by"],
         "lumen-operator"
@@ -1459,6 +1466,55 @@ fn the_crd_accepts_placement() {
             .is_none(),
         "exposing spec.affinity would let a deployer drop the anti-affinity"
     );
+}
+
+/// A private registry needs a pull secret on every pod that pulls `spec.image`.
+/// The StatefulSet is operator-rendered, so a `kubectl patch` adding one is
+/// reverted on the next reconcile; the CR is the only place it can live.
+#[test]
+fn image_pull_secrets_reach_every_pod_that_pulls_the_image() {
+    let mut spec = prod_spec();
+    spec.image_pull_secrets = vec![LocalObjectReference {
+        name: "ghcr-pull".into(),
+    }];
+    spec.serving.backup = Some(ServingBackupSpec {
+        policy: service_backup::ScheduledBackupPolicy {
+            schedule: "0 * * * *".into(),
+            destination: "gs://bucket/backups".into(),
+            retention_secs: None,
+        },
+        admin_token_secret: None,
+    });
+    let objs = render(&lumen("search", spec));
+    let sts = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    assert_eq!(
+        sts["imagePullSecrets"],
+        serde_json::json!([{ "name": "ghcr-pull" }])
+    );
+    let cron =
+        &find(&objs, "CronJob", "search-backup")["spec"]["jobTemplate"]["spec"]["template"]["spec"];
+    assert_eq!(
+        cron["imagePullSecrets"],
+        serde_json::json!([{ "name": "ghcr-pull" }])
+    );
+}
+
+/// An empty list renders no `imagePullSecrets` key, so a CR written before the
+/// field existed renders the same StatefulSet as before.
+#[test]
+fn no_image_pull_secrets_renders_no_key() {
+    let objs = render(&lumen("search", prod_spec()));
+    let sts = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    assert!(sts.get("imagePullSecrets").is_none(), "{sts:#}");
+}
+
+#[test]
+fn the_crd_accepts_image_pull_secrets() {
+    let doc = crd_document("lumens.lumen.dev");
+    let field = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
+        ["properties"]["imagePullSecrets"];
+    assert_eq!(field["type"], "array");
+    assert_eq!(field["items"]["properties"]["name"]["type"], "string");
 }
 
 #[test]

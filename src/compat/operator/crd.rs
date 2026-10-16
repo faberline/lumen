@@ -11,6 +11,6 @@ pub use crate::operator::domain::lumen_spec::topology::{
     ReshardPhase, ReshardPolicy, ReshardWorkflowSpec, ShardMapSpec,
 };
 pub use crate::operator::domain::lumen_spec::{
-    AdmissionSpec, Lumen, LumenSpec, PlacementSpec, Toleration, MAX_BODY_LIMIT_BYTES,
-    MIN_BODY_LIMIT_BYTES,
+    AdmissionSpec, LocalObjectReference, Lumen, LumenSpec, PlacementSpec, Toleration,
+    MAX_BODY_LIMIT_BYTES, MIN_BODY_LIMIT_BYTES,
 };

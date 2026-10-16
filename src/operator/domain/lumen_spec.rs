@@ -57,6 +57,13 @@ pub struct LumenSpec {
     #[serde(default)]
     pub image_pull_policy: Option<String>,
 
+    /// Secrets in the instance's namespace used to pull `image`, copied to
+    /// `spec.template.spec.imagePullSecrets` of every pod the operator
+    /// renders (the serving StatefulSet and the optional backup CronJob).
+    /// Empty means the node's own registry credentials, as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub image_pull_secrets: Vec<LocalObjectReference>,
+
     /// Physical storage shard count. Data ownership is resolved through the
     /// versioned virtual-bucket map, not permanent `hash % shardCount`
     /// routing.
@@ -323,6 +330,18 @@ pub struct Toleration {
     /// Only meaningful with `effect: NoExecute`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toleration_seconds: Option<i64>,
+}
+
+/// A Secret named in the instance's namespace, mirroring the Kubernetes
+/// `v1.LocalObjectReference`.
+// Declared here for the same reason as `Toleration`: the CRD schema is derived
+// with `schemars`.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalObjectReference {
+    /// Name of a Secret of type `kubernetes.io/dockerconfigjson` in the
+    /// instance's namespace.
+    pub name: String,
 }
 
 fn default_shard_count() -> u32 {

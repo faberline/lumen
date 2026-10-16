@@ -66,6 +66,13 @@ const AUTH_DELEGATOR_ROLE: &str = "system:auth-delegator";
 /// its own to read.
 const OWNER_NAMESPACE_LABEL: &str = "lumen.dev/owner-namespace";
 
+/// The same owner namespace under Faberline's cross-repository key. The shared
+/// GKE test cluster's teardown and reaper (faberline/aw
+/// docs/standards/test-cluster.md) delete cluster-scoped objects carrying it
+/// once that namespace is gone, so a run that dies before the sweep below can
+/// reach the binding still leaves nothing behind.
+const FABERLINE_OWNER_NAMESPACE_LABEL: &str = "faberline.dev/owner-namespace";
+
 const HEADLESS_ENV_KEY: &str = "LUMEN_HEADLESS_SERVICE";
 
 // #1387: embedded-mode persistence subtree, disjoint from the raft backend's

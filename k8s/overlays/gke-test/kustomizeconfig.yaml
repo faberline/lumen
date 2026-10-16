@@ -1,0 +1,5 @@
+# The Lumen CR names the serving image in spec.image, which the builtin image
+# transformer does not know about.
+images:
+  - kind: Lumen
+    path: spec/image
