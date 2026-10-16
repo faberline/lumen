@@ -1,5 +1,7 @@
 # What the harness in attach mode does with kubectl, in this namespace only:
-# read lumen-perf-0 (spec, status, logs) and exec the restarter container.
+# read lumen-perf-0 (spec, status, logs) and its data claim, and exec the
+# restarter container. The node and volume reads are cluster-scoped and live
+# in k8s/overlays/gke-perf/cluster-reader.yaml.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -15,6 +17,9 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
     verbs: ["get"]
   # kubectl 1.30+ opens exec over WebSocket (GET); older ones POST (create).
   - apiGroups: [""]

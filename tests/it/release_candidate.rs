@@ -1623,6 +1623,18 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
                     false,
                 ),
                 (
+                    "kube_hardware_reads_the_bound_node_volume_and_cpu".into(),
+                    false,
+                ),
+                (
+                    "kube_hardware_rejects_each_unobserved_or_ambiguous_value".into(),
+                    false,
+                ),
+                (
+                    "kube_gke_perf_overlay_claims_dynamic_rwo_and_reads_the_cluster".into(),
+                    false,
+                ),
+                (
                     "kube_kubectl_args_put_the_namespace_before_the_subcommand".into(),
                     false,
                 ),
@@ -4411,6 +4423,10 @@ fn forge_durable_perf_aggregate(dir: &Path) {
 }
 
 fn add_valid_durable_perf_evidence(dir: &Path) {
+    add_durable_perf_evidence_on(dir, perf_cell_receipt::Server::docker());
+}
+
+fn add_durable_perf_evidence_on(dir: &Path, server: perf_cell_receipt::Server) {
     let receipts = dir.join("perf");
     fs::create_dir_all(&receipts).unwrap();
     for cell in perf_cell_receipt::expected_cells() {
@@ -4420,7 +4436,7 @@ fn add_valid_durable_perf_evidence(dir: &Path) {
             binding: durable_perf_fixture_binding(),
             cell: cell.clone(),
             limits: perf_cell_receipt::Limits::approved(),
-            server: perf_cell_receipt::Server::docker(),
+            server: server.clone(),
             measurement: durable_perf_fixture_measurement(),
             outcome: perf_cell_receipt::Outcome {
                 qualifying: true,
@@ -4535,6 +4551,124 @@ fn durable_perf_restart_duration_above_thirty_seconds_is_rejected_by_python_veri
         !output.status.success(),
         "Python verifier accepted restart_duration_ms=30001: {}",
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn n4_durable_perf_server() -> perf_cell_receipt::Server {
+    perf_cell_receipt::Server::kubernetes(
+        "n4-highmem-4",
+        "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz",
+        "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+    )
+}
+
+#[test]
+fn durable_perf_python_verifier_requires_one_observed_kubernetes_shape() {
+    let fixture = tempfile::tempdir().unwrap();
+    add_durable_perf_evidence_on(fixture.path(), n4_durable_perf_server());
+    let summary: Value = serde_json::from_slice(
+        &fs::read(fixture.path().join("durable-perf-summary.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(summary["receipt_count"], 16);
+
+    fn negative(name: &str, cell: &str, mutate: fn(&mut Value), needle: &str) {
+        let fixture = tempfile::tempdir().unwrap();
+        add_durable_perf_evidence_on(fixture.path(), n4_durable_perf_server());
+        remove_durable_perf_aggregate(fixture.path());
+        let receipt_path = fixture.path().join(format!("perf/{cell}.json"));
+        let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+        mutate(&mut receipt["server"]);
+        fs::write(&receipt_path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+        let output = run_durable_perf_verifier(fixture.path());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{name} passed");
+        assert!(stderr.contains(needle), "{name}: {stderr}");
+    }
+
+    let drift = "ran on a different server shape";
+    negative(
+        "one cell on another machine type",
+        "replace-32-hnsw-cpu",
+        |server| server["instance_type"] = json!("n4-highmem-8"),
+        drift,
+    );
+    negative(
+        "one cell on another server CPU",
+        "unindex-100-flat-cpu",
+        |server| server["cpu_model"] = json!("INTEL(R) XEON(R) PLATINUM 8481C CPU @ 2.70GHz"),
+        drift,
+    );
+    negative(
+        "one cell from another client CPU",
+        "index-1000-hnsw-cpu",
+        |server| server["client_cpu_model"] = json!("AMD EPYC 9B14"),
+        drift,
+    );
+    for (name, mutate) in [
+        (
+            "uppercase machine type",
+            (|server| server["instance_type"] = json!("N4-highmem-4")) as fn(&mut Value),
+        ),
+        ("bare machine series", |server| {
+            server["instance_type"] = json!("n4")
+        }),
+        ("numeric machine type", |server| {
+            server["instance_type"] = json!(4)
+        }),
+        ("empty server CPU", |server| server["cpu_model"] = json!("")),
+        ("untrimmed client CPU", |server| {
+            server["client_cpu_model"] = json!("AMD EPYC 9B14 ")
+        }),
+        ("non-ASCII server CPU", |server| {
+            server["cpu_model"] = json!("AMD EPYC\u{2122}")
+        }),
+    ] {
+        negative(
+            name,
+            "index-1-flat-cpu",
+            mutate,
+            "is not an observed kubernetes value",
+        );
+    }
+    for (name, mutate) in [
+        (
+            "standard-rwo",
+            (|server| server["storage_class"] = json!("standard-rwo")) as fn(&mut Value),
+        ),
+        ("pd-balanced", |server| {
+            server["disk_type"] = json!("pd-balanced")
+        }),
+        ("other pool", |server| {
+            server["node_pool"] = json!("lumen-perf-client")
+        }),
+        ("resource limits", |server| {
+            server["resource_limits"] = json!(true)
+        }),
+    ] {
+        negative(
+            name,
+            "index-1-flat-cpu",
+            mutate,
+            "does not match the approved kubernetes shape",
+        );
+    }
+    negative(
+        "no instance type",
+        "index-1-flat-cpu",
+        |server| {
+            server.as_object_mut().unwrap().remove("instance_type");
+        },
+        "server keys differ: missing=['instance_type']",
+    );
+    negative(
+        "docker shape with kubernetes keys",
+        "index-1-flat-cpu",
+        |server| {
+            *server = json!({"runtime": "docker", "cpu_limit_milli": 2500,
+                "memory_limit_bytes": 17179869184_u64, "instance_type": "n4-highmem-4"});
+        },
+        "server keys differ",
     );
 }
 
