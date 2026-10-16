@@ -331,6 +331,8 @@ async fn stage1_capture_barrier_hold_aof(aof: SharedAof) -> Stage1CaptureBarrier
     hold
 }
 
+const POST_RELEASE_LIVENESS: Duration = Duration::from_secs(30);
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn checkpoint_capture_never_publishes_engine_state_before_its_aof_record_is_durable() {
     let fixture = stage1_capture_barrier_fixture();
@@ -390,13 +392,17 @@ async fn checkpoint_capture_never_publishes_engine_state_before_its_aof_record_i
     .await;
     let idle_ids = idle_query.expect("idle collection query must finish while capture save runs");
     aof_hold.release();
-    let write_result = tokio::time::timeout(Duration::from_secs(2), write)
+    // The ordering claims above are checked while the AOF is held. After the
+    // release, the write, its MemWal publication, and the real checkpoint save
+    // only have to finish; they fsync on a CI runner shared with the rest of
+    // the suite, so these are liveness bounds, not latency gates.
+    let write_result = tokio::time::timeout(POST_RELEASE_LIVENESS, write)
         .await
         .expect("hot write must finish after AOF release")
         .expect("hot write task must not panic")
         .expect("hot write must succeed");
 
-    let (hot_sequence, _) = tokio::time::timeout(Duration::from_secs(1), observed_wal.next())
+    let (hot_sequence, _) = tokio::time::timeout(POST_RELEASE_LIVENESS, observed_wal.next())
         .await
         .expect("hot record must publish after AOF release")
         .expect("MemWal stream remains open")
@@ -408,7 +414,7 @@ async fn checkpoint_capture_never_publishes_engine_state_before_its_aof_record_i
         let engine = fixture.engine.clone();
         tokio::task::spawn_blocking(move || store.save(&engine, hot_sequence))
     };
-    tokio::time::timeout(Duration::from_secs(2), checkpoint_save)
+    tokio::time::timeout(POST_RELEASE_LIVENESS, checkpoint_save)
         .await
         .expect("real checkpoint save must finish after AOF release")
         .expect("checkpoint save task must not panic")
