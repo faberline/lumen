@@ -15,7 +15,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 
-pub const SCHEMA_VERSION: u64 = 1;
+pub const SCHEMA_VERSION: u64 = 2;
 pub const RECEIPT_KIND: &str = "lumen.durable-perf-cell";
 pub const INPUT_SECONDS: u64 = 30 * 60;
 pub const DOCOPS_PER_SECOND: u64 = 60;
@@ -28,6 +28,9 @@ pub const RESTART_LIMIT_MS: u64 = 30_000;
 pub const RSS_LIMIT_BYTES: u64 = 12 * 1024 * 1024 * 1024;
 pub const DOCKER_CPUS_MILLI: u64 = 2_500;
 pub const DOCKER_MEMORY_BYTES: u64 = 16 * 1024 * 1024 * 1024;
+/// The faberline GKE test pool of the measured server. The pod there has no
+/// resource limits and is alone on its node.
+pub const KUBERNETES_NODE_POOL: &str = "lumen-perf-server";
 pub const SNAPSHOT_SECONDS: u64 = 15;
 pub const HOT_DOCUMENTS: u64 = 100_000;
 pub const IDLE_COLLECTIONS: u64 = 181;
@@ -80,8 +83,6 @@ pub struct Limits {
     pub query_max_limit_ms: u64,
     pub drain_limit_ms: u64,
     pub rss_limit_bytes: u64,
-    pub docker_cpus_milli: u64,
-    pub docker_memory_bytes: u64,
     pub snapshot_seconds: u64,
     pub hot_documents: u64,
     pub idle_collections: u64,
@@ -105,8 +106,6 @@ impl Limits {
             query_max_limit_ms: QUERY_MAX_LIMIT_MS,
             drain_limit_ms: DRAIN_LIMIT_MS,
             rss_limit_bytes: RSS_LIMIT_BYTES,
-            docker_cpus_milli: DOCKER_CPUS_MILLI,
-            docker_memory_bytes: DOCKER_MEMORY_BYTES,
             snapshot_seconds: SNAPSHOT_SECONDS,
             hot_documents: HOT_DOCUMENTS,
             idle_collections: IDLE_COLLECTIONS,
@@ -117,6 +116,35 @@ impl Limits {
             vector_dimensions: VECTOR_DIMENSIONS,
             capacity_refusal_percent: CAPACITY_REFUSAL_PERCENT,
             metric_sample_missing_percent: METRIC_SAMPLE_MISSING_PERCENT,
+        }
+    }
+}
+
+/// The resources the measured server ran with. A qualifying receipt states
+/// one of exactly two shapes, and all sixteen receipts state the same one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Server {
+    /// `docker run --cpus 2.5 --memory 16g`.
+    Docker {
+        cpu_limit_milli: u64,
+        memory_limit_bytes: u64,
+    },
+    /// The gke-perf overlay: no resource limits, one pod on a node of
+    /// `node_pool`.
+    Kubernetes { node_pool: String },
+}
+
+impl Server {
+    pub fn docker() -> Self {
+        Self::Docker {
+            cpu_limit_milli: DOCKER_CPUS_MILLI,
+            memory_limit_bytes: DOCKER_MEMORY_BYTES,
+        }
+    }
+
+    pub fn kubernetes() -> Self {
+        Self::Kubernetes {
+            node_pool: KUBERNETES_NODE_POOL.to_owned(),
         }
     }
 }
@@ -202,6 +230,7 @@ pub struct Receipt {
     pub binding: Binding,
     pub cell: Cell,
     pub limits: Limits,
+    pub server: Server,
     pub measurement: Measurement,
     pub outcome: Outcome,
 }
@@ -296,6 +325,7 @@ impl Receipt {
             ("binding", self.binding.to_json()),
             ("cell", self.cell.to_json()),
             ("limits", self.limits.to_json()),
+            ("server", self.server.to_json()),
             ("measurement", self.measurement.to_json()),
             ("outcome", self.outcome.to_json()),
         ])
@@ -313,6 +343,7 @@ impl Receipt {
                 "binding",
                 "cell",
                 "limits",
+                "server",
                 "measurement",
                 "outcome",
             ],
@@ -323,6 +354,7 @@ impl Receipt {
             binding: Binding::from_json(take_value(&mut root, "receipt", "binding")?)?,
             cell: Cell::from_json(take_value(&mut root, "receipt", "cell")?)?,
             limits: Limits::from_json(take_value(&mut root, "receipt", "limits")?)?,
+            server: Server::from_json(take_value(&mut root, "receipt", "server")?)?,
             measurement: Measurement::from_json(take_value(&mut root, "receipt", "measurement")?)?,
             outcome: Outcome::from_json(take_value(&mut root, "receipt", "outcome")?)?,
         })
@@ -347,6 +379,12 @@ impl Receipt {
             return Err(ReceiptError::Invalid(
                 "limits do not equal the approved durable workload configuration".to_owned(),
             ));
+        }
+        if self.server != Server::docker() && self.server != Server::kubernetes() {
+            return Err(ReceiptError::Invalid(format!(
+                "server {:?} is neither the docker nor the kubernetes shape",
+                self.server
+            )));
         }
         if !self.outcome.qualifying || self.outcome.diagnostic || !self.outcome.succeeded {
             return Err(ReceiptError::Invalid(
@@ -432,8 +470,6 @@ impl Limits {
             ("query_max_limit_ms", number(self.query_max_limit_ms)),
             ("drain_limit_ms", number(self.drain_limit_ms)),
             ("rss_limit_bytes", number(self.rss_limit_bytes)),
-            ("docker_cpus_milli", number(self.docker_cpus_milli)),
-            ("docker_memory_bytes", number(self.docker_memory_bytes)),
             ("snapshot_seconds", number(self.snapshot_seconds)),
             ("hot_documents", number(self.hot_documents)),
             ("idle_collections", number(self.idle_collections)),
@@ -470,8 +506,6 @@ impl Limits {
                 "query_max_limit_ms",
                 "drain_limit_ms",
                 "rss_limit_bytes",
-                "docker_cpus_milli",
-                "docker_memory_bytes",
                 "snapshot_seconds",
                 "hot_documents",
                 "idle_collections",
@@ -493,8 +527,6 @@ impl Limits {
             query_max_limit_ms: take_number(&mut object, "limits", "query_max_limit_ms")?,
             drain_limit_ms: take_number(&mut object, "limits", "drain_limit_ms")?,
             rss_limit_bytes: take_number(&mut object, "limits", "rss_limit_bytes")?,
-            docker_cpus_milli: take_number(&mut object, "limits", "docker_cpus_milli")?,
-            docker_memory_bytes: take_number(&mut object, "limits", "docker_memory_bytes")?,
             snapshot_seconds: take_number(&mut object, "limits", "snapshot_seconds")?,
             hot_documents: take_number(&mut object, "limits", "hot_documents")?,
             idle_collections: take_number(&mut object, "limits", "idle_collections")?,
@@ -518,6 +550,76 @@ impl Limits {
                 "metric_sample_missing_percent",
             )?,
         })
+    }
+}
+
+impl Server {
+    fn to_json(&self) -> String {
+        match self {
+            Self::Docker {
+                cpu_limit_milli,
+                memory_limit_bytes,
+            } => object(&[
+                ("runtime", string("docker")),
+                ("cpu_limit_milli", number(*cpu_limit_milli)),
+                ("memory_limit_bytes", number(*memory_limit_bytes)),
+            ]),
+            Self::Kubernetes { node_pool } => object(&[
+                ("runtime", string("kubernetes")),
+                ("node_pool", string(node_pool)),
+                ("resource_limits", boolean(false)),
+            ]),
+        }
+    }
+
+    fn from_json(value: Json) -> Result<Self> {
+        let mut object = object_value(value, "server")?;
+        let runtime = match object.get("runtime") {
+            Some(Json::String(runtime)) => runtime.clone(),
+            Some(_) => {
+                return Err(ReceiptError::Type {
+                    context: "server",
+                    key: "runtime",
+                })
+            }
+            None => {
+                return Err(ReceiptError::MissingKey {
+                    context: "server",
+                    key: "runtime",
+                })
+            }
+        };
+        match runtime.as_str() {
+            "docker" => {
+                require_exact_keys(
+                    &object,
+                    "server",
+                    &["runtime", "cpu_limit_milli", "memory_limit_bytes"],
+                )?;
+                Ok(Self::Docker {
+                    cpu_limit_milli: take_number(&mut object, "server", "cpu_limit_milli")?,
+                    memory_limit_bytes: take_number(&mut object, "server", "memory_limit_bytes")?,
+                })
+            }
+            "kubernetes" => {
+                require_exact_keys(
+                    &object,
+                    "server",
+                    &["runtime", "node_pool", "resource_limits"],
+                )?;
+                if take_boolean(&mut object, "server", "resource_limits")? {
+                    return Err(ReceiptError::Invalid(
+                        "a kubernetes server must run without resource limits".to_owned(),
+                    ));
+                }
+                Ok(Self::Kubernetes {
+                    node_pool: take_string(&mut object, "server", "node_pool")?,
+                })
+            }
+            other => Err(ReceiptError::Invalid(format!(
+                "server.runtime must be docker or kubernetes, got {other}"
+            ))),
+        }
     }
 }
 
@@ -1032,6 +1134,7 @@ pub fn validate_aggregate(
         });
     }
     let mut actual_image_id = None;
+    let mut server = None;
     let mut seen = BTreeSet::new();
     for receipt in receipts {
         receipt.validate()?;
@@ -1048,6 +1151,16 @@ pub fn validate_aggregate(
                 return Err(ReceiptError::BindingMismatch(format!(
                     "actual_image_id {} differs from {}",
                     receipt.binding.actual_image_id, prior
+                )))
+            }
+            Some(_) => {}
+        }
+        match &server {
+            None => server = Some(receipt.server.clone()),
+            Some(prior) if prior != &receipt.server => {
+                return Err(ReceiptError::Invalid(format!(
+                    "cell {} ran on server {:?}, other cells on {:?}",
+                    receipt.cell.id, receipt.server, prior
                 )))
             }
             Some(_) => {}
@@ -1888,6 +2001,7 @@ mod tests {
             binding: binding(),
             cell,
             limits: Limits::approved(),
+            server: Server::docker(),
             measurement: measurement(),
             outcome: Outcome {
                 qualifying: true,
@@ -1915,6 +2029,72 @@ mod tests {
             .expect("all sixteen approved receipts should validate");
         assert_eq!(aggregate.cells.len(), 16);
         assert_eq!(aggregate.actual_image_id, binding().actual_image_id);
+    }
+
+    #[test]
+    fn server_states_one_of_two_shapes_for_the_whole_matrix() {
+        let expected = expectation();
+        let kubernetes = aggregate_receipts()
+            .into_iter()
+            .map(|mut receipt| {
+                receipt.server = Server::kubernetes();
+                receipt
+            })
+            .collect::<Vec<_>>();
+        let encoded = kubernetes[0].to_json();
+        assert!(encoded.contains(
+            "\"server\":{\"runtime\":\"kubernetes\",\"node_pool\":\"lumen-perf-server\",\"resource_limits\":false}"
+        ));
+        assert_eq!(Receipt::from_json(&encoded).unwrap(), kubernetes[0]);
+        validate_aggregate(&expected, &kubernetes).expect("a kubernetes matrix validates");
+        assert!(aggregate_receipts()[0].to_json().contains(
+            "\"server\":{\"runtime\":\"docker\",\"cpu_limit_milli\":2500,\"memory_limit_bytes\":17179869184}"
+        ));
+
+        let mut mixed = kubernetes.clone();
+        mixed[3].server = Server::docker();
+        assert!(matches!(
+            validate_aggregate(&expected, &mixed),
+            Err(ReceiptError::Invalid(_))
+        ));
+        let mut other_pool = kubernetes.clone();
+        other_pool[0].server = Server::Kubernetes {
+            node_pool: "lumen-server".to_owned(),
+        };
+        assert!(matches!(
+            validate_aggregate(&expected, &other_pool),
+            Err(ReceiptError::Invalid(_))
+        ));
+        let mut smaller_docker = aggregate_receipts();
+        smaller_docker[0].server = Server::Docker {
+            cpu_limit_milli: DOCKER_CPUS_MILLI,
+            memory_limit_bytes: DOCKER_MEMORY_BYTES - 1,
+        };
+        assert!(matches!(
+            validate_aggregate(&expected, &smaller_docker),
+            Err(ReceiptError::Invalid(_))
+        ));
+
+        let limited = encoded.replacen("\"resource_limits\":false", "\"resource_limits\":true", 1);
+        assert!(matches!(
+            Receipt::from_json(&limited),
+            Err(ReceiptError::Invalid(_))
+        ));
+        let docker_keys_on_kubernetes = encoded.replacen(
+            "\"resource_limits\":false",
+            "\"resource_limits\":false,\"cpu_limit_milli\":2500",
+            1,
+        );
+        assert!(matches!(
+            Receipt::from_json(&docker_keys_on_kubernetes),
+            Err(ReceiptError::UnknownKey { .. })
+        ));
+        let unknown_runtime =
+            encoded.replacen("\"runtime\":\"kubernetes\"", "\"runtime\":\"podman\"", 1);
+        assert!(matches!(
+            Receipt::from_json(&unknown_runtime),
+            Err(ReceiptError::Invalid(_))
+        ));
     }
 
     #[test]
@@ -1949,8 +2129,8 @@ mod tests {
             Err(ReceiptError::MissingKey { .. })
         ));
         let duplicate = encoded.replacen(
-            "\"schema_version\":1,",
-            "\"schema_version\":1,\"schema_version\":1,",
+            "\"schema_version\":2,",
+            "\"schema_version\":2,\"schema_version\":2,",
             1,
         );
         assert!(matches!(
@@ -2020,7 +2200,7 @@ mod tests {
         let expected = expectation();
 
         let mut altered_limits = aggregate_receipts();
-        altered_limits[0].limits.docker_memory_bytes -= 1;
+        altered_limits[0].limits.rss_limit_bytes += 1;
         assert!(matches!(
             validate_aggregate(&expected, &altered_limits),
             Err(ReceiptError::Invalid(_))

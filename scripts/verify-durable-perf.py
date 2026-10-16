@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed verifier for sixteen Lumen durable-performance receipts.
 
-This program verifies only the measurements in receipt schema v1.  It never
+This program verifies only the measurements in receipt schema v2.  It never
 contacts a registry, a workflow service, or a running Lumen process.
 """
 import argparse
@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 CELL_KIND = "lumen.durable-perf-cell"
 SUMMARY_KIND = "lumen.durable-perf-summary"
 IMAGE_RE = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
@@ -37,8 +37,6 @@ REQUIRED_LIMITS = {
     "query_max_limit_ms": 5000,
     "drain_limit_ms": 60000,
     "rss_limit_bytes": 12884901888,
-    "docker_cpus_milli": 2500,
-    "docker_memory_bytes": 17179869184,
     "snapshot_seconds": 15,
     "hot_documents": 100000,
     "idle_collections": 181,
@@ -50,6 +48,13 @@ REQUIRED_LIMITS = {
     "capacity_refusal_percent": 1,
     "metric_sample_missing_percent": 1,
 }
+# The measured server ran either under `docker run --cpus 2.5 --memory 16g`
+# or as the gke-perf overlay pod: no resource limits, alone on a
+# lumen-perf-server node.  All sixteen receipts must state the same shape.
+APPROVED_SERVERS = (
+    {"runtime": "docker", "cpu_limit_milli": 2500, "memory_limit_bytes": 17179869184},
+    {"runtime": "kubernetes", "node_pool": "lumen-perf-server", "resource_limits": False},
+)
 MEASUREMENT_INTS = frozenset((
     "input_duration_ms", "observed_input_elapsed_ms", "requests_offered", "requests_finished",
     "requests_completed", "requests_started_in_input", "requests_finished_in_input",
@@ -135,7 +140,7 @@ def load_receipt(path):
 
 
 def validate_cell(value, expected_binding):
-    exact_keys(value, {"schema_version", "kind", "binding", "cell", "limits", "measurement", "outcome"}, "receipt")
+    exact_keys(value, {"schema_version", "kind", "binding", "cell", "limits", "server", "measurement", "outcome"}, "receipt")
     if require_u64(value["schema_version"], "schema_version") != SCHEMA_VERSION:
         fail("unsupported receipt schema_version")
     if value["kind"] != CELL_KIND:
@@ -170,6 +175,18 @@ def validate_cell(value, expected_binding):
     for key, required in REQUIRED_LIMITS.items():
         if require_u64(limits[key], f"limits.{key}") != required:
             fail(f"limits.{key} does not match frozen durable gate")
+
+    server = value["server"]
+    if not isinstance(server, dict):
+        fail("server must be an object")
+    approved = [shape for shape in APPROVED_SERVERS if shape["runtime"] == server.get("runtime")]
+    if not approved:
+        fail("server.runtime must be docker or kubernetes")
+    exact_keys(server, approved[0], "server")
+    for key, required in approved[0].items():
+        actual = server[key]
+        if type(actual) is not type(required) or actual != required:
+            fail(f"server.{key} does not match the approved {approved[0]['runtime']} shape")
 
     measurement = value["measurement"]
     exact_keys(measurement, MEASUREMENT_KEYS, "measurement")
@@ -346,6 +363,7 @@ def expected_summary(receipts_dir, repo, run_id, run_attempt, commit, image):
     records = []
     cell_ids = set()
     actual_image_id = None
+    server = None
     for path in paths:
         raw, receipt = load_receipt(path)
         if actual_image_id is None:
@@ -354,6 +372,10 @@ def expected_summary(receipts_dir, repo, run_id, run_attempt, commit, image):
             fail("first receipt has no actual image ID")
         expected["actual_image_id"] = actual_image_id
         cell_id = validate_cell(receipt, expected)
+        if server is None:
+            server = receipt["server"]
+        elif receipt["server"] != server:
+            fail(f"cell {cell_id!r} ran on a different server shape than the other cells")
         if cell_id in cell_ids:
             fail(f"duplicate cell receipt {cell_id!r}")
         cell_ids.add(cell_id)

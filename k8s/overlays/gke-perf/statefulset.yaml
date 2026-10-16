@@ -1,6 +1,9 @@
-# The measured server. It mirrors `docker_run_args` in tests/it/perf_gate.rs:
-# - lumen requests == limits, 2500m and 16Gi (`--cpus 2.5 --memory 16g`), so
-#   the pod is QoS Guaranteed;
+# The measured server. It follows the faberline GKE test rule, not the
+# `docker run --cpus 2.5 --memory 16g` shape: one pod per node through the
+# required pod anti-affinity, small requests, and no limits, so lumen gets the
+# whole lumen-perf-server node. The receipt records that shape
+# (server.runtime=kubernetes, resource_limits=false). Otherwise it mirrors
+# `docker_run_args` in tests/it/perf_gate.rs:
 # - the env below and nothing else, no command, args, envFrom, or valueFrom;
 # - the data directory on a fresh volume (here a PVC per namespace).
 # No liveness or startup probe: Docker never restarts the container on its
@@ -28,6 +31,11 @@ spec:
       labels:
         app: lumen-perf
     spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector: {}
       nodeSelector:
         faberline.dev/pool: lumen-perf-server
       tolerations:
@@ -72,11 +80,8 @@ spec:
               value: "1"
           resources:
             requests:
-              cpu: 2500m
-              memory: 16Gi
-            limits:
-              cpu: 2500m
-              memory: 16Gi
+              cpu: 500m
+              memory: 1Gi
           # Only gates the rollout before the test Job starts; it never
           # restarts anything.
           readinessProbe:
@@ -99,11 +104,8 @@ spec:
           command: ["sleep", "2147483647"]
           resources:
             requests:
-              cpu: 100m
-              memory: 64Mi
-            limits:
-              cpu: 100m
-              memory: 64Mi
+              cpu: 10m
+              memory: 16Mi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

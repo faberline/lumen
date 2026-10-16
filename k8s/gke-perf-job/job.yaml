@@ -5,8 +5,9 @@
 # job of gke-perf.yml takes the receipt from there.
 #
 # The client runs on its own node (pool lumen-perf-client), so it never takes
-# CPU from the measured server. No retry: a second attempt would be a second
-# measurement of the same cell.
+# CPU from the measured server. Like every faberline GKE test pod it is one
+# pod per node, with small requests and no limits. No retry: a second attempt
+# would be a second measurement of the same cell.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -21,6 +22,11 @@ spec:
       restartPolicy: Never
       serviceAccountName: lumen-perf-client
       enableServiceLinks: false
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector: {}
       nodeSelector:
         faberline.dev/pool: lumen-perf-client
       tolerations:
@@ -58,10 +64,8 @@ spec:
               value: /work
           resources:
             requests:
-              cpu: "2"
-              memory: 4Gi
-            limits:
-              memory: 8Gi
+              cpu: 500m
+              memory: 1Gi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
