@@ -992,7 +992,7 @@ mod durable_workload {
     use super::perf_cell_receipt::{
         self, percent_milli, rate_milli, Binding as ReceiptBinding, Cell as ReceiptCell,
         Limits as ReceiptLimits, Measurement as ReceiptMeasurement, Outcome as ReceiptOutcome,
-        Receipt,
+        Receipt, Server as ReceiptServer,
     };
     use super::perf_workload_ledger::{
         Backend, DocumentOperation, Endpoint, GateFailure, Outcome, QueryClass, Request,
@@ -3659,6 +3659,16 @@ mod durable_workload {
             Ok(())
         }
 
+        /// `assert_docker_limits` or `inspect_kube_pod` has checked this shape
+        /// before the workload starts.
+        fn receipt_server(&self) -> ReceiptServer {
+            if self.kubernetes.is_some() {
+                ReceiptServer::kubernetes()
+            } else {
+                ReceiptServer::docker()
+            }
+        }
+
         async fn wait_ready(&self) -> Result<()> {
             self.wait_ready_until(Instant::now() + STARTUP_TIMEOUT)
                 .await
@@ -4659,8 +4669,10 @@ mod durable_workload {
 
     // `LUMEN_PERF_RUNTIME=kubernetes` attaches to a pod that the gke-perf
     // overlay deployed. The harness does not create the server. It checks
-    // that the pod matches the Docker contract above, restarts the server
-    // container in place, and collects evidence. Namespace teardown owns
+    // that the pod runs the Docker contract above except for resources: the
+    // faberline GKE test rule gives the pod no limits and a whole
+    // lumen-perf-server node, and the receipt says so. It restarts the server
+    // container in place and collects evidence. Namespace teardown owns
     // cleanup.
     const PERF_RUNTIME_ENV: &str = "LUMEN_PERF_RUNTIME";
     const KUBE_POD_ENV: &str = "LUMEN_PERF_KUBE_POD";
@@ -4670,7 +4682,8 @@ mod durable_workload {
     const KUBE_RESTARTER_CONTAINER: &str = "restarter";
     const KUBE_DATA_MOUNT: &str = "/var/lib/lumen/data";
     const KUBE_SERVER_PORT: u16 = 7373;
-    const KUBE_CPU_MILLI: u64 = 2500;
+    const KUBE_POOL_LABEL: &str = "faberline.dev/pool";
+    const KUBE_HOSTNAME_TOPOLOGY: &str = "kubernetes.io/hostname";
     const KUBE_RESTART_POLL: Duration = Duration::from_millis(200);
     // 100 ticks of 0.1 s match the 10-second grace of `docker restart`.
     const KUBE_RESTART_GRACE_TICKS: u32 = 100;
@@ -4891,8 +4904,78 @@ mod durable_workload {
         })
     }
 
-    /// Checks the pod against the same contract that `docker run` and
-    /// `assert_docker_limits` enforce locally.
+    /// The faberline GKE test rule: every container requests resources and has
+    /// no limits, and the pod is alone on a lumen-perf-server node. The
+    /// receipt records this as `ReceiptServer::kubernetes()`.
+    fn check_kube_resources(pod: &Value, lumen: &Value) -> Result<()> {
+        let requested = |pointer: &str, parse: fn(&str) -> Option<u64>| {
+            lumen
+                .pointer(pointer)
+                .and_then(Value::as_str)
+                .and_then(parse)
+                .is_some_and(|value| value > 0)
+        };
+        if !requested("/resources/requests/cpu", kube_cpu_milli)
+            || !requested("/resources/requests/memory", kube_memory_bytes)
+        {
+            return Err(HarnessError::DockerLimits(format!(
+                "lumen must request cpu and memory; got {}",
+                lumen.pointer("/resources").unwrap_or(&Value::Null)
+            )));
+        }
+        for container in pod
+            .pointer("/spec/containers")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let limits = container.pointer("/resources/limits");
+            if limits.is_some_and(|limits| limits.as_object().is_none_or(|map| !map.is_empty())) {
+                return Err(HarnessError::DockerLimits(format!(
+                    "container {} sets resource limits {}",
+                    container["name"],
+                    limits.unwrap_or(&Value::Null)
+                )));
+            }
+        }
+        let qos = pod.pointer("/status/qosClass").and_then(Value::as_str);
+        if qos != Some("Burstable") {
+            return Err(HarnessError::DockerLimits(format!(
+                "expected qosClass Burstable (requests without limits); got {qos:?}"
+            )));
+        }
+        let pool = pod
+            .pointer("/spec/nodeSelector")
+            .and_then(|selector| selector.get(KUBE_POOL_LABEL))
+            .and_then(Value::as_str);
+        if pool != Some(perf_cell_receipt::KUBERNETES_NODE_POOL) {
+            return Err(kube_pod_invalid(format!(
+                "selects pool {pool:?}; expected {}",
+                perf_cell_receipt::KUBERNETES_NODE_POOL
+            )));
+        }
+        let alone_on_node = pod
+            .pointer(
+                "/spec/affinity/podAntiAffinity/requiredDuringSchedulingIgnoredDuringExecution",
+            )
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|term| {
+                term.get("topologyKey").and_then(Value::as_str) == Some(KUBE_HOSTNAME_TOPOLOGY)
+                    && term.get("labelSelector") == Some(&json!({}))
+            });
+        if !alone_on_node {
+            return Err(kube_pod_invalid(format!(
+                "has no required pod anti-affinity on {KUBE_HOSTNAME_TOPOLOGY} with an empty labelSelector"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Checks the pod against the contract that `docker run` enforces
+    /// locally, with `check_kube_resources` in place of
+    /// `assert_docker_limits`.
     fn inspect_kube_pod(
         pod: &Value,
         image_reference: &str,
@@ -4907,32 +4990,7 @@ mod durable_workload {
                 "runs image {image:?}; expected {image_reference}"
             )));
         }
-        let quantity = |pointer: &str| container.pointer(pointer).and_then(Value::as_str);
-        let cpu = [
-            quantity("/resources/requests/cpu"),
-            quantity("/resources/limits/cpu"),
-        ];
-        let memory = [
-            quantity("/resources/requests/memory"),
-            quantity("/resources/limits/memory"),
-        ];
-        if cpu
-            .iter()
-            .any(|value| value.and_then(kube_cpu_milli) != Some(KUBE_CPU_MILLI))
-            || memory
-                .iter()
-                .any(|value| value.and_then(kube_memory_bytes) != Some(DOCKER_MEMORY_BYTES))
-        {
-            return Err(HarnessError::DockerLimits(format!(
-                "expected lumen requests and limits cpu={KUBE_CPU_MILLI}m memory={DOCKER_MEMORY_BYTES}; got cpu={cpu:?} memory={memory:?}"
-            )));
-        }
-        let qos = pod.pointer("/status/qosClass").and_then(Value::as_str);
-        if qos != Some("Guaranteed") {
-            return Err(HarnessError::DockerLimits(format!(
-                "expected qosClass Guaranteed; got {qos:?}"
-            )));
-        }
+        check_kube_resources(pod, container)?;
         if pod
             .pointer("/spec/shareProcessNamespace")
             .and_then(Value::as_bool)
@@ -5303,24 +5361,29 @@ mod durable_workload {
             "metadata": {"uid": "uid-1"},
             "spec": {
                 "shareProcessNamespace": true,
+                "nodeSelector": {"faberline.dev/pool": "lumen-perf-server"},
+                "affinity": {"podAntiAffinity": {"requiredDuringSchedulingIgnoredDuringExecution": [
+                    {"topologyKey": "kubernetes.io/hostname", "labelSelector": {}}
+                ]}},
                 "containers": [
                     {
                         "name": "lumen",
                         "image": KUBE_TEST_IMAGE,
                         "args": ["serve"],
                         "env": env,
-                        "resources": {
-                            "requests": {"cpu": "2500m", "memory": "16Gi"},
-                            "limits": {"cpu": "2500m", "memory": "16Gi"}
-                        },
+                        "resources": {"requests": {"cpu": "500m", "memory": "1Gi"}},
                         "volumeMounts": [{"name": "data", "mountPath": "/var/lib/lumen/data"}]
                     },
-                    {"name": "restarter", "image": "busybox"}
+                    {
+                        "name": "restarter",
+                        "image": "busybox",
+                        "resources": {"requests": {"cpu": "10m", "memory": "16Mi"}}
+                    }
                 ],
                 "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": "data-lumen-perf-0"}}]
             },
             "status": {
-                "qosClass": "Guaranteed",
+                "qosClass": "Burstable",
                 "podIP": "10.4.0.7",
                 "containerStatuses": [{
                     "name": "lumen",
@@ -5482,12 +5545,18 @@ mod durable_workload {
         let expected = expected_server_env(Some("1"), false);
         let other_digest =
             "ghcr.io/faberline/lumen@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let mutations: [(&str, fn(&mut Value)); 17] = [
+        let mutations: [(&str, fn(&mut Value)); 22] = [
             ("image", |pod| {
                 pod["spec"]["containers"][0]["image"] = json!("ghcr.io/faberline/lumen:latest")
             }),
             ("cpu limit", |pod| {
-                pod["spec"]["containers"][0]["resources"]["limits"]["cpu"] = json!("2")
+                pod["spec"]["containers"][0]["resources"]["limits"] = json!({"cpu": "2500m"})
+            }),
+            ("memory limit", |pod| {
+                pod["spec"]["containers"][0]["resources"]["limits"] = json!({"memory": "16Gi"})
+            }),
+            ("restarter limit", |pod| {
+                pod["spec"]["containers"][1]["resources"]["limits"] = json!({"memory": "64Mi"})
             }),
             ("cpu request", |pod| {
                 pod["spec"]["containers"][0]["resources"]["requests"]
@@ -5495,10 +5564,21 @@ mod durable_workload {
                     .unwrap()
                     .remove("cpu");
             }),
-            ("memory", |pod| {
-                pod["spec"]["containers"][0]["resources"]["requests"]["memory"] = json!("8Gi")
+            ("memory request", |pod| {
+                pod["spec"]["containers"][0]["resources"]["requests"]["memory"] = json!("0")
             }),
-            ("qos", |pod| pod["status"]["qosClass"] = json!("Burstable")),
+            ("qos", |pod| pod["status"]["qosClass"] = json!("Guaranteed")),
+            ("pool", |pod| {
+                pod["spec"]["nodeSelector"]["faberline.dev/pool"] = json!("lumen-server")
+            }),
+            ("anti-affinity", |pod| {
+                pod["spec"].as_object_mut().unwrap().remove("affinity");
+            }),
+            ("anti-affinity selector", |pod| {
+                pod["spec"]["affinity"]["podAntiAffinity"]
+                    ["requiredDuringSchedulingIgnoredDuringExecution"][0]["labelSelector"] =
+                    json!({"matchLabels": {"app": "lumen-perf"}})
+            }),
             ("extra env", |pod| {
                 pod["spec"]["containers"][0]["env"]
                     .as_array_mut()
@@ -5551,6 +5631,10 @@ mod durable_workload {
                 "{label} drift must be refused"
             );
         }
+        let mut empty_limits = kube_pod_fixture();
+        empty_limits["spec"]["containers"][0]["resources"]["limits"] = json!({});
+        inspect_kube_pod(&empty_limits, KUBE_TEST_IMAGE, &expected)
+            .expect("an empty limits object sets no limit");
         let mut pod = kube_pod_fixture();
         pod["status"]["containerStatuses"][0]["imageID"] = json!(other_digest);
         let observation = inspect_kube_pod(&pod, KUBE_TEST_IMAGE, &expected).unwrap();
@@ -9144,6 +9228,7 @@ mod durable_workload {
         cold_mutation_readback: bool,
         image_reference: String,
         actual_image_id: String,
+        server: ReceiptServer,
     }
 
     fn duration_millis(name: &'static str, duration: Duration) -> Result<u64> {
@@ -9315,6 +9400,7 @@ mod durable_workload {
             binding: context.binding(completed.actual_image_id.clone()),
             cell: config.receipt_cell(),
             limits: ReceiptLimits::approved(),
+            server: completed.server.clone(),
             measurement,
             outcome: ReceiptOutcome {
                 qualifying: true,
@@ -9601,6 +9687,7 @@ mod durable_workload {
             cold_mutation_readback,
             image_reference: server.image_reference.clone(),
             actual_image_id: server.image_id.clone(),
+            server: server.receipt_server(),
         })
     }
 
@@ -9672,6 +9759,7 @@ mod durable_workload {
             cold_mutation_readback: true,
             image_reference: "sha256:fixture".to_owned(),
             actual_image_id: "sha256:fixture".to_owned(),
+            server: ReceiptServer::docker(),
         }
     }
 

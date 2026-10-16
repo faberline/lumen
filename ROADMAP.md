@@ -96,7 +96,10 @@ release. Search v2 is outside this release, and its activation remains
   With a fixed seed, one hot collection of 100,000 documents, 181 idle
   collections of 100 documents each, 14 fields, three ngram text subfields,
   and separate Flat and HNSW vector cases, each batch-size and vector-backend
-  workload case runs independently for 1,800 seconds on 2.5 CPU and 16 GiB.
+  workload case runs independently for 1,800 seconds. A local Docker run
+  gives the server 2.5 CPU and 16 GiB; the qualifying GKE run gives it a
+  whole `lumen-perf-server` node with no resource limits. Each receipt
+  records which shape it ran, and all sixteen must match.
   That is sixteen cells: `/index` 1, 100, and 1,000; `docs:replace` 1 and 32;
   and `docs:unindex` 1, 100, and 1,000, each with `flat-cpu` and `hnsw-cpu`.
   It includes checkpoint and merge while serving 10 query QPS and 60 complete
@@ -115,10 +118,11 @@ release. Search v2 is outside this release, and its activation remains
   I/O, pending bytes, disk use, and restart time. A run without its input
   rate, checkpoint, or merge is invalid. The server image and the load client
   both use the repository `[profile.release]`. The sixteen qualifying receipts
-  run locally against the candidate registry digest and are judged by
+  run on the shared GKE test cluster through `.github/workflows/gke-perf.yml`
+  against the candidate registry digest and are judged by
   `verify-durable-perf.py`. Native Kind e2e runs 100,000 documents in both
-  overlay and operator modes on amd64 and arm64. A 500,000-document matrix
-  and a GKE run are later work, not part of `lumen@0.6.1`.
+  overlay and operator modes on amd64 and arm64. A 500,000-document matrix is
+  later work, not part of `lumen@0.6.1`.
 - Tracking: [Milestone #36](https://github.com/faberline/lumen/milestone/36).
 
 ### Durable write contract

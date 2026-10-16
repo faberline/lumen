@@ -4420,6 +4420,7 @@ fn add_valid_durable_perf_evidence(dir: &Path) {
             binding: durable_perf_fixture_binding(),
             cell: cell.clone(),
             limits: perf_cell_receipt::Limits::approved(),
+            server: perf_cell_receipt::Server::docker(),
             measurement: durable_perf_fixture_measurement(),
             outcome: perf_cell_receipt::Outcome {
                 qualifying: true,

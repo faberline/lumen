@@ -4359,6 +4359,8 @@ fn add_durable_perf_evidence(fixture: &GkeReceiptFixture, attempt: &str) -> (Pat
             binding: binding.clone(),
             cell: cell.clone(),
             limits: perf_cell_receipt::Limits::approved(),
+            // 0.6.1 evidence comes from the gke-perf overlay.
+            server: perf_cell_receipt::Server::kubernetes(),
             measurement: crate::release_candidate::durable_perf_fixture_measurement(),
             outcome: perf_cell_receipt::Outcome {
                 qualifying: true,
