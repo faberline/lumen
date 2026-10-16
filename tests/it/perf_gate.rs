@@ -655,6 +655,9 @@ fn median_statistic_and_ignored_inventory() {
             ("kube_pod_inspection_accepts_the_docker_equivalent_pod", false),
             ("kube_gke_perf_overlay_passes_the_pod_contract", false),
             ("kube_pod_inspection_rejects_each_contract_drift", false),
+            ("kube_hardware_reads_the_bound_node_volume_and_cpu", false),
+            ("kube_hardware_rejects_each_unobserved_or_ambiguous_value", false),
+            ("kube_gke_perf_overlay_claims_dynamic_rwo_and_reads_the_cluster", false),
             ("kube_kubectl_args_put_the_namespace_before_the_subcommand", false),
             ("kube_evidence_collects_logs_previous_logs_and_pod_json", false),
             ("kube_restart_progress_requires_one_in_place_restart", false),
@@ -3586,6 +3589,7 @@ mod durable_workload {
                     )));
                 }
                 let image_id = kube_actual_image_id(&observation, &image)?;
+                let server_shape = observe_kube_server(&target, &pod, &observation).await?;
                 let pod_ip = observation
                     .pod_ip
                     .as_deref()
@@ -3618,6 +3622,7 @@ mod durable_workload {
                     readyz_readiness_trace: Arc::new(std::sync::Mutex::new(None)),
                     kubernetes: Some(AttachedKubeServer {
                         target: target.clone(),
+                        server: server_shape,
                     }),
                 })
             }
@@ -3659,13 +3664,12 @@ mod durable_workload {
             Ok(())
         }
 
-        /// `assert_docker_limits` or `inspect_kube_pod` has checked this shape
-        /// before the workload starts.
+        /// `assert_docker_limits` or `observe_kube_server` has checked this
+        /// shape before the workload starts.
         fn receipt_server(&self) -> ReceiptServer {
-            if self.kubernetes.is_some() {
-                ReceiptServer::kubernetes()
-            } else {
-                ReceiptServer::docker()
+            match &self.kubernetes {
+                Some(attached) => attached.server.clone(),
+                None => ReceiptServer::docker(),
             }
         }
 
@@ -4684,6 +4688,9 @@ mod durable_workload {
     const KUBE_SERVER_PORT: u16 = 7373;
     const KUBE_POOL_LABEL: &str = "faberline.dev/pool";
     const KUBE_HOSTNAME_TOPOLOGY: &str = "kubernetes.io/hostname";
+    const KUBE_INSTANCE_TYPE_LABEL: &str = "node.kubernetes.io/instance-type";
+    const KUBE_DISK_TYPE_PREFIX: &str = "disk-type.gke.io/";
+    const KUBE_PD_CSI_DRIVER: &str = "pd.csi.storage.gke.io";
     const KUBE_RESTART_POLL: Duration = Duration::from_millis(200);
     // 100 ticks of 0.1 s match the 10-second grace of `docker restart`.
     const KUBE_RESTART_GRACE_TICKS: u32 = 100;
@@ -4710,6 +4717,8 @@ mod durable_workload {
     #[derive(Clone, Debug)]
     struct AttachedKubeServer {
         target: KubeTarget,
+        /// Observed once at attach. The restart keeps the pod, node and claim.
+        server: ReceiptServer,
     }
 
     fn is_kube_dns_label(value: &str) -> bool {
@@ -4906,7 +4915,7 @@ mod durable_workload {
 
     /// The faberline GKE test rule: every container requests resources and has
     /// no limits, and the pod is alone on a lumen-perf-server node. The
-    /// receipt records this as `ReceiptServer::kubernetes()`.
+    /// receipt records this as `ReceiptServer::Kubernetes`.
     fn check_kube_resources(pod: &Value, lumen: &Value) -> Result<()> {
         let requested = |pointer: &str, parse: fn(&str) -> Option<u64>| {
             lumen
@@ -5083,6 +5092,280 @@ mod durable_workload {
             )));
         }
         Ok(digest.to_owned())
+    }
+
+    fn kube_hardware_invalid(detail: impl Display) -> HarnessError {
+        HarnessError::DataInvariant(format!("kubernetes server hardware {detail}"))
+    }
+
+    fn kube_text<'a>(value: &'a Value, pointer: &str) -> Option<&'a str> {
+        value
+            .pointer(pointer)
+            .and_then(Value::as_str)
+            .filter(|text| !text.is_empty())
+    }
+
+    /// The node the scheduler bound the pod to, not the node the selector
+    /// asked for.
+    fn kube_pod_node(pod: &Value) -> Result<(String, String)> {
+        let node = kube_text(pod, "/spec/nodeName")
+            .ok_or_else(|| kube_pod_invalid("has no spec.nodeName"))?;
+        let namespace = kube_text(pod, "/metadata/namespace")
+            .ok_or_else(|| kube_pod_invalid("has no metadata.namespace"))?;
+        Ok((node.to_owned(), namespace.to_owned()))
+    }
+
+    /// Returns the machine type GKE labelled the node with. The node must be
+    /// in the measured pool and support the measured disk type.
+    fn kube_node_instance_type(node: &Value, node_name: &str) -> Result<String> {
+        if kube_text(node, "/metadata/name") != Some(node_name) {
+            return Err(kube_hardware_invalid(format!(
+                "node JSON names {:?}; expected {node_name}",
+                kube_text(node, "/metadata/name")
+            )));
+        }
+        let labels = node
+            .pointer("/metadata/labels")
+            .and_then(Value::as_object)
+            .ok_or_else(|| kube_hardware_invalid(format!("node {node_name} has no labels")))?;
+        let label = |key: &str| labels.get(key).and_then(Value::as_str);
+        let pool = label(KUBE_POOL_LABEL);
+        if pool != Some(perf_cell_receipt::KUBERNETES_NODE_POOL) {
+            return Err(kube_hardware_invalid(format!(
+                "node {node_name} is in pool {pool:?}; expected {}",
+                perf_cell_receipt::KUBERNETES_NODE_POOL
+            )));
+        }
+        let disk_label = format!(
+            "{KUBE_DISK_TYPE_PREFIX}{}",
+            perf_cell_receipt::KUBERNETES_DISK_TYPE
+        );
+        if label(&disk_label) != Some("true") {
+            return Err(kube_hardware_invalid(format!(
+                "node {node_name} does not support {}: {disk_label}={:?}",
+                perf_cell_receipt::KUBERNETES_DISK_TYPE,
+                label(&disk_label)
+            )));
+        }
+        label(KUBE_INSTANCE_TYPE_LABEL)
+            .filter(|instance_type| perf_cell_receipt::is_machine_type(instance_type))
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                kube_hardware_invalid(format!(
+                    "node {node_name} has {KUBE_INSTANCE_TYPE_LABEL}={:?}; expected a GCE machine type",
+                    label(KUBE_INSTANCE_TYPE_LABEL)
+                ))
+            })
+    }
+
+    /// Returns the bound volume of the data claim.
+    fn kube_claim_volume(claim: &Value, claim_name: &str) -> Result<String> {
+        if kube_text(claim, "/metadata/name") != Some(claim_name) {
+            return Err(kube_hardware_invalid(format!(
+                "claim JSON names {:?}; expected {claim_name}",
+                kube_text(claim, "/metadata/name")
+            )));
+        }
+        let class = kube_text(claim, "/spec/storageClassName");
+        if class != Some(perf_cell_receipt::KUBERNETES_STORAGE_CLASS) {
+            return Err(kube_hardware_invalid(format!(
+                "claim {claim_name} uses StorageClass {class:?}; expected {}",
+                perf_cell_receipt::KUBERNETES_STORAGE_CLASS
+            )));
+        }
+        let phase = kube_text(claim, "/status/phase");
+        if phase != Some("Bound") {
+            return Err(kube_hardware_invalid(format!(
+                "claim {claim_name} is {phase:?}; expected Bound"
+            )));
+        }
+        kube_text(claim, "/spec/volumeName")
+            .map(str::to_owned)
+            .ok_or_else(|| kube_hardware_invalid(format!("claim {claim_name} has no volumeName")))
+    }
+
+    /// Returns the disk type the PD CSI driver provisioned. `dynamic-rwo`
+    /// only says `type: dynamic`; the driver records its choice as the one
+    /// `disk-type.gke.io/<type>` term of the volume's node affinity.
+    fn kube_volume_disk_type(
+        volume: &Value,
+        volume_name: &str,
+        claim_name: &str,
+        namespace: &str,
+    ) -> Result<String> {
+        if kube_text(volume, "/metadata/name") != Some(volume_name) {
+            return Err(kube_hardware_invalid(format!(
+                "volume JSON names {:?}; expected {volume_name}",
+                kube_text(volume, "/metadata/name")
+            )));
+        }
+        let driver = kube_text(volume, "/spec/csi/driver");
+        if driver != Some(KUBE_PD_CSI_DRIVER) {
+            return Err(kube_hardware_invalid(format!(
+                "volume {volume_name} uses CSI driver {driver:?}; expected {KUBE_PD_CSI_DRIVER}"
+            )));
+        }
+        let class = kube_text(volume, "/spec/storageClassName");
+        if class != Some(perf_cell_receipt::KUBERNETES_STORAGE_CLASS) {
+            return Err(kube_hardware_invalid(format!(
+                "volume {volume_name} has StorageClass {class:?}; expected {}",
+                perf_cell_receipt::KUBERNETES_STORAGE_CLASS
+            )));
+        }
+        let claim_ref = (
+            kube_text(volume, "/spec/claimRef/namespace"),
+            kube_text(volume, "/spec/claimRef/name"),
+        );
+        if claim_ref != (Some(namespace), Some(claim_name)) {
+            return Err(kube_hardware_invalid(format!(
+                "volume {volume_name} is bound to {claim_ref:?}; expected {namespace}/{claim_name}"
+            )));
+        }
+        let terms = volume
+            .pointer("/spec/nodeAffinity/required/nodeSelectorTerms")
+            .and_then(Value::as_array)
+            .filter(|terms| !terms.is_empty())
+            .ok_or_else(|| {
+                kube_hardware_invalid(format!(
+                    "volume {volume_name} has no required node affinity"
+                ))
+            })?;
+        let mut disk_types = BTreeSet::new();
+        for term in terms {
+            let mut term_types = Vec::new();
+            for expression in term
+                .get("matchExpressions")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                let Some(disk_type) = expression
+                    .get("key")
+                    .and_then(Value::as_str)
+                    .and_then(|key| key.strip_prefix(KUBE_DISK_TYPE_PREFIX))
+                else {
+                    continue;
+                };
+                if expression.get("operator").and_then(Value::as_str) != Some("In")
+                    || expression.get("values") != Some(&json!(["true"]))
+                {
+                    return Err(kube_hardware_invalid(format!(
+                        "volume {volume_name} has disk-type affinity {expression}; expected In [\"true\"]"
+                    )));
+                }
+                term_types.push(disk_type.to_owned());
+            }
+            if term_types.len() != 1 {
+                return Err(kube_hardware_invalid(format!(
+                    "volume {volume_name} affinity term {term} names disk types {term_types:?}; expected one"
+                )));
+            }
+            disk_types.extend(term_types);
+        }
+        let mut disk_types = disk_types.into_iter();
+        match (disk_types.next(), disk_types.next()) {
+            (Some(disk_type), None) => Ok(disk_type),
+            (first, second) => Err(kube_hardware_invalid(format!(
+                "volume {volume_name} names more than one disk type: {first:?}, {second:?}"
+            ))),
+        }
+    }
+
+    /// The one `model name` of every processor in `/proc/cpuinfo`.
+    fn cpuinfo_model(cpuinfo: &str, source: &str) -> Result<String> {
+        let field = |line: &str, name: &str| {
+            line.split_once(':')
+                .filter(|(key, _)| key.trim_end() == name)
+                .map(|(_, value)| value.trim().to_owned())
+        };
+        let processors = cpuinfo
+            .lines()
+            .filter(|line| field(line, "processor").is_some())
+            .count();
+        let models = cpuinfo
+            .lines()
+            .filter_map(|line| field(line, "model name"))
+            .collect::<BTreeSet<_>>();
+        let named = cpuinfo
+            .lines()
+            .filter(|line| field(line, "model name").is_some())
+            .count();
+        let mut distinct = models.into_iter();
+        match (distinct.next(), distinct.next()) {
+            (Some(model), None)
+                if processors > 0
+                    && named == processors
+                    && perf_cell_receipt::is_cpu_model(&model) =>
+            {
+                Ok(model)
+            }
+            (first, second) => Err(kube_hardware_invalid(format!(
+                "{source} /proc/cpuinfo has {processors} processors and {named} model names \
+                 ({first:?}, {second:?}); expected one printable model name per processor"
+            ))),
+        }
+    }
+
+    async fn kube_json(target: &KubeTarget, kind: &str, name: &str) -> Result<Value> {
+        let output = kubectl_capture(
+            target.kubectl_args(&["get", kind, name, "-o", "json"]),
+            REQUEST_TIMEOUT,
+        )
+        .await?;
+        serde_json::from_str(&output).map_err(|error| {
+            kube_hardware_invalid(format!(
+                "{kind} {name} JSON from kubectl is invalid: {error}"
+            ))
+        })
+    }
+
+    /// Reads the receipt's server shape from the node, the data volume, and
+    /// both pods' `/proc/cpuinfo`. Any missing or ambiguous value fails the
+    /// attach; nothing falls back to the overlay's declared values.
+    async fn observe_kube_server(
+        target: &KubeTarget,
+        pod: &Value,
+        observation: &KubePodObservation,
+    ) -> Result<ReceiptServer> {
+        let (node_name, namespace) = kube_pod_node(pod)?;
+        let node = kube_json(target, "node", &node_name).await?;
+        let instance_type = kube_node_instance_type(&node, &node_name)?;
+        let claim = kube_json(target, "persistentvolumeclaim", &observation.claim).await?;
+        let volume_name = kube_claim_volume(&claim, &observation.claim)?;
+        let volume = kube_json(target, "persistentvolume", &volume_name).await?;
+        let disk_type =
+            kube_volume_disk_type(&volume, &volume_name, &observation.claim, &namespace)?;
+        if disk_type != perf_cell_receipt::KUBERNETES_DISK_TYPE {
+            return Err(kube_hardware_invalid(format!(
+                "volume {volume_name} is {disk_type}; expected {}",
+                perf_cell_receipt::KUBERNETES_DISK_TYPE
+            )));
+        }
+        let server_cpuinfo = kubectl_capture(
+            target.kubectl_args(&[
+                "exec",
+                target.pod.as_str(),
+                "-c",
+                KUBE_RESTARTER_CONTAINER,
+                "--",
+                "cat",
+                "/proc/cpuinfo",
+            ]),
+            REQUEST_TIMEOUT,
+        )
+        .await?;
+        let cpu_model = cpuinfo_model(&server_cpuinfo, "server")?;
+        let client_cpuinfo = fs::read_to_string("/proc/cpuinfo").map_err(|error| {
+            kube_hardware_invalid(format!("client cannot read /proc/cpuinfo: {error}"))
+        })?;
+        let client_cpu_model = cpuinfo_model(&client_cpuinfo, "client")?;
+        let server = ReceiptServer::kubernetes(&instance_type, &cpu_model, &client_cpu_model);
+        server.validate().map_err(kube_hardware_invalid)?;
+        eprintln!(
+            "PERF_KUBE_HARDWARE node={node_name} instance_type={instance_type} \
+             volume={volume_name} cpu_model={cpu_model:?} client_cpu_model={client_cpu_model:?}"
+        );
+        Ok(server)
     }
 
     async fn kubectl_capture(args: Vec<String>, timeout: Duration) -> Result<String> {
@@ -5646,6 +5929,320 @@ mod durable_workload {
             &expected_server_env(Some("1"), true)
         )
         .is_err());
+    }
+
+    const KUBE_TEST_NODE: &str = "gke-faberline-test-pool-lumen-perf-se-1a2b3c4d-x9z8";
+    const KUBE_TEST_VOLUME: &str = "pvc-0b5c7f9e-1111-4222-8333-944455556666";
+
+    fn kube_node_fixture() -> Value {
+        json!({
+            "metadata": {
+                "name": KUBE_TEST_NODE,
+                "labels": {
+                    "faberline.dev/pool": "lumen-perf-server",
+                    "node.kubernetes.io/instance-type": "n4-highmem-4",
+                    "disk-type.gke.io/hyperdisk-balanced": "true"
+                }
+            }
+        })
+    }
+
+    fn kube_claim_fixture() -> Value {
+        json!({
+            "metadata": {"name": "data-lumen-perf-0", "namespace": "lumen-run-7"},
+            "spec": {"storageClassName": "dynamic-rwo", "volumeName": KUBE_TEST_VOLUME},
+            "status": {"phase": "Bound"}
+        })
+    }
+
+    fn kube_volume_fixture() -> Value {
+        json!({
+            "metadata": {"name": KUBE_TEST_VOLUME},
+            "spec": {
+                "storageClassName": "dynamic-rwo",
+                "claimRef": {"namespace": "lumen-run-7", "name": "data-lumen-perf-0"},
+                "csi": {
+                    "driver": "pd.csi.storage.gke.io",
+                    "volumeHandle": "projects/p/zones/asia-east1-a/disks/pvc-0b5c7f9e"
+                },
+                "nodeAffinity": {"required": {"nodeSelectorTerms": [{"matchExpressions": [
+                    {"key": "topology.gke.io/zone", "operator": "In", "values": ["asia-east1-a"]},
+                    {"key": "disk-type.gke.io/hyperdisk-balanced", "operator": "In", "values": ["true"]}
+                ]}]}}
+            }
+        })
+    }
+
+    const CPUINFO_FIXTURE: &str = "processor\t: 0\n\
+        vendor_id\t: GenuineIntel\n\
+        model name\t: INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz\n\
+        flags\t\t: fpu vme\n\
+        \n\
+        processor\t: 1\n\
+        vendor_id\t: GenuineIntel\n\
+        model name\t: INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz\n\
+        flags\t\t: fpu vme\n";
+
+    #[test]
+    fn kube_hardware_reads_the_bound_node_volume_and_cpu() {
+        let mut pod = kube_pod_fixture();
+        pod["metadata"]["namespace"] = json!("lumen-run-7");
+        pod["spec"]["nodeName"] = json!(KUBE_TEST_NODE);
+        assert_eq!(
+            kube_pod_node(&pod).unwrap(),
+            (KUBE_TEST_NODE.to_owned(), "lumen-run-7".to_owned())
+        );
+        assert_eq!(
+            kube_node_instance_type(&kube_node_fixture(), KUBE_TEST_NODE).unwrap(),
+            "n4-highmem-4"
+        );
+        assert_eq!(
+            kube_claim_volume(&kube_claim_fixture(), "data-lumen-perf-0").unwrap(),
+            KUBE_TEST_VOLUME
+        );
+        assert_eq!(
+            kube_volume_disk_type(
+                &kube_volume_fixture(),
+                KUBE_TEST_VOLUME,
+                "data-lumen-perf-0",
+                "lumen-run-7"
+            )
+            .unwrap(),
+            "hyperdisk-balanced"
+        );
+        assert_eq!(
+            cpuinfo_model(CPUINFO_FIXTURE, "server").unwrap(),
+            "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz"
+        );
+
+        // The selector alone does not name a node.
+        let unscheduled = kube_pod_fixture();
+        assert!(matches!(
+            kube_pod_node(&unscheduled),
+            Err(HarnessError::DataInvariant(_))
+        ));
+    }
+
+    #[test]
+    fn kube_hardware_rejects_each_unobserved_or_ambiguous_value() {
+        let node_mutations: [(&str, fn(&mut Value)); 6] = [
+            ("other node", |node| {
+                node["metadata"]["name"] = json!("other")
+            }),
+            ("other pool", |node| {
+                node["metadata"]["labels"]["faberline.dev/pool"] = json!("lumen-perf-client")
+            }),
+            ("no pool", |node| {
+                node["metadata"]["labels"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("faberline.dev/pool");
+            }),
+            ("no instance type", |node| {
+                node["metadata"]["labels"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("node.kubernetes.io/instance-type");
+            }),
+            ("empty instance type", |node| {
+                node["metadata"]["labels"]["node.kubernetes.io/instance-type"] = json!("")
+            }),
+            ("no hyperdisk support", |node| {
+                node["metadata"]["labels"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("disk-type.gke.io/hyperdisk-balanced");
+            }),
+        ];
+        for (name, mutate) in node_mutations {
+            let mut node = kube_node_fixture();
+            mutate(&mut node);
+            assert!(
+                matches!(
+                    kube_node_instance_type(&node, KUBE_TEST_NODE),
+                    Err(HarnessError::DataInvariant(_))
+                ),
+                "{name} must fail"
+            );
+        }
+
+        let claim_mutations: [(&str, fn(&mut Value)); 5] = [
+            ("other claim", |claim| {
+                claim["metadata"]["name"] = json!("other")
+            }),
+            ("standard-rwo", |claim| {
+                claim["spec"]["storageClassName"] = json!("standard-rwo")
+            }),
+            ("pending", |claim| {
+                claim["status"]["phase"] = json!("Pending")
+            }),
+            ("no phase", |claim| claim["status"] = json!({})),
+            ("no volume", |claim| {
+                claim["spec"].as_object_mut().unwrap().remove("volumeName");
+            }),
+        ];
+        for (name, mutate) in claim_mutations {
+            let mut claim = kube_claim_fixture();
+            mutate(&mut claim);
+            assert!(
+                matches!(
+                    kube_claim_volume(&claim, "data-lumen-perf-0"),
+                    Err(HarnessError::DataInvariant(_))
+                ),
+                "{name} must fail"
+            );
+        }
+
+        let volume_mutations: [(&str, fn(&mut Value)); 10] = [
+            ("other volume", |volume| {
+                volume["metadata"]["name"] = json!("other")
+            }),
+            ("other driver", |volume| {
+                volume["spec"]["csi"]["driver"] = json!("filestore.csi.storage.gke.io")
+            }),
+            ("other class", |volume| {
+                volume["spec"]["storageClassName"] = json!("standard-rwo")
+            }),
+            ("other claim", |volume| {
+                volume["spec"]["claimRef"]["name"] = json!("data-lumen-perf-1")
+            }),
+            ("other namespace", |volume| {
+                volume["spec"]["claimRef"]["namespace"] = json!("lumen")
+            }),
+            ("no affinity", |volume| {
+                volume["spec"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("nodeAffinity");
+            }),
+            ("zone only", |volume| {
+                volume["spec"]["nodeAffinity"]["required"]["nodeSelectorTerms"][0]
+                    ["matchExpressions"]
+                    .as_array_mut()
+                    .unwrap()
+                    .pop();
+            }),
+            ("two disk types in one term", |volume| {
+                volume["spec"]["nodeAffinity"]["required"]["nodeSelectorTerms"][0]
+                    ["matchExpressions"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(json!({"key": "disk-type.gke.io/pd-balanced", "operator": "In", "values": ["true"]}));
+            }),
+            ("two terms disagree", |volume| {
+                volume["spec"]["nodeAffinity"]["required"]["nodeSelectorTerms"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(json!({"matchExpressions": [
+                        {"key": "disk-type.gke.io/pd-balanced", "operator": "In", "values": ["true"]}
+                    ]}));
+            }),
+            ("negated disk type", |volume| {
+                volume["spec"]["nodeAffinity"]["required"]["nodeSelectorTerms"][0]
+                    ["matchExpressions"][1]["operator"] = json!("NotIn")
+            }),
+        ];
+        for (name, mutate) in volume_mutations {
+            let mut volume = kube_volume_fixture();
+            mutate(&mut volume);
+            assert!(
+                matches!(
+                    kube_volume_disk_type(
+                        &volume,
+                        KUBE_TEST_VOLUME,
+                        "data-lumen-perf-0",
+                        "lumen-run-7"
+                    ),
+                    Err(HarnessError::DataInvariant(_))
+                ),
+                "{name} must fail"
+            );
+        }
+        let mut pd_volume = kube_volume_fixture();
+        pd_volume["spec"]["nodeAffinity"]["required"]["nodeSelectorTerms"][0]["matchExpressions"]
+            [1]["key"] = json!("disk-type.gke.io/pd-balanced");
+        assert_eq!(
+            kube_volume_disk_type(
+                &pd_volume,
+                KUBE_TEST_VOLUME,
+                "data-lumen-perf-0",
+                "lumen-run-7"
+            )
+            .unwrap(),
+            "pd-balanced",
+            "the attach then refuses pd-balanced against KUBERNETES_DISK_TYPE"
+        );
+
+        let mixed = CPUINFO_FIXTURE.replacen("8581C CPU @ 2.10GHz", "8481C CPU @ 2.70GHz", 1);
+        let unnamed = CPUINFO_FIXTURE.replacen(
+            "model name\t: INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz\n",
+            "",
+            1,
+        );
+        let blank = CPUINFO_FIXTURE.replace(
+            "model name\t: INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz",
+            "model name\t: ",
+        );
+        let arm = "processor\t: 0\nBogoMIPS\t: 50.00\nCPU implementer\t: 0x41\n";
+        for (name, cpuinfo) in [
+            ("mixed", mixed.as_str()),
+            ("unnamed", unnamed.as_str()),
+            ("blank", blank.as_str()),
+            ("arm", arm),
+            ("empty", ""),
+        ] {
+            assert!(
+                matches!(
+                    cpuinfo_model(cpuinfo, "server"),
+                    Err(HarnessError::DataInvariant(_))
+                ),
+                "{name} cpuinfo must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn kube_gke_perf_overlay_claims_dynamic_rwo_and_reads_the_cluster() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let statefulset: Value = serde_yaml::from_str(
+            &fs::read_to_string(root.join("k8s/overlays/gke-perf/statefulset.yaml")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            statefulset["spec"]["volumeClaimTemplates"][0]["spec"]["storageClassName"],
+            perf_cell_receipt::KUBERNETES_STORAGE_CLASS
+        );
+        let reader =
+            fs::read_to_string(root.join("k8s/overlays/gke-perf/cluster-reader.yaml")).unwrap();
+        let documents = serde_yaml::Deserializer::from_str(&reader)
+            .map(|document| <Value as serde::Deserialize>::deserialize(document).unwrap())
+            .collect::<Vec<_>>();
+        let role = documents
+            .iter()
+            .find(|document| document["kind"] == "ClusterRole")
+            .unwrap();
+        assert_eq!(
+            role["rules"],
+            json!([{"apiGroups": [""], "resources": ["nodes", "persistentvolumes"], "verbs": ["get"]}])
+        );
+        let binding = documents
+            .iter()
+            .find(|document| document["kind"] == "ClusterRoleBinding")
+            .unwrap();
+        assert_eq!(binding["roleRef"]["name"], role["metadata"]["name"]);
+        assert_eq!(binding["subjects"][0]["name"], "lumen-perf-client");
+        let job_rbac = fs::read_to_string(root.join("k8s/gke-perf-job/rbac.yaml")).unwrap();
+        assert!(serde_yaml::Deserializer::from_str(&job_rbac)
+            .map(|document| <Value as serde::Deserialize>::deserialize(document).unwrap())
+            .filter(|document| document["kind"] == "Role")
+            .any(|role| role["rules"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(
+                    |rule| rule["resources"] == json!(["persistentvolumeclaims"])
+                        && rule["verbs"] == json!(["get"])
+                )));
     }
 
     #[test]

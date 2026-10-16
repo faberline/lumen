@@ -15,7 +15,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 
-pub const SCHEMA_VERSION: u64 = 2;
+pub const SCHEMA_VERSION: u64 = 3;
 pub const RECEIPT_KIND: &str = "lumen.durable-perf-cell";
 pub const INPUT_SECONDS: u64 = 30 * 60;
 pub const DOCOPS_PER_SECOND: u64 = 60;
@@ -31,6 +31,10 @@ pub const DOCKER_MEMORY_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 /// The faberline GKE test pool of the measured server. The pod there has no
 /// resource limits and is alone on its node.
 pub const KUBERNETES_NODE_POOL: &str = "lumen-perf-server";
+/// The data claim's StorageClass. On N4 it provisions Hyperdisk.
+pub const KUBERNETES_STORAGE_CLASS: &str = "dynamic-rwo";
+/// The disk type the PD CSI driver chose for the data volume.
+pub const KUBERNETES_DISK_TYPE: &str = "hyperdisk-balanced";
 pub const SNAPSHOT_SECONDS: u64 = 15;
 pub const HOT_DOCUMENTS: u64 = 100_000;
 pub const IDLE_COLLECTIONS: u64 = 181;
@@ -130,8 +134,16 @@ pub enum Server {
         memory_limit_bytes: u64,
     },
     /// The gke-perf overlay: no resource limits, one pod on a node of
-    /// `node_pool`.
-    Kubernetes { node_pool: String },
+    /// `node_pool`. The harness reads the other fields from the node, the
+    /// data volume, and `/proc/cpuinfo` of the server and client pods.
+    Kubernetes {
+        node_pool: String,
+        instance_type: String,
+        cpu_model: String,
+        client_cpu_model: String,
+        storage_class: String,
+        disk_type: String,
+    },
 }
 
 impl Server {
@@ -142,11 +154,89 @@ impl Server {
         }
     }
 
-    pub fn kubernetes() -> Self {
+    pub fn kubernetes(instance_type: &str, cpu_model: &str, client_cpu_model: &str) -> Self {
         Self::Kubernetes {
             node_pool: KUBERNETES_NODE_POOL.to_owned(),
+            instance_type: instance_type.to_owned(),
+            cpu_model: cpu_model.to_owned(),
+            client_cpu_model: client_cpu_model.to_owned(),
+            storage_class: KUBERNETES_STORAGE_CLASS.to_owned(),
+            disk_type: KUBERNETES_DISK_TYPE.to_owned(),
         }
     }
+
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Docker { .. } if *self == Self::docker() => Ok(()),
+            Self::Docker { .. } => Err(ReceiptError::Invalid(format!(
+                "server {self:?} is not the approved docker shape"
+            ))),
+            Self::Kubernetes {
+                node_pool,
+                instance_type,
+                cpu_model,
+                client_cpu_model,
+                storage_class,
+                disk_type,
+            } => {
+                let fixed = [
+                    ("node_pool", node_pool, KUBERNETES_NODE_POOL),
+                    ("storage_class", storage_class, KUBERNETES_STORAGE_CLASS),
+                    ("disk_type", disk_type, KUBERNETES_DISK_TYPE),
+                ];
+                for (key, actual, expected) in fixed {
+                    if actual != expected {
+                        return Err(ReceiptError::Invalid(format!(
+                            "server.{key} must be {expected}, got {actual:?}"
+                        )));
+                    }
+                }
+                if !is_machine_type(instance_type) {
+                    return Err(ReceiptError::Invalid(format!(
+                        "server.instance_type {instance_type:?} is not a GCE machine type"
+                    )));
+                }
+                for (key, model) in [
+                    ("cpu_model", cpu_model),
+                    ("client_cpu_model", client_cpu_model),
+                ] {
+                    if !is_cpu_model(model) {
+                        return Err(ReceiptError::Invalid(format!(
+                            "server.{key} {model:?} is not a /proc/cpuinfo model name"
+                        )));
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// A GCE machine type such as `n4-highmem-4`: lowercase series, then
+/// lowercase words joined by hyphens.
+pub fn is_machine_type(value: &str) -> bool {
+    let mut parts = value.split('-');
+    let series = parts.next().unwrap_or("");
+    value.len() <= 63
+        && series.starts_with(|c: char| c.is_ascii_lowercase())
+        && series
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        && value.contains('-')
+        && parts.all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        })
+}
+
+/// A trimmed, printable-ASCII `model name` value from `/proc/cpuinfo`.
+pub fn is_cpu_model(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.trim() == value
+        && value.bytes().all(|b| (b' '..=b'~').contains(&b))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -380,12 +470,7 @@ impl Receipt {
                 "limits do not equal the approved durable workload configuration".to_owned(),
             ));
         }
-        if self.server != Server::docker() && self.server != Server::kubernetes() {
-            return Err(ReceiptError::Invalid(format!(
-                "server {:?} is neither the docker nor the kubernetes shape",
-                self.server
-            )));
-        }
+        self.server.validate()?;
         if !self.outcome.qualifying || self.outcome.diagnostic || !self.outcome.succeeded {
             return Err(ReceiptError::Invalid(
                 "a qualifying receipt must be qualifying=true, diagnostic=false, succeeded=true"
@@ -564,9 +649,21 @@ impl Server {
                 ("cpu_limit_milli", number(*cpu_limit_milli)),
                 ("memory_limit_bytes", number(*memory_limit_bytes)),
             ]),
-            Self::Kubernetes { node_pool } => object(&[
+            Self::Kubernetes {
+                node_pool,
+                instance_type,
+                cpu_model,
+                client_cpu_model,
+                storage_class,
+                disk_type,
+            } => object(&[
                 ("runtime", string("kubernetes")),
                 ("node_pool", string(node_pool)),
+                ("instance_type", string(instance_type)),
+                ("cpu_model", string(cpu_model)),
+                ("client_cpu_model", string(client_cpu_model)),
+                ("storage_class", string(storage_class)),
+                ("disk_type", string(disk_type)),
                 ("resource_limits", boolean(false)),
             ]),
         }
@@ -605,7 +702,16 @@ impl Server {
                 require_exact_keys(
                     &object,
                     "server",
-                    &["runtime", "node_pool", "resource_limits"],
+                    &[
+                        "runtime",
+                        "node_pool",
+                        "instance_type",
+                        "cpu_model",
+                        "client_cpu_model",
+                        "storage_class",
+                        "disk_type",
+                        "resource_limits",
+                    ],
                 )?;
                 if take_boolean(&mut object, "server", "resource_limits")? {
                     return Err(ReceiptError::Invalid(
@@ -614,6 +720,11 @@ impl Server {
                 }
                 Ok(Self::Kubernetes {
                     node_pool: take_string(&mut object, "server", "node_pool")?,
+                    instance_type: take_string(&mut object, "server", "instance_type")?,
+                    cpu_model: take_string(&mut object, "server", "cpu_model")?,
+                    client_cpu_model: take_string(&mut object, "server", "client_cpu_model")?,
+                    storage_class: take_string(&mut object, "server", "storage_class")?,
+                    disk_type: take_string(&mut object, "server", "disk_type")?,
                 })
             }
             other => Err(ReceiptError::Invalid(format!(
@@ -2031,20 +2142,36 @@ mod tests {
         assert_eq!(aggregate.actual_image_id, binding().actual_image_id);
     }
 
+    const N4_SERVER_CPU: &str = "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz";
+    const N4_CLIENT_CPU: &str = "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz";
+
+    fn n4_server() -> Server {
+        Server::kubernetes("n4-highmem-4", N4_SERVER_CPU, N4_CLIENT_CPU)
+    }
+
+    fn n4_matrix() -> Vec<Receipt> {
+        aggregate_receipts()
+            .into_iter()
+            .map(|mut receipt| {
+                receipt.server = n4_server();
+                receipt
+            })
+            .collect()
+    }
+
     #[test]
     fn server_states_one_of_two_shapes_for_the_whole_matrix() {
         let expected = expectation();
-        let kubernetes = aggregate_receipts()
-            .into_iter()
-            .map(|mut receipt| {
-                receipt.server = Server::kubernetes();
-                receipt
-            })
-            .collect::<Vec<_>>();
+        let kubernetes = n4_matrix();
         let encoded = kubernetes[0].to_json();
-        assert!(encoded.contains(
-            "\"server\":{\"runtime\":\"kubernetes\",\"node_pool\":\"lumen-perf-server\",\"resource_limits\":false}"
-        ));
+        assert!(encoded.contains(concat!(
+            "\"server\":{\"runtime\":\"kubernetes\",\"node_pool\":\"lumen-perf-server\",",
+            "\"instance_type\":\"n4-highmem-4\",",
+            "\"cpu_model\":\"INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz\",",
+            "\"client_cpu_model\":\"INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz\",",
+            "\"storage_class\":\"dynamic-rwo\",\"disk_type\":\"hyperdisk-balanced\",",
+            "\"resource_limits\":false}"
+        )));
         assert_eq!(Receipt::from_json(&encoded).unwrap(), kubernetes[0]);
         validate_aggregate(&expected, &kubernetes).expect("a kubernetes matrix validates");
         assert!(aggregate_receipts()[0].to_json().contains(
@@ -2055,14 +2182,6 @@ mod tests {
         mixed[3].server = Server::docker();
         assert!(matches!(
             validate_aggregate(&expected, &mixed),
-            Err(ReceiptError::Invalid(_))
-        ));
-        let mut other_pool = kubernetes.clone();
-        other_pool[0].server = Server::Kubernetes {
-            node_pool: "lumen-server".to_owned(),
-        };
-        assert!(matches!(
-            validate_aggregate(&expected, &other_pool),
             Err(ReceiptError::Invalid(_))
         ));
         let mut smaller_docker = aggregate_receipts();
@@ -2095,6 +2214,109 @@ mod tests {
             Receipt::from_json(&unknown_runtime),
             Err(ReceiptError::Invalid(_))
         ));
+        // The v2 kubernetes shape had only node_pool and resource_limits.
+        for key in [
+            "instance_type",
+            "cpu_model",
+            "client_cpu_model",
+            "storage_class",
+            "disk_type",
+        ] {
+            let start = encoded.find(&format!("\"{key}\":")).unwrap();
+            let end = start + encoded[start..].find("\",").unwrap() + 2;
+            let missing = format!("{}{}", &encoded[..start], &encoded[end..]);
+            assert!(
+                matches!(
+                    Receipt::from_json(&missing),
+                    Err(ReceiptError::MissingKey { key: missing_key, .. }) if missing_key == key
+                ),
+                "a kubernetes receipt without {key} must not parse"
+            );
+        }
+    }
+
+    #[test]
+    fn kubernetes_matrix_states_one_observed_machine_cpu_and_disk() {
+        let expected = expectation();
+        let kubernetes = n4_matrix();
+        let drifts = [
+            Server::kubernetes("n4-highmem-8", N4_SERVER_CPU, N4_CLIENT_CPU),
+            Server::kubernetes("n4-highmem-4", "AMD EPYC 9B14", N4_CLIENT_CPU),
+            Server::kubernetes("n4-highmem-4", N4_SERVER_CPU, "AMD EPYC 9B14"),
+        ];
+        for drift in drifts {
+            drift
+                .validate()
+                .expect("each drifted cell is a valid shape alone");
+            let mut matrix = kubernetes.clone();
+            matrix[7].server = drift.clone();
+            assert!(
+                matches!(
+                    validate_aggregate(&expected, &matrix),
+                    Err(ReceiptError::Invalid(_))
+                ),
+                "one cell on {drift:?} must fail the matrix"
+            );
+        }
+
+        let with = |edit: fn(&mut Server)| {
+            let mut server = n4_server();
+            edit(&mut server);
+            server
+        };
+        let invalid = [
+            with(|server| {
+                if let Server::Kubernetes { node_pool, .. } = server {
+                    *node_pool = "lumen-server".to_owned();
+                }
+            }),
+            with(|server| {
+                if let Server::Kubernetes { storage_class, .. } = server {
+                    *storage_class = "standard-rwo".to_owned();
+                }
+            }),
+            with(|server| {
+                if let Server::Kubernetes { disk_type, .. } = server {
+                    *disk_type = "pd-balanced".to_owned();
+                }
+            }),
+            Server::kubernetes("", N4_SERVER_CPU, N4_CLIENT_CPU),
+            Server::kubernetes("n4", N4_SERVER_CPU, N4_CLIENT_CPU),
+            Server::kubernetes("N4-highmem-4", N4_SERVER_CPU, N4_CLIENT_CPU),
+            Server::kubernetes("n4-highmem-", N4_SERVER_CPU, N4_CLIENT_CPU),
+            Server::kubernetes("4n-highmem-4", N4_SERVER_CPU, N4_CLIENT_CPU),
+            Server::kubernetes("n4--4", N4_SERVER_CPU, N4_CLIENT_CPU),
+            Server::kubernetes("n4-highmem-4", "", N4_CLIENT_CPU),
+            Server::kubernetes("n4-highmem-4", " Xeon", N4_CLIENT_CPU),
+            Server::kubernetes("n4-highmem-4", "Xeon\n", N4_CLIENT_CPU),
+            Server::kubernetes("n4-highmem-4", N4_SERVER_CPU, ""),
+            Server::kubernetes("n4-highmem-4", N4_SERVER_CPU, "Xeon\u{e9}"),
+            Server::kubernetes("n4-highmem-4", N4_SERVER_CPU, &"x".repeat(129)),
+        ];
+        for server in invalid {
+            let mut matrix = kubernetes.clone();
+            matrix[0].server = server.clone();
+            assert!(
+                matches!(matrix[0].validate(), Err(ReceiptError::Invalid(_))),
+                "{server:?} must not validate"
+            );
+            assert!(matches!(
+                Receipt::from_json(&matrix[0].to_json()).and_then(|receipt| receipt.validate()),
+                Err(ReceiptError::Invalid(_))
+            ));
+            assert!(matches!(
+                validate_aggregate(&expected, &matrix),
+                Err(ReceiptError::Invalid(_))
+            ));
+        }
+        for machine in [
+            "e2-standard-4",
+            "n4-highmem-4",
+            "c3-standard-4-lssd",
+            "n2d-custom-4-16384",
+        ] {
+            assert!(is_machine_type(machine), "{machine}");
+        }
     }
 
     #[test]
@@ -2129,8 +2351,8 @@ mod tests {
             Err(ReceiptError::MissingKey { .. })
         ));
         let duplicate = encoded.replacen(
-            "\"schema_version\":2,",
-            "\"schema_version\":2,\"schema_version\":2,",
+            "\"schema_version\":3,",
+            "\"schema_version\":3,\"schema_version\":3,",
             1,
         );
         assert!(matches!(

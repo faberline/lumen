@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed verifier for sixteen Lumen durable-performance receipts.
 
-This program verifies only the measurements in receipt schema v2.  It never
+This program verifies only the measurements in receipt schema v3.  It never
 contacts a registry, a workflow service, or a running Lumen process.
 """
 import argparse
@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 CELL_KIND = "lumen.durable-perf-cell"
 SUMMARY_KIND = "lumen.durable-perf-summary"
 IMAGE_RE = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
@@ -50,11 +50,25 @@ REQUIRED_LIMITS = {
 }
 # The measured server ran either under `docker run --cpus 2.5 --memory 16g`
 # or as the gke-perf overlay pod: no resource limits, alone on a
-# lumen-perf-server node.  All sixteen receipts must state the same shape.
+# lumen-perf-server node, with its data on a dynamic-rwo Hyperdisk Balanced
+# volume.  A kubernetes receipt also states what the harness observed: the
+# node's GCE machine type and the server and client `/proc/cpuinfo` model
+# names.  All sixteen receipts must state the same shape.
 APPROVED_SERVERS = (
     {"runtime": "docker", "cpu_limit_milli": 2500, "memory_limit_bytes": 17179869184},
-    {"runtime": "kubernetes", "node_pool": "lumen-perf-server", "resource_limits": False},
+    {"runtime": "kubernetes", "node_pool": "lumen-perf-server", "instance_type": None,
+     "cpu_model": None, "client_cpu_model": None, "storage_class": "dynamic-rwo",
+     "disk_type": "hyperdisk-balanced", "resource_limits": False},
 )
+# Observed server fields, checked like perf_cell_receipt::is_machine_type and
+# is_cpu_model; None above marks them.
+MACHINE_TYPE_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$")
+CPU_MODEL_RE = re.compile(r"^[!-~](?:[ -~]{0,126}[!-~])?$")
+OBSERVED_SERVER_FIELDS = {
+    "instance_type": lambda value: len(value) <= 63 and MACHINE_TYPE_RE.fullmatch(value),
+    "cpu_model": CPU_MODEL_RE.fullmatch,
+    "client_cpu_model": CPU_MODEL_RE.fullmatch,
+}
 MEASUREMENT_INTS = frozenset((
     "input_duration_ms", "observed_input_elapsed_ms", "requests_offered", "requests_finished",
     "requests_completed", "requests_started_in_input", "requests_finished_in_input",
@@ -185,7 +199,10 @@ def validate_cell(value, expected_binding):
     exact_keys(server, approved[0], "server")
     for key, required in approved[0].items():
         actual = server[key]
-        if type(actual) is not type(required) or actual != required:
+        if required is None:
+            if not isinstance(actual, str) or not OBSERVED_SERVER_FIELDS[key](actual):
+                fail(f"server.{key} is not an observed {approved[0]['runtime']} value")
+        elif type(actual) is not type(required) or actual != required:
             fail(f"server.{key} does not match the approved {approved[0]['runtime']} shape")
 
     measurement = value["measurement"]

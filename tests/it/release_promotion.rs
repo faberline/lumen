@@ -4359,8 +4359,12 @@ fn add_durable_perf_evidence(fixture: &GkeReceiptFixture, attempt: &str) -> (Pat
             binding: binding.clone(),
             cell: cell.clone(),
             limits: perf_cell_receipt::Limits::approved(),
-            // 0.6.1 evidence comes from the gke-perf overlay.
-            server: perf_cell_receipt::Server::kubernetes(),
+            // 0.6.1 evidence comes from the gke-perf overlay on N4.
+            server: perf_cell_receipt::Server::kubernetes(
+                "n4-highmem-4",
+                "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.10GHz",
+                "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+            ),
             measurement: crate::release_candidate::durable_perf_fixture_measurement(),
             outcome: perf_cell_receipt::Outcome {
                 qualifying: true,

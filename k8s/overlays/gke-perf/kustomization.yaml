@@ -21,3 +21,20 @@ labels:
 resources:
   - service.yaml
   - statefulset.yaml
+  - cluster-reader.yaml
+
+# The namespace transformer leaves a ClusterRoleBinding subject alone when its
+# ServiceAccount is not in this build. Copy the run namespace into the subject
+# and into the owner label that lets the aw reaper delete the binding.
+replacements:
+  - source:
+      kind: Service
+      name: lumen-perf
+      fieldPath: metadata.namespace
+    targets:
+      - select:
+          kind: ClusterRoleBinding
+          name: lumen-perf-cluster-reader
+        fieldPaths:
+          - subjects.0.namespace
+          - metadata.labels.faberline\.dev/owner-namespace
