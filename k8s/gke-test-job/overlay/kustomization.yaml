@@ -1,4 +1,4 @@
-# GKE e2e suite `overlay`: e2e.sh in ../base for the direct-install
+# GKE e2e suite `overlay` (tests/it/e2e/overlay.rs): the direct-install
 # Deployment `lumen`, reached at http://lumen:7373.
 # One call of faberline/aw's gke-test workflow, on a freshly deployed
 # k8s/overlays/gke-test (.github/workflows/gke-test.yml).
@@ -20,7 +20,8 @@ patches:
         template:
           spec:
             containers:
-              - name: e2e
+              - name: test
+                args: ["e2e::overlay::"]
                 env:
-                  - name: LUMEN_E2E_MODES
-                    value: overlay
+                  - name: E2E_ENDPOINT
+                    value: http://lumen:7373

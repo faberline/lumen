@@ -1,6 +1,7 @@
-# GKE e2e suite `operator`: e2e.sh in ../base for the Lumen CR `lumen-op` reconciled by the shipped operator,
-# reached at http://lumen-op:7373, and the legacy CR that must fail on the
-# missing capacity catalog.
+# GKE e2e suite `operator` (tests/it/e2e/operator.rs): the Lumen CR
+# `lumen-op` reconciled by the shipped operator, reached at
+# http://lumen-op:7373, and the legacy CR that must fail on the missing
+# capacity catalog.
 # One call of faberline/aw's gke-test workflow, on a freshly deployed
 # k8s/overlays/gke-test (.github/workflows/gke-test.yml).
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -21,7 +22,8 @@ patches:
         template:
           spec:
             containers:
-              - name: e2e
+              - name: test
+                args: ["e2e::operator::"]
                 env:
-                  - name: LUMEN_E2E_MODES
-                    value: operator
+                  - name: E2E_ENDPOINT
+                    value: http://lumen-op:7373

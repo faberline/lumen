@@ -164,6 +164,9 @@ jobs:
         with:
           context: .
           file: Dockerfile.test
+          # Dockerfile.test also holds the e2e `test-client` stage
+          # (gke-test.yml builds it); this image is the server.
+          target: server
           platforms: linux/amd64,linux/arm64
           push: true
           # NEVER add `latest` or a semver tag here — this is the dev/test

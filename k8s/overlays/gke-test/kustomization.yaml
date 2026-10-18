@@ -4,7 +4,8 @@ kind: Kustomization
 # lumen on Faberline's shared GKE test cluster (faberline-test, pool-lumen-server),
 # deployed by faberline/aw's reusable gke-test workflow, exercised by the
 # in-cluster Job of one suite in ../../gke-test-job (on pool-lumen-client,
-# through the Services), and tied to the image by scripts/gke-test/verify.sh.
+# through the Services), which also ties every pod it checks to the image
+# under test (tests/it/e2e/identity.rs).
 # Each suite is its own workflow call on a fresh deploy of this overlay, which
 # holds both kind-e2e deploy paths in one namespace:
 #

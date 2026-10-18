@@ -17,12 +17,31 @@
 #   dist/linux/amd64/lumen
 #   dist/linux/arm64/lumen
 #
-#   docker buildx build -f Dockerfile.test \
+#   docker buildx build -f Dockerfile.test --target server \
 #     --platform linux/amd64,linux/arm64 \
 #     -t ghcr.io/<owner>/lumen:sha-<git12> --push .
+#
+# The `test-client` target is the e2e test client the GKE test Job runs
+# (faberline/aw docs/standards/rust-tests.md): the `it` test binary as
+# /usr/local/bin/lumen-it plus kubectl, both static, staged by
+# `.github/workflows/gke-test.yml` before buildx:
+#   dist/linux/amd64/lumen-it
+#   dist/linux/amd64/kubectl
+#
+#   docker buildx build -f Dockerfile.test --target test-client \
+#     --platform linux/amd64 \
+#     -t ghcr.io/<owner>/lumen-test-client:sha-<git12> --push .
 
 FROM debian:bookworm-slim AS seed
 RUN mkdir -p -m 0750 /out/lumen-data && touch /out/lumen-data/.lumen-volume-seed
+
+# The e2e test client. Nothing here reaches the server image: the server
+# stage below stays last, so it is also the default target.
+FROM gcr.io/distroless/static-debian12:nonroot AS test-client
+ARG TARGETARCH=amd64
+COPY dist/linux/${TARGETARCH}/lumen-it /usr/local/bin/lumen-it
+COPY dist/linux/${TARGETARCH}/kubectl /usr/local/bin/kubectl
+ENTRYPOINT ["/usr/local/bin/lumen-it"]
 
 # distroless static runtime — only the binary + CA certs, nonroot. Identical
 # to Dockerfile.release's runtime stage: static-debian12 ships no
@@ -30,7 +49,7 @@ RUN mkdir -p -m 0750 /out/lumen-data && touch /out/lumen-data/.lumen-volume-seed
 # workflow builds (see Dockerfile.release / #1195 for why). :nonroot = uid
 # 65532. A single tokio binary handles SIGTERM itself (graceful drain) and
 # spawns no children, so no tini/init shim is required.
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot AS server
 ARG TARGETARCH=amd64
 COPY --from=seed --chown=65532:65532 /out/lumen-data/ /var/lib/lumen/data/
 COPY dist/linux/${TARGETARCH}/lumen /usr/local/bin/lumen
