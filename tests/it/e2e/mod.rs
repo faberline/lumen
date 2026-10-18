@@ -26,3 +26,49 @@ mod operator;
 mod overlay;
 mod standalone_container;
 mod support;
+
+/// libtest passes a filter that matches nothing ("running 0 tests"), so a
+/// renamed module would turn a GKE suite into a green no-op. Pin each Job
+/// folder's filter to a module here that holds the ignored `journey`, and
+/// the workflow's `all` to exactly those folders.
+#[test]
+fn gke_suite_filters_match_modules() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let read = |path: &str| {
+        std::fs::read_to_string(root.join(path)).unwrap_or_else(|e| panic!("read {path}: {e}"))
+    };
+    let suites = ["overlay", "operator"];
+    let mut folders: Vec<String> = std::fs::read_dir(root.join("k8s/gke-test-job"))
+        .expect("read k8s/gke-test-job")
+        .map(|e| e.expect("dir entry").file_name().to_string_lossy().into_owned())
+        .filter(|name| name != "base")
+        .collect();
+    folders.sort();
+    let mut expected: Vec<String> = suites.iter().map(|s| s.to_string()).collect();
+    expected.sort();
+    assert_eq!(folders, expected, "k8s/gke-test-job suite folders");
+
+    for suite in suites {
+        let job = read(&format!("k8s/gke-test-job/{suite}/kustomization.yaml"));
+        assert_eq!(
+            job.matches("args: [").count(),
+            1,
+            "k8s/gke-test-job/{suite} must set exactly one test filter"
+        );
+        assert!(
+            job.contains(&format!("args: [\"e2e::{suite}::\"]")),
+            "k8s/gke-test-job/{suite} must filter e2e::{suite}::"
+        );
+        let module = read(&format!("tests/it/e2e/{suite}.rs"));
+        assert!(
+            module.contains("#[ignore = \"e2e: needs E2E_ENDPOINT\"]\nasync fn journey()"),
+            "tests/it/e2e/{suite}.rs must hold the ignored `journey`"
+        );
+    }
+
+    let workflow = read(".github/workflows/gke-test.yml");
+    assert!(
+        workflow.contains(r#"all) suites='["overlay","operator"]' ;;"#),
+        "gke-test.yml `all` must run every suite folder"
+    );
+}
