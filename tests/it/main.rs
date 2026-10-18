@@ -54,6 +54,7 @@ mod docker_named_volume;
 mod docs_namespace_e2e;
 mod drop_drain_e2e;
 mod drop_field_e2e;
+mod e2e;
 mod efficiency_lumen_claim_competitor_performance_external_comparison;
 mod efficiency_lumen_claim_elastic_disk_tier;
 mod feature_gated_targets_are_registered;
