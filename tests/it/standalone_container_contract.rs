@@ -1,6 +1,6 @@
 //! Deterministic contract test for Lumen standalone container and binary defaults.
 
-use std::{fs, io::Write, path::PathBuf, process::Command};
+use std::{fs, path::PathBuf};
 
 const EXPECTED_DOCKERFILES: &[&str] = &["Dockerfile", "Dockerfile.release", "Dockerfile.test"];
 
@@ -52,1086 +52,489 @@ fn insert_after_first_from(source: &str, instruction: &str) -> String {
     output
 }
 
-const DURABLE_BEGIN: &str = "  # DURABLE-CONTRACT-BEGIN\n";
-const DURABLE_END: &str = "  # DURABLE-CONTRACT-END\n";
-const DURABLE_BLOCK_SHA256: &str =
-    "7981fef4e6560767fc49e7651ba7ca69104241a6c870a2b4982f5698165ac118";
-const CANDIDATE_ROOT_REGEX: &str = "^ghcr\\.io/faberline/lumen@sha256:[0-9a-f]{64}$";
-const OLD_IMAGE: &str =
-    "ghcr.io/chrischeng-c4/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d";
-const DATA_MOUNT: &str = "--mount \"type=volume,src=$VOLUME,dst=/var/lib/lumen/data\"";
-const REJECT_DATA_MOUNT: &str =
-    "--mount \"type=volume,src=$REJECT_VOLUME,dst=/var/lib/lumen/data\"";
-const OLD_RUN: &str = concat!(
-    "docker run -d --name \"$OLD_CONTAINER\" ",
-    "--mount \"type=volume,src=$VOLUME,dst=/var/lib/lumen/data\" ",
-    "-e LUMEN_AUTH=off -e LUMEN_DATA_DIR=/var/lib/lumen/data -e LUMEN_PERSISTENCE=segment -e LUMEN_SNAPSHOT_SECS=1 -e LUMEN_GRACE_SECS=1 ",
-    "-p 127.0.0.1::7373 \"$OLD_IMAGE\" >/dev/null"
-);
-const CANDIDATE_RUN: &str = concat!(
-    "docker run -d --name \"$CANDIDATE_CONTAINER\" ",
-    "--mount \"type=volume,src=$VOLUME,dst=/var/lib/lumen/data\" ",
-    "-e LUMEN_AUTH=off -e LUMEN_LOG_FORMAT=json -p 127.0.0.1::7373 ",
-    "\"$LUMEN_STANDALONE_DURABLE_IMAGE\" >/dev/null"
-);
-const REPLACEMENT_RUN: &str = concat!(
-    "docker run -d --name \"$REPLACEMENT_CONTAINER\" ",
-    "--mount \"type=volume,src=$VOLUME,dst=/var/lib/lumen/data\" ",
-    "-e LUMEN_AUTH=off -e LUMEN_LOG_FORMAT=json -p 127.0.0.1::7373 ",
-    "\"$LUMEN_STANDALONE_DURABLE_IMAGE\" >/dev/null"
-);
-const REJECTED_RUN: &str = concat!(
-    "docker run -d --name \"$REJECTED_CONTAINER\" ",
-    "--mount \"type=volume,src=$REJECT_VOLUME,dst=/var/lib/lumen/data\" ",
-    "-e LUMEN_AUTH=off -p 127.0.0.1::7373 ",
-    "\"$LUMEN_STANDALONE_DURABLE_IMAGE\" >/dev/null"
-);
-const CANDIDATE_RUN_SOURCE: &str = concat!(
-    "  docker run -d --name \"$CANDIDATE_CONTAINER\" ",
-    "--mount \"type=volume,src=$VOLUME,dst=/var/lib/lumen/data\" -e LUMEN_AUTH=off -e LUMEN_LOG_FORMAT=json \\\n",
-    "    -p 127.0.0.1::7373 \"$LUMEN_STANDALONE_DURABLE_IMAGE\" >/dev/null\n"
-);
-const REPLACEMENT_RUN_SOURCE: &str = concat!(
-    "  docker run -d --name \"$REPLACEMENT_CONTAINER\" ",
-    "--mount \"type=volume,src=$VOLUME,dst=/var/lib/lumen/data\" -e LUMEN_AUTH=off -e LUMEN_LOG_FORMAT=json \\\n",
-    "    -p 127.0.0.1::7373 \"$LUMEN_STANDALONE_DURABLE_IMAGE\" >/dev/null\n"
-);
-const CANDIDATE_AUTH_LINE: &str = concat!(
-    "  docker run -d --name \"$CANDIDATE_CONTAINER\" ",
-    "--mount \"type=volume,src=$VOLUME,dst=/var/lib/lumen/data\" -e LUMEN_AUTH=off -e LUMEN_LOG_FORMAT=json \\\n"
-);
-const CURRENT_FIRST_ASSERT: &str = r#"python3 -c 'import pathlib,re,sys; b=pathlib.Path(sys.argv[1]).read_bytes(); sys.exit(0 if re.fullmatch(rb"generation:gen-[0-9]+\n",b) else 1)' "$TEMP_DIR/current-first""#;
-const CURRENT_REV_ASSERT: &str = r#"python3 -c 'import pathlib,re,sys; b=pathlib.Path(sys.argv[1]).read_bytes(); sys.exit(0 if re.fullmatch(rb"generation:gen-[0-9]+-rev-[1-9][0-9]*\n",b) else 1)' "$TEMP_DIR/current-rev""#;
-const CURRENT_REPLACEMENT_ASSERT: &str = r#"python3 -c 'import pathlib,re,sys; b=pathlib.Path(sys.argv[1]).read_bytes(); sys.exit(0 if re.fullmatch(rb"generation:gen-[0-9]+-rev-[1-9][0-9]*\n",b) else 1)' "$TEMP_DIR/current-replacement""#;
-const SAFE_PUBLISHED_PORT_TEMPLATE: &str =
-    "{{with .NetworkSettings.Ports}}{{with index . \"7373/tcp\"}}{{with index . 0}}{{.HostPort}}{{end}}{{end}}{{end}}";
-const PORT_DIAGNOSTIC: &str =
-    "if ! docker inspect --format 'state={{.State.Status}} running={{.State.Running}} exit_code={{.State.ExitCode}} error={{json .State.Error}} ports={{json .NetworkSettings.Ports}}' \"$container\" >&2; then :; fi";
+const DURABLE_SUITE: &str = "tests/it/e2e/standalone_container.rs";
+/// Pins the bytes of the suite file. A comment-only edit keeps the durable
+/// semantics below but still has to update this pin, so every change to the
+/// suite is reviewed against this contract.
+const DURABLE_SUITE_SHA256: &str =
+    "2c1345bae15e03884799d6670535452b75e7d3b897c99668eaacf963688beae7";
+const DURABLE_HEADER: &str =
+    "\n\n#[tokio::test]\n#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn durable() {\n";
+const BIND_HEADER: &str =
+    "\n\n#[tokio::test]\n#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn bind() {\n";
 
-fn durable_script_block(source: &str) -> Result<&str, String> {
-    let starts = source.matches(DURABLE_BEGIN).count();
-    if starts != 1 {
-        return Err(format!(
-            "durable block must have one start marker, found {starts}"
-        ));
+/// Every active line of `durable()`, trimmed, in order. Blank lines and
+/// full-line `//` comments are not steps; anything else that is added,
+/// removed, reordered, or changed fails the contract. The steps are: an
+/// exact GHCR root digest; the 0428 image writes a legacy `gen-N` layout on a
+/// named volume at /var/lib/lumen/data; the candidate adopts it
+/// (`adopted_legacy_0428`, CURRENT `generation:gen-<n>`), keeps the first
+/// record, takes a second, and checkpoints to a CURRENT revision; a
+/// replacement restores that revision (`restored_current_generation`) with
+/// both records; a volume with an unknown root fails startup, never serves
+/// /readyz, logs the refusal, and keeps its sentinel without gaining CURRENT.
+const DURABLE_STEPS: &[&str] = &[
+    "let image = required(\"E2E_STANDALONE_IMAGE\");",
+    "assert!(",
+    "image",
+    ".strip_prefix(REPO_DIGEST_PREFIX)",
+    ".is_some_and(|hex| super::support::is_lower_hex(hex, 64)),",
+    "\"E2E_STANDALONE_IMAGE must be an exact GHCR root digest ({REPO_DIGEST_PREFIX}<64 hex>) for durable, got {image}\"",
+    ");",
+    "let id = suffix();",
+    "let volume = format!(\"lumen-smoke-durable-{id}\");",
+    "let reject_volume = format!(\"lumen-smoke-durable-reject-{id}\");",
+    "let old = format!(\"lumen-smoke-durable-old-{id}\");",
+    "let candidate = format!(\"lumen-smoke-durable-candidate-{id}\");",
+    "let replacement = format!(\"lumen-smoke-durable-replacement-{id}\");",
+    "let seed = format!(\"lumen-smoke-durable-seed-{id}\");",
+    "let rejected = format!(\"lumen-smoke-durable-rejected-{id}\");",
+    "let mut scratch = Scratch::new();",
+    "let tmp = scratch.dir(&format!(\"durable-{id}\"));",
+    "scratch.volume(&volume);",
+    "scratch.volume(&reject_volume);",
+    "let mount = format!(\"type=volume,src={volume},dst={DATA}\");",
+    "let reject_mount = format!(\"type=volume,src={reject_volume},dst={DATA}\");",
+    "say(format!(\">> [{SUITE}] durable: the 0428 image writes a legacy layout\"));",
+    "let api = serve(",
+    "&mut scratch,",
+    "&old,",
+    "&[",
+    "\"--mount\", &mount,",
+    "\"-e\", \"LUMEN_AUTH=off\",",
+    "\"-e\", &format!(\"LUMEN_DATA_DIR={DATA}\"),",
+    "\"-e\", \"LUMEN_PERSISTENCE=segment\",",
+    "\"-e\", \"LUMEN_SNAPSHOT_SECS=1\",",
+    "\"-e\", \"LUMEN_GRACE_SECS=1\",",
+    "],",
+    "OLD_IMAGE,",
+    ")",
+    ".await;",
+    "api.put(\"/collections/durable\", &json!({\"fields\": {\"tag\": {\"type\": \"keyword\"}}}), TIMEOUT).await;",
+    "index_tag(&api, \"first\").await;",
+    "assert_search(&api, \"first\").await;",
+    "let old_data = tmp.join(\"old-data\");",
+    "let old_data_arg = old_data.to_str().expect(\"utf-8 path\");",
+    "for _ in 0..60 {",
+    "let _ = docker(&[\"cp\", &format!(\"{old}:{DATA}\"), old_data_arg]);",
+    "if has_legacy_generation(&old_data) {",
+    "break;",
+    "}",
+    "let _ = std::fs::remove_dir_all(&old_data);",
+    "tokio::time::sleep(Duration::from_millis(500)).await;",
+    "}",
+    "assert!(",
+    "old_data.is_dir() && !old_data.join(\"CURRENT\").exists(),",
+    "\"the 0428 image left no legacy checkpoint\\n{}\",",
+    "logs(&old)",
+    ");",
+    "scratch.remove(&old);",
+    "say(format!(\">> [{SUITE}] durable: the candidate adopts the legacy layout\"));",
+    "let json_logs = [\"--mount\", mount.as_str(), \"-e\", \"LUMEN_AUTH=off\", \"-e\", \"LUMEN_LOG_FORMAT=json\"];",
+    "let api = serve(&mut scratch, &candidate, &json_logs, &image).await;",
+    "assert_startup_decision(&candidate, \"adopted_legacy_0428\");",
+    "let current = read_current(&scratch, &candidate, \"current-first\");",
+    "assert!(is_current(&current, false), \"adopted CURRENT is not generation:gen-<n>: {:?}\", String::from_utf8_lossy(&current));",
+    "assert_search(&api, \"first\").await;",
+    "index_tag(&api, \"second\").await;",
+    "assert_search(&api, \"second\").await;",
+    "let checkpoint = api.post(\"/admin/checkpoint\", &json!({}), TIMEOUT).await;",
+    "assert!(checkpoint[\"persisted\"] == true, \"checkpoint did not persist: {checkpoint}\");",
+    "let current = read_current(&scratch, &candidate, \"current-rev\");",
+    "assert!(is_current(&current, true), \"checkpointed CURRENT is not a revision: {:?}\", String::from_utf8_lossy(&current));",
+    "must(&[\"kill\", &candidate]);",
+    "scratch.remove(&candidate);",
+    "say(format!(\">> [{SUITE}] durable: a replacement restores the CURRENT revision\"));",
+    "let api = serve(&mut scratch, &replacement, &json_logs, &image).await;",
+    "assert_startup_decision(&replacement, \"restored_current_generation\");",
+    "let current = read_current(&scratch, &replacement, \"current-replacement\");",
+    "assert!(is_current(&current, true), \"restored CURRENT is not a revision: {:?}\", String::from_utf8_lossy(&current));",
+    "assert_search(&api, \"first\").await;",
+    "assert_search(&api, \"second\").await;",
+    "say(format!(\">> [{SUITE}] durable: an unknown root is refused and left as it was\"));",
+    "let foreign = tmp.join(\"foreign-layout\");",
+    "std::fs::create_dir(&foreign).expect(\"create foreign-layout\");",
+    "std::fs::write(foreign.join(\"sentinel\"), b\"fail-closed unknown root\\n\").expect(\"write sentinel\");",
+    "scratch.containers.push(seed.clone());",
+    "must(&[\"create\", \"--name\", &seed, \"--mount\", &reject_mount, &image]);",
+    "must(&[\"cp\", foreign.to_str().expect(\"utf-8 path\"), &format!(\"{seed}:{DATA}/foreign-layout\")]);",
+    "scratch.remove(&seed);",
+    "scratch.run(&rejected, &[\"--mount\", &reject_mount, \"-e\", \"LUMEN_AUTH=off\"], &image);",
+    "wait_failed_exit(&rejected).await;",
+    "let port = published_port(&rejected).unwrap_or_else(|_| panic!(\"{}\", port_diagnostics(&rejected)));",
+    "if !port.is_empty() {",
+    "assert!(is_port(&port), \"rejected container has an invalid published port {port}\\n{}\", port_diagnostics(&rejected));",
+    "let url = format!(\"http://127.0.0.1:{port}/readyz\");",
+    "assert!(!Api::new(&format!(\"http://127.0.0.1:{port}\")).answers(\"/readyz\").await, \"rejected container served {url}\");",
+    "}",
+    "let log = logs(&rejected);",
+    "assert!(refused_root(&log), \"rejected container did not refuse the unknown root\\n{log}\");",
+    "let rejected_data = tmp.join(\"rejected-data\");",
+    "must(&[\"cp\", &format!(\"{rejected}:{DATA}\"), rejected_data.to_str().expect(\"utf-8 path\")]);",
+    "assert!(!rejected_data.join(\"CURRENT\").exists(), \"the refused volume gained a CURRENT\");",
+    "assert_eq!(",
+    "std::fs::read(rejected_data.join(\"foreign-layout/sentinel\")).ok(),",
+    "Some(b\"fail-closed unknown root\\n\".to_vec()),",
+    "\"the refused volume's sentinel changed\"",
+    ");",
+    "evidence(SUITE, \"durable\", json!({\"image\": image, \"old_image\": OLD_IMAGE, \"result\": \"pass\"}));",
+    "say(format!(\">> [{SUITE}] durable PASS\"));",
+];
+
+/// Lines the durable steps lean on outside `durable()`. Each must occur
+/// exactly once in the suite.
+const DURABLE_HELPER_LINES: &[(&str, &str)] = &[
+    ("data path", "const DATA: &str = \"/var/lib/lumen/data\";"),
+    (
+        "candidate digest prefix",
+        "const REPO_DIGEST_PREFIX: &str = \"ghcr.io/faberline/lumen@sha256:\";",
+    ),
+    (
+        "0428 image digest",
+        "\"ghcr.io/chrischeng-c4/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d\";",
+    ),
+    ("docker exit status", "if !out.status.success() {"),
+    ("docker failure panics", "docker(args).unwrap_or_else(|e| panic!(\"{e}\"))"),
+    (
+        "host-loopback published port",
+        "all.extend_from_slice(&[\"-p\", \"127.0.0.1::7373\", image]);",
+    ),
+    ("cleanup removes containers", "if let Err(e) = docker(&[\"rm\", \"-f\", c]) {"),
+    ("cleanup removes volumes", "if let Err(e) = docker(&[\"volume\", \"rm\", v]) {"),
+    ("serve runs the container", "scratch.run(name, args, image);"),
+    ("serve waits for the port", "let port = wait_published_port(name).await;"),
+    ("serve waits for readiness", "wait_answers(&api, name, \"/readyz\").await;"),
+    (
+        "search finds exactly one record",
+        "found[\"total\"] == 1 && found[\"hits\"].as_array().map(Vec::len) == Some(1) && found[\"hits\"][0][\"external_id\"] == id.as_str(),",
+    ),
+    (
+        "index writes the tagged record",
+        "&json!({\"items\": [{\"external_id\": format!(\"durable-{value}\"), \"field\": \"tag\", \"value\": value}]}),",
+    ),
+    ("legacy layout has no CURRENT", "&& !dir.join(\"CURRENT\").exists()"),
+    ("legacy layout has gen-N", ".and_then(|n| n.strip_prefix(\"gen-\"))"),
+    (
+        "CURRENT read from the data path",
+        "must(&[\"cp\", &format!(\"{container}:{DATA}/CURRENT\"), dest.to_str().expect(\"utf-8 path\")]);",
+    ),
+    (
+        "every log line is JSON",
+        "serde_json::from_str(line).unwrap_or_else(|_| panic!(\"invalid structured startup log line: {line}\\n{log}\"));",
+    ),
+    ("decision log schema", "if entry[\"schema\"] == \"axiom.service.log.v1\""),
+    ("decision log service", "&& entry[\"service\"][\"name\"] == \"lumen\""),
+    (
+        "decision log message",
+        "&& entry[\"message\"] == \"segment checkpoint startup decision\"",
+    ),
+    ("decision log value", "&& entry[\"attributes\"][\"decision\"] == expected"),
+    ("one decision", "matches == 1,"),
+    (
+        "rejected container must fail",
+        "assert!(code != \"0\", \"rejected container {container} exited successfully\\n{}\", logs(container));",
+    ),
+    (
+        "refusal log line",
+        "line.split_once(\"invalid segment checkpoint root inventory \")",
+    ),
+    (
+        "refusal reason",
+        ".is_some_and(|(_, rest)| rest.contains(\"refusing to initialize CURRENT\"))",
+    ),
+    ("CURRENT marker unit test", "fn current_markers() {"),
+    ("refusal unit test", "fn refusal_line() {"),
+    (
+        "revision 0 is not a revision",
+        "assert!(!is_current(b\"generation:gen-12-rev-0\\n\", true));",
+    ),
+];
+
+/// Ways around the contract: a skipped test, a compiled-out step, an exit
+/// that bypasses the panic, docker housekeeping that touches what the run
+/// did not create, or a durability override the shipped image does not use.
+const DURABLE_FORBIDDEN: &[&str] = &[
+    "should_panic",
+    "#[cfg",
+    "cfg_attr",
+    "process::exit",
+    "catch_unwind",
+    "unsafe",
+    "/*",
+    "\"prune\"",
+    "\"rmi\"",
+    "\"system\"",
+    "\"build\"",
+    "LUMEN_WAL",
+    "LUMEN_FSYNC",
+];
+
+fn sha256_text(content: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(content.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn durable_body(source: &str) -> Result<&str, String> {
+    if source.matches(DURABLE_HEADER).count() != 1 {
+        return Err("durable() must be one #[tokio::test] ignored for E2E_STANDALONE_IMAGE".into());
     }
-    let ends = source.matches(DURABLE_END).count();
-    if ends != 1 {
-        return Err(format!(
-            "durable block must have one end marker, found {ends}"
-        ));
-    }
-    let start = source
-        .find(DURABLE_BEGIN)
-        .ok_or_else(|| "durable block start marker is missing".to_string())?
-        + DURABLE_BEGIN.len();
+    let start = source.find(DURABLE_HEADER).unwrap() + DURABLE_HEADER.len();
     let end = source[start..]
-        .find(DURABLE_END)
-        .map(|offset| start + offset)
-        .ok_or_else(|| "durable block end marker is before its start".to_string())?;
-    let block = &source[start..end];
-    if block.trim().is_empty() {
-        return Err("durable block is empty".to_string());
-    }
-    Ok(block)
+        .find("\n}\n")
+        .ok_or("durable() has no closing brace")?;
+    Ok(&source[start..start + end])
 }
 
-fn strip_shell_comment(raw: &str) -> String {
-    let mut output = String::with_capacity(raw.len());
-    let mut quote = None;
-    let mut escaped = false;
-    let mut token_start = true;
-    for ch in raw.chars() {
-        if escaped {
-            output.push(ch);
-            escaped = false;
-            token_start = ch.is_whitespace();
-            continue;
-        }
-        match quote {
-            Some('\'') => {
-                output.push(ch);
-                if ch == '\'' {
-                    quote = None;
-                }
-                token_start = false;
-            }
-            Some('"') => {
-                output.push(ch);
-                if ch == '\\' {
-                    escaped = true;
-                } else if ch == '"' {
-                    quote = None;
-                }
-                token_start = false;
-            }
-            None if ch == '\\' => {
-                output.push(ch);
-                escaped = true;
-                token_start = false;
-            }
-            None if ch == '\'' || ch == '"' => {
-                output.push(ch);
-                quote = Some(ch);
-                token_start = false;
-            }
-            None if ch == '#' && token_start => break,
-            None => {
-                output.push(ch);
-                token_start = ch.is_whitespace();
-            }
-            Some(other) => unreachable!("unsupported shell quote delimiter: {other}"),
-        }
-    }
-    output
+fn active_lines(body: &str) -> Vec<&str> {
+    body.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("//"))
+        .collect()
 }
 
-fn has_unescaped_continuation(line: &str) -> bool {
-    let slash_count = line.chars().rev().take_while(|ch| *ch == '\\').count();
-    slash_count % 2 == 1
-}
-
-fn durable_logical_lines(block: &str) -> Vec<String> {
-    let mut lines = Vec::new();
-    let mut pending = String::new();
-    for raw in block.lines() {
-        let active = strip_shell_comment(raw);
-        let trimmed = active.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let continued = has_unescaped_continuation(trimmed);
-        let part = if continued {
-            trimmed.strip_suffix('\\').expect("continuation suffix")
-        } else {
-            trimmed
-        };
-        if !pending.is_empty() {
-            pending.push(' ');
-        }
-        pending.push_str(part.trim_end());
-        if continued {
-            continue;
-        }
-        lines.push(std::mem::take(&mut pending));
+fn validate_durable_suite_semantics(source: &str) -> Result<(), String> {
+    if source.matches(BIND_HEADER).count() != 1 {
+        return Err("bind() must be one #[tokio::test] ignored for E2E_STANDALONE_IMAGE".into());
     }
-    if !pending.is_empty() {
-        lines.push(pending);
-    }
-    lines
-}
-
-fn sha256_text(content: &str) -> Result<String, String> {
-    let mut file = tempfile::NamedTempFile::new().map_err(|error| error.to_string())?;
-    file.write_all(content.as_bytes())
-        .map_err(|error| error.to_string())?;
-    let path = file.path();
-
-    let shasum = Command::new("shasum")
-        .args(["-a", "256"])
-        .arg(path)
-        .output();
-    if let Ok(output) = shasum {
-        if output.status.success() {
-            if let Some(digest) = String::from_utf8_lossy(&output.stdout)
-                .split_whitespace()
-                .next()
-            {
-                return Ok(digest.to_string());
-            }
-        }
-    }
-
-    let sha256sum = Command::new("sha256sum").arg(path).output();
-    if let Ok(output) = sha256sum {
-        if output.status.success() {
-            if let Some(digest) = String::from_utf8_lossy(&output.stdout)
-                .split_whitespace()
-                .next()
-            {
-                return Ok(digest.to_string());
-            }
-        }
-    }
-    Err("neither shasum nor sha256sum could hash the durable block".to_string())
-}
-
-fn require_exact_once(lines: &[String], expected: &str, detail: &str) -> Result<usize, String> {
-    let matches: Vec<_> = lines
-        .iter()
-        .enumerate()
-        .filter_map(|(index, line)| (line == expected).then_some(index))
-        .collect();
-    if matches.len() != 1 {
+    let steps = active_lines(durable_body(source)?);
+    if steps != DURABLE_STEPS {
+        let at = steps
+            .iter()
+            .zip(DURABLE_STEPS)
+            .position(|(got, want)| got != want)
+            .unwrap_or(steps.len().min(DURABLE_STEPS.len()));
         return Err(format!(
-            "{detail}: expected one active command, found {}",
-            matches.len()
+            "durable() steps differ at step {at}: got {:?}, want {:?}",
+            steps.get(at),
+            DURABLE_STEPS.get(at)
         ));
     }
-    Ok(matches[0])
-}
-
-fn require_active_contains(lines: &[String], expected: &str, detail: &str) -> Result<(), String> {
-    if lines.iter().any(|line| line.contains(expected)) {
-        Ok(())
-    } else {
-        Err(format!("{detail}: missing active text {expected:?}"))
-    }
-}
-
-fn require_before(
-    lines: &[String],
-    assignment: &str,
-    command: &str,
-    detail: &str,
-) -> Result<(), String> {
-    let assignment = require_exact_once(lines, assignment, detail)?;
-    let command = require_exact_once(lines, command, detail)?;
-    if assignment < command {
-        Ok(())
-    } else {
-        Err(format!(
-            "{detail}: container is not tracked before docker run"
-        ))
-    }
-}
-
-fn validate_durable_script_semantics(source: &str) -> Result<(), String> {
-    let block = durable_script_block(source)?;
-    let lines = durable_logical_lines(block);
-
-    require_active_contains(&lines, CANDIDATE_ROOT_REGEX, "candidate root digest")?;
-    require_exact_once(
-        &lines,
-        &format!("OLD_IMAGE=\"{OLD_IMAGE}\""),
-        "old root digest",
-    )?;
-    require_exact_once(
-        &lines,
-        "VOLUME=\"lumen-smoke-durable-${ID_SUFFIX}\"",
-        "run volume",
-    )?;
-    require_exact_once(
-        &lines,
-        "REJECT_VOLUME=\"lumen-smoke-durable-reject-${ID_SUFFIX}\"",
-        "reject volume",
-    )?;
-    require_exact_once(
-        &lines,
-        "if docker volume inspect \"$VOLUME\" >/dev/null 2>&1; then",
-        "volume ownership check",
-    )?;
-    require_exact_once(
-        &lines,
-        "docker volume create \"$VOLUME\" >/dev/null",
-        "volume creation",
-    )?;
-    require_exact_once(
-        &lines,
-        "if docker volume inspect \"$REJECT_VOLUME\" >/dev/null 2>&1; then",
-        "reject volume ownership check",
-    )?;
-    require_exact_once(
-        &lines,
-        "docker volume create \"$REJECT_VOLUME\" >/dev/null",
-        "reject volume creation",
-    )?;
-    require_exact_once(&lines, "CREATED_VOLUME=1", "owned volume tracking")?;
-    require_exact_once(
-        &lines,
-        "CREATED_REJECT_VOLUME=1",
-        "owned reject volume tracking",
-    )?;
-    require_exact_once(
-        &lines,
-        "if [[ \"$CREATED_VOLUME\" == 1 ]]; then",
-        "owned volume cleanup",
-    )?;
-    require_exact_once(
-        &lines,
-        "if [[ \"$CREATED_REJECT_VOLUME\" == 1 ]]; then",
-        "owned reject volume cleanup",
-    )?;
-    require_exact_once(
-        &lines,
-        "if ! docker volume rm \"$VOLUME\" >/dev/null 2>&1; then",
-        "volume cleanup",
-    )?;
-    require_exact_once(
-        &lines,
-        "if ! docker volume rm \"$REJECT_VOLUME\" >/dev/null 2>&1; then",
-        "reject volume cleanup",
-    )?;
-    require_exact_once(
-        &lines,
-        "if ! docker rm -f \"$container\" >/dev/null 2>&1; then",
-        "container cleanup",
-    )?;
-    require_exact_once(
-        &lines,
-        "if [[ -n \"$TEMP_DIR\" ]] && ! rm -rf -- \"$TEMP_DIR\"; then",
-        "temporary cleanup",
-    )?;
-    require_active_contains(
-        &lines,
-        "if [[ \"$exit_code\" -ne 0 ]]; then",
-        "main failure preservation",
-    )?;
-    require_active_contains(
-        &lines,
-        "if [[ \"$cleanup_failed\" -ne 0 ]]; then",
-        "cleanup failure",
-    )?;
-    require_exact_once(&lines, "trap cleanup_durable EXIT", "cleanup exit trap")?;
-    require_exact_once(&lines, "trap 'exit 130' INT", "INT signal trap")?;
-    require_exact_once(&lines, "trap 'exit 143' TERM", "TERM signal trap")?;
-
-    require_before(&lines, "CREATED_OLD=\"$OLD_CONTAINER\"", OLD_RUN, "old run")?;
-    require_before(
-        &lines,
-        "CREATED_CANDIDATE=\"$CANDIDATE_CONTAINER\"",
-        CANDIDATE_RUN,
-        "candidate run",
-    )?;
-    require_before(
-        &lines,
-        "CREATED_REPLACEMENT=\"$REPLACEMENT_CONTAINER\"",
-        REPLACEMENT_RUN,
-        "replacement run",
-    )?;
-    require_before(
-        &lines,
-        "CREATED_REJECTED=\"$REJECTED_CONTAINER\"",
-        REJECTED_RUN,
-        "rejected run",
-    )?;
-    require_exact_once(&lines, OLD_RUN, "old image command")?;
-    require_exact_once(&lines, CANDIDATE_RUN, "candidate image command")?;
-    require_exact_once(&lines, REPLACEMENT_RUN, "replacement image command")?;
-    require_exact_once(&lines, REJECTED_RUN, "rejected image command")?;
-    require_exact_once(
-        &lines,
-        "port_diagnostics() {",
-        "published port diagnostic helper",
-    )?;
-    require_exact_once(
-        &lines,
-        "wait_published_port() {",
-        "bounded published port helper",
-    )?;
-    require_exact_once(
-        &lines,
-        "published_port() {",
-        "nil-safe published port helper",
-    )?;
-    require_exact_once(
-        &lines,
-        &format!("docker inspect --format '{SAFE_PUBLISHED_PORT_TEMPLATE}' \"$1\" 2>/dev/null"),
-        "nil-safe published port lookup",
-    )?;
-    require_exact_once(
-        &lines,
-        "if ! port=\"$(published_port \"$container\")\"; then",
-        "bounded published port lookup",
-    )?;
-    require_exact_once(&lines, PORT_DIAGNOSTIC, "published port state diagnostic")?;
-    require_exact_once(
-        &lines,
-        "if ! docker logs --tail 200 \"$container\" >&2; then :; fi",
-        "published port log diagnostic",
-    )?;
-    require_exact_once(
-        &lines,
-        "if [[ \"$port\" =~ ^[1-9][0-9]*$ ]]; then",
-        "published port validation",
-    )?;
-    for (variable, container) in [
-        ("OLD_PORT", "OLD_CONTAINER"),
-        ("CANDIDATE_PORT", "CANDIDATE_CONTAINER"),
-        ("REPLACEMENT_PORT", "REPLACEMENT_CONTAINER"),
-    ] {
-        require_exact_once(
-            &lines,
-            &format!("{variable}=\"$(wait_published_port \"${container}\")\""),
-            "bounded published port use",
-        )?;
-    }
-    let rejected_exit = require_exact_once(
-        &lines,
-        "wait_for_exit \"$REJECTED_CONTAINER\"",
-        "rejected startup exit",
-    )?;
-    let rejected_port = require_exact_once(
-        &lines,
-        "if ! REJECTED_PORT=\"$(published_port \"$REJECTED_CONTAINER\")\"; then",
-        "rejected optional published port lookup",
-    )?;
-    if rejected_exit >= rejected_port {
-        return Err("rejected port lookup must occur after the nonzero exit proof".to_string());
-    }
-    if lines
-        .iter()
-        .any(|line| line.contains("index (index .NetworkSettings.Ports"))
-    {
-        return Err("durable block uses an unchecked published port lookup".to_string());
-    }
-    if lines
-        .iter()
-        .filter(|line| line.contains(DATA_MOUNT))
-        .count()
-        != 3
-    {
-        return Err("each run must mount only the named volume at the data path".to_string());
-    }
-    if lines
-        .iter()
-        .filter(|line| line.contains(REJECT_DATA_MOUNT))
-        .count()
-        != 2
-    {
-        return Err(
-            "reject seed and run must mount only the reject volume at the data path".to_string(),
-        );
-    }
-    require_exact_once(
-        &lines,
-        "docker kill \"$CANDIDATE_CONTAINER\" >/dev/null",
-        "hard-kill proof",
-    )?;
-    require_exact_once(
-        &lines,
-        "docker rm \"$CANDIDATE_CONTAINER\" >/dev/null",
-        "candidate removal",
-    )?;
-    require_exact_once(
-        &lines,
-        "docker create --name \"$SEED_CONTAINER\" --mount \"type=volume,src=$REJECT_VOLUME,dst=/var/lib/lumen/data\" \"$LUMEN_STANDALONE_DURABLE_IMAGE\" >/dev/null",
-        "reject volume seed container",
-    )?;
-    require_exact_once(
-        &lines,
-        "docker cp \"$TEMP_DIR/foreign-layout\" \"$SEED_CONTAINER:/var/lib/lumen/data/foreign-layout\"",
-        "reject volume unknown-root seed",
-    )?;
-    require_exact_once(
-        &lines,
-        "docker rm \"$SEED_CONTAINER\" >/dev/null",
-        "reject seed removal",
-    )?;
-    require_exact_once(
-        &lines,
-        "wait_for_exit \"$REJECTED_CONTAINER\"",
-        "rejected startup exit",
-    )?;
-    require_exact_once(
-        &lines,
-        "[[ \"$exit_status\" -ne 0 ]] && return 0",
-        "rejected startup nonzero exit",
-    )?;
-    require_exact_once(
-        &lines,
-        "if [[ -n \"$REJECTED_PORT\" ]] && curl -fsS --noproxy '*' --connect-timeout 2 --max-time 5 \"http://127.0.0.1:${REJECTED_PORT}/readyz\" -o \"$TEMP_DIR/rejected-ready\" >/dev/null 2>&1; then",
-        "rejected startup never ready",
-    )?;
-    require_exact_once(
-        &lines,
-        "grep -Eq 'invalid segment checkpoint root inventory .*refusing to initialize CURRENT' \"$TEMP_DIR/rejected.log\"",
-        "rejected startup reason",
-    )?;
-    require_exact_once(
-        &lines,
-        "[[ ! -e \"$TEMP_DIR/rejected-data/CURRENT\" ]]",
-        "rejected CURRENT absence",
-    )?;
-    require_exact_once(
-        &lines,
-        "cmp -s \"$TEMP_DIR/foreign-layout/sentinel\" \"$TEMP_DIR/rejected-data/foreign-layout/sentinel\"",
-        "rejected unknown-root preservation",
-    )?;
-    require_exact_once(
-        &lines,
-        "assert_startup_decision() {",
-        "startup decision helper",
-    )?;
-    require_exact_once(
-        &lines,
-        "local log_path=\"$1\" expected=\"$2\" matches",
-        "startup decision arguments",
-    )?;
-    require_exact_once(
-        &lines,
-        "if ! matches=\"$(jq -r -s --arg expected \"$expected\" '[.[] | select(.schema == \"axiom.service.log.v1\" and .service.name == \"lumen\" and .message == \"segment checkpoint startup decision\" and .attributes.decision == $expected)] | length' \"$log_path\")\"; then",
-        "structured startup decision assertion",
-    )?;
-    require_exact_once(
-        &lines,
-        "echo \"ERROR: invalid structured startup log\" >&2",
-        "invalid startup log diagnostic",
-    )?;
-    require_exact_once(
-        &lines,
-        "if [[ \"$matches\" == 1 ]]; then",
-        "single startup decision assertion",
-    )?;
-    require_exact_once(
-        &lines,
-        "echo \"ERROR: expected one segment checkpoint startup decision '$expected'; found $matches\" >&2",
-        "startup decision mismatch diagnostic",
-    )?;
-    require_exact_once(
-        &lines,
-        "assert_startup_decision \"$TEMP_DIR/candidate.log\" adopted_legacy_0428",
-        "legacy adoption startup decision",
-    )?;
-    require_exact_once(
-        &lines,
-        "assert_startup_decision \"$TEMP_DIR/replacement.log\" restored_current_generation",
-        "current generation startup decision",
-    )?;
-
-    require_exact_once(
-        &lines,
-        "[[ -d \"$1\" ]] || return 1",
-        "legacy checkpoint directory",
-    )?;
-    require_exact_once(
-        &lines,
-        "[[ ! -e \"$1/CURRENT\" ]] || return 1",
-        "legacy CURRENT absence",
-    )?;
-    require_exact_once(
-        &lines,
-        "[[ \"$base\" =~ ^gen-[0-9]+$ ]] && return 0",
-        "legacy generation name",
-    )?;
-    require_exact_once(
-        &lines,
-        "has_legacy_generation \"$TEMP_DIR/old-data\" && break",
-        "legacy checkpoint adoption",
-    )?;
-    require_active_contains(&lines, "/readyz", "readiness proof")?;
-    require_exact_once(
-        &lines,
-        "request -X POST \"$url/collections/durable/search\" -H 'Content-Type: application/json' -d \"{\\\"query\\\":{\\\"term\\\":{\\\"field\\\":\\\"tag\\\",\\\"value\\\":\\\"$value\\\"}},\\\"limit\\\":10}\" -o \"$response\"",
-        "search request",
-    )?;
-    require_exact_once(
-        &lines,
-        "jq -e --arg id \"durable-${value}\" '.total == 1 and (.hits | length) == 1 and .hits[0].external_id == $id' \"$response\" >/dev/null",
-        "search response assertion",
-    )?;
-    require_exact_once(
-        &lines,
-        "request -X PUT \"$OLD_URL/collections/durable\" -H 'Content-Type: application/json' -d '{\"fields\":{\"tag\":{\"type\":\"keyword\"}}}' -o \"$TEMP_DIR/create\"",
-        "collection creation",
-    )?;
-    require_exact_once(
-        &lines,
-        "request -X POST \"$OLD_URL/collections/durable/index\" -H 'Content-Type: application/json' -d '{\"items\":[{\"external_id\":\"durable-first\",\"field\":\"tag\",\"value\":\"first\"}]}' -o \"$TEMP_DIR/index-first\"",
-        "first record",
-    )?;
-    require_exact_once(
-        &lines,
-        "request -X POST \"$CANDIDATE_URL/collections/durable/index\" -H 'Content-Type: application/json' -d '{\"items\":[{\"external_id\":\"durable-second\",\"field\":\"tag\",\"value\":\"second\"}]}' -o \"$TEMP_DIR/index-second\"",
-        "second record",
-    )?;
-    for search in [
-        "assert_search \"$OLD_URL\" first",
-        "assert_search \"$CANDIDATE_URL\" first",
-        "assert_search \"$CANDIDATE_URL\" second",
-        "assert_search \"$REPLACEMENT_URL\" first",
-        "assert_search \"$REPLACEMENT_URL\" second",
-    ] {
-        require_exact_once(&lines, search, "search proof")?;
-    }
-    require_exact_once(
-        &lines,
-        "docker cp \"$CANDIDATE_CONTAINER:/var/lib/lumen/data/CURRENT\" \"$TEMP_DIR/current-first\"",
-        "CURRENT adoption",
-    )?;
-    require_exact_once(&lines, CURRENT_FIRST_ASSERT, "CURRENT adoption bytes")?;
-    require_exact_once(
-        &lines,
-        "request -X POST \"$CANDIDATE_URL/admin/checkpoint\" -H 'Content-Type: application/json' -d '{}' -o \"$TEMP_DIR/checkpoint\"",
-        "checkpoint request",
-    )?;
-    require_exact_once(
-        &lines,
-        "jq -e '.persisted == true' \"$TEMP_DIR/checkpoint\" >/dev/null",
-        "persisted checkpoint",
-    )?;
-    require_exact_once(
-        &lines,
-        "docker cp \"$CANDIDATE_CONTAINER:/var/lib/lumen/data/CURRENT\" \"$TEMP_DIR/current-rev\"",
-        "candidate revision copy",
-    )?;
-    require_exact_once(
-        &lines,
-        "docker cp \"$REPLACEMENT_CONTAINER:/var/lib/lumen/data/CURRENT\" \"$TEMP_DIR/current-replacement\"",
-        "replacement revision copy",
-    )?;
-    require_exact_once(&lines, CURRENT_REV_ASSERT, "candidate revision bytes")?;
-    require_exact_once(
-        &lines,
-        CURRENT_REPLACEMENT_ASSERT,
-        "replacement revision bytes",
-    )?;
-
-    for line in &lines {
-        if line.contains("if false") || line.contains("false &&") || line.contains("|| true") {
-            return Err(format!("dead or bypassed durable proof: {line}"));
-        }
-        if [
-            "docker build",
-            "docker rmi",
-            "docker system prune",
-            "docker container prune",
-            "docker volume prune",
-        ]
-        .iter()
-        .any(|forbidden| line.contains(forbidden))
-        {
+    let lines: Vec<&str> = source.lines().map(str::trim).collect();
+    for (label, expected) in DURABLE_HELPER_LINES {
+        let count = lines.iter().filter(|line| *line == expected).count();
+        if count != 1 {
             return Err(format!(
-                "durable block has forbidden cleanup or image action: {line}"
-            ));
-        }
-        if line.starts_with("docker rm -f ")
-            && line != "docker rm -f \"$OLD_CONTAINER\" >/dev/null"
-            && line != "if ! docker rm -f \"$container\" >/dev/null 2>&1; then"
-        {
-            return Err(format!(
-                "durable block has unscoped container cleanup: {line}"
-            ));
-        }
-        if line.starts_with("docker volume rm ")
-            && line != "if ! docker volume rm \"$VOLUME\" >/dev/null 2>&1; then"
-            && line != "if ! docker volume rm \"$REJECT_VOLUME\" >/dev/null 2>&1; then"
-        {
-            return Err(format!("durable block has unscoped volume cleanup: {line}"));
-        }
-        if (line.starts_with("echo ") || line.starts_with("cat "))
-            && (line.contains("$response")
-                || line.contains("$TEMP_DIR/search")
-                || line.contains("/CURRENT")
-                || line.contains("$TEMP_DIR/current"))
-        {
-            return Err(format!(
-                "durable block exposes private response bytes: {line}"
+                "{label}: expected {expected:?} once, found {count}"
             ));
         }
     }
-
-    Ok(())
-}
-
-fn validate_durable_script_bytes(source: &str) -> Result<(), String> {
-    let block = durable_script_block(source)?;
-    let digest = sha256_text(block)?;
-    if digest != DURABLE_BLOCK_SHA256 {
-        return Err(format!(
-            "durable block digest changed: expected {DURABLE_BLOCK_SHA256}, got {digest}"
-        ));
+    for token in DURABLE_FORBIDDEN {
+        if source.contains(token) {
+            return Err(format!("forbidden token {token:?} in the suite"));
+        }
     }
     Ok(())
 }
 
-fn validate_durable_script(source: &str) -> Result<(), String> {
-    validate_durable_script_semantics(source)?;
-    validate_durable_script_bytes(source)
-}
-
-fn insert_after_exact(source: &str, target: &str, addition: &str) -> String {
-    replace_exact(source, target, &format!("{target}{addition}"))
-}
-
-fn candidate_with_override(source: &str, variable: &str) -> String {
-    replace_exact(
-        source,
-        CANDIDATE_AUTH_LINE,
-        &format!(
-            "  docker run -d --name \"$CANDIDATE_CONTAINER\" {DATA_MOUNT} -e LUMEN_AUTH=off -e LUMEN_LOG_FORMAT=json -e {variable}=forbidden \\\n"
-        ),
-    )
+fn validate_durable_suite_bytes(source: &str) -> Result<(), String> {
+    let digest = sha256_text(source);
+    if digest != DURABLE_SUITE_SHA256 {
+        return Err(format!(
+            "{DURABLE_SUITE} sha256 {digest} != {DURABLE_SUITE_SHA256}; review the change against this contract"
+        ));
+    }
+    Ok(())
 }
 
 fn assert_durable_rejected(label: &str, source: String) {
     assert!(
-        validate_durable_script_semantics(&source).is_err(),
+        validate_durable_suite_semantics(&source).is_err(),
         "mutation must fail: {label}"
     );
 }
 
+/// The durable container smoke is the Rust suite
+/// `e2e::standalone_container::durable`; the candidate's `container-smoke`
+/// job runs it against the candidate root (tests/it/release_candidate.rs
+/// pins that command). This pins what the suite checks.
 #[test]
-fn test_durable_script_contract_and_negative_mutations() {
-    let path = repo_root().join("scripts/standalone-container-smoke.sh");
-    let source = fs::read_to_string(path).expect("read durable smoke script");
-    validate_durable_script(&source).expect("durable script contract");
+fn test_durable_suite_contract_and_negative_mutations() {
+    let source = fs::read_to_string(repo_root().join(DURABLE_SUITE)).expect("read durable suite");
+    validate_durable_suite_semantics(&source).expect("durable suite contract");
+    validate_durable_suite_bytes(&source).expect("durable suite bytes");
 
-    let byte_drift = insert_after_exact(&source, DURABLE_BEGIN, "  # reviewed byte drift\n");
-    validate_durable_script_semantics(&byte_drift)
+    let byte_drift = replace_exact(
+        &source,
+        "    scratch.remove(&old);\n",
+        "    scratch.remove(&old);\n    // reviewed byte drift\n",
+    );
+    validate_durable_suite_semantics(&byte_drift)
         .expect("a comment-only byte drift keeps the durable semantics");
     assert!(
-        validate_durable_script_bytes(&byte_drift).is_err(),
-        "durable block digest must reject a generic byte drift"
+        validate_durable_suite_bytes(&byte_drift).is_err(),
+        "the suite digest must reject a generic byte drift"
     );
 
-    assert_durable_rejected(
-        "full-line comment",
-        replace_exact(
-            &source,
-            "  assert_search \"$OLD_URL\" first\n",
-            "  # assert_search \"$OLD_URL\" first\n",
-        ),
-    );
-    assert_durable_rejected(
-        "inline comment truncation",
-        replace_exact(
-            &source,
-            "  assert_search \"$CANDIDATE_URL\" first\n",
-            "  assert_search # \"$CANDIDATE_URL\" first\n",
-        ),
-    );
-    assert_durable_rejected(
-        "quoted prose",
-        replace_exact(
-            &source,
-            "  assert_search \"$CANDIDATE_URL\" second\n",
-            "  : 'assert_search \"$CANDIDATE_URL\" second'\n",
-        ),
-    );
-    assert_durable_rejected(
-        "if-false dead branch",
-        replace_exact(
-            &source,
-            "  assert_search \"$REPLACEMENT_URL\" first\n",
-            "  if false; then assert_search \"$REPLACEMENT_URL\" first; fi\n",
-        ),
-    );
-    assert_durable_rejected(
-        "false-and dead proof",
-        replace_exact(
-            &source,
-            "  assert_search \"$REPLACEMENT_URL\" second\n",
-            "  false && assert_search \"$REPLACEMENT_URL\" second\n",
-        ),
-    );
-    assert_durable_rejected(
-        "true bypass",
-        replace_exact(
-            &source,
-            "  assert_search \"$CANDIDATE_URL\" first\n",
-            "  assert_search \"$CANDIDATE_URL\" first || true\n",
-        ),
-    );
+    // Deleting any one step fails.
+    let body = durable_body(&source).expect("durable body");
+    let body_start = source.find(body).expect("body offset");
+    let mut offset = 0;
+    for line in body.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() && !trimmed.starts_with("//") {
+            let at = body_start + offset;
+            let mutated = format!("{}{}", &source[..at], &source[at + line.len()..]);
+            assert_durable_rejected(&format!("delete step {trimmed:?}"), mutated);
+        }
+        offset += line.len();
+    }
+
+    let candidate_serve =
+        "    let api = serve(&mut scratch, &candidate, &json_logs, &image).await;\n";
+    let adopted = "    assert_startup_decision(&candidate, \"adopted_legacy_0428\");\n";
     for (label, target, replacement) in [
         (
-            "cleanup exit trap removed",
-            "  trap cleanup_durable EXIT\n",
+            "commented-out step",
+            adopted,
+            "    // assert_startup_decision(&candidate, \"adopted_legacy_0428\");\n",
+        ),
+        (
+            "dead branch",
+            adopted,
+            "    if false {\n        assert_startup_decision(&candidate, \"adopted_legacy_0428\");\n    }\n",
+        ),
+        (
+            "reordered steps",
+            "    let api = serve(&mut scratch, &replacement, &json_logs, &image).await;\n    assert_startup_decision(&replacement, \"restored_current_generation\");\n",
+            "    assert_startup_decision(&replacement, \"restored_current_generation\");\n    let api = serve(&mut scratch, &replacement, &json_logs, &image).await;\n",
+        ),
+        (
+            "candidate image by tag",
+            candidate_serve,
+            "    let api = serve(&mut scratch, &candidate, &json_logs, \"ghcr.io/faberline/lumen:latest\").await;\n",
+        ),
+        (
+            "candidate digest not checked",
+            "            .is_some_and(|hex| super::support::is_lower_hex(hex, 64)),\n",
+            "            .is_some(),\n",
+        ),
+        (
+            "plain-text logs",
+            "\"-e\", \"LUMEN_LOG_FORMAT=json\"];",
+            "\"-e\", \"LUMEN_LOG_FORMAT=text\"];",
+        ),
+        (
+            "candidate durability override",
+            "\"-e\", \"LUMEN_LOG_FORMAT=json\"];",
+            "\"-e\", \"LUMEN_LOG_FORMAT=json\", \"-e\", \"LUMEN_SNAPSHOT_SECS=1\"];",
+        ),
+        (
+            "0428 persistence flag dropped",
+            "            \"-e\", \"LUMEN_PERSISTENCE=segment\",\n",
             "",
         ),
         (
-            "cleanup exit trap quoted",
-            "  trap cleanup_durable EXIT\n",
-            "  : 'trap cleanup_durable EXIT'\n",
+            "0428 data dir flag dropped",
+            "            \"-e\", &format!(\"LUMEN_DATA_DIR={DATA}\"),\n",
+            "",
         ),
         (
-            "cleanup exit trap dead branch",
-            "  trap cleanup_durable EXIT\n",
-            "  if false; then trap cleanup_durable EXIT; fi\n",
+            "bind mount",
+            "    let mount = format!(\"type=volume,src={volume},dst={DATA}\");\n",
+            "    let mount = format!(\"type=bind,src={volume},dst={DATA}\");\n",
         ),
-        ("INT signal trap removed", "  trap 'exit 130' INT\n", ""),
         (
-            "TERM signal trap quoted",
-            "  trap 'exit 143' TERM\n",
-            "  : 'trap exit 143 TERM'\n",
+            "wrong data path",
+            "const DATA: &str = \"/var/lib/lumen/data\";",
+            "const DATA: &str = \"/data\";",
+        ),
+        (
+            "0428 digest drift",
+            "59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        ),
+        (
+            "candidate repository drift",
+            "const REPO_DIGEST_PREFIX: &str = \"ghcr.io/faberline/lumen@sha256:\";",
+            "const REPO_DIGEST_PREFIX: &str = \"ghcr.io/\";",
+        ),
+        (
+            "wrong adopted decision",
+            adopted,
+            "    assert_startup_decision(&candidate, \"restored_current_generation\");\n",
+        ),
+        ("decision count", "matches == 1,", "matches >= 1,"),
+        (
+            "decision schema",
+            "\"axiom.service.log.v1\"",
+            "\"axiom.service.log.v2\"",
+        ),
+        (
+            "decision message",
+            "&& entry[\"message\"] == \"segment checkpoint startup decision\"",
+            "",
+        ),
+        (
+            "non-JSON log lines tolerated",
+            "serde_json::from_str(line).unwrap_or_else(|_| panic!(\"invalid structured startup log line: {line}\\n{log}\"));",
+            "match serde_json::from_str(line) { Ok(entry) => entry, Err(_) => continue };",
+        ),
+        (
+            "all-interface published port",
+            "\"127.0.0.1::7373\"",
+            "\"7373:7373\"",
+        ),
+        (
+            "search accepts more hits",
+            "found[\"total\"] == 1 && ",
+            "found[\"total\"] != 0 && ",
+        ),
+        (
+            "refusal reason not checked",
+            ".is_some_and(|(_, rest)| rest.contains(\"refusing to initialize CURRENT\"))",
+            ".is_some()",
+        ),
+        (
+            "rejected exit not checked",
+            "assert!(code != \"0\", ",
+            "assert!(code == code, ",
+        ),
+        (
+            "cleanup keeps volumes",
+            "if let Err(e) = docker(&[\"volume\", \"rm\", v]) {",
+            "if let Err(e) = docker(&[\"volume\", \"inspect\", v]) {",
+        ),
+        (
+            "skipped test",
+            "#[tokio::test]\n#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn durable() {\n",
+            "#[tokio::test]\n#[should_panic]\n#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn durable() {\n",
+        ),
+        (
+            "compiled out",
+            "\n\n#[tokio::test]\n#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn durable() {\n",
+            "\n\n#[cfg(any())]\n#[tokio::test]\n#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn durable() {\n",
+        ),
+        (
+            "ignore reason drift",
+            "#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn durable() {\n",
+            "#[ignore = \"e2e: needs docker\"]\nasync fn durable() {\n",
+        ),
+        (
+            "early return",
+            "    let id = suffix();\n    let volume",
+            "    return;\n    let id = suffix();\n    let volume",
+        ),
+        (
+            "docker prune",
+            "    scratch.remove(&old);\n",
+            "    scratch.remove(&old);\n    must(&[\"system\", \"prune\", \"-af\"]);\n",
+        ),
+        (
+            "local build",
+            "    must(&all);\n",
+            "    must(&[\"build\", \"-t\", image, \".\"]);\n    must(&all);\n",
+        ),
+        (
+            "WAL override",
+            "\"-e\", \"LUMEN_AUTH=off\", \"-e\", \"LUMEN_LOG_FORMAT=json\"];",
+            "\"-e\", \"LUMEN_AUTH=off\", \"-e\", \"LUMEN_WAL=off\", \"-e\", \"LUMEN_LOG_FORMAT=json\"];",
         ),
     ] {
         assert_durable_rejected(label, replace_exact(&source, target, replacement));
     }
-
-    assert_durable_rejected(
-        "candidate published port wait removed",
-        replace_exact(
-            &source,
-            "  CANDIDATE_PORT=\"$(wait_published_port \"$CANDIDATE_CONTAINER\")\"\n",
-            "",
-        ),
-    );
-    let safe_port_lookup = format!(
-        "    docker inspect --format '{SAFE_PUBLISHED_PORT_TEMPLATE}' \"$1\" 2>/dev/null\n"
-    );
-    assert_durable_rejected(
-        "unchecked published port lookup",
-        replace_exact(
-            &source,
-            &safe_port_lookup,
-            "    docker inspect --format '{{(index (index .NetworkSettings.Ports \"7373/tcp\") 0).HostPort}}' \"$1\" 2>/dev/null\n",
-        ),
-    );
-    assert_durable_rejected(
-        "published port state diagnostic removed",
-        replace_exact(&source, &format!("    {PORT_DIAGNOSTIC}\n"), ""),
-    );
-    assert_durable_rejected(
-        "rejected optional published port lookup removed",
-        replace_exact(
-            &source,
-            "  if ! REJECTED_PORT=\"$(published_port \"$REJECTED_CONTAINER\")\"; then\n",
-            "",
-        ),
-    );
-
-    for (label, replacement) in [
-        ("candidate tag", "\"ghcr.io/faberline/lumen:latest\""),
-        ("candidate local image", "\"./lumen\""),
-        (
-            "candidate child image",
-            "\"${LUMEN_STANDALONE_DURABLE_IMAGE}-child\"",
-        ),
-    ] {
-        assert_durable_rejected(
-            label,
-            replace_exact(
-                &source,
-                CANDIDATE_RUN_SOURCE,
-                &CANDIDATE_RUN_SOURCE.replace("\"$LUMEN_STANDALONE_DURABLE_IMAGE\"", replacement),
-            ),
-        );
-    }
-    assert_durable_rejected(
-        "candidate structured logging removed",
-        replace_exact(
-            &source,
-            CANDIDATE_RUN_SOURCE,
-            &CANDIDATE_RUN_SOURCE.replace(" -e LUMEN_LOG_FORMAT=json", ""),
-        ),
-    );
-    assert_durable_rejected(
-        "replacement structured logging removed",
-        replace_exact(
-            &source,
-            REPLACEMENT_RUN_SOURCE,
-            &REPLACEMENT_RUN_SOURCE.replace(" -e LUMEN_LOG_FORMAT=json", ""),
-        ),
-    );
-    assert_durable_rejected(
-        "old digest drift",
-        replace_exact(
-            &source,
-            OLD_IMAGE,
-            "ghcr.io/faberline/lumen@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-        ),
-    );
-    for (label, replacement) in [
-        (
-            "old image data directory flag removed",
-            "-e LUMEN_AUTH=off -e LUMEN_PERSISTENCE=segment -e LUMEN_SNAPSHOT_SECS=1 -e LUMEN_GRACE_SECS=1",
-        ),
-        (
-            "old image persistence flag removed",
-            "-e LUMEN_AUTH=off -e LUMEN_DATA_DIR=/var/lib/lumen/data -e LUMEN_SNAPSHOT_SECS=1 -e LUMEN_GRACE_SECS=1",
-        ),
-    ] {
-        assert_durable_rejected(
-            label,
-            replace_exact(
-                &source,
-                "-e LUMEN_AUTH=off -e LUMEN_DATA_DIR=/var/lib/lumen/data -e LUMEN_PERSISTENCE=segment -e LUMEN_SNAPSHOT_SECS=1 -e LUMEN_GRACE_SECS=1",
-                replacement,
-            ),
-        );
-    }
-    assert_durable_rejected(
-        "replacement image differs",
-        replace_exact(
-            &source,
-            REPLACEMENT_RUN_SOURCE,
-            &REPLACEMENT_RUN_SOURCE.replace(
-                "\"$LUMEN_STANDALONE_DURABLE_IMAGE\"",
-                "\"ghcr.io/faberline/lumen:other\"",
-            ),
-        ),
-    );
-    for (label, replacement) in [
-        (
-            "anonymous mount",
-            "--mount \"type=volume,dst=/var/lib/lumen/data\"",
-        ),
-        (
-            "bind mount",
-            "--mount \"type=bind,src=$TEMP_DIR,dst=/var/lib/lumen/data\"",
-        ),
-        (
-            "wrong data path",
-            "--mount \"type=volume,src=$VOLUME,dst=/data\"",
-        ),
-    ] {
-        assert_durable_rejected(
-            label,
-            replace_exact(
-                &source,
-                CANDIDATE_RUN_SOURCE,
-                &CANDIDATE_RUN_SOURCE.replace(DATA_MOUNT, replacement),
-            ),
-        );
-    }
-    for variable in [
-        "LUMEN_DATA_DIR",
-        "LUMEN_PERSISTENCE",
-        "LUMEN_WAL",
-        "LUMEN_FSYNC",
-        "LUMEN_SNAPSHOT_SECS",
-        "LUMEN_GRACE_SECS",
-    ] {
-        assert_durable_rejected(variable, candidate_with_override(&source, variable));
-    }
-
-    for (label, target) in [
-        (
-            "first record",
-            "  request -X POST \"$OLD_URL/collections/durable/index\" -H 'Content-Type: application/json' -d '{\"items\":[{\"external_id\":\"durable-first\",\"field\":\"tag\",\"value\":\"first\"}]}' -o \"$TEMP_DIR/index-first\"\n",
-        ),
-        (
-            "second record",
-            "  request -X POST \"$CANDIDATE_URL/collections/durable/index\" -H 'Content-Type: application/json' -d '{\"items\":[{\"external_id\":\"durable-second\",\"field\":\"tag\",\"value\":\"second\"}]}' -o \"$TEMP_DIR/index-second\"\n",
-        ),
-        (
-            "search request",
-            "    request -X POST \"$url/collections/durable/search\" -H 'Content-Type: application/json' \\\n      -d \"{\\\"query\\\":{\\\"term\\\":{\\\"field\\\":\\\"tag\\\",\\\"value\\\":\\\"$value\\\"}},\\\"limit\\\":10}\" -o \"$response\"\n",
-        ),
-        ("old first search", "  assert_search \"$OLD_URL\" first\n"),
-        ("candidate first search", "  assert_search \"$CANDIDATE_URL\" first\n"),
-        ("candidate second search", "  assert_search \"$CANDIDATE_URL\" second\n"),
-        ("replacement first search", "  assert_search \"$REPLACEMENT_URL\" first\n"),
-        ("replacement second search", "  assert_search \"$REPLACEMENT_URL\" second\n"),
-        (
-            "CURRENT adoption check",
-            "  docker cp \"$CANDIDATE_CONTAINER:/var/lib/lumen/data/CURRENT\" \"$TEMP_DIR/current-first\"\n",
-        ),
-        (
-            "revision check",
-            "  python3 -c 'import pathlib,re,sys; b=pathlib.Path(sys.argv[1]).read_bytes(); sys.exit(0 if re.fullmatch(rb\"generation:gen-[0-9]+-rev-[1-9][0-9]*\\n\",b) else 1)' \"$TEMP_DIR/current-rev\"\n",
-        ),
-        (
-            "checkpoint request",
-            "  request -X POST \"$CANDIDATE_URL/admin/checkpoint\" -H 'Content-Type: application/json' -d '{}' -o \"$TEMP_DIR/checkpoint\"\n",
-        ),
-        (
-            "persisted checkpoint",
-            "  jq -e '.persisted == true' \"$TEMP_DIR/checkpoint\" >/dev/null\n",
-        ),
-    ] {
-        assert_durable_rejected(label, replace_exact(&source, target, ""));
-    }
-    for (label, assertion) in [
-        ("CURRENT adoption quoted prose", CURRENT_FIRST_ASSERT),
-        ("candidate revision quoted prose", CURRENT_REV_ASSERT),
-        (
-            "replacement revision quoted prose",
-            CURRENT_REPLACEMENT_ASSERT,
-        ),
-    ] {
-        assert_durable_rejected(
-            label,
-            replace_exact(
-                &source,
-                &format!("  {assertion}\n"),
-                "  : 'CURRENT assertion is prose, not a proof'\n",
-            ),
-        );
-    }
-    for (label, copy) in [
-        (
-            "CURRENT adoption copy",
-            "  docker cp \"$CANDIDATE_CONTAINER:/var/lib/lumen/data/CURRENT\" \"$TEMP_DIR/current-first\"\n",
-        ),
-        (
-            "candidate revision copy",
-            "  docker cp \"$CANDIDATE_CONTAINER:/var/lib/lumen/data/CURRENT\" \"$TEMP_DIR/current-rev\"\n",
-        ),
-        (
-            "replacement revision copy",
-            "  docker cp \"$REPLACEMENT_CONTAINER:/var/lib/lumen/data/CURRENT\" \"$TEMP_DIR/current-replacement\"\n",
-        ),
-    ] {
-        assert_durable_rejected(label, replace_exact(&source, copy, ""));
-    }
-
-    for (label, target) in [
-        (
-            "reject volume seed",
-            "  docker cp \"$TEMP_DIR/foreign-layout\" \"$SEED_CONTAINER:/var/lib/lumen/data/foreign-layout\"\n",
-        ),
-        (
-            "reject run",
-            "  docker run -d --name \"$REJECTED_CONTAINER\" --mount \"type=volume,src=$REJECT_VOLUME,dst=/var/lib/lumen/data\" -e LUMEN_AUTH=off \\\n    -p 127.0.0.1::7373 \"$LUMEN_STANDALONE_DURABLE_IMAGE\" >/dev/null\n",
-        ),
-        ("reject exit wait", "  wait_for_exit \"$REJECTED_CONTAINER\"\n"),
-        (
-            "reject error assertion",
-            "  grep -Eq 'invalid segment checkpoint root inventory .*refusing to initialize CURRENT' \"$TEMP_DIR/rejected.log\"\n",
-        ),
-        (
-            "reject CURRENT absence",
-            "  [[ ! -e \"$TEMP_DIR/rejected-data/CURRENT\" ]]\n",
-        ),
-        (
-            "reject unknown preservation",
-            "  cmp -s \"$TEMP_DIR/foreign-layout/sentinel\" \"$TEMP_DIR/rejected-data/foreign-layout/sentinel\"\n",
-        ),
-        (
-            "legacy adoption decision log",
-            "  assert_startup_decision \"$TEMP_DIR/candidate.log\" adopted_legacy_0428\n",
-        ),
-        (
-            "current generation decision log",
-            "  assert_startup_decision \"$TEMP_DIR/replacement.log\" restored_current_generation\n",
-        ),
-        (
-            "structured decision parser",
-            "    if ! matches=\"$(jq -r -s --arg expected \"$expected\" '[.[] | select(.schema == \"axiom.service.log.v1\" and .service.name == \"lumen\" and .message == \"segment checkpoint startup decision\" and .attributes.decision == $expected)] | length' \"$log_path\")\"; then\n",
-        ),
-        (
-            "single decision requirement",
-            "    if [[ \"$matches\" == 1 ]]; then\n",
-        ),
-        (
-            "decision mismatch diagnostic",
-            "    echo \"ERROR: expected one segment checkpoint startup decision '$expected'; found $matches\" >&2\n",
-        ),
-    ] {
-        assert_durable_rejected(label, replace_exact(&source, target, ""));
-    }
-
-    for action in [
-        "docker container prune -f\n",
-        "docker volume prune -f\n",
-        "docker system prune -af\n",
-        "docker build -t lumen:bad .\n",
-        "docker rmi lumen:bad\n",
-        "docker rm -f $(docker ps -aq)\n",
-    ] {
-        assert_durable_rejected(
-            action.trim(),
-            insert_after_exact(&source, DURABLE_BEGIN, &format!("  {action}")),
-        );
-    }
-    assert_durable_rejected(
-        "response output",
-        insert_after_exact(
-            &source,
-            "  assert_search \"$CANDIDATE_URL\" first\n",
-            "  cat \"$TEMP_DIR/search-first\"\n",
-        ),
-    );
-    assert_durable_rejected(
-        "CURRENT output",
-        insert_after_exact(
-            &source,
-            "  docker cp \"$CANDIDATE_CONTAINER:/var/lib/lumen/data/CURRENT\" \"$TEMP_DIR/current-first\"\n",
-            "  echo \"$(cat \"$TEMP_DIR/current-first\")\"\n",
-        ),
-    );
 }
 
 fn validate_compose_contract(source: &str) -> Result<(), String> {

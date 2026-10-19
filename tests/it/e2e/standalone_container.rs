@@ -12,7 +12,9 @@
 //!            container, and a volume with an unknown root is refused without
 //!            being touched. Needs an exact GHCR root digest.
 //!
-//! Same checks as scripts/standalone-container-smoke.sh bind|durable.
+//! The candidate's `container-smoke` job runs both against the candidate
+//! root. tests/it/standalone_container_contract.rs pins the durable steps,
+//! their helpers, and this file's bytes; a change here updates that pin.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

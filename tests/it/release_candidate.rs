@@ -47,9 +47,12 @@ const ACTIONS: &[&str] = &[
     "anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610",
 ];
 const WORKFLOW_BYTES_SHA256: &str =
-    "d32a61720618af18d3572f2d4261376402805632f35b67af375aefc89c8513db";
+    "27b9029d240d8b3ccccfaa95791e59f9ff72ef8b3596f93d0ed57c5da6066ecb";
 const KIND_E2E_BYTES_SHA256: &str =
     "e96c2a010d141eb6cfe4c261ad63f7017f4baacdf5509d65606731669beb0044";
+/// The standalone container smoke gate: the Rust suite
+/// `e2e::standalone_container::` (bind and durable) on the candidate root.
+const STANDALONE_SMOKE_GATE: &str = "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1";
 const RELEASE_PERF_GATE: &str = "cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --skip durable_workload --test-threads=1 --nocapture";
 const VERIFIER_BYTES_SHA256: &str =
     "00f259c99c0d071b699372e1954e5c8fb1b5b983d12730c0ddc081d138d10b7a";
@@ -947,6 +950,7 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
             "container-smoke",
             &[
                 "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "Reclaim runner disk before the cargo gate",
                 "Log in to GHCR with read-only job access",
                 "Run standalone container smoke gates",
             ][..],
@@ -1165,10 +1169,21 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
     .ok_or(Finding("GATES"))?;
     let smoke_map = smoke.as_mapping().ok_or(Finding("GATES"))?;
     require(
-        smoke_map.len() == 3
-            && ["name", "shell", "run"]
+        smoke_map.len() == 4
+            && ["name", "env", "shell", "run"]
                 .iter()
                 .all(|name| smoke_map.contains_key(&key(name))),
+        "GATES",
+    )?;
+    let smoke_env = field(smoke, "env")
+        .and_then(Yaml::as_mapping)
+        .ok_or(Finding("GATES"))?;
+    require(
+        smoke_env.len() == 1
+            && smoke_env
+                .get(&key("CARGO_INCREMENTAL"))
+                .and_then(Yaml::as_str)
+                == Some("0"),
         "GATES",
     )?;
     let smoke_run = field(smoke, "run")
@@ -1178,11 +1193,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
         field(smoke, "shell").and_then(Yaml::as_str) == Some("bash")
             && exact_shell_lines(
                 smoke_run,
-                &[
-                    "set -euo pipefail",
-                    "bash scripts/standalone-container-smoke.sh bind",
-                    "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
-                ],
+                &["set -euo pipefail", STANDALONE_SMOKE_GATE],
             ),
         "GATES",
     )?;
@@ -2414,8 +2425,7 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         "cargo test --locked -p lumen",
         "cargo test --locked -p lumen --features \"operator delegated-auth\"",
         "cargo test --locked -p lumen --features release --test it -- release_feature_set::",
-        "bash scripts/standalone-container-smoke.sh bind",
-        "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
+        STANDALONE_SMOKE_GATE,
         RELEASE_PERF_GATE,
         "cargo build --locked -p lumen --features raft-wal",
         "cargo test --locked -p lumen --features raft-wal --lib --no-run",
@@ -2962,34 +2972,50 @@ fn client_seed_inventory_requires_each_approved_case_and_rejects_unapproved_case
 #[test]
 fn live_candidate_contract_is_fail_closed() {
     let source = workflow();
-    const DURABLE_GATE: &str = "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable";
+    const DURABLE_GATE: &str = STANDALONE_SMOKE_GATE;
     for (replacement, finding) in [
         (
-            "# LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
+            "# E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1",
             "GATES",
         ),
         (
-            "echo 'LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable'",
+            "echo 'E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1'",
             "GATES",
         ),
         (
-            "if false; then LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable; fi",
+            "if false; then E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1; fi",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\" bash scripts/standalone-container-smoke.sh durable",
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1 || true",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\" bash scripts/standalone-container-smoke.sh durable",
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}:latest\" bash scripts/standalone-container-smoke.sh durable",
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh bind",
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}:latest\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1",
+            "GATES",
+        ),
+        (
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container::bind --ignored --test-threads=1",
+            "GATES",
+        ),
+        (
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_contaner:: --ignored --test-threads=1",
+            "GATES",
+        ),
+        (
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --test-threads=1",
+            "GATES",
+        ),
+        (
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --skip durable --test-threads=1",
             "GATES",
         ),
     ] {
@@ -3887,8 +3913,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             "      - name: Run raft-wal cargo gates\n        if: false\n        env:",
         ),
         (
-            "      - name: Run standalone container smoke gates\n        shell: bash",
-            "      - name: Run standalone container smoke gates\n        continue-on-error: true\n        shell: bash",
+            "        # or fail; e2e::standalone_filter_matches_module pins this filter.\n        env:",
+            "        # or fail; e2e::standalone_filter_matches_module pins this filter.\n        continue-on-error: true\n        env:",
         ),
     ] {
         expect_workflow(&source, from, to, "GATES");
@@ -3964,7 +3990,7 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         (
             "container-smoke",
             "Run standalone container smoke gates",
-            "scripts/standalone-container-smoke.sh",
+            "Cargo.toml",
             0,
         ),
         (

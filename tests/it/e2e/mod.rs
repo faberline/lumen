@@ -72,3 +72,36 @@ fn gke_suite_filters_match_modules() {
         "gke-test.yml `all` must run every suite folder"
     );
 }
+
+/// The same guard for the image-targeted suite: every workflow that runs
+/// `standalone_container` must filter a module that holds the ignored `bind`
+/// and `durable`, so a rename cannot turn the gate into "running 0 tests".
+#[test]
+fn standalone_filter_matches_module() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let read = |path: &str| {
+        std::fs::read_to_string(root.join(path)).unwrap_or_else(|e| panic!("read {path}: {e}"))
+    };
+    let command =
+        "cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1";
+    for workflow in [
+        ".github/workflows/gke-test.yml",
+        ".github/workflows/lumen-release-candidate.yml",
+    ] {
+        let source = read(workflow);
+        assert_eq!(
+            source.matches(command).count(),
+            1,
+            "{workflow} must run `{command}` exactly once"
+        );
+    }
+    let module = read("tests/it/e2e/standalone_container.rs");
+    for test in ["bind", "durable"] {
+        assert!(
+            module.contains(&format!(
+                "#[tokio::test]\n#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn {test}()"
+            )),
+            "tests/it/e2e/standalone_container.rs must hold the ignored `{test}`"
+        );
+    }
+}

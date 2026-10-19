@@ -546,6 +546,21 @@ jobs:
         with:
           ref: ${{ needs.identity.outputs.commit }}
           fetch-depth: 0
+      - name: Reclaim runner disk before the cargo gate
+        # The smoke suite builds the debug `it` test binary; keep the `df -h`
+        # lines as direct free-space evidence.
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
       - name: Log in to GHCR with read-only job access
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
@@ -553,11 +568,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Run standalone container smoke gates
+        # The Rust suite e2e::standalone_container:: (tests/it/e2e/
+        # standalone_container.rs) runs `bind` and `durable` against the
+        # candidate root digest under docker on this runner. Rust decides pass
+        # or fail; e2e::standalone_filter_matches_module pins this filter.
+        env:
+          CARGO_INCREMENTAL: '0'
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/standalone-container-smoke.sh bind
-          LUMEN_STANDALONE_DURABLE_IMAGE="${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}" bash scripts/standalone-container-smoke.sh durable
+          E2E_STANDALONE_IMAGE="${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1
 
   cloud-free-config:
     name: cloud-free config gates

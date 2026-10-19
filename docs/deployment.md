@@ -201,7 +201,7 @@ these jobs against the exact commit:
 | `gates-operator` | `cargo test --locked -p lumen --features "operator delegated-auth"` |
 | `gates-raft-wal` | The `raft-wal` feature cases, plus the `raft-wal` build, lib test build, and `git diff --check`. |
 | `gates-release-features` | The release feature set (`release_feature_set::`). |
-| `container-smoke` | `scripts/standalone-container-smoke.sh` in `bind` and `durable` modes against the candidate image. |
+| `container-smoke` | The Rust suite `e2e::standalone_container::` (`bind` and `durable`) under docker against the candidate root digest. |
 | `cloud-free-config` | Terraform and Kustomize static checks; it calls no cloud API. |
 | `perf-coarse` | The release-profile `perf_gate::` cases except the thirty-minute durable workload. It still blocks the release. |
 | `verify-candidate` | `scripts/verify-release-candidate.sh`: supply-chain verification only. |

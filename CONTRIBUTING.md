@@ -95,7 +95,7 @@ A docs-only change does not claim that product gates ran.
 | protected-tag promotion oracle | `cargo test -p lumen --test it -- release_promotion::` |
 | full candidate verifier | `scripts/verify-release-candidate.sh --repo faberline/lumen --version <version> --commit <commit> --run-id <id> --run-attempt <attempt> --manifest <path> --manifest-sidecar <path> --artifacts-dir <path> --image <image> --candidate-tag <tag> --amd64-digest <digest> --arm64-digest <digest> --mode full` |
 | public release verifier | `scripts/verify-release-artifacts.sh --repo faberline/lumen --tag lumen@<version> --commit <commit> --candidate-run-id <id> --mode public --output <path>` |
-| standalone container bind smoke | `bash scripts/standalone-container-smoke.sh bind` |
+| standalone container smoke (`bind`, `durable`; needs docker and a GHCR root digest) | `E2E_STANDALONE_IMAGE=ghcr.io/faberline/lumen@sha256:<root digest> cargo test -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1` |
 
 All eight rows are required for a full Lumen behavior claim. None is a superset
 of the others. Do not replace the second or third row with `--all-features`;
