@@ -15,7 +15,9 @@
 //! through its Service at `E2E_ENDPOINT`, call `kubectl` with the Job's
 //! namespaced Role, and check the image identity the run hands them in the
 //! ConfigMap `gke-test-env` (`identity`). Results go to the pod log as
-//! `E2E_EVIDENCE {json}` lines.
+//! `E2E_EVIDENCE {json}` lines. The release candidate runs the same two Jobs
+//! on native amd64 and arm64 kind clusters (scripts/kind-cluster.sh), which
+//! only deploy and wait; the suites decide pass or fail.
 //!
 //! `cluster` holds the steps both cluster suites share; `support` the
 //! clients, the evidence lines, and the fixture.
@@ -29,8 +31,9 @@ mod support;
 
 /// libtest passes a filter that matches nothing ("running 0 tests"), so a
 /// renamed module would turn a GKE suite into a green no-op. Pin each Job
-/// folder's filter to a module here that holds the ignored `journey`, and
-/// the workflow's `all` to exactly those folders.
+/// folder's filter to a module here that holds the ignored `journey`, the
+/// workflow's `all` to exactly those folders, and the candidate's kind jobs to
+/// each folder on both architectures.
 #[test]
 fn gke_suite_filters_match_modules() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -71,4 +74,58 @@ fn gke_suite_filters_match_modules() {
         workflow.contains(r#"all) suites='["overlay","operator"]' ;;"#),
         "gke-test.yml `all` must run every suite folder"
     );
+
+    // The candidate's kind jobs run the same Job folders on amd64 and arm64.
+    let kind = read("scripts/kind-cluster.sh");
+    assert!(
+        kind.contains("  overlay | operator) ;;\n"),
+        "kind-cluster.sh must accept exactly the suite folders"
+    );
+    assert!(
+        kind.contains("kubectl kustomize \"$ROOT/k8s/gke-test-job/$SUITE\""),
+        "kind-cluster.sh must run k8s/gke-test-job/<suite>"
+    );
+    let candidate = read(".github/workflows/lumen-release-candidate.yml");
+    for suite in suites {
+        assert_eq!(
+            candidate
+                .matches(&format!("scripts/kind-cluster.sh {suite}\n"))
+                .count(),
+            2,
+            "lumen-release-candidate.yml must run the {suite} suite on both kind architectures"
+        );
+    }
+}
+
+/// The same guard for the image-targeted suite: every workflow that runs
+/// `standalone_container` must filter a module that holds the ignored `bind`
+/// and `durable`, so a rename cannot turn the gate into "running 0 tests".
+#[test]
+fn standalone_filter_matches_module() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let read = |path: &str| {
+        std::fs::read_to_string(root.join(path)).unwrap_or_else(|e| panic!("read {path}: {e}"))
+    };
+    let command =
+        "cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1";
+    for workflow in [
+        ".github/workflows/gke-test.yml",
+        ".github/workflows/lumen-release-candidate.yml",
+    ] {
+        let source = read(workflow);
+        assert_eq!(
+            source.matches(command).count(),
+            1,
+            "{workflow} must run `{command}` exactly once"
+        );
+    }
+    let module = read("tests/it/e2e/standalone_container.rs");
+    for test in ["bind", "durable"] {
+        assert!(
+            module.contains(&format!(
+                "#[tokio::test]\n#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn {test}()"
+            )),
+            "tests/it/e2e/standalone_container.rs must hold the ignored `{test}`"
+        );
+    }
 }

@@ -47,9 +47,32 @@ const ACTIONS: &[&str] = &[
     "anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610",
 ];
 const WORKFLOW_BYTES_SHA256: &str =
-    "d32a61720618af18d3572f2d4261376402805632f35b67af375aefc89c8513db";
-const KIND_E2E_BYTES_SHA256: &str =
-    "e96c2a010d141eb6cfe4c261ad63f7017f4baacdf5509d65606731669beb0044";
+    "ee9c759e2990c233aecc71227794f539f3cfca5c3dbe75363d128dd56120f0e3";
+/// scripts/kind-cluster.sh, which the kind jobs run: deploy only.
+const KIND_CLUSTER_BYTES_SHA256: &str =
+    "eaf454237863b5f03acac986474d2d31d3a80f8f764e2fbab482cf7dc424f1d0";
+/// The Rust suites the kind jobs' test Job runs, which decide pass or fail.
+const KIND_SUITE_BYTES_SHA256: &[(&str, &str)] = &[
+    (
+        "tests/it/e2e/cluster.rs",
+        "a3c35dfc7e2a2e0a37037cd8c05c69853d60b2c4faaf1dae45a2e2527c925080",
+    ),
+    (
+        "tests/it/e2e/operator.rs",
+        "97a2ce1cc6cc18c0e310938e7f2ebfc3c1e38d299f08477b8a7cfb6afbee2cb6",
+    ),
+    (
+        "tests/it/e2e/overlay.rs",
+        "1f144865c047a8a265bd163635c348454eb47029f4dedc27255ebab4f488deb4",
+    ),
+    (
+        "tests/it/e2e/identity.rs",
+        "4bf58fb638f6258a15f7e72a20edf0bf1f251980855060f30a51306ff91c5ce8",
+    ),
+];
+/// The standalone container smoke gate: the Rust suite
+/// `e2e::standalone_container::` (bind and durable) on the candidate root.
+const STANDALONE_SMOKE_GATE: &str = "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1";
 const RELEASE_PERF_GATE: &str = "cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --skip durable_workload --test-threads=1 --nocapture";
 const VERIFIER_BYTES_SHA256: &str =
     "00f259c99c0d071b699372e1954e5c8fb1b5b983d12730c0ddc081d138d10b7a";
@@ -379,127 +402,239 @@ fn shell_logical_lines(content: &str) -> Vec<String> {
     logical
 }
 
-fn shell_function_body(content: &str, name: &str) -> Option<Vec<String>> {
-    let lines = shell_logical_lines(content);
-    let header = format!("{name}() {{");
+/// The kind jobs' sources: the deploy-only script, and the Rust suites its
+/// test Job runs (`e2e::overlay::`, `e2e::operator::`), which decide pass or
+/// fail.
+struct KindSources {
+    script: String,
+    cluster: String,
+    operator: String,
+    overlay: String,
+}
+
+/// The trimmed, non-empty lines of the one top-level Rust item opened by the
+/// exact line `signature`, up to its closing `}`. Comments are kept, so a
+/// commented-out line no longer matches the line it was.
+fn rust_fn_body(source: &str, signature: &str) -> Option<Vec<String>> {
+    let lines = source.lines().collect::<Vec<_>>();
     let starts = lines
         .iter()
         .enumerate()
-        .filter_map(|(index, line)| (line == &header).then_some(index))
+        .filter_map(|(index, line)| (*line == signature).then_some(index))
         .collect::<Vec<_>>();
     if starts.len() != 1 {
         return None;
     }
     let start = starts[0] + 1;
-    let end = lines[start..].iter().position(|line| line == "}")? + start;
-    Some(lines[start..end].to_vec())
+    let end = lines[start..].iter().position(|line| *line == "}")? + start;
+    Some(
+        lines[start..end]
+            .iter()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+            .collect(),
+    )
 }
 
-fn validate_kind_e2e_semantics(source: &str) -> Result<(), Finding> {
-    const NORMALIZE_API_DEFAULT: &str =
-        r#"map(if has("readOnly") then . else . + {"readOnly": false} end)) == ["#;
-    const PARENT: &str = r#"{"mountPath":"/var/lib/lumen","name":"raft","readOnly":false}"#;
-    const PARENT_COMMA: &str = r#"{"mountPath":"/var/lib/lumen","name":"raft","readOnly":false},"#;
-    const CHILD: &str =
-        r#"{"mountPath":"/var/lib/lumen/data","name":"raft","readOnly":false,"subPath":"data"}"#;
-    let topology = shell_function_body(source, "assert_operator_topology")
-        .ok_or(Finding("KIND_STORAGE"))?
-        .join("\n");
-    let single_replica = [
-        r#"([.spec.template.spec.containers[] | select(.name == "server") | .volumeMounts[] | select(.name == "raft")] |"#,
-        NORMALIZE_API_DEFAULT,
-        PARENT_COMMA,
-        CHILD,
-        "] and",
-    ]
-    .join("\n");
-    let replicated = [
-        r#"([.spec.template.spec.containers[] | select(.name == "server") | .volumeMounts[] | select(.name == "raft")] |"#,
-        NORMALIZE_API_DEFAULT,
-        PARENT,
-        "] and",
-    ]
-    .join("\n");
+fn validate_kind_semantics(sources: &KindSources) -> Result<(), Finding> {
+    // KIND_STORAGE: the operator's raft PVC at the parent path and its `data`
+    // child at LUMEN_DATA_DIR, both writable, in the rendered StatefulSet and
+    // on the live pod; an API-defaulted readOnly reads as false, an explicit
+    // true does not.
+    let raft_mounts = rust_fn_body(
+        &sources.operator,
+        "fn raft_mounts() -> Vec<serde_json::Value> {",
+    )
+    .ok_or(Finding("KIND_STORAGE"))?;
     require(
-        topology.matches(&single_replica).count() == 1,
+        raft_mounts.iter().map(String::as_str).eq([
+            "vec![",
+            r#"json!({"mountPath": "/var/lib/lumen", "name": "raft", "readOnly": false}),"#,
+            r#"json!({"mountPath": "/var/lib/lumen/data", "name": "raft", "readOnly": false, "subPath": "data"}),"#,
+            "]",
+        ]),
         "KIND_STORAGE",
     )?;
-    require(topology.matches(&replicated).count() == 1, "KIND_STORAGE")?;
-
-    let live_storage = shell_function_body(source, "assert_operator_storage_live")
-        .ok_or(Finding("KIND_STORAGE"))?
-        .join("\n");
-    let live_mounts = [
-        r#"([.spec.containers[] | select(.name == "server") | .volumeMounts[] | select(.name == "raft")] |"#,
-        NORMALIZE_API_DEFAULT,
-        PARENT_COMMA,
-        CHILD,
-        "] and",
-    ]
-    .join("\n");
+    let mounts_named = rust_fn_body(
+        &sources.cluster,
+        "pub fn mounts_named(pod_spec: &Value, container: &str, name: &str) -> Vec<Value> {",
+    )
+    .ok_or(Finding("KIND_STORAGE"))?;
     require(
-        live_storage.matches(&live_mounts).count() == 1,
+        mounts_named.iter().map(String::as_str).eq([
+            r#"named(&pod_spec["containers"], container)"#,
+            ".into_iter()",
+            r#".flat_map(|c| c["volumeMounts"].as_array().into_iter().flatten())"#,
+            r#".filter(|m| m["name"] == name)"#,
+            ".map(|m| {",
+            "let mut m = m.clone();",
+            r#"if m.get("readOnly").is_none() {"#,
+            r#"m["readOnly"] = json!(false);"#,
+            "}",
+            "m",
+            "})",
+            ".collect()",
+        ]),
         "KIND_STORAGE",
     )?;
+    for (signature, assertion) in [
+        (
+            "fn assert_operator_topology(s: &Suite) {",
+            [
+                "assert!(",
+                r#"mounts_named(spec, "server", "raft") == raft_mounts()"#,
+                r#"&& env_count(spec, "server", "LUMEN_DATA_DIR", "/var/lib/lumen/data") == 1"#,
+            ],
+        ),
+        (
+            "fn assert_operator_storage_live(s: &Suite) {",
+            [
+                "assert!(",
+                r#"mounts_named(&pod["spec"], "server", "raft") == raft_mounts() && claimed == 1,"#,
+                r#""live serving pod lost the exact raft PVC parent/data child mounts""#,
+            ],
+        ),
+    ] {
+        let body = rust_fn_body(&sources.operator, signature).ok_or(Finding("KIND_STORAGE"))?;
+        require(
+            body.windows(assertion.len())
+                .filter(|window| window.iter().map(String::as_str).eq(assertion))
+                .count()
+                == 1,
+            "KIND_STORAGE",
+        )?;
+    }
+    let journey =
+        rust_fn_body(&sources.operator, "async fn journey() {").ok_or(Finding("KIND_STORAGE"))?;
+    for call in [
+        "assert_operator_topology(&s);",
+        "assert_operator_storage_live(&s);",
+    ] {
+        require(
+            journey.iter().filter(|line| *line == call).count() == 1,
+            "KIND_STORAGE",
+        )?;
+    }
 
+    // KIND_DURABLE_RESTART: index, persisted checkpoint, replace every serving
+    // pod, read the pre-restart document before any new write, then write.
     let expected = [
-        "local pre_id=\"pre-restart-${CLUSTER_NAME}-$$\"",
-        "local pre_value=\"${pre_id}@example.invalid\"",
-        "local post_id=\"post-restart-${CLUSTER_NAME}-$$\"",
-        "local post_value=\"${post_id}@example.invalid\"",
-        "local checkpoint old_hits post_hits",
-        "api_index_exact \"$pre_id\" \"$pre_value\"",
-        "checkpoint=\"$(api_checkpoint)\"",
-        "jq -e '.persisted == true' <<<\"$checkpoint\" >/dev/null || die \"/admin/checkpoint did not return persisted=true\"",
-        "kubectl -n \"$NAMESPACE\" delete pod -l \"$APP_LABEL\" --wait=true",
-        "wait_lumen_ready 240",
-        "expose_nodeport",
-        "assert_cluster_identity",
-        "old_hits=\"$(api_search_exact \"$pre_value\" | jq --arg id \"$pre_id\" '[.hits[] | select(.external_id == $id)] | length')\"",
-        "[[ \"$old_hits\" -eq 1 ]] || die \"pre-restart document was not readable before any new write\"",
-        "api_index_exact \"$post_id\" \"$post_value\"",
-        "post_hits=\"$(api_search_exact \"$post_value\" | jq --arg id \"$post_id\" '[.hits[] | select(.external_id == $id)] | length')\"",
-        "[[ \"$post_hits\" -eq 1 ]] || die \"replacement pod did not accept the post-restart write\"",
-        "echo \"   durable restart preserved $pre_id and accepted $post_id\"",
+        r#"let pre_id = format!("pre-restart-{}-{}", s.pod_name, s.name);"#,
+        r#"let pre_value = format!("{pre_id}@example.invalid");"#,
+        r#"let post_id = format!("post-restart-{}-{}", s.pod_name, s.name);"#,
+        r#"let post_value = format!("{post_id}@example.invalid");"#,
+        "index_exact(s, &pre_id, &pre_value).await;",
+        r#"let checkpoint = s.api.post("/admin/checkpoint", &json!({}), Duration::from_secs(120)).await;"#,
+        r#"assert!(checkpoint["persisted"] == true, "/admin/checkpoint did not return persisted=true: {checkpoint}");"#,
+        "let before = serving_uids(s);",
+        r#"s.kube.run(&["delete", "pod", "-l", &s.label, "--wait=true"]);"#,
+        "wait_ready(&s.kube, &s.label, EXPECTED_STORAGE_PODS, Duration::from_secs(600));",
+        "let after = serving_uids(s);",
+        "assert!(",
+        "before.iter().all(|uid| !after.contains(uid)),",
+        r#""a serving pod survived the restart: before={before:?} after={after:?}""#,
+        ");",
+        "wait_service(s).await;",
+        "assert_pods_on_pool(s);",
+        r#"record_version(s, "after-restart").await;"#,
+        "let old_hits = hits_for(&search_exact(s, &pre_value).await, &pre_id);",
+        r#"assert_eq!(old_hits, 1, "pre-restart document was not readable before any new write");"#,
+        "index_exact(s, &post_id, &post_value).await;",
+        "let post_hits = hits_for(&search_exact(s, &post_value).await, &post_id);",
+        r#"assert_eq!(post_hits, 1, "replacement pod did not accept the post-restart write");"#,
+        "s.evidence(",
+        r#""durable-restart","#,
+        r#"json!({"pre_id": pre_id, "post_id": post_id, "checkpoint": checkpoint, "pre_restart_hits": 1, "post_restart_hits": 1}),"#,
+        ");",
+        r#"say(format!("   durable restart preserved {pre_id} and accepted {post_id}"));"#,
     ];
-    let body = shell_function_body(source, "durable_restart_oracle")
-        .ok_or(Finding("KIND_DURABLE_RESTART"))?;
+    let body = rust_fn_body(
+        &sources.cluster,
+        "async fn durable_restart_oracle(s: &Suite) {",
+    )
+    .ok_or(Finding("KIND_DURABLE_RESTART"))?;
     require(
         body.iter().map(String::as_str).eq(expected),
         "KIND_DURABLE_RESTART",
     )?;
 
-    let lines = shell_logical_lines(source);
-    let collection = "step \"4b. PUT /collections/users\" api_put_collection";
-    let oracle =
-        "step \"5. checkpoint, replace serving pod, and prove durable recovery\" durable_restart_oracle";
+    let exercise = rust_fn_body(&sources.cluster, "pub async fn exercise(s: &Suite) {")
+        .ok_or(Finding("KIND_DURABLE_RESTART"))?;
     let positions = |needle: &str| {
-        lines
+        exercise
             .iter()
             .enumerate()
             .filter_map(|(index, line)| (line == needle).then_some(index))
             .collect::<Vec<_>>()
     };
-    let collections = positions(collection);
-    let oracles = positions(oracle);
+    let collection =
+        positions(r#"s.api.put("/collections/users", &schema, Duration::from_secs(30)).await;"#);
+    let oracle = positions(
+        r#"let step = s.step("5. checkpoint, replace serving pod, and prove durable recovery");"#,
+    );
     require(
-        collections.len() == 1 && oracles.len() == 1 && collections[0] < oracles[0],
+        collection.len() == 1
+            && oracle.len() == 1
+            && collection[0] < oracle[0]
+            && exercise.get(oracle[0] + 1).map(String::as_str)
+                == Some("durable_restart_oracle(s).await;")
+            && !exercise[oracle[0]..]
+                .iter()
+                .any(|line| line.contains(".put(")),
         "KIND_DURABLE_RESTART",
     )?;
+    for suite in [&sources.overlay, &sources.operator] {
+        let journey =
+            rust_fn_body(suite, "async fn journey() {").ok_or(Finding("KIND_DURABLE_RESTART"))?;
+        require(
+            journey
+                .iter()
+                .filter(|line| *line == "exercise(&s).await;")
+                .count()
+                == 1,
+            "KIND_DURABLE_RESTART",
+        )?;
+    }
+
+    // KIND_DEPLOY: the script deploys the image under test, hands the Job
+    // the four identity values, runs the suite's own Job folder, and passes
+    // only on the Job's Complete condition.
+    let lines = shell_logical_lines(&sources.script);
+    for line in [
+        "overlay | operator) ;;",
+        r#"[[ "$IMAGE" == "${IMAGE_REPO}@sha256:"* ]] || die "E2E_EXPECTED_IMAGE must be ${IMAGE_REPO}@sha256:<digest>, got: $IMAGE""#,
+        r#"sed -i.orig "s|^    newTag: REPLACE_ME\$|    digest: ${IMAGE#*@}|" "$server""#,
+        r#"kubectl apply -k "$WORK/k8s/overlays/gke-test""#,
+        r#"kubectl -n "$NAMESPACE" create configmap gke-test-env --from-literal=E2E_EXPECTED_IMAGE="$IMAGE" --from-literal=E2E_EXPECTED_RUNTIME_DIGEST="$E2E_EXPECTED_RUNTIME_DIGEST" --from-literal=E2E_EXPECTED_VERSION="$E2E_EXPECTED_VERSION" --from-literal=E2E_EXPECTED_GIT_SHA="$E2E_EXPECTED_GIT_SHA""#,
+        r#"kubectl kustomize "$ROOT/k8s/gke-test-job/$SUITE" >"$WORK/job.yaml""#,
+        r#"kubectl apply -f "$WORK/job.yaml""#,
+        r#"[[ " $state " == *" Complete "* ]] || die "Job/lumen-e2e did not complete (conditions: ${state:-none})""#,
+    ] {
+        require(
+            lines.iter().filter(|candidate| *candidate == line).count() == 1,
+            "KIND_DEPLOY",
+        )?;
+    }
     require(
-        !lines[oracles[0] + 1..]
-            .iter()
-            .any(|line| line.contains("api_put_collection")),
-        "KIND_DURABLE_RESTART",
+        lines.last().map(String::as_str) == Some(r#"say "Job/lumen-e2e completed""#)
+            && lines[lines.len() - 2]
+                == r#"[[ " $state " == *" Complete "* ]] || die "Job/lumen-e2e did not complete (conditions: ${state:-none})""#,
+        "KIND_DEPLOY",
     )
 }
 
-fn validate_kind_e2e(source: &str) -> Result<(), Finding> {
-    validate_kind_e2e_semantics(source)?;
+fn validate_kind(sources: &KindSources) -> Result<(), Finding> {
+    validate_kind_semantics(sources)?;
     require(
-        sha256_bytes(source.as_bytes()) == KIND_E2E_BYTES_SHA256,
+        sha256_bytes(sources.script.as_bytes()) == KIND_CLUSTER_BYTES_SHA256,
         "KIND_BYTES",
-    )
+    )?;
+    for (path, expected) in KIND_SUITE_BYTES_SHA256 {
+        let bytes = fs::read(root().join(path)).map_err(|_| Finding("KIND_BYTES"))?;
+        require(sha256_bytes(&bytes) == *expected, "KIND_BYTES")?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -877,6 +1012,69 @@ fn validate_candidate_and_kind_commands(workflow: &Yaml) -> Result<(), Finding> 
         "GATE_COMMANDS",
     )?;
 
+    for (job_name, arch, target, kubectl_sha) in [
+        (
+            "kind-amd64",
+            "amd64",
+            "x86_64-unknown-linux-musl",
+            "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f",
+        ),
+        (
+            "kind-arm64",
+            "arm64",
+            "aarch64-unknown-linux-musl",
+            "922df28df248cc00a9e025f947704f1d1482de64ece54cfe57e61f19eaf1eef3",
+        ),
+    ] {
+        validate_exact_run_step(
+            workflow,
+            job_name,
+            "Install verified kubectl v1.37.0",
+            &["name", "shell", "run"],
+            &[
+                "set -euo pipefail",
+                &format!("curl -fsSL https://dl.k8s.io/release/v1.37.0/bin/linux/{arch}/kubectl -o /tmp/kubectl"),
+                &format!("echo '{kubectl_sha}  /tmp/kubectl' | sha256sum -c -"),
+                "sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl",
+            ],
+        )?;
+        // The image the kind Job runs is this commit's own `it` binary: the
+        // one test executable cargo reports, built for this architecture.
+        let build = format!(
+            "exe=\"$(cargo test --release --locked -p lumen --target {target} --test it --no-run --message-format=json | jq -r 'select(.profile.test == true and .target.name == \"it\") | .executable')\""
+        );
+        let staged_it = format!("install -m 0755 \"$exe\" dist/linux/{arch}/lumen-it");
+        let staged_kubectl =
+            format!("install -m 0755 /usr/local/bin/kubectl dist/linux/{arch}/kubectl");
+        let image = format!("docker build -f Dockerfile.test --target test-client --platform linux/{arch} --build-arg TARGETARCH={arch} -t lumen-test-client:kind .");
+        validate_exact_run_step(
+            workflow,
+            job_name,
+            "Build the native e2e test client",
+            &["name", "env", "shell", "run"],
+            &[
+                "set -euo pipefail",
+                &build,
+                "[ \"$(printf '%s\\n' \"$exe\" | grep -c .)\" -eq 1 ] || { echo \"expected one it executable, got: $exe\" >&2; exit 1; }",
+                &format!("mkdir -p dist/linux/{arch}"),
+                &staged_it,
+                &staged_kubectl,
+                &image,
+            ],
+        )?;
+        let build_env = named_step(workflow, job_name, "Build the native e2e test client")
+            .and_then(|step| field(step, "env"))
+            .and_then(Yaml::as_mapping)
+            .ok_or(Finding("GATE_COMMANDS"))?;
+        require(
+            build_env.len() == 1
+                && build_env
+                    .get(&key("CARGO_INCREMENTAL"))
+                    .and_then(Yaml::as_str)
+                    == Some("0"),
+            "GATE_COMMANDS",
+        )?;
+    }
     for (job_name, digest) in [
         (
             "kind-amd64",
@@ -889,7 +1087,7 @@ fn validate_candidate_and_kind_commands(workflow: &Yaml) -> Result<(), Finding> 
     ] {
         for mode in ["overlay", "operator"] {
             let command = format!(
-            "LUMEN_E2E_MODE={mode} LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 LUMEN_E2E_IMAGE=\"${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}\" LUMEN_E2E_EXPECTED_VERSION=\"${{{{ needs.identity.outputs.version }}}}\" LUMEN_E2E_EXPECTED_GIT_SHA=\"${{short_sha:0:8}}\" LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"{digest}\" LUMEN_E2E_REGISTRY_CONFIG=\"$HOME/.docker/config.json\" scripts/kind-e2e.sh"
+            "E2E_EXPECTED_IMAGE=\"${{{{ needs.ghcr-image-and-attest.outputs.image_repo }}}}@${{{{ needs.ghcr-image-and-attest.outputs.root_digest }}}}\" E2E_EXPECTED_RUNTIME_DIGEST=\"{digest}\" E2E_EXPECTED_VERSION=\"${{{{ needs.identity.outputs.version }}}}\" E2E_EXPECTED_GIT_SHA=\"${{short_sha:0:8}}\" E2E_TEST_CLIENT_IMAGE=lumen-test-client:kind E2E_REGISTRY_CONFIG=\"$HOME/.docker/config.json\" scripts/kind-cluster.sh {mode}"
         );
             validate_exact_run_step(
                 workflow,
@@ -947,6 +1145,7 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
             "container-smoke",
             &[
                 "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "Reclaim runner disk before the cargo gate",
                 "Log in to GHCR with read-only job access",
                 "Run standalone container smoke gates",
             ][..],
@@ -992,7 +1191,13 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
             &[
                 "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "Assert native x86_64 runner architecture",
+                "Reclaim runner disk before the test client build",
+                "uses:dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c",
+                "Install musl toolchain",
+                "uses:Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
                 "Install verified kind v0.32.0",
+                "Install verified kubectl v1.37.0",
+                "Build the native e2e test client",
                 "Log in to GHCR for kind node image pulls",
                 "Run prebuilt candidate kind e2e (overlay)",
                 "Run prebuilt candidate kind e2e (operator)",
@@ -1003,7 +1208,13 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
             &[
                 "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "Assert native aarch64 runner architecture",
+                "Reclaim runner disk before the test client build",
+                "uses:dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c",
+                "Install musl toolchain",
+                "uses:Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
                 "Install verified kind v0.32.0",
+                "Install verified kubectl v1.37.0",
+                "Build the native e2e test client",
                 "Log in to GHCR for kind node image pulls",
                 "Run prebuilt candidate kind e2e (overlay)",
                 "Run prebuilt candidate kind e2e (operator)",
@@ -1165,10 +1376,21 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
     .ok_or(Finding("GATES"))?;
     let smoke_map = smoke.as_mapping().ok_or(Finding("GATES"))?;
     require(
-        smoke_map.len() == 3
-            && ["name", "shell", "run"]
+        smoke_map.len() == 4
+            && ["name", "env", "shell", "run"]
                 .iter()
                 .all(|name| smoke_map.contains_key(&key(name))),
+        "GATES",
+    )?;
+    let smoke_env = field(smoke, "env")
+        .and_then(Yaml::as_mapping)
+        .ok_or(Finding("GATES"))?;
+    require(
+        smoke_env.len() == 1
+            && smoke_env
+                .get(&key("CARGO_INCREMENTAL"))
+                .and_then(Yaml::as_str)
+                == Some("0"),
         "GATES",
     )?;
     let smoke_run = field(smoke, "run")
@@ -1176,14 +1398,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
         .ok_or(Finding("GATES"))?;
     require(
         field(smoke, "shell").and_then(Yaml::as_str) == Some("bash")
-            && exact_shell_lines(
-                smoke_run,
-                &[
-                    "set -euo pipefail",
-                    "bash scripts/standalone-container-smoke.sh bind",
-                    "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
-                ],
-            ),
+            && exact_shell_lines(smoke_run, &["set -euo pipefail", STANDALONE_SMOKE_GATE]),
         "GATES",
     )?;
     runs.push(smoke_run);
@@ -2294,7 +2509,7 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
     validate_fail_closed_gate_conditions(&workflow)?;
     validate_gate_step_inventory(&workflow)?;
     validate_candidate_and_kind_commands(&workflow)?;
-    validate_kind_e2e(&kind_e2e_source())?;
+    validate_kind(&kind_sources())?;
     let graph = [
         ("identity", &[][..]),
         ("build", &["identity"][..]),
@@ -2414,16 +2629,15 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         "cargo test --locked -p lumen",
         "cargo test --locked -p lumen --features \"operator delegated-auth\"",
         "cargo test --locked -p lumen --features release --test it -- release_feature_set::",
-        "bash scripts/standalone-container-smoke.sh bind",
-        "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
+        STANDALONE_SMOKE_GATE,
         RELEASE_PERF_GATE,
         "cargo build --locked -p lumen --features raft-wal",
         "cargo test --locked -p lumen --features raft-wal --lib --no-run",
         "git -c core.fsmonitor=false diff --check",
         "--image \"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\"",
-        "LUMEN_E2E_EXPECTED_RUNTIME_DIGEST",
-        "LUMEN_E2E_MODE=overlay LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000",
-        "LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000",
+        "E2E_EXPECTED_RUNTIME_DIGEST",
+        "scripts/kind-cluster.sh overlay",
+        "scripts/kind-cluster.sh operator",
         "final-candidate-manifest.json",
         "Verify final receipt as local fixture only",
         "--mode local",
@@ -2433,6 +2647,8 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         "6e9b2cc741875ab906d800af3134b076489f049565e0a1dbdb6deacd91f5054c",
         "v1.37.0/bin/linux/amd64/kubectl",
         "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f",
+        "v1.37.0/bin/linux/arm64/kubectl",
+        "922df28df248cc00a9e025f947704f1d1482de64ece54cfe57e61f19eaf1eef3",
         "bash terraform/lumen-standalone-gke/scripts/check.sh",
         "bash kustomize/lumen-standalone-acceptance/tests/contract.sh",
     ] {
@@ -2506,8 +2722,8 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         require(source.contains(binding), "MANIFEST")?;
     }
     validate_final_jobs_manifest_binding(&workflow)?;
-    require(source.contains("LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\""), "KIND")?;
-    require(source.contains("LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\""), "KIND")?;
+    require(source.contains("E2E_EXPECTED_RUNTIME_DIGEST=\"${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\""), "KIND")?;
+    require(source.contains("E2E_EXPECTED_RUNTIME_DIGEST=\"${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\""), "KIND")?;
     require(
         source.contains("--manifest-sidecar candidate/final-candidate-manifest.json.sha256"),
         "MANIFEST",
@@ -2608,8 +2824,14 @@ fn expect_verifier(source: &str, from: &str, to: &str, code: &'static str) {
 fn workflow() -> String {
     fs::read_to_string(root().join(".github/workflows/lumen-release-candidate.yml")).unwrap()
 }
-fn kind_e2e_source() -> String {
-    fs::read_to_string(root().join("scripts/kind-e2e.sh")).unwrap()
+fn kind_sources() -> KindSources {
+    let read = |path: &str| fs::read_to_string(root().join(path)).unwrap();
+    KindSources {
+        script: read("scripts/kind-cluster.sh"),
+        cluster: read("tests/it/e2e/cluster.rs"),
+        operator: read("tests/it/e2e/operator.rs"),
+        overlay: read("tests/it/e2e/overlay.rs"),
+    }
 }
 fn perf_gate_source() -> String {
     fs::read_to_string(root().join("tests/it/perf_gate.rs")).unwrap()
@@ -2767,13 +2989,13 @@ fn cloud_free_gate_mutations_fail_without_hash_oracle() {
         "GATE_COMMANDS",
     );
     assert_finding(
-        "v1.37.0/bin/linux/amd64/kubectl",
-        "v1.37.1/bin/linux/amd64/kubectl",
+        "https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl -o /tmp/kubectl\n          echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /tmp/kubectl' | sha256sum -c -\n          chmod +x /tmp/kubectl",
+        "https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl -o /tmp/kubectl\n          echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /tmp/kubectl' | sha256sum -c -\n          chmod +x /tmp/kubectl",
         "GATE_COMMANDS",
     );
     assert_finding(
-        "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f",
-        "0000000000000000000000000000000000000000000000000000000000000000",
+        "https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl -o /tmp/kubectl\n          echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /tmp/kubectl' | sha256sum -c -\n          chmod +x /tmp/kubectl",
+        "https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl -o /tmp/kubectl\n          echo '0000000000000000000000000000000000000000000000000000000000000000  /tmp/kubectl' | sha256sum -c -\n          chmod +x /tmp/kubectl",
         "GATE_COMMANDS",
     );
     assert_finding(
@@ -2962,34 +3184,50 @@ fn client_seed_inventory_requires_each_approved_case_and_rejects_unapproved_case
 #[test]
 fn live_candidate_contract_is_fail_closed() {
     let source = workflow();
-    const DURABLE_GATE: &str = "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable";
+    const DURABLE_GATE: &str = STANDALONE_SMOKE_GATE;
     for (replacement, finding) in [
         (
-            "# LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable",
+            "# E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1",
             "GATES",
         ),
         (
-            "echo 'LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable'",
+            "echo 'E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1'",
             "GATES",
         ),
         (
-            "if false; then LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh durable; fi",
+            "if false; then E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1; fi",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\" bash scripts/standalone-container-smoke.sh durable",
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1 || true",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\" bash scripts/standalone-container-smoke.sh durable",
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}:latest\" bash scripts/standalone-container-smoke.sh durable",
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.arm64_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1",
             "GATES",
         ),
         (
-            "LUMEN_STANDALONE_DURABLE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" bash scripts/standalone-container-smoke.sh bind",
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}:latest\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1",
+            "GATES",
+        ),
+        (
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container::bind --ignored --test-threads=1",
+            "GATES",
+        ),
+        (
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_contaner:: --ignored --test-threads=1",
+            "GATES",
+        ),
+        (
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --test-threads=1",
+            "GATES",
+        ),
+        (
+            "E2E_STANDALONE_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\" cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --skip durable --test-threads=1",
             "GATES",
         ),
     ] {
@@ -3007,42 +3245,73 @@ fn live_candidate_contract_is_fail_closed() {
 
 #[test]
 fn kind_storage_mutations_fail_without_hash_oracle() {
-    let source = kind_e2e_source();
-    validate_kind_e2e_semantics(&source).expect("kind storage semantics");
-    let normalize = r#"map(if has("readOnly") then . else . + {"readOnly": false} end)"#;
-    for (label, occurrence, replacement) in [
-        ("normalization removed", 0, "map(.)"),
+    let sources = kind_sources();
+    validate_kind_semantics(&sources).expect("kind storage semantics");
+    let with_operator = |operator: String| KindSources {
+        operator,
+        ..kind_sources()
+    };
+    let with_cluster = |cluster: String| KindSources {
+        cluster,
+        ..kind_sources()
+    };
+    let parent = r#"json!({"mountPath": "/var/lib/lumen", "name": "raft", "readOnly": false}),"#;
+    let child = r#"json!({"mountPath": "/var/lib/lumen/data", "name": "raft", "readOnly": false, "subPath": "data"}),"#;
+    for (label, from, to) in [
         (
-            "explicit true overwritten",
-            2,
-            r#"map(. + {"readOnly": false})"#,
+            "read-only child accepted",
+            child.to_owned(),
+            child.replace(r#""readOnly": false"#, r#""readOnly": true"#),
+        ),
+        (
+            "child subPath removed",
+            child.to_owned(),
+            child.replace(r#", "subPath": "data""#, ""),
+        ),
+        (
+            "parent removed",
+            format!("        {parent}\n"),
+            String::new(),
+        ),
+        (
+            "topology mount check dropped",
+            r#"mounts_named(spec, "server", "raft") == raft_mounts()"#.to_owned(),
+            "true".to_owned(),
+        ),
+        (
+            "live mount check dropped",
+            r#"mounts_named(&pod["spec"], "server", "raft") == raft_mounts() && claimed == 1,"#
+                .to_owned(),
+            "claimed == 1,".to_owned(),
+        ),
+        (
+            "live storage step skipped",
+            "    assert_operator_storage_live(&s);\n".to_owned(),
+            "    // assert_operator_storage_live(&s);\n".to_owned(),
         ),
     ] {
-        let changed = replace_occurrence(&source, normalize, replacement, occurrence);
+        let changed = with_operator(replace_once(&sources.operator, &from, &to));
         assert_eq!(
-            validate_kind_e2e_semantics(&changed).unwrap_err(),
+            validate_kind_semantics(&changed).unwrap_err(),
             Finding("KIND_STORAGE"),
             "{label} mutation passed",
         );
     }
-
-    let child =
-        r#"{"mountPath":"/var/lib/lumen/data","name":"raft","readOnly":false,"subPath":"data"}"#;
-    for (label, occurrence, replacement) in [
+    for (label, from, to) in [
         (
-            "read-only child accepted",
-            0,
-            r#"{"mountPath":"/var/lib/lumen/data","name":"raft","readOnly":true,"subPath":"data"}"#,
+            "normalization removed",
+            "            if m.get(\"readOnly\").is_none() {\n                m[\"readOnly\"] = json!(false);\n            }\n",
+            "",
         ),
         (
-            "child subPath removed",
-            1,
-            r#"{"mountPath":"/var/lib/lumen/data","name":"raft","readOnly":false}"#,
+            "explicit true overwritten",
+            "            if m.get(\"readOnly\").is_none() {\n                m[\"readOnly\"] = json!(false);\n            }\n",
+            "            m[\"readOnly\"] = json!(false);\n",
         ),
     ] {
-        let changed = replace_occurrence(&source, child, replacement, occurrence);
+        let changed = with_cluster(replace_once(&sources.cluster, from, to));
         assert_eq!(
-            validate_kind_e2e_semantics(&changed).unwrap_err(),
+            validate_kind_semantics(&changed).unwrap_err(),
             Finding("KIND_STORAGE"),
             "{label} mutation passed",
         );
@@ -3051,29 +3320,42 @@ fn kind_storage_mutations_fail_without_hash_oracle() {
 
 #[test]
 fn kind_durable_restart_mutations_fail_without_hash_oracle() {
-    let source = kind_e2e_source();
-    validate_kind_e2e_semantics(&source).expect("kind durable restart semantics");
+    let sources = kind_sources();
+    validate_kind_semantics(&sources).expect("kind durable restart semantics");
+    let with_cluster = |cluster: String| KindSources {
+        cluster,
+        ..kind_sources()
+    };
     for (label, line) in [
-        ("checkpoint", "checkpoint=\"$(api_checkpoint)\""),
+        (
+            "checkpoint",
+            r#"let checkpoint = s.api.post("/admin/checkpoint", &json!({}), Duration::from_secs(120)).await;"#,
+        ),
+        (
+            "persisted",
+            r#"assert!(checkpoint["persisted"] == true, "/admin/checkpoint did not return persisted=true: {checkpoint}");"#,
+        ),
         (
             "restart",
-            "kubectl -n \"$NAMESPACE\" delete pod -l \"$APP_LABEL\" --wait=true",
+            r#"s.kube.run(&["delete", "pod", "-l", &s.label, "--wait=true"]);"#,
         ),
         (
-            "old document search",
-            "old_hits=\"$(api_search_exact \"$pre_value\" | jq --arg id \"$pre_id\" '[.hits[] | select(.external_id == $id)] | length')\"",
+            "old document read",
+            r#"assert_eq!(old_hits, 1, "pre-restart document was not readable before any new write");"#,
         ),
     ] {
-        let quoted = line.replace('\'', "'\"'\"'");
         for (mutation, replacement) in [
-            ("comment", format!("# {line}")),
-            ("quoted prose", format!("printf '%s\\n' '{quoted}'")),
-            ("dead branch", format!("if false; then {line}; fi")),
-            ("ignored failure", format!("{line} || true")),
+            ("comment", format!("// {line}")),
+            ("dead branch", format!("if false {{ {line} }}")),
+            ("discarded", format!("let _ = 0; // {line}")),
         ] {
-            let changed = replace_once(&source, &format!("  {line}"), &format!("  {replacement}"));
+            let changed = with_cluster(replace_once(
+                &sources.cluster,
+                &format!("    {line}"),
+                &format!("    {replacement}"),
+            ));
             assert_eq!(
-                validate_kind_e2e_semantics(&changed).unwrap_err(),
+                validate_kind_semantics(&changed).unwrap_err(),
                 Finding("KIND_DURABLE_RESTART"),
                 "{label} {mutation} mutation passed",
             );
@@ -3081,20 +3363,110 @@ fn kind_durable_restart_mutations_fail_without_hash_oracle() {
     }
 
     let old_read_then_new_write = concat!(
-        "  old_hits=\"$(api_search_exact \"$pre_value\" | jq --arg id \"$pre_id\" '[.hits[] | select(.external_id == $id)] | length')\"\n",
-        "  [[ \"$old_hits\" -eq 1 ]] || die \"pre-restart document was not readable before any new write\"\n",
-        "  api_index_exact \"$post_id\" \"$post_value\""
+        "    let old_hits = hits_for(&search_exact(s, &pre_value).await, &pre_id);\n",
+        "    assert_eq!(old_hits, 1, \"pre-restart document was not readable before any new write\");\n",
+        "    index_exact(s, &post_id, &post_value).await;\n",
     );
     let new_write_then_old_read = concat!(
-        "  api_index_exact \"$post_id\" \"$post_value\"\n",
-        "  old_hits=\"$(api_search_exact \"$pre_value\" | jq --arg id \"$pre_id\" '[.hits[] | select(.external_id == $id)] | length')\"\n",
-        "  [[ \"$old_hits\" -eq 1 ]] || die \"pre-restart document was not readable before any new write\""
+        "    index_exact(s, &post_id, &post_value).await;\n",
+        "    let old_hits = hits_for(&search_exact(s, &pre_value).await, &pre_id);\n",
+        "    assert_eq!(old_hits, 1, \"pre-restart document was not readable before any new write\");\n",
     );
-    let reordered = replace_once(&source, old_read_then_new_write, new_write_then_old_read);
+    let reordered = with_cluster(replace_once(
+        &sources.cluster,
+        old_read_then_new_write,
+        new_write_then_old_read,
+    ));
     assert_eq!(
-        validate_kind_e2e_semantics(&reordered).unwrap_err(),
+        validate_kind_semantics(&reordered).unwrap_err(),
         Finding("KIND_DURABLE_RESTART"),
         "new write before old-document read passed",
+    );
+
+    let oracle = "    let step = s.step(\"5. checkpoint, replace serving pod, and prove durable recovery\");\n    durable_restart_oracle(s).await;\n";
+    for (label, to) in [
+        (
+            "oracle skipped",
+            "    let step = s.step(\"5. checkpoint, replace serving pod, and prove durable recovery\");\n    // durable_restart_oracle(s).await;\n".to_owned(),
+        ),
+        (
+            "collection replaced after the restart",
+            format!("{oracle}    s.api.put(\"/collections/users\", &schema, Duration::from_secs(30)).await;\n"),
+        ),
+    ] {
+        let changed = with_cluster(replace_once(&sources.cluster, oracle, &to));
+        assert_eq!(
+            validate_kind_semantics(&changed).unwrap_err(),
+            Finding("KIND_DURABLE_RESTART"),
+            "{label} mutation passed",
+        );
+    }
+    let overlay_skips = KindSources {
+        overlay: replace_once(
+            &sources.overlay,
+            "    exercise(&s).await;\n",
+            "    // exercise(&s).await;\n",
+        ),
+        ..kind_sources()
+    };
+    assert_eq!(
+        validate_kind_semantics(&overlay_skips).unwrap_err(),
+        Finding("KIND_DURABLE_RESTART"),
+        "overlay journey without the exercise passed",
+    );
+}
+
+#[test]
+fn kind_deploy_mutations_fail_without_hash_oracle() {
+    let sources = kind_sources();
+    validate_kind(&sources).expect("kind sources");
+    let with_script = |script: String| KindSources {
+        script,
+        ..kind_sources()
+    };
+    for (label, from, to) in [
+        (
+            "Job result ignored",
+            "[[ \" $state \" == *\" Complete \"* ]] || die \"Job/lumen-e2e did not complete (conditions: ${state:-none})\"",
+            "[[ \" $state \" == *\" Complete \"* ]] || true",
+        ),
+        (
+            "fixed suite",
+            "kubectl kustomize \"$ROOT/k8s/gke-test-job/$SUITE\" >\"$WORK/job.yaml\"",
+            "kubectl kustomize \"$ROOT/k8s/gke-test-job/overlay\" >\"$WORK/job.yaml\"",
+        ),
+        (
+            "identity value dropped",
+            "  --from-literal=E2E_EXPECTED_RUNTIME_DIGEST=\"$E2E_EXPECTED_RUNTIME_DIGEST\" \\\n",
+            "",
+        ),
+        (
+            "image under test not deployed",
+            "sed -i.orig \"s|^    newTag: REPLACE_ME\\$|    digest: ${IMAGE#*@}|\" \"$server\"",
+            "sed -i.orig \"s|^    newTag: REPLACE_ME\\$|    newTag: latest|\" \"$server\"",
+        ),
+        (
+            "pass forced after the Job",
+            "say \"Job/lumen-e2e completed\"\n",
+            "say \"Job/lumen-e2e completed\"\nexit 0\n",
+        ),
+    ] {
+        let changed = with_script(replace_once(&sources.script, from, to));
+        assert_eq!(
+            validate_kind_semantics(&changed).unwrap_err(),
+            Finding("KIND_DEPLOY"),
+            "{label} mutation passed",
+        );
+    }
+    let comment_only = with_script(replace_once(
+        &sources.script,
+        "# Usage:  scripts/kind-cluster.sh overlay|operator\n",
+        "# Usage: scripts/kind-cluster.sh overlay|operator\n",
+    ));
+    validate_kind_semantics(&comment_only).expect("comment-only edit keeps the semantics");
+    assert_eq!(
+        validate_kind(&comment_only).unwrap_err(),
+        Finding("KIND_BYTES")
     );
 }
 
@@ -3204,8 +3576,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             "GATES",
         ),
         (
-            "dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c",
-            "dtolnay/rust-toolchain@stable",
+            "dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable\n        with:\n          toolchain: stable\n          targets: ${{ matrix.target }}",
+            "dtolnay/rust-toolchain@stable # stable\n        with:\n          toolchain: stable\n          targets: ${{ matrix.target }}",
             "ACTION_PIN",
         ),
         (
@@ -3813,8 +4185,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     );
     let changed = replace_occurrence(
         &source,
-        "LUMEN_E2E_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\"",
-        "LUMEN_E2E_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\"",
+        "E2E_EXPECTED_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.root_digest }}\"",
+        "E2E_EXPECTED_IMAGE=\"${{ needs.ghcr-image-and-attest.outputs.image_repo }}@${{ needs.ghcr-image-and-attest.outputs.amd64_digest }}\"",
         0,
     );
     assert_eq!(
@@ -3826,8 +4198,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         for occurrence in 0..2 {
             let changed = replace_occurrence(
                 &source,
-                &format!("LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{{{ needs.ghcr-image-and-attest.outputs.{from}_digest }}}}\""),
-                &format!("LUMEN_E2E_EXPECTED_RUNTIME_DIGEST=\"${{{{ needs.ghcr-image-and-attest.outputs.{to}_digest }}}}\""),
+                &format!("E2E_EXPECTED_RUNTIME_DIGEST=\"${{{{ needs.ghcr-image-and-attest.outputs.{from}_digest }}}}\""),
+                &format!("E2E_EXPECTED_RUNTIME_DIGEST=\"${{{{ needs.ghcr-image-and-attest.outputs.{to}_digest }}}}\""),
                 occurrence,
             );
             assert_eq!(
@@ -3887,8 +4259,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             "      - name: Run raft-wal cargo gates\n        if: false\n        env:",
         ),
         (
-            "      - name: Run standalone container smoke gates\n        shell: bash",
-            "      - name: Run standalone container smoke gates\n        continue-on-error: true\n        shell: bash",
+            "        # or fail; e2e::standalone_filter_matches_module pins this filter.\n        env:",
+            "        # or fail; e2e::standalone_filter_matches_module pins this filter.\n        continue-on-error: true\n        env:",
         ),
     ] {
         expect_workflow(&source, from, to, "GATES");
@@ -3929,10 +4301,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         for occurrence in 0..2 {
             let changed = replace_occurrence(
                 &source,
-                &format!("      - name: Run prebuilt candidate kind e2e ({mode})\n        shell: bash"),
-                &format!(
-                    "      - name: Run prebuilt candidate kind e2e ({mode})\n        if: false\n        shell: bash"
-                ),
+                &format!("        # e2e::{mode}:: decides pass or fail, and the step passes only when the\n        # Job completes.\n        shell: bash"),
+                &format!("        # e2e::{mode}:: decides pass or fail, and the step passes only when the\n        # Job completes.\n        if: false\n        shell: bash"),
                 occurrence,
             );
             assert_eq!(
@@ -3964,7 +4334,7 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         (
             "container-smoke",
             "Run standalone container smoke gates",
-            "scripts/standalone-container-smoke.sh",
+            "Cargo.toml",
             0,
         ),
         (
@@ -3976,25 +4346,25 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         (
             "kind-amd64",
             "Run prebuilt candidate kind e2e (overlay)",
-            "scripts/kind-e2e.sh",
+            "scripts/kind-cluster.sh",
             0,
         ),
         (
             "kind-amd64",
             "Run prebuilt candidate kind e2e (operator)",
-            "scripts/kind-e2e.sh",
+            "scripts/kind-cluster.sh",
             0,
         ),
         (
             "kind-arm64",
             "Run prebuilt candidate kind e2e (overlay)",
-            "scripts/kind-e2e.sh",
+            "scripts/kind-cluster.sh",
             1,
         ),
         (
             "kind-arm64",
             "Run prebuilt candidate kind e2e (operator)",
-            "scripts/kind-e2e.sh",
+            "scripts/kind-cluster.sh",
             1,
         ),
     ] {
@@ -4014,18 +4384,98 @@ fn candidate_source_mutations_fail_with_stable_categories() {
             "unrecognized step before {job} gate passed",
         );
     }
-    for occurrence in 0..4 {
-        let changed = replace_occurrence(
-            &source,
-            "          scripts/kind-e2e.sh",
-            "          if false; then scripts/kind-e2e.sh; fi",
-            occurrence,
+    for mode in ["overlay", "operator"] {
+        for occurrence in 0..2 {
+            let line = format!("scripts/kind-cluster.sh {mode}\n");
+            for (mutation, replacement) in [
+                (
+                    "dead branch",
+                    format!("if false; then scripts/kind-cluster.sh {mode}; fi\n"),
+                ),
+                (
+                    "ignored failure",
+                    format!("scripts/kind-cluster.sh {mode} || true\n"),
+                ),
+                (
+                    "other suite",
+                    format!(
+                        "scripts/kind-cluster.sh {}\n",
+                        if mode == "overlay" {
+                            "operator"
+                        } else {
+                            "overlay"
+                        }
+                    ),
+                ),
+                (
+                    "kept cluster",
+                    format!("LUMEN_KIND_KEEP=1 scripts/kind-cluster.sh {mode}\n"),
+                ),
+            ] {
+                let changed = replace_occurrence(
+                    &source,
+                    &format!("          {line}"),
+                    &format!("          {replacement}"),
+                    occurrence,
+                );
+                assert_eq!(
+                    validate_workflow(&changed, &dockerfile()).unwrap_err(),
+                    Finding("GATE_COMMANDS"),
+                    "kind {mode} {mutation} occurrence {occurrence} passed",
+                );
+            }
+        }
+    }
+    for (arch, sha) in [
+        (
+            "amd64",
+            "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f",
+        ),
+        (
+            "arm64",
+            "922df28df248cc00a9e025f947704f1d1482de64ece54cfe57e61f19eaf1eef3",
+        ),
+    ] {
+        let line = format!(
+            "          echo '{sha}  /tmp/kubectl' | sha256sum -c -\n          sudo install"
         );
+        let changed = replace_once(&source, &line, &line.replace(sha, &"0".repeat(64)));
         assert_eq!(
             validate_workflow(&changed, &dockerfile()).unwrap_err(),
             Finding("GATE_COMMANDS"),
-            "kind dead-branch occurrence {occurrence} passed",
+            "kind {arch} kubectl digest mutation passed",
         );
+    }
+    // The test client must be this commit's `it` binary for this architecture.
+    for arch in ["amd64", "arm64"] {
+        for (mutation, from, to) in [
+            (
+                "stub binary",
+                format!("install -m 0755 \"$exe\" dist/linux/{arch}/lumen-it"),
+                format!("printf '#!/bin/sh\\nexit 0\\n' > dist/linux/{arch}/lumen-it"),
+            ),
+            (
+                "pulled client",
+                "-t lumen-test-client:kind .".to_owned(),
+                "-t lumen-test-client:kind . && docker pull ghcr.io/faberline/lumen-test-client:latest".to_owned(),
+            ),
+            (
+                "foreign architecture",
+                format!("--platform linux/{arch} --build-arg TARGETARCH={arch}"),
+                format!("--platform linux/{0} --build-arg TARGETARCH={0}", if arch == "amd64" { "arm64" } else { "amd64" }),
+            ),
+        ] {
+            let occurrence = if arch == "amd64" { 0 } else { 1 };
+            let changed = if mutation == "pulled client" {
+                replace_occurrence(&source, &from, &to, occurrence)
+            } else {
+                replace_once(&source, &from, &to)
+            };
+            assert!(
+                validate_workflow(&changed, &dockerfile()).is_err(),
+                "kind {arch} test client {mutation} passed",
+            );
+        }
     }
     let supply_chain_dead = replace_occurrence(
         &source,

@@ -201,7 +201,7 @@ these jobs against the exact commit:
 | `gates-operator` | `cargo test --locked -p lumen --features "operator delegated-auth"` |
 | `gates-raft-wal` | The `raft-wal` feature cases, plus the `raft-wal` build, lib test build, and `git diff --check`. |
 | `gates-release-features` | The release feature set (`release_feature_set::`). |
-| `container-smoke` | `scripts/standalone-container-smoke.sh` in `bind` and `durable` modes against the candidate image. |
+| `container-smoke` | The Rust suite `e2e::standalone_container::` (`bind` and `durable`) under docker against the candidate root digest. |
 | `cloud-free-config` | Terraform and Kustomize static checks; it calls no cloud API. |
 | `perf-coarse` | The release-profile `perf_gate::` cases except the thirty-minute durable workload. It still blocks the release. |
 | `verify-candidate` | `scripts/verify-release-candidate.sh`: supply-chain verification only. |
@@ -212,20 +212,25 @@ The service and Raft crate tests (`service-k8s`, `storage-durable`,
 `service-backup`, `raft-core`, `raft-runtime`) belong to faberline/core. Its
 own CI runs them for each core tag; the Lumen candidate does not rerun them.
 
-Each Kind job runs `scripts/kind-e2e.sh` twice with the prebuilt candidate
-image, once per mode, and checks the image's version, commit, and runtime
-digest:
+Each Kind job builds the test client for its own architecture (the same
+`Dockerfile.test` `test-client` image `gke-test.yml` uses, loaded into kind
+instead of pushed) and runs `scripts/kind-cluster.sh` once per suite:
 
 ```bash
-LUMEN_E2E_MODE=overlay LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 \
-  LUMEN_E2E_IMAGE=ghcr.io/faberline/lumen@sha256:<root digest> scripts/kind-e2e.sh
-LUMEN_E2E_MODE=operator LUMEN_E2E_IMAGE_MODE=prebuilt LUMEN_E2E_DOC_COUNT=100000 \
-  LUMEN_E2E_IMAGE=ghcr.io/faberline/lumen@sha256:<root digest> scripts/kind-e2e.sh
+E2E_EXPECTED_IMAGE=ghcr.io/faberline/lumen@sha256:<root digest> \
+  E2E_EXPECTED_RUNTIME_DIGEST=sha256:<this architecture's child digest> \
+  E2E_EXPECTED_VERSION=<version> E2E_EXPECTED_GIT_SHA=<8-hex commit> \
+  E2E_TEST_CLIENT_IMAGE=lumen-test-client:kind scripts/kind-cluster.sh overlay
 ```
 
-`scripts/kind-e2e.sh` also defaults to 100,000 documents. The candidate kind
-runs do not wait for the durable performance matrix. These kind runs do not
-prove GKE, Regional HA, Fleet, or autoscaling.
+and the same with `operator`. The script only creates the cluster, deploys
+`k8s/overlays/gke-test` at the root digest, runs `Job/lumen-e2e` from
+`k8s/gke-test-job/<suite>`, and prints its log. The Rust suites
+`e2e::overlay::` and `e2e::operator::` decide pass or fail: the image's
+version, commit, and runtime digest, the 100,000-document fixture, and the
+durable restart. The step passes only when the Job completes. The candidate
+kind runs do not wait for the durable performance matrix. These kind runs do
+not prove GKE, Regional HA, Fleet, or autoscaling.
 
 The durable performance matrix runs locally, on a Mac with OrbStack, through
 `scripts/durable-perf-local.sh`. CI does not run the thirty-minute cells.
