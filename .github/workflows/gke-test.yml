@@ -25,6 +25,8 @@
 #   pull_request / dispatch without `image`  builds sha-<git12> with
 #                                            lumen-test-image.yml
 #   dispatch or workflow_call with `image`   tests that image as given
+#                                            (the release candidate's gke-e2e
+#                                            job calls it at the candidate root)
 # Either way the image is pinned to ghcr.io/faberline/lumen@sha256:<root>, and
 # the run hands the suite its expected image, linux/amd64 runtime digest,
 # version, and git sha in the ConfigMap gke-test-env (tests/it/e2e/identity.rs).
@@ -248,7 +250,7 @@ jobs:
           mkdir -p dist/linux/amd64
           cp "$exe" dist/linux/amd64/lumen-it
       - name: Stage kubectl
-        # Same release as the candidate workflow's Kind jobs, checked by digest.
+        # kubectl v1.37.0, checked by digest.
         shell: bash
         run: |
           set -euo pipefail

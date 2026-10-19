@@ -207,8 +207,11 @@ fn command_files(root: &Path) -> Vec<PathBuf> {
 
 struct Repo {
     main_rs: String,
-    /// Stems of `tests/it/*.rs`, without `main` and `support`.
+    /// Stems of `tests/it/*.rs`, without `main` and `support`, and the names
+    /// of `tests/it/*/mod.rs` directory modules.
     case_files: Vec<String>,
+    /// The directory modules among `case_files`.
+    dir_cases: Vec<String>,
     /// Stems of `tests/*.rs`.
     standalone_files: Vec<String>,
     cargo_toml: String,
@@ -234,15 +237,32 @@ fn rs_stems(dir: &Path) -> Vec<String> {
     stems
 }
 
+/// Directory modules: subdirectories that hold a `mod.rs`.
+fn mod_dirs(dir: &Path) -> Vec<String> {
+    let entries =
+        fs::read_dir(dir).unwrap_or_else(|e| panic!("failed to read dir {:?}: {}", dir, e));
+    let mut names: Vec<String> = entries
+        .map(|e| e.expect("valid dir entry").path())
+        .filter(|p| p.join("mod.rs").is_file())
+        .map(|p| p.file_name().unwrap().to_str().unwrap().to_string())
+        .collect();
+    names.sort();
+    names
+}
+
 fn load_repo() -> Repo {
     let root = repo_root();
     let read = |p: &Path| {
         fs::read_to_string(p).unwrap_or_else(|e| panic!("failed to read {:?}: {}", p, e))
     };
-    let case_files = rs_stems(&root.join("tests/it"))
+    // A case is `tests/it/<name>.rs` or `tests/it/<name>/mod.rs`.
+    let dir_cases = mod_dirs(&root.join("tests/it"));
+    let mut case_files: Vec<String> = rs_stems(&root.join("tests/it"))
         .into_iter()
+        .chain(dir_cases.iter().cloned())
         .filter(|s| s != "main" && s != "support")
         .collect();
+    case_files.sort();
     let commands = command_files(&root)
         .into_iter()
         .filter(|p| p.is_file())
@@ -254,6 +274,7 @@ fn load_repo() -> Repo {
     Repo {
         main_rs: read(&root.join("tests/it/main.rs")),
         case_files,
+        dir_cases,
         standalone_files: rs_stems(&root.join("tests")),
         cargo_toml: read(&root.join("Cargo.toml")),
         contributing: read(&root.join("CONTRIBUTING.md")),
@@ -428,12 +449,16 @@ fn validate_layout(repo: &Repo) -> Result<(), String> {
     }
     for m in cases {
         if !repo.case_files.iter().any(|f| f == m) {
-            return Err(format!("main.rs declares `mod {m};` but tests/it/{m}.rs is missing"));
+            return Err(format!(
+                "main.rs declares `mod {m};` but tests/it/{m}.rs is missing (nor tests/it/{m}/mod.rs)"
+            ));
         }
     }
     // A `name::` filter is a substring match, so it also selects every case
-    // whose name ends in `name`.
-    for a in cases {
+    // whose name ends in `name`. A directory module is never run by its bare
+    // `name::`: each submodule is a suite with its own `name::<suite>::`
+    // filter, which tests/it/e2e/mod.rs guards.
+    for a in cases.iter().filter(|a| !repo.dir_cases.iter().any(|d| d == *a)) {
         if let Some(b) = cases.iter().find(|b| *b != a && b.ends_with(a)) {
             return Err(format!("case `{a}` is a suffix of case `{b}`; `{a}::` would run both"));
         }
@@ -761,6 +786,7 @@ fn negative_fixtures_reject_invalid_manifest_or_gate() {
         let mut repo = Repo {
             main_rs: base.main_rs.clone(),
             case_files: base.case_files.clone(),
+            dir_cases: base.dir_cases.clone(),
             standalone_files: base.standalone_files.clone(),
             cargo_toml: base.cargo_toml.clone(),
             contributing: base.contributing.clone(),

@@ -1,6 +1,6 @@
 //! What the cluster suites check about the image under test (rust-tests.md
 //! rule 8). The run hands the expected identity to the Job in the ConfigMap
-//! `gke-test-env` (.github/workflows/gke-test.yml, scripts/kind-cluster.sh):
+//! `gke-test-env` (.github/workflows/gke-test.yml):
 //!
 //!   E2E_EXPECTED_IMAGE           ghcr.io/faberline/lumen@sha256:<64 hex>, the root index
 //!   E2E_EXPECTED_RUNTIME_DIGEST  sha256:<64 hex>, its child for the nodes' architecture

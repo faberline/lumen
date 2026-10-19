@@ -12,8 +12,8 @@ destination without copying tracker state.
 ## Near-term outcomes
 
 Milestone #36 (`lumen@0.6.1`) delivers the `incremental-segment-checkpoint`
-outcome below. Its release gate is the native Kind e2e on amd64 and arm64 plus
-the local durable-perf matrix; [Deployment](docs/deployment.md#release-gate-kind-and-local-durable-perf)
+outcome below. Its release gate is the candidate e2e plus the local
+durable-perf matrix; [Deployment](docs/deployment.md#release-gate-gke-e2e-and-local-durable-perf)
 describes how both run. `lumen@0.6.1` does not claim GKE; see
 [GKE](docs/gke.md#release-claim). Standalone gains no new feature in this
 release. Search v2 is outside this release, and its activation remains
@@ -120,8 +120,9 @@ release. Search v2 is outside this release, and its activation remains
   both use the repository `[profile.release]`. The sixteen qualifying receipts
   run on the shared GKE test cluster through `.github/workflows/gke-perf.yml`
   against the candidate registry digest and are judged by
-  `verify-durable-perf.py`. Native Kind e2e runs 100,000 documents in both
-  overlay and operator modes on amd64 and arm64. A 500,000-document matrix is
+  `verify-durable-perf.py`. The candidate GKE e2e runs 100,000 documents in
+  both overlay and operator modes on amd64, and the arm64 image runs the
+  standalone container smoke. A 500,000-document matrix is
   later work, not part of `lumen@0.6.1`.
 - Tracking: [Milestone #36](https://github.com/faberline/lumen/milestone/36).
 

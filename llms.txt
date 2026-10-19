@@ -18,7 +18,7 @@
 - [docs/gke.md](docs/gke.md): GKE release claim (`lumen@0.6.1` does not claim GKE), local and GKE support tiers, topology, placement, and optional acceptance.
 - [docs/client-integration.md](docs/client-integration.md): client profiles, workload projection, request mechanics, and source hydration.
 - [docs/authentication.md](docs/authentication.md): current and planned KSA access.
-- [docs/deployment.md](docs/deployment.md): Standalone and Managed activation, and the Kind plus local durable-perf release gate.
+- [docs/deployment.md](docs/deployment.md): Standalone and Managed activation, and the GKE e2e plus local durable-perf release gate.
 - [CONTRIBUTING.md](CONTRIBUTING.md): local edit and verification rules.
 
 ## Behaviour

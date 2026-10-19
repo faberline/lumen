@@ -89,11 +89,11 @@ validate_receipt() {
   [[ "$expected" == "$actual" && "$name" == "${manifest##*/}" && -z "${extra:-}" ]] || fail "final receipt sidecar does not bind exact bytes"
   jq -e --arg repo "$REPO" --arg tag "$TAG" --arg version "${TAG#lumen@}" --arg commit "$COMMIT" --arg run "$CANDIDATE_RUN_ID" '
     (keys | sort) == ["artifacts","candidate_tag","commit","image","jobs","pr","repository","run_attempt","run_id","run_url","sboms","schema","source_ref","tag","version","workflow_id","workflow_path","workflow_ref"] and
-    .schema == "cclab.lumen.candidate-manifest.v3" and .repository == $repo and .version == $version and .tag == $tag and .commit == $commit and
+    (.schema == "cclab.lumen.candidate-manifest.v3" or .schema == "cclab.lumen.candidate-manifest.v4") and .repository == $repo and .version == $version and .tag == $tag and .commit == $commit and
     .run_id == $run and .source_ref == "refs/heads/main" and .workflow_path == ".github/workflows/lumen-release-candidate.yml" and
     .workflow_ref == ($repo + "/.github/workflows/lumen-release-candidate.yml@refs/heads/main") and
     .run_url == ("https://github.com/" + $repo + "/actions/runs/" + .run_id + "/attempts/" + .run_attempt) and
-    .jobs == {identity:"success",build:"success",manifest:"success","ghcr-image-and-attest":"success","gates-default":"success","gates-operator":"success","gates-raft-wal":"success","gates-release-features":"success","container-smoke":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","kind-amd64":"success","kind-arm64":"success",result:"success"} and
+    (if .schema == "cclab.lumen.candidate-manifest.v3" then .jobs == {identity:"success",build:"success",manifest:"success","ghcr-image-and-attest":"success","gates-default":"success","gates-operator":"success","gates-raft-wal":"success","gates-release-features":"success","container-smoke":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","kind-amd64":"success","kind-arm64":"success",result:"success"} else .jobs == {identity:"success",build:"success",manifest:"success","ghcr-image-and-attest":"success","gates-default":"success","gates-operator":"success","gates-raft-wal":"success","gates-release-features":"success","container-smoke":"success","container-smoke-arm64":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","gke-e2e":"success",result:"success"} end) and
     (.image | (
       (keys | sort) == ["amd64_digest","arm64_digest","repository","root_digest"] and
       .repository == "ghcr.io/faberline/lumen" and
@@ -186,10 +186,30 @@ verify_annotated_tag_and_ruleset() {
 
 flatten_paginated_jobs() { jq -cs '[.[] | .jobs[]]'; }
 flatten_paginated_artifacts() { jq -cs '[.[] | .artifacts[]]'; }
+# v3 candidates ran the kind jobs. v4 candidates run container-smoke-arm64 and
+# the gke-e2e call of gke-test.yml, whose jobs GitHub lists as "GKE e2e / ...":
+# its image build is skipped (the candidate passes its own root digest), and
+# each suite runs faberline/aw's gke-test.yml under "GKE e2e (<suite>) / ".
 validate_candidate_job_inventory() {
   jq -e '
-    length == 19 and all(.[]; .status == "completed" and .conclusion == "success") and
-    ([.[].name] | sort == ["bind candidate inputs","build (aarch64-apple-darwin)","build (aarch64-unknown-linux-gnu)","build (aarch64-unknown-linux-musl)","build (x86_64-unknown-linux-gnu)","build (x86_64-unknown-linux-musl)","build candidate image and attest","candidate identity","cargo gates (default features)","cargo gates (operator delegated-auth)","cargo gates (raft-wal)","cargo gates (release feature set)","cloud-free config gates","coarse performance gates","final candidate receipt","kind e2e (amd64)","kind e2e (arm64)","standalone container smoke","verify candidate supply chain"])
+    def gke: .name | startswith("GKE e2e / ");
+    def passed: .status == "completed" and .conclusion == "success";
+    [.[] | select(gke | not)] as $top | [.[] | select(gke)] as $gke |
+    if ($gke | length) == 0 then
+      length == 19 and all(.[]; passed) and
+      ([.[].name] | sort == ["bind candidate inputs","build (aarch64-apple-darwin)","build (aarch64-unknown-linux-gnu)","build (aarch64-unknown-linux-musl)","build (x86_64-unknown-linux-gnu)","build (x86_64-unknown-linux-musl)","build candidate image and attest","candidate identity","cargo gates (default features)","cargo gates (operator delegated-auth)","cargo gates (raft-wal)","cargo gates (release feature set)","cloud-free config gates","coarse performance gates","final candidate receipt","kind e2e (amd64)","kind e2e (arm64)","standalone container smoke","verify candidate supply chain"])
+    else
+      ($top | length == 18 and all(.[]; passed) and
+        ([.[].name] | sort == ["bind candidate inputs","build (aarch64-apple-darwin)","build (aarch64-unknown-linux-gnu)","build (aarch64-unknown-linux-musl)","build (x86_64-unknown-linux-gnu)","build (x86_64-unknown-linux-musl)","build candidate image and attest","candidate identity","cargo gates (default features)","cargo gates (operator delegated-auth)","cargo gates (raft-wal)","cargo gates (release feature set)","cloud-free config gates","coarse performance gates","final candidate receipt","standalone container smoke","standalone container smoke (arm64)","verify candidate supply chain"])) and
+      ([$gke[] | select(.name == "GKE e2e / build test image")] |
+        length <= 1 and all(.[]; .status == "completed" and .conclusion == "skipped")) and
+      ([$gke[] | select(.name != "GKE e2e / build test image")] |
+        all(.[]; passed) and
+        all(.[]; .name | test("^GKE e2e / (resolve image identity|build the e2e test client|standalone container e2e|GKE e2e \\((overlay|operator)\\) / .+)$")) and
+        ([.[].name | select(startswith("GKE e2e / GKE e2e (") | not)] | sort == ["GKE e2e / build the e2e test client","GKE e2e / resolve image identity","GKE e2e / standalone container e2e"]) and
+        any(.[]; .name | startswith("GKE e2e / GKE e2e (overlay) / ")) and
+        any(.[]; .name | startswith("GKE e2e / GKE e2e (operator) / ")))
+    end
   ' >/dev/null || fail "candidate attempt does not contain the exact successful execution set"
 }
 

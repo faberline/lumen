@@ -17,7 +17,7 @@ const RUN_ID: &str = "123";
 const RELEASE_WORKFLOW_SHA256: &str =
     "d88da5b42dfa535c62f479166967bf389163c62da09939ebacac2ad5a10757e5";
 const PROMOTION_VERIFIER_BYTES_SHA256: &str =
-    "90444101995faedd2066286b7bc972611ddf0be95c47fee51efb8a5eecf85df1";
+    "3f1484b91fdc2271742bfd30d64c185aa99dd55d25962a39d58a3bb3a0054b6f";
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const COSIGN_INSTALLER: &str = "sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6";
 const SETUP_BUILDX: &str = "docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f";
@@ -613,6 +613,38 @@ const CANDIDATE_EXECUTION_NAMES: &[&str] = &[
     "kind e2e (arm64)",
     "standalone container smoke",
     "verify candidate supply chain",
+];
+
+/// A v4 candidate's top-level jobs: the v3 set without the kind runs, plus the
+/// native arm64 standalone smoke.
+const CANDIDATE_V4_EXECUTION_NAMES: &[&str] = &[
+    "bind candidate inputs",
+    "build (aarch64-apple-darwin)",
+    "build (aarch64-unknown-linux-gnu)",
+    "build (aarch64-unknown-linux-musl)",
+    "build (x86_64-unknown-linux-gnu)",
+    "build (x86_64-unknown-linux-musl)",
+    "build candidate image and attest",
+    "candidate identity",
+    "cargo gates (default features)",
+    "cargo gates (operator delegated-auth)",
+    "cargo gates (raft-wal)",
+    "cargo gates (release feature set)",
+    "cloud-free config gates",
+    "coarse performance gates",
+    "final candidate receipt",
+    "standalone container smoke",
+    "standalone container smoke (arm64)",
+    "verify candidate supply chain",
+];
+
+/// The jobs of the v4 gke-e2e call, as GitHub names them under the caller.
+const CANDIDATE_V4_GKE_NAMES: &[&str] = &[
+    "GKE e2e / resolve image identity",
+    "GKE e2e / build the e2e test client",
+    "GKE e2e / standalone container e2e",
+    "GKE e2e / GKE e2e (overlay) / deploy + test on shared GKE",
+    "GKE e2e / GKE e2e (operator) / deploy + test on shared GKE",
 ];
 
 fn shell_function_lines<'a>(source: &'a str, name: &str) -> Result<Vec<&'a str>, String> {
@@ -4277,6 +4309,95 @@ fn candidate_execution_inventory_is_exact_and_fail_closed() {
         );
     }
 
+    // v4: the GKE call's jobs replace the kind runs; its image build is skipped.
+    let v4 = |top: &[&str], gke: &[&str], image: Option<&str>| {
+        let mut jobs: Vec<serde_json::Value> =
+            serde_json::from_str(&candidate_jobs(top, None)).unwrap();
+        jobs.extend(
+            serde_json::from_str::<Vec<serde_json::Value>>(&candidate_jobs(gke, None)).unwrap(),
+        );
+        if let Some(conclusion) = image {
+            jobs.push(serde_json::json!({
+                "name": "GKE e2e / build test image",
+                "status": "completed",
+                "conclusion": conclusion,
+            }));
+        }
+        serde_json::to_string(&jobs).unwrap()
+    };
+    for (name, jobs) in [
+        (
+            "v4 with the skipped image build",
+            v4(CANDIDATE_V4_EXECUTION_NAMES, CANDIDATE_V4_GKE_NAMES, Some("skipped")),
+        ),
+        (
+            "v4 without the image build",
+            v4(CANDIDATE_V4_EXECUTION_NAMES, CANDIDATE_V4_GKE_NAMES, None),
+        ),
+    ] {
+        assert!(
+            execute_verifier_function(verifier, "validate_candidate_job_inventory", &jobs)
+                .status
+                .success(),
+            "candidate execution inventory rejected {name} fixture"
+        );
+    }
+    let no_operator = &CANDIDATE_V4_GKE_NAMES[..4];
+    let mut no_arm64 = CANDIDATE_V4_EXECUTION_NAMES.to_vec();
+    no_arm64.retain(|name| *name != "standalone container smoke (arm64)");
+    let mut foreign = CANDIDATE_V4_GKE_NAMES.to_vec();
+    foreign.push("GKE e2e / extra job");
+    let mut foreign_suite = CANDIDATE_V4_GKE_NAMES.to_vec();
+    foreign_suite.push("GKE e2e / GKE e2e (debug) / deploy + test on shared GKE");
+    let mut failed_suite: Vec<serde_json::Value> = serde_json::from_str(&v4(
+        CANDIDATE_V4_EXECUTION_NAMES,
+        CANDIDATE_V4_GKE_NAMES,
+        Some("skipped"),
+    ))
+    .unwrap();
+    for job in &mut failed_suite {
+        if job["name"] == "GKE e2e / GKE e2e (overlay) / deploy + test on shared GKE" {
+            job["conclusion"] = "failure".into();
+        }
+    }
+    for (name, jobs) in [
+        (
+            "v4 without the operator suite",
+            v4(CANDIDATE_V4_EXECUTION_NAMES, no_operator, Some("skipped")),
+        ),
+        (
+            "v4 without the arm64 smoke",
+            v4(&no_arm64, CANDIDATE_V4_GKE_NAMES, Some("skipped")),
+        ),
+        (
+            "v4 with a foreign GKE job",
+            v4(CANDIDATE_V4_EXECUTION_NAMES, &foreign, Some("skipped")),
+        ),
+        (
+            "v4 with a foreign GKE suite",
+            v4(CANDIDATE_V4_EXECUTION_NAMES, &foreign_suite, Some("skipped")),
+        ),
+        (
+            "v4 that built its own test image",
+            v4(CANDIDATE_V4_EXECUTION_NAMES, CANDIDATE_V4_GKE_NAMES, Some("success")),
+        ),
+        (
+            "v3 kind runs beside the GKE call",
+            v4(CANDIDATE_EXECUTION_NAMES, CANDIDATE_V4_GKE_NAMES, Some("skipped")),
+        ),
+        (
+            "v4 with a failed suite",
+            serde_json::to_string(&failed_suite).unwrap(),
+        ),
+    ] {
+        assert!(
+            !execute_verifier_function(verifier, "validate_candidate_job_inventory", &jobs)
+                .status
+                .success(),
+            "candidate execution inventory accepted {name} fixture"
+        );
+    }
+
     let binding = "validate_candidate_job_inventory <<<\"$jobs\"";
     let comment_shadow = format!("# {binding}\n{}", verifier.replacen(binding, "true", 1));
     assert!(
@@ -5112,6 +5233,81 @@ fn fixture_mode_rejects_v2_and_job_map_drift() {
             format!("{digest}  final-candidate-manifest.json\n"),
         )
         .unwrap();
+        let output = run_fixture(&fixture);
+        assert!(!output.status.success(), "{name} fixture passed");
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("candidate final receipt contract changed"),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+/// The kind runs' v3 job map, which candidates before the move to GKE carry.
+const V3_JOBS: &str = r#""container-smoke":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","kind-amd64":"success","kind-arm64":"success","result":"success""#;
+/// The v4 job map: GKE e2e and the native arm64 standalone smoke.
+const V4_JOBS: &str = r#""container-smoke":"success","container-smoke-arm64":"success","cloud-free-config":"success","perf-coarse":"success","verify-candidate":"success","gke-e2e":"success","result":"success""#;
+
+/// Rewrites the fixture's final receipt and its sidecar.
+fn rewrite_final_receipt(fixture: &ReleaseFixture, schema: &str, jobs: &str) {
+    let path = fixture.candidate.join("final-candidate-manifest.json");
+    let manifest = fs::read_to_string(&path).unwrap();
+    assert_eq!(manifest.matches(V3_JOBS).count(), 1, "v3 fixture job map");
+    let mutated = manifest
+        .replacen(
+            "\"schema\":\"cclab.lumen.candidate-manifest.v3\"",
+            &format!("\"schema\":\"{schema}\""),
+            1,
+        )
+        .replacen(V3_JOBS, jobs, 1);
+    fs::write(&path, mutated).unwrap();
+    let digest = sha256(&path);
+    fs::write(
+        path.with_extension("json.sha256"),
+        format!("{digest}  final-candidate-manifest.json\n"),
+    )
+    .unwrap();
+}
+
+/// Promotion accepts both receipt generations, each only with its own job
+/// map: v3 with the kind runs, v4 with GKE e2e and the arm64 smoke.
+#[test]
+fn fixture_mode_binds_each_schema_to_its_own_job_map() {
+    let v4 = release_fixture();
+    rewrite_final_receipt(&v4, "cclab.lumen.candidate-manifest.v4", V4_JOBS);
+    let output = run_fixture(&v4);
+    assert!(
+        output.status.success(),
+        "v4 fixture failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("LOCAL FIXTURE ONLY"));
+
+    for (name, schema, jobs) in [
+        (
+            "v3 schema with the v4 job map",
+            "cclab.lumen.candidate-manifest.v3",
+            V4_JOBS,
+        ),
+        (
+            "v4 schema with the v3 job map",
+            "cclab.lumen.candidate-manifest.v4",
+            V3_JOBS,
+        ),
+        (
+            "v4 without the arm64 smoke",
+            "cclab.lumen.candidate-manifest.v4",
+            &V4_JOBS.replacen("\"container-smoke-arm64\":\"success\",", "", 1),
+        ),
+        (
+            "v4 with a failed GKE e2e",
+            "cclab.lumen.candidate-manifest.v4",
+            &V4_JOBS.replacen("\"gke-e2e\":\"success\"", "\"gke-e2e\":\"failure\"", 1),
+        ),
+    ] {
+        let fixture = release_fixture();
+        rewrite_final_receipt(&fixture, schema, jobs);
         let output = run_fixture(&fixture);
         assert!(!output.status.success(), "{name} fixture passed");
         assert!(

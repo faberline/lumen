@@ -15,9 +15,9 @@
 //! through its Service at `E2E_ENDPOINT`, call `kubectl` with the Job's
 //! namespaced Role, and check the image identity the run hands them in the
 //! ConfigMap `gke-test-env` (`identity`). Results go to the pod log as
-//! `E2E_EVIDENCE {json}` lines. The release candidate runs the same two Jobs
-//! on native amd64 and arm64 kind clusters (scripts/kind-cluster.sh), which
-//! only deploy and wait; the suites decide pass or fail.
+//! `E2E_EVIDENCE {json}` lines. The release candidate calls the same workflow
+//! for both suites at the candidate root digest; the suites decide pass or
+//! fail.
 //!
 //! `cluster` holds the steps both cluster suites share; `support` the
 //! clients, the evidence lines, and the fixture.
@@ -32,8 +32,8 @@ mod support;
 /// libtest passes a filter that matches nothing ("running 0 tests"), so a
 /// renamed module would turn a GKE suite into a green no-op. Pin each Job
 /// folder's filter to a module here that holds the ignored `journey`, the
-/// workflow's `all` to exactly those folders, and the candidate's kind jobs to
-/// each folder on both architectures.
+/// workflow's `all` to exactly those folders, and the candidate's gke-e2e job
+/// to that workflow with `suite: all`.
 #[test]
 fn gke_suite_filters_match_modules() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -75,26 +75,20 @@ fn gke_suite_filters_match_modules() {
         "gke-test.yml `all` must run every suite folder"
     );
 
-    // The candidate's kind jobs run the same Job folders on amd64 and arm64.
-    let kind = read("scripts/kind-cluster.sh");
-    assert!(
-        kind.contains("  overlay | operator) ;;\n"),
-        "kind-cluster.sh must accept exactly the suite folders"
-    );
-    assert!(
-        kind.contains("kubectl kustomize \"$ROOT/k8s/gke-test-job/$SUITE\""),
-        "kind-cluster.sh must run k8s/gke-test-job/<suite>"
-    );
+    // The candidate's gke-e2e job calls the same workflow for every suite.
     let candidate = read(".github/workflows/lumen-release-candidate.yml");
-    for suite in suites {
-        assert_eq!(
-            candidate
-                .matches(&format!("scripts/kind-cluster.sh {suite}\n"))
-                .count(),
-            2,
-            "lumen-release-candidate.yml must run the {suite} suite on both kind architectures"
-        );
-    }
+    assert_eq!(
+        candidate
+            .matches("    uses: ./.github/workflows/gke-test.yml\n")
+            .count(),
+        1,
+        "lumen-release-candidate.yml must call gke-test.yml once"
+    );
+    assert_eq!(
+        candidate.matches("      suite: all\n").count(),
+        1,
+        "lumen-release-candidate.yml must run every suite folder"
+    );
 }
 
 /// The same guard for the image-targeted suite: every workflow that runs
@@ -108,15 +102,17 @@ fn standalone_filter_matches_module() {
     };
     let command =
         "cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1";
-    for workflow in [
-        ".github/workflows/gke-test.yml",
-        ".github/workflows/lumen-release-candidate.yml",
+    // The candidate runs it on amd64 (container-smoke) and arm64
+    // (container-smoke-arm64).
+    for (workflow, runs) in [
+        (".github/workflows/gke-test.yml", 1),
+        (".github/workflows/lumen-release-candidate.yml", 2),
     ] {
         let source = read(workflow);
         assert_eq!(
             source.matches(command).count(),
-            1,
-            "{workflow} must run `{command}` exactly once"
+            runs,
+            "{workflow} must run `{command}` exactly {runs} time(s)"
         );
     }
     let module = read("tests/it/e2e/standalone_container.rs");

@@ -13,7 +13,7 @@ FROM rust:1.92-slim-bookworm AS builder
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
-# Same release as the candidate workflow's Kind jobs, checked by digest.
+# Same release gke-test.yml stages for the test-client image, checked by digest.
 RUN curl -fsSL https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl \
  && echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /usr/local/bin/kubectl' | sha256sum -c - \
  && chmod 0755 /usr/local/bin/kubectl

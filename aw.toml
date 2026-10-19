@@ -68,17 +68,6 @@ required_for_production = true
 assertions = ["The installed CLI exposes discoverable connect and query tooling for agents and operators."]
 
 [[aw.ec.generated.cases]]
-id = "lumen-claim-dynamic-multi-shard-replica-kind"
-capability_id = "scaling-availability"
-claim_id = "dynamic-shard-topology"
-contract_id = "dynamic-multi-shard-replica-kind"
-category = "stability"
-test_path = "tests/it/stability_lumen_claim_dynamic_multi_shard_replica_kind.rs"
-command = "scripts/kind-e2e.sh"
-required_for_production = true
-assertions = ["The live kind dogfood path covers multi-shard and replicated-shard operator profiles."]
-
-[[aw.ec.generated.cases]]
 id = "lumen-claim-elastic-disk-tier"
 capability_id = "scaling-availability"
 claim_id = "elastic-segment-tier"
@@ -101,17 +90,6 @@ required_for_production = true
 assertions = ["The Kubernetes base, overlays, HPA/PDB, and operator manifests render successfully."]
 
 [[aw.ec.generated.cases]]
-id = "lumen-claim-k8s-stateless-kind"
-capability_id = "kubernetes-native-deployment"
-claim_id = "live-operator-reconciliation"
-contract_id = "k8s-stateless-kind-dogfood"
-category = "stability"
-test_path = "tests/it/stability_lumen_claim_k8s_stateless_kind.rs"
-command = "scripts/kind-e2e.sh"
-required_for_production = true
-assertions = ["The live kind dogfood path runs Lumen only, without building or deploying Relay, and proves the serving API recovers after a pod restart; operator mode also proves shardCount=2 with replicasPerShard=1 and replicasPerShard=3 storage topology."]
-
-[[aw.ec.generated.cases]]
 id = "lumen-claim-long-running-kustomize-base"
 capability_id = "operations-observability"
 claim_id = "long-running-stability"
@@ -121,17 +99,6 @@ test_path = "tests/it/behavior_lumen_claim_long_running_kustomize_base.rs"
 command = "kustomize build k8s/base && kustomize build k8s/overlays/dev && kustomize build k8s/overlays/staging && kustomize build k8s/overlays/prod && kustomize build k8s/operator"
 required_for_production = true
 assertions = ["The base, dev, staging, prod, and operator kustomize surfaces render valid Kubernetes manifests."]
-
-[[aw.ec.generated.cases]]
-id = "lumen-claim-long-running-stateless-kind"
-capability_id = "operations-observability"
-claim_id = "long-running-stability"
-contract_id = "long-running-stateless-kind-dogfood"
-category = "stability"
-test_path = "tests/it/stability_lumen_claim_long_running_stateless_kind.rs"
-command = "scripts/kind-e2e.sh"
-required_for_production = true
-assertions = ["The live kind dogfood path runs Lumen only, without building or deploying Relay, and proves the serving API recovers after a pod restart; operator mode also proves shardCount=2 with replicasPerShard=1 and replicasPerShard=3 storage topology."]
 
 [[aw.ec.generated.cases]]
 id = "lumen-claim-observability-servicemonitor-rule"

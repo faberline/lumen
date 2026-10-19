@@ -1,4 +1,4 @@
-# kind-e2e's operator-mode CR on pool-lumen-server. A non-empty nodeSelector with the
+# The operator suite's CR on pool-lumen-server. A non-empty nodeSelector with the
 # default initialMachineType takes the native placement path: the operator
 # keeps this selector and these tolerations as written and never reads the
 # GCE capacity catalog.

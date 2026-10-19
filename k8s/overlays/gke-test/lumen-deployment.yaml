@@ -1,4 +1,4 @@
-# The direct-install Deployment as kind-e2e's overlay mode runs it: ../dev's
+# The direct-install Deployment the overlay suite runs against: ../dev's
 # auth-off wiring, embedded WAL, and a claim at the image's LUMEN_DATA_DIR so
 # the durable restart oracle has something to restart from. Small requests
 # and no limits: anti-affinity gives the pod its own node, and the pod uses

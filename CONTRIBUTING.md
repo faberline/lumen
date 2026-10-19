@@ -112,7 +112,7 @@ lumen --test it -- perf_gate:: --ignored --test-threads=1 --nocapture`) runs
 locally through `scripts/durable-perf-local.sh`. The candidate workflow's
 `perf-coarse` job runs the other `perf_gate::` tests with
 `--skip durable_workload`. The
-[release gate](docs/deployment.md#release-gate-kind-and-local-durable-perf)
+[release gate](docs/deployment.md#release-gate-gke-e2e-and-local-durable-perf)
 owns the driver modes, the qualifying `qualify-matrix` run, the CI job split,
 and the release inputs. [ROADMAP](ROADMAP.md) owns the workload and its
 thresholds.
