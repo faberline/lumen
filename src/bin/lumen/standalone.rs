@@ -15,7 +15,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const IMAGE: &str = "ghcr.io/faberline/lumen:0.6.1";
+const IMAGE: &str = "ghcr.io/faberline/lumen:0.6.2";
 const MANAGED_LABEL: &str = "com.axiom.lumen.managed";
 const MANAGED_LABEL_VALUE: &str = "com.axiom.lumen.managed=true";
 
@@ -180,7 +180,7 @@ fn compose_base_url(path: &Path, name: Option<&str>) -> Result<String> {
         bail!("Compose service `{name}` is not managed by Lumen")
     }
     if service.get("image").and_then(Value::as_str) != Some(IMAGE) {
-        bail!("Compose service `{name}` does not use the Lumen 0.6.1 image")
+        bail!("Compose service `{name}` does not use the Lumen 0.6.2 image")
     }
     let ports = service
         .get("ports")

@@ -20,7 +20,7 @@ use storage_durable::{atomic_write, sync_parent_dir, FsyncPolicy};
 use crate::standalone::gke::validate::{valid_dns, valid_dns_subdomain};
 
 const MARKER: &str = "lumen-standalone-managed/v1\n";
-const IMAGE: &str = "ghcr.io/faberline/lumen:0.6.1";
+const IMAGE: &str = "ghcr.io/faberline/lumen:0.6.2";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
