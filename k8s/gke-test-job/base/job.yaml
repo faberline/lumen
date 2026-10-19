@@ -1,6 +1,6 @@
 # One attempt, on pool-lumen-client. A retry would re-index into the same
 # servers and hide the first failure, so a failed pod fails the run. Each
-# suite folder sets LUMEN_E2E_MODES.
+# suite folder sets the test filter `e2e::<suite>::` and E2E_ENDPOINT.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -42,23 +42,29 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: e2e
-          # kubectl, bash, curl, and jq; pinned to the linux multi-arch index.
-          image: docker.io/alpine/k8s:1.33.4@sha256:b0523f0a244ddc4c8e055aa335c040d3d78b3ead5528f4544395f7f9f69c7b68
-          command: ["bash", "/opt/lumen-e2e/e2e.sh"]
+        - name: test
+          # tests/it built for x86_64-unknown-linux-musl as lumen-it, plus
+          # kubectl (Dockerfile.test `test-client`). The run sets the
+          # digest-pinned tag (TEST_IMAGE); each suite folder sets the
+          # filter and E2E_ENDPOINT.
+          image: lumen-test-client
+          command: ["/usr/local/bin/lumen-it", "--ignored", "--test-threads=1"]
+          # E2E_EXPECTED_IMAGE, _RUNTIME_DIGEST, _VERSION, and _GIT_SHA, from
+          # the run (rust-tests.md rule 8).
+          envFrom:
+            - configMapRef:
+                name: gke-test-env
           env:
-            - name: NAMESPACE
+            - name: E2E_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: POD_NAME
+            - name: E2E_POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: LUMEN_E2E_DOC_COUNT
+            - name: E2E_DOC_COUNT
               value: "100000"
-            - name: WORK_DIR
-              value: /work
             # kubectl keeps its discovery cache under $HOME.
             - name: HOME
               value: /work
@@ -74,15 +80,9 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
-            - name: script
-              mountPath: /opt/lumen-e2e
-              readOnly: true
             - name: work
               mountPath: /work
       volumes:
-        - name: script
-          configMap:
-            name: lumen-e2e-script
         - name: work
           emptyDir:
             sizeLimit: 1Gi

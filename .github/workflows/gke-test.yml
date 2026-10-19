@@ -1,11 +1,14 @@
 # lumen on Faberline's shared GKE test cluster (faberline-test).
 #
 # faberline/aw's reusable gke-test workflow deploys k8s/overlays/gke-test with
-# the image under test on pool-lumen-server, runs the in-cluster test Job of
-# one suite on pool-lumen-client (kind-e2e.sh's checks through the Services, no
-# port-forward), then runs scripts/gke-test/verify.sh on the runner to tie the
-# pods and /version to the image. It uploads the evidence artifact
-# gke-test-evidence-<run_id>-<attempt>-<suite> and tears the namespace down.
+# the image under test on pool-lumen-server, then runs the in-cluster test Job
+# of one suite on pool-lumen-client: the Rust e2e suite `e2e::<suite>::`
+# (tests/it/e2e, faberline/aw docs/standards/rust-tests.md) from the
+# test-client image, through the Services, no port-forward. The suite also
+# ties every pod and /version to the image under test, so the call passes only
+# when the Job completes. aw uploads the evidence artifact
+# gke-test-evidence-<run_id>-<attempt>-<suite>, which keeps the Job's log and
+# its E2E_EVIDENCE lines, and tears the namespace down.
 #
 # Suites (aw docs/standards/test-cluster.md "Test suites"), one call each, one
 # at a time, each on a fresh deploy:
@@ -20,8 +23,14 @@
 #   pull_request / dispatch without `image`  builds sha-<git12> with
 #                                            lumen-test-image.yml
 #   dispatch or workflow_call with `image`   tests that image as given
-# Either way the image is pinned to ghcr.io/faberline/lumen@sha256:<root> and
-# verify.sh checks /version and every pod's runtime digest against it.
+# Either way the image is pinned to ghcr.io/faberline/lumen@sha256:<root>, and
+# the run hands the suite its expected image, linux/amd64 runtime digest,
+# version, and git sha in the ConfigMap gke-test-env (tests/it/e2e/identity.rs).
+# The expected version must equal the test binary's Cargo version, so a given
+# `image` is tested from a ref of the same version.
+#
+# The test client is always this ref's: ghcr.io/faberline/lumen-test-client:
+# sha-<git12>, Dockerfile.test `test-client`, the musl `it` binary plus kubectl.
 name: gke-test
 
 on:
@@ -31,7 +40,7 @@ on:
       - ".github/workflows/lumen-test-image.yml"
       - "Dockerfile.test"
       - "k8s/**"
-      - "scripts/gke-test/**"
+      - "tests/it/e2e/**"
       - "src/compat/operator/**"
       - "src/operator/**"
   workflow_dispatch:
@@ -103,7 +112,7 @@ jobs:
       packages: read
     outputs:
       image: ${{ steps.identity.outputs.image }}
-      test-command: ${{ steps.identity.outputs.test_command }}
+      test-env: ${{ steps.identity.outputs.test_env }}
       suites: ${{ steps.identity.outputs.suites }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -156,11 +165,18 @@ jobs:
             *) die "suite must be all, overlay, or operator, got: $INPUT_SUITE" ;;
           esac
 
-          test_command="EXPECTED_VERSION=${version} EXPECTED_GIT_SHA=${git_sha} EXPECTED_RUNTIME_DIGEST=${runtime_digest} scripts/gke-test/verify.sh"
+          # KEY=VALUE lines for aw's gke-test-env ConfigMap. They land in the
+          # evidence, so only public identity goes here.
+          delim="test_env_$(openssl rand -hex 16)"
           {
             echo "image=${image}"
-            echo "test_command=${test_command}"
             echo "suites=${suites}"
+            echo "test_env<<${delim}"
+            echo "E2E_EXPECTED_IMAGE=${image}"
+            echo "E2E_EXPECTED_RUNTIME_DIGEST=${runtime_digest}"
+            echo "E2E_EXPECTED_VERSION=${version}"
+            echo "E2E_EXPECTED_GIT_SHA=${git_sha}"
+            echo "${delim}"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### lumen gke-test identity"
@@ -174,10 +190,112 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  test-client:
+    name: build the e2e test client
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+    steps:
+      - name: Refuse Cargo profile overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          overrides="$(env | cut -d= -f1 | grep '^CARGO_PROFILE_' || true)"
+          [ -z "$overrides" ] || { echo "CARGO_PROFILE_* overrides are not allowed: $overrides" >&2; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+      - name: Reclaim runner disk before the release test build
+        # The release `it` binary is a full LTO test build; keep the `df -h`
+        # lines as direct free-space evidence.
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-musl
+      - name: Install musl toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: lumen-e2e-x86_64-unknown-linux-musl
+      - name: Build the static it binary
+        # rust-tests.md: the one `it` executable cargo reports.
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="$(cargo test --release --locked -p lumen --target x86_64-unknown-linux-musl --test it --no-run --message-format=json \
+            | jq -r 'select(.profile.test == true and .target.name == "it") | .executable')"
+          [ "$(printf '%s\n' "$exe" | grep -c .)" -eq 1 ] || { echo "expected one it executable, got: $exe" >&2; exit 1; }
+          mkdir -p dist/linux/amd64
+          cp "$exe" dist/linux/amd64/lumen-it
+      - name: Stage kubectl
+        # Same release as the candidate workflow's Kind jobs, checked by digest.
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl -o dist/linux/amd64/kubectl
+          echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  dist/linux/amd64/kubectl' | sha256sum -c -
+          chmod 0755 dist/linux/amd64/lumen-it dist/linux/amd64/kubectl
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Name the test client image
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'tag=ghcr.io/faberline/lumen-test-client:sha-%s\n' "${GITHUB_SHA::12}" >>"$GITHUB_OUTPUT"
+      - name: Build and push the test client image
+        id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: Dockerfile.test
+          target: test-client
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Pin the test client image by digest
+        id: ref
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'test client image digest is missing' >&2; exit 1; }
+          printf 'image=%s@%s\n' "$TAG" "$DIGEST" >>"$GITHUB_OUTPUT"
+          printf 'TEST CLIENT %s@%s\n' "$TAG" "$DIGEST"
+
   gke-test:
     name: GKE e2e (${{ matrix.suite }})
-    needs: resolve
-    if: ${{ !cancelled() && needs.resolve.result == 'success' }}
+    needs: [resolve, test-client]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.test-client.result == 'success' }}
     # One call at a time: the repository's concurrency group in aw keeps only
     # one waiting run. fail-fast off runs the other suites when one fails.
     strategy:
@@ -195,5 +313,7 @@ jobs:
       image-name: ghcr.io/faberline/lumen
       namespace: lumen
       test-job: k8s/gke-test-job/${{ matrix.suite }}
-      test-command: EXPECTED_SUITE=${{ matrix.suite }} ${{ needs.resolve.outputs.test-command }}
+      test-image: ${{ needs.test-client.outputs.image }}
+      test-image-name: lumen-test-client
+      test-env: ${{ needs.resolve.outputs.test-env }}
       evidence-suffix: ${{ matrix.suite }}

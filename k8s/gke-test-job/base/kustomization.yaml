@@ -4,9 +4,9 @@
 #
 # For each suite, aw's run.sh deploys k8s/overlays/gke-test, waits for every
 # rollout, sets the suite folder's namespace to the run's namespace, applies
-# it, and passes the call only when Job/lumen-e2e completes. e2e.sh drives the
-# suite's deploy path through its Service from pool-lumen-client, so no load
-# crosses a port-forward.
+# it, and passes the call only when Job/lumen-e2e completes. The Job runs the
+# suite's Rust e2e tests (tests/it/e2e) against the deploy path's Service from
+# pool-lumen-client, so no load crosses a port-forward.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -15,8 +15,3 @@ namespace: lumen
 resources:
   - rbac.yaml
   - job.yaml
-
-configMapGenerator:
-  - name: lumen-e2e-script
-    files:
-      - e2e.sh

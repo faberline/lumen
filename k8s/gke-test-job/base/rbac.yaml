@@ -1,4 +1,4 @@
-# What e2e.sh reads and does in the run's namespace, and nothing cluster-wide:
+# What the e2e suites (tests/it/e2e) read and do in the run's namespace, and nothing cluster-wide:
 # it reads the overlay's and the operator's objects, waits on pods, reads
 # Events for the legacy CR, and deletes serving pods for the restart oracle.
 apiVersion: v1
