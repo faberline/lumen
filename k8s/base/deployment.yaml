@@ -75,7 +75,7 @@ spec:
         - name: lumen
           # Bumped by the release procedure alongside Cargo.toml/openapi.json;
           # grep target for the bump commit: `ghcr.io/faberline/lumen:`.
-          image: ghcr.io/faberline/lumen:0.6.1
+          image: ghcr.io/faberline/lumen:0.6.2
           imagePullPolicy: IfNotPresent
           command: ["lumen", "serve"]
           ports:

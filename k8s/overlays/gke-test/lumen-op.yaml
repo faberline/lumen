@@ -7,7 +7,7 @@ kind: Lumen
 metadata:
   name: lumen-op
 spec:
-  image: ghcr.io/faberline/lumen:0.6.1
+  image: ghcr.io/faberline/lumen:0.6.2
   imagePullPolicy: IfNotPresent
   imagePullSecrets:
     - name: ghcr-pull

@@ -2,7 +2,7 @@
 name = "lumen"
 # lumen owns its version and releases independently (see CONTRIBUTING.md
 # "Releasing").
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 authors = ["Chris Cheng <chris.cheng.c4@gmail.com>"]
 license = "MIT"
