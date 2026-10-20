@@ -287,10 +287,11 @@ fn refuses_bad_cell_arguments() {
     }
 }
 
-/// The workflow runs one cell at a time through the aw contract, with the
-/// folders and image names this repository ships.
+/// The workflow runs up to three cells at a time through the aw contract, each
+/// in its own lane and namespace, with the folders and image names this
+/// repository ships.
 #[test]
-fn workflow_runs_cells_one_at_a_time_through_aw() {
+fn workflow_runs_cells_in_lanes_through_aw() {
     let source = fs::read_to_string(root().join(".github/workflows/gke-perf.yml")).unwrap();
     let workflow: Value = serde_yaml::from_str(&source).unwrap();
     let cell = &workflow["jobs"]["cell"];
@@ -298,7 +299,10 @@ fn workflow_runs_cells_one_at_a_time_through_aw() {
         cell["uses"],
         "faberline/aw/.github/workflows/gke-test.yml@main"
     );
-    assert_eq!(cell["strategy"]["max-parallel"], 1);
+    // At most max_nodes of the perf pools in faberline/aw pools.yaml.
+    assert_eq!(cell["strategy"]["max-parallel"], 3);
+    assert_eq!(workflow["concurrency"]["group"], "lumen-gke-perf");
+    assert_eq!(workflow["concurrency"]["cancel-in-progress"], false);
     assert_eq!(cell["strategy"]["fail-fast"], false);
     let with = &cell["with"];
     for folder in ["overlay", "test-job"] {
@@ -307,6 +311,8 @@ fn workflow_runs_cells_one_at_a_time_through_aw() {
     }
     assert_eq!(with["test-image-name"], "lumen-perf-client");
     assert_eq!(with["evidence-suffix"], "${{ matrix.cell }}");
+    assert_eq!(with["lane"], "${{ matrix.cell }}");
+    assert_eq!(with["namespace"], "lumen-perf-${{ matrix.cell }}");
     let env = with["test-env"].as_str().unwrap();
     for key in [
         "LUMEN_PERF_CELL",
