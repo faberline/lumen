@@ -278,8 +278,8 @@ contract. Each source below states its direct contribution.
   - `external:kubernetes` stores desired state and runs the workload, network,
     lease, RBAC, and Secret contracts.
 - Gate: `cargo test -p lumen --features operator --test it -- operator_render:: operator_backup_kubernetes_wiring::`
-- Gate: `scripts/kind-e2e.sh`
-- Gate: `LUMEN_E2E_MODE=operator scripts/kind-e2e.sh`
+- Gate: `cargo test -p lumen --test it -- e2e::overlay:: --ignored --test-threads=1`, run as Job/lumen-e2e on the shared GKE test cluster (`.github/workflows/gke-test.yml`)
+- Gate: `cargo test -p lumen --test it -- e2e::operator:: --ignored --test-threads=1`, run as Job/lumen-e2e on the shared GKE test cluster (`.github/workflows/gke-test.yml`)
 
 ### Managed Fleet materialization
 
@@ -349,9 +349,8 @@ contract. Each source below states its direct contribution.
     durable state transitions at reshard and restart boundaries.
   - `external:kubernetes` runs the declared members and networking contracts.
 - Gate: `cargo test -p lumen --features operator --test it -- reshard_admin_e2e:: reshard_driver_e2e:: routed_shard_e2e::`
-- Gate: `cargo test -p lumen --test it -- stability_lumen_claim_dynamic_multi_shard_replica_kind::`
 - Gate: `cargo test -p lumen --features raft-wal --test it -- raft_shutdown_failover:: raft_segment_snapshot_archive:: raft_segment_snapshot_archive_wiring:: raft_oversized_committed_apply::`
-- Gate: `scripts/kind-e2e.sh`
+- Gate: `cargo test -p lumen --test it -- e2e::operator:: --ignored --test-threads=1`, run as Job/lumen-e2e on the shared GKE test cluster (`.github/workflows/gke-test.yml`)
 
 ### Durability and recovery
 
@@ -370,7 +369,8 @@ contract. Each source below states its direct contribution.
   - [`libs/raft-runtime`](https://github.com/faberline/core/blob/v0.4.13/crates/raft-runtime/README.md) installs replica
     snapshots and manages the replicated log lifecycle.
 - Gate: `cargo test -p lumen --test it -- backup_restore_e2e:: indexing_durable_oracle::`
-- Gate: `scripts/kind-e2e.sh`
+- Gate: `cargo test -p lumen --test it -- e2e::overlay:: --ignored --test-threads=1`, run as Job/lumen-e2e on the shared GKE test cluster (`.github/workflows/gke-test.yml`)
+- Gate: `cargo test -p lumen --test it -- e2e::operator:: --ignored --test-threads=1`, run as Job/lumen-e2e on the shared GKE test cluster (`.github/workflows/gke-test.yml`)
 
 ### Operations and observability
 

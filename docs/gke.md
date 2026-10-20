@@ -18,10 +18,11 @@ None of these choices silently enables another one.
 
 This guide is the single source for Lumen's GKE release claim.
 
-`lumen@0.6.1` does not claim GKE. Its release gate is the native Kind e2e on
-amd64 and arm64 plus the local durable-perf matrix; see
-[Deployment](deployment.md#release-gate-kind-and-local-durable-perf). GKE
-acceptance is optional. A release without a Standalone GKE receipt publishes no
+`lumen@0.6.1` does not claim GKE. The release gate runs the candidate e2e
+suites on the shared GKE test cluster plus the local durable-perf matrix; see
+[Deployment](deployment.md#release-gate-gke-e2e-and-local-durable-perf). That
+e2e run is a release gate, not a GKE release claim. GKE acceptance is
+optional. A release without a Standalone GKE receipt publishes no
 GKE receipt assets, and its notes state `- Standalone GKE: not claimed`. The
 release verifier refuses a published GKE receipt that the release does not
 claim. Regional GKE certification and a GKE durable-perf run are later work in

@@ -391,7 +391,7 @@ validate_candidate_manifest_v2() {
   CANDIDATE_DEFAULT_IMAGE="ghcr.io/faberline/lumen:$CANDIDATE_VERSION"
   jq -e --arg version "$CANDIDATE_VERSION" --arg tag "$CANDIDATE_TAG" '
     (keys|sort) == ["artifacts","candidate_tag","commit","image","jobs","pr","repository","run_attempt","run_id","run_url","sboms","schema","source_ref","tag","version","workflow_id","workflow_path","workflow_ref"] and
-    .schema == "cclab.lumen.candidate-manifest.v3" and .repository == "faberline/lumen" and
+    (.schema == "cclab.lumen.candidate-manifest.v3" or .schema == "cclab.lumen.candidate-manifest.v4") and .repository == "faberline/lumen" and
     .version == $version and .tag == $tag and .source_ref == "refs/heads/main" and
     .workflow_path == ".github/workflows/lumen-release-candidate.yml" and
     .workflow_ref == "faberline/lumen/.github/workflows/lumen-release-candidate.yml@refs/heads/main" and
@@ -401,7 +401,7 @@ validate_candidate_manifest_v2() {
     .candidate_tag == ("release-candidate-" + .run_id + "-" + .run_attempt) and
     .image.repository == "ghcr.io/faberline/lumen" and
     ([.image.root_digest,.image.amd64_digest,.image.arm64_digest] | all(.[]; type == "string" and test("^sha256:[0-9a-f]{64}$"))) and
-    (.jobs|keys|sort) == ["build","cloud-free-config","container-smoke","gates-default","gates-operator","gates-raft-wal","gates-release-features","ghcr-image-and-attest","identity","kind-amd64","kind-arm64","manifest","perf-coarse","result","verify-candidate"] and
+    (.jobs|keys|sort) == (if .schema == "cclab.lumen.candidate-manifest.v3" then ["build","cloud-free-config","container-smoke","gates-default","gates-operator","gates-raft-wal","gates-release-features","ghcr-image-and-attest","identity","kind-amd64","kind-arm64","manifest","perf-coarse","result","verify-candidate"] else ["build","cloud-free-config","container-smoke","container-smoke-arm64","gates-default","gates-operator","gates-raft-wal","gates-release-features","ghcr-image-and-attest","gke-e2e","identity","manifest","perf-coarse","result","verify-candidate"] end) and
     (.jobs|all(.[]; . == "success")) and
     (.artifacts|type == "array" and length == 5 and
       ([.[].target]|sort) == ["aarch64-apple-darwin","aarch64-unknown-linux-gnu","aarch64-unknown-linux-musl","x86_64-unknown-linux-gnu","x86_64-unknown-linux-musl"] and

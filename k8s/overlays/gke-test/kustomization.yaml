@@ -7,7 +7,7 @@ kind: Kustomization
 # through the Services), which also ties every pod it checks to the image
 # under test (tests/it/e2e/identity.rs).
 # Each suite is its own workflow call on a fresh deploy of this overlay, which
-# holds both kind-e2e deploy paths in one namespace:
+# holds both deploy paths in one namespace:
 #
 #   overlay   the direct-install Deployment `lumen` from ../../base, shaped
 #             like ../dev, with a data PVC for the durable restart oracle.

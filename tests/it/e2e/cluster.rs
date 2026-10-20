@@ -1,4 +1,4 @@
-//! The steps both cluster suites share, in the order kind-e2e.sh runs them:
+//! The steps both cluster suites share, in order:
 //! wait for the serving pods, prove where they run, PUT a collection, index
 //! the 100k-doc fixture, search, duplicates, then the durable restart oracle
 //! (checkpoint one document, replace the serving pod, read it back before
@@ -209,8 +209,8 @@ pub async fn exercise(s: &Suite) {
     s.evidence("search", json!({"hits": hits, "first": found["hits"].get(0).cloned().unwrap_or(Value::Null)}));
     say(format!("   search hits: {hits}"));
     assert!(hits > 0, "expected search hits > 0, got {hits}");
-    // One shard, so duplicates is answered locally (kind-e2e.sh explains the
-    // routed refusal that a multi-shard topology would assert instead).
+    // One shard, so duplicates is answered locally (a multi-shard topology
+    // would assert the routed refusal instead).
     let dups = json!({"field": "email", "min_group_size": 2, "limit": 100});
     let found = s.api.post("/collections/users/duplicates", &dups, Duration::from_secs(30)).await;
     let groups = found["groups"].as_array().map_or(0, Vec::len);
@@ -224,8 +224,7 @@ pub async fn exercise(s: &Suite) {
     step.end();
 }
 
-/// Same order as kind-e2e.sh's oracle. The Service, not a NodePort, finds
-/// the replacement pod once it is Ready.
+/// The Service, not a NodePort, finds the replacement pod once it is Ready.
 async fn durable_restart_oracle(s: &Suite) {
     let pre_id = format!("pre-restart-{}-{}", s.pod_name, s.name);
     let pre_value = format!("{pre_id}@example.invalid");

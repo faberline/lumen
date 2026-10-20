@@ -85,9 +85,9 @@ Before `lumen@0.6.1` the verifier refuses durable performance arguments.
 
 Each release image carries a keyless Cosign signature and SLSA v1 provenance on the
 root index, with per-platform SPDX 2.3 JSON SBOM attestations. The release workflow
-verifies artifacts and runs native amd64 and arm64 kind runs before publication. See
-[the release gate](#release-gate-kind-and-local-durable-perf) for the candidate
-kind runs and the durable performance matrix.
+verifies artifacts and runs the GKE e2e suites and a native arm64 standalone smoke before publication.
+See [the release gate](#release-gate-gke-e2e-and-local-durable-perf) for the
+candidate e2e runs and the durable performance matrix.
 
 Shipped container images set `LUMEN_HOST=0.0.0.0` by default so published
 ports are reachable from the host without extra environment variables. The bare
@@ -183,13 +183,13 @@ curl -fsS http://127.0.0.1:7373/openapi.json
 
 Use [configuration](configuration.md) for precedence and restart behavior.
 
-## Release gate: Kind and local durable perf
+## Release gate: GKE e2e and local durable perf
 
-This section is the single description of how the `lumen@0.6.1` release gate
-runs. The workload, the sixteen cells, and every pass threshold are defined
-once in the
+This section is the single description of how the release gate runs. The
+workload, the sixteen cells, and every pass threshold are defined once in the
 [incremental segment checkpoint outcome](../ROADMAP.md#incremental-segment-checkpoint).
-`lumen@0.6.1` does not claim GKE; see [GKE](gke.md#release-claim).
+The `gke-e2e` job runs the e2e suites on Faberline's shared GKE test cluster;
+it is not a GKE release claim. See [GKE](gke.md#release-claim).
 
 The `lumen-release-candidate` workflow builds the candidate once and runs
 these jobs against the exact commit:
@@ -202,35 +202,43 @@ these jobs against the exact commit:
 | `gates-raft-wal` | The `raft-wal` feature cases, plus the `raft-wal` build, lib test build, and `git diff --check`. |
 | `gates-release-features` | The release feature set (`release_feature_set::`). |
 | `container-smoke` | The Rust suite `e2e::standalone_container::` (`bind` and `durable`) under docker against the candidate root digest. |
+| `container-smoke-arm64` | The same suite on a native arm64 runner, so docker runs the root digest's `linux/arm64` child. |
 | `cloud-free-config` | Terraform and Kustomize static checks; it calls no cloud API. |
 | `perf-coarse` | The release-profile `perf_gate::` cases except the thirty-minute durable workload. It still blocks the release. |
 | `verify-candidate` | `scripts/verify-release-candidate.sh`: supply-chain verification only. |
-| `kind-amd64`, `kind-arm64` | Native Kind e2e on each architecture. |
+| `gke-e2e` | `e2e::overlay::` and `e2e::operator::` on the shared GKE test cluster through `gke-test.yml`. |
 | `result` | Writes `final-candidate-manifest.json`, whose `jobs` map binds every job above. |
 
 The service and Raft crate tests (`service-k8s`, `storage-durable`,
 `service-backup`, `raft-core`, `raft-runtime`) belong to faberline/core. Its
 own CI runs them for each core tag; the Lumen candidate does not rerun them.
 
-Each Kind job builds the test client for its own architecture (the same
-`Dockerfile.test` `test-client` image `gke-test.yml` uses, loaded into kind
-instead of pushed) and runs `scripts/kind-cluster.sh` once per suite:
+The `gke-e2e` job calls this repository's `.github/workflows/gke-test.yml`
+with the candidate identity and `suite: all`:
 
-```bash
-E2E_EXPECTED_IMAGE=ghcr.io/faberline/lumen@sha256:<root digest> \
-  E2E_EXPECTED_RUNTIME_DIGEST=sha256:<this architecture's child digest> \
-  E2E_EXPECTED_VERSION=<version> E2E_EXPECTED_GIT_SHA=<8-hex commit> \
-  E2E_TEST_CLIENT_IMAGE=lumen-test-client:kind scripts/kind-cluster.sh overlay
+```yaml
+uses: ./.github/workflows/gke-test.yml
+with:
+  image: ghcr.io/faberline/lumen@sha256:<root digest>
+  expected-version: <version>
+  expected-git-sha: <8-hex commit>
+  expected-runtime-digest: sha256:<amd64 child digest>
+  suite: all
 ```
 
-and the same with `operator`. The script only creates the cluster, deploys
-`k8s/overlays/gke-test` at the root digest, runs `Job/lumen-e2e` from
-`k8s/gke-test-job/<suite>`, and prints its log. The Rust suites
-`e2e::overlay::` and `e2e::operator::` decide pass or fail: the image's
+That workflow builds and pushes the `Dockerfile.test` `test-client` image and
+calls faberline/aw's `gke-test.yml` once per suite, one at a time. The aw
+workflow only deploys `k8s/overlays/gke-test` at the root digest, runs
+`Job/lumen-e2e` from `k8s/gke-test-job/<suite>`, and prints its log. The Rust
+suites `e2e::overlay::` and `e2e::operator::` decide pass or fail: the image's
 version, commit, and runtime digest, the 100,000-document fixture, and the
-durable restart. The step passes only when the Job completes. The candidate
-kind runs do not wait for the durable performance matrix. These kind runs do
-not prove GKE, Regional HA, Fleet, or autoscaling.
+durable restart. The job passes only when every suite's Job completes. The GKE
+pools are `linux/amd64`, so the expected runtime digest is the amd64 child and
+`container-smoke-arm64` is the candidate's run of the arm64 image.
+`gke-test.yml` also runs its `standalone-container` job, the same suite as
+`container-smoke`. The candidate e2e runs do not wait for the durable
+performance matrix. They do not prove Regional HA, Fleet, or autoscaling, and
+they are not a Standalone GKE receipt.
 
 The durable performance matrix runs locally, on a Mac with OrbStack, through
 `scripts/durable-perf-local.sh`. CI does not run the thirty-minute cells.

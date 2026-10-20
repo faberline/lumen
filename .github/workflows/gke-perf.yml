@@ -145,7 +145,7 @@ jobs:
           actual="$(sha256sum "$manifest" | cut -d' ' -f1)"
           [[ "$expected" == "$actual" && "$name" == final-candidate-manifest.json && -z "${extra:-}" ]] || { echo 'candidate receipt sidecar does not bind its bytes' >&2; exit 1; }
           jq -e --arg repo "$GITHUB_REPOSITORY" --arg commit "$GITHUB_SHA" --arg run "$CANDIDATE_RUN_ID" --arg attempt "$CANDIDATE_ATTEMPT" '
-            .schema == "cclab.lumen.candidate-manifest.v3" and .repository == $repo and .commit == $commit and
+            (.schema == "cclab.lumen.candidate-manifest.v3" or .schema == "cclab.lumen.candidate-manifest.v4") and .repository == $repo and .commit == $commit and
             .run_id == $run and .run_attempt == $attempt and .source_ref == "refs/heads/main" and
             .workflow_path == ".github/workflows/lumen-release-candidate.yml" and
             .workflow_ref == ($repo + "/.github/workflows/lumen-release-candidate.yml@refs/heads/main") and

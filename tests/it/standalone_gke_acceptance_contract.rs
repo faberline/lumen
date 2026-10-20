@@ -778,7 +778,16 @@ fn findings(source: &str) -> Vec<&'static str> {
     let mut bad = Vec::new();
     bad.extend(shared_renderer_findings(source));
     for (code, required) in [
-        ("CANDIDATE", "cclab.lumen.candidate-manifest.v3"),
+        // v3 receipts ran the kind jobs; v4 receipts run GKE e2e and the
+        // native arm64 standalone smoke.
+        (
+            "CANDIDATE",
+            "(.schema == \"cclab.lumen.candidate-manifest.v3\" or .schema == \"cclab.lumen.candidate-manifest.v4\")",
+        ),
+        (
+            "CANDIDATE",
+            "else [\"build\",\"cloud-free-config\",\"container-smoke\",\"container-smoke-arm64\",\"gates-default\",\"gates-operator\",\"gates-raft-wal\",\"gates-release-features\",\"ghcr-image-and-attest\",\"gke-e2e\",\"identity\",\"manifest\",\"perf-coarse\",\"result\",\"verify-candidate\"] end",
+        ),
         ("CANDIDATE", "(.jobs|all(.[]; . == \"success\"))"),
         (
             "CANDIDATE",
@@ -2875,8 +2884,13 @@ fn negative_mutations_remove_real_gate_obligations() {
     let source = live_slice();
     for (from, to, expected) in [
         (
-            "cclab.lumen.candidate-manifest.v3",
-            "candidate-v2",
+            "(.schema == \"cclab.lumen.candidate-manifest.v3\" or .schema == \"cclab.lumen.candidate-manifest.v4\")",
+            "(.schema | startswith(\"cclab.lumen.candidate-manifest\"))",
+            "CANDIDATE",
+        ),
+        (
+            "\"gke-e2e\",\"identity\"",
+            "\"identity\"",
             "CANDIDATE",
         ),
         (

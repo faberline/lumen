@@ -1520,7 +1520,7 @@ fn dx_llm_composes_library_owned_provider_content() {
         "never move latest backward",
         "do not create a stable Git tag",
         "semver/latest image tag",
-        "Run kind before public promotion",
+        "Run the GKE e2e before public promotion",
         "GHCR root and platform digests",
         "downloaded host archive passes its checksum",
         "scripts/raft-implementor-build.sh",
