@@ -1,7 +1,10 @@
 # One durable performance cell on the shared GKE test cluster
 # (faberline/aw docs/standards/test-cluster.md). `.github/workflows/gke-perf.yml`
-# deploys it once per cell into a fresh namespace, so every cell gets a fresh
-# PVC. The test Job in k8s/gke-perf-job attaches to lumen-perf-0 with
+# deploys it once per cell into a fresh namespace, lumen-perf-<cell>, in its own
+# aw lane, so every cell gets a fresh PVC and up to three cells run at the same
+# time. A lane may not carry cluster-scoped objects; the node and volume reads
+# come from the cluster-wide ClusterRole faberline-gke-test-reader that aw
+# binds to every ServiceAccount (faberline/aw infra/gke-test). The test Job in k8s/gke-perf-job attaches to lumen-perf-0 with
 # LUMEN_PERF_RUNTIME=kubernetes; tests/it/perf_gate.rs checks this pod against
 # the `docker run` contract before it measures anything.
 #
@@ -21,20 +24,3 @@ labels:
 resources:
   - service.yaml
   - statefulset.yaml
-  - cluster-reader.yaml
-
-# The namespace transformer leaves a ClusterRoleBinding subject alone when its
-# ServiceAccount is not in this build. Copy the run namespace into the subject
-# and into the owner label that lets the aw reaper delete the binding.
-replacements:
-  - source:
-      kind: Service
-      name: lumen-perf
-      fieldPath: metadata.namespace
-    targets:
-      - select:
-          kind: ClusterRoleBinding
-          name: lumen-perf-cluster-reader
-        fieldPaths:
-          - subjects.0.namespace
-          - metadata.labels.faberline\.dev/owner-namespace

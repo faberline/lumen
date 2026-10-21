@@ -1,7 +1,7 @@
 # What the harness in attach mode does with kubectl, in this namespace only:
 # read lumen-perf-0 (spec, status, logs) and its data claim, and exec the
-# restarter container. The node and volume reads are cluster-scoped and live
-# in k8s/overlays/gke-perf/cluster-reader.yaml.
+# restarter container. The node and volume reads are cluster-scoped: aw's
+# ClusterRole faberline-gke-test-reader grants them to every ServiceAccount.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

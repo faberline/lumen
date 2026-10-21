@@ -6212,25 +6212,31 @@ mod durable_workload {
             statefulset["spec"]["volumeClaimTemplates"][0]["spec"]["storageClassName"],
             perf_cell_receipt::KUBERNETES_STORAGE_CLASS
         );
-        let reader =
-            fs::read_to_string(root.join("k8s/overlays/gke-perf/cluster-reader.yaml")).unwrap();
-        let documents = serde_yaml::Deserializer::from_str(&reader)
-            .map(|document| <Value as serde::Deserialize>::deserialize(document).unwrap())
-            .collect::<Vec<_>>();
-        let role = documents
-            .iter()
-            .find(|document| document["kind"] == "ClusterRole")
+        // Each cell runs in its own aw lane, which may not carry cluster-scoped
+        // objects: the node and volume reads come from aw's cluster-wide
+        // faberline-gke-test-reader, so neither folder may ship its own.
+        for folder in ["k8s/overlays/gke-perf", "k8s/gke-perf-job"] {
+            let kustomization: Value = serde_yaml::from_str(
+                &fs::read_to_string(root.join(folder).join("kustomization.yaml")).unwrap(),
+            )
             .unwrap();
-        assert_eq!(
-            role["rules"],
-            json!([{"apiGroups": [""], "resources": ["nodes", "persistentvolumes"], "verbs": ["get"]}])
-        );
-        let binding = documents
-            .iter()
-            .find(|document| document["kind"] == "ClusterRoleBinding")
-            .unwrap();
-        assert_eq!(binding["roleRef"]["name"], role["metadata"]["name"]);
-        assert_eq!(binding["subjects"][0]["name"], "lumen-perf-client");
+            for resource in kustomization["resources"].as_array().unwrap() {
+                let source =
+                    fs::read_to_string(root.join(folder).join(resource.as_str().unwrap()))
+                        .unwrap();
+                for document in serde_yaml::Deserializer::from_str(&source) {
+                    let document = <Value as serde::Deserialize>::deserialize(document).unwrap();
+                    assert!(
+                        !matches!(
+                            document["kind"].as_str(),
+                            Some("ClusterRole" | "ClusterRoleBinding")
+                        ),
+                        "{folder}/{resource}: a lane may not carry {}",
+                        document["kind"]
+                    );
+                }
+            }
+        }
         let job_rbac = fs::read_to_string(root.join("k8s/gke-perf-job/rbac.yaml")).unwrap();
         assert!(serde_yaml::Deserializer::from_str(&job_rbac)
             .map(|document| <Value as serde::Deserialize>::deserialize(document).unwrap())

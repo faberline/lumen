@@ -12,8 +12,12 @@ name: lumen-gke-perf
 # Every receipt binds the candidate run, its attempt, its commit, and its root
 # image digest, the same values `scripts/durable-perf-local.sh qualify` uses.
 # The dispatch commit must be the candidate commit, so the harness that runs
-# is the harness that was tested. Cells run one at a time: aw serializes the
-# calls of one repository, and the cells must not share a node.
+# is the harness that was tested. Up to three cells run at the same time, each
+# in its own aw lane: its own namespace (lumen-perf-<cell>), concurrency group,
+# and nodes. Three is max_nodes of the lumen-perf-server and lumen-perf-client
+# pools in faberline/aw infra/gke-test/pools.yaml; a fourth cell would wait for
+# a node past the project quota. The workflow-level group keeps two matrices
+# from overlapping.
 on:
   workflow_dispatch:
     inputs:
@@ -240,7 +244,7 @@ jobs:
     needs: [resolve, client-image]
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 3
       matrix:
         include: ${{ fromJSON(needs.resolve.outputs.cells) }}
     permissions:
@@ -250,6 +254,8 @@ jobs:
     uses: faberline/aw/.github/workflows/gke-test.yml@main
     with:
       image: ${{ needs.resolve.outputs.image }}
+      namespace: lumen-perf-${{ matrix.cell }}
+      lane: ${{ matrix.cell }}
       overlay: k8s/overlays/gke-perf
       test-job: k8s/gke-perf-job
       test-image: ${{ needs.client-image.outputs.image }}

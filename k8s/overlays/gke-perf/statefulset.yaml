@@ -4,7 +4,7 @@
 # whole lumen-perf-server node. The receipt records that shape
 # (server.runtime=kubernetes, resource_limits=false) with the node's
 # instance type, both pods' CPU model, and the data disk type, which the
-# harness reads through cluster-reader.yaml. Otherwise it mirrors
+# harness reads through aw's faberline-gke-test-reader. Otherwise it mirrors
 # `docker_run_args` in tests/it/perf_gate.rs:
 # - the env below and nothing else, no command, args, envFrom, or valueFrom;
 # - the data directory on a fresh volume (here a PVC per namespace).
