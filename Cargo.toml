@@ -32,37 +32,37 @@ futures = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-tls-native-roots", "json", "cookies", "gzip", "brotli", "multipart", "stream"], optional = true }
 # Shared h2c transport: `server` powers `serve` (HTTP/1.1 + h2c on one port via
 # hyper auto-builder, replacing the HTTP/1-only `axum::serve`).
-transport-h2c = { git = "https://github.com/faberline/core", tag = "v0.4.13", features = ["server"] }
+transport-h2c = { git = "https://github.com/faberline/core", tag = "v0.4.14", features = ["server"] }
 # `lumen upgrade` / `lumen issue` — the standard agent-facing CLI ops,
 # shared across the ecosystem (CONTRIBUTING.md "CLI convention"). Offline paths
 # always build; the HTTPS paths are pulled in by lumen's `self-update` /
 # `issue` features via `cli-std/online`. `k8s` pulls in `cli_std::connect`
 # (#1376) — `lumen connect`'s port-forward lifecycle + token-registry Secret
 # resolution, always built (not behind a lumen feature flag).
-cli-std = { git = "https://github.com/faberline/core", tag = "v0.4.13", default-features = false, features = ["k8s"] }
+cli-std = { git = "https://github.com/faberline/core", tag = "v0.4.14", default-features = false, features = ["k8s"] }
 # Shared request-auth plumbing. Lumen holds no credentials: `service_auth::k8s`
 # delegates authentication to TokenReview and authorization to
 # SubjectAccessReview, and Lumen supplies only the mapping from its own
 # operations onto Kubernetes resource attributes (#2869).
-service-auth = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+service-auth = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 # Shared k8s-native HTTP service shell: standard probe routes, request tracing,
 # h2c serve wrapper, and SIGTERM drain sequencing.
-service-http = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+service-http = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 # One absolute shutdown deadline shared by Lumen's public HTTP drain and its
 # Raft host. The serving binary consumes it directly during SIGINT/SIGTERM.
-server-lifecycle = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+server-lifecycle = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 # Shared backup destination/policy/sink/runner contract. Lumen still owns
 # producing a consistent engine snapshot; this lib owns where/how bytes are kept.
-service-backup = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+service-backup = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 # Shared durable local storage primitives: fsync policy, atomic snapshot replace,
 # and CRC-framed append logs. Lumen owns the domain codecs layered on top.
-storage-durable = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+storage-durable = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 # Shared analyzer and rebuildable text-index core. Lumen keeps its collection,
 # routing, scoring, and distributed state above this product-neutral base.
-index-text = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+index-text = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 # Lumen-owned HA: writes replicated through the shared raft-core engine (behind
 # the `raft-wal` feature). Peer RPCs ride the same h2c transport.
-raft-core = { git = "https://github.com/faberline/core", tag = "v0.4.13", optional = true }
+raft-core = { git = "https://github.com/faberline/core", tag = "v0.4.14", optional = true }
 # Non-optional (#1002): `src/app/config.rs`/`src/replication/domain/cluster_state.rs` delegate the StatefulSet
 # shard/replica/voter math + peer-DNS/`LUMEN_PEERS` override parsing to
 # `raft_runtime::cluster` unconditionally (those modules compile with no
@@ -71,9 +71,9 @@ raft-core = { git = "https://github.com/faberline/core", tag = "v0.4.13", option
 # every transitive dep it pulls in (raft-core, h2c, axum, tokio, reqwest via
 # h2c) is already unconditional in this graph; only `raft-wal` still gates the
 # replication engine (raft-core) + peer-RPC HTTP client (reqwest) themselves.
-raft-runtime = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+raft-runtime = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 # `lumen spec gen` — generate a typed client from lumen's own OpenAPI.
-openapi-codegen = { git = "https://github.com/faberline/core", tag = "v0.4.13", version = "0.5" }
+openapi-codegen = { git = "https://github.com/faberline/core", tag = "v0.4.14", version = "0.5" }
 rayon = "1.10"
 # simdeez_f compiles anndists' SIMD distance kernels (aarch64 NEON `asimd`,
 # x86 AVX2/SSE2) for DistL2/DistDot. The cosine path routes through DistDot on
@@ -88,7 +88,7 @@ k8s-openapi = { version = "0.24", features = ["v1_32"], optional = true }
 schemars = { version = "0.8", optional = true }
 # Shared operator scaffolding (reconcile loop + leader-election lease); lumen
 # supplies the `Lumen` CRD + render and composes the rest (epic #580).
-service-k8s = { git = "https://github.com/faberline/core", tag = "v0.4.13", default-features = false, features = ["render-only"] }
+service-k8s = { git = "https://github.com/faberline/core", tag = "v0.4.14", default-features = false, features = ["render-only"] }
 serde_yaml = "0.9"
 lz4_flex = "0.11"
 memmap2 = "0.9"
@@ -110,11 +110,11 @@ rustls = "0.23"
 # Shared peer-mTLS material loading (PEM cert/key/CA + rustls builders +
 # crypto-provider install); lumen keeps a thin adapter with its
 # `LUMEN_PEER_TLS_*`/`LUMEN_PEER_MTLS` env names (#971).
-peer-tls = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+peer-tls = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 # Shared lock-free counter/gauge/latency primitives + Prometheus text
 # encoder; lumen's `Metrics` reimplements on top with byte-identical
 # `render()` output (#974).
-metrics-prometheus = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+metrics-prometheus = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 smallvec = "1"
 thiserror = "2.0"
 tokio = { version = "1.40", features = ["full"] }
@@ -130,7 +130,7 @@ opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"], optional = true
 utoipa = { version = "4", features = ["axum_extras"] }
 
 [build-dependencies]
-build-stamp = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+build-stamp = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 
 [features]
 default = []
@@ -198,7 +198,7 @@ rand = "0.8"
 rig = { git = "https://github.com/faberline/rig", rev = "1fbe487eb4a94d745447227dbc974c3eb3e9fbd5" }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 # Shared observability layer: JSON formatter + service-identity for subscriber-capture tests.
-service-observability = { git = "https://github.com/faberline/core", tag = "v0.4.13" }
+service-observability = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 tracing-subscriber = { version = "0.3", features = ["fmt", "json", "env-filter", "registry"] }
 # HTTP client for the perf-gate / write-qps harness (drives lumen + OpenSearch).
 # DEV-ONLY on purpose: the serving binary speaks REST/OpenAPI and ships no Rust
