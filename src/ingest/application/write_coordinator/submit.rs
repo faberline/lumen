@@ -177,7 +177,7 @@ impl WriteCoordinator {
         let admission_deadline = submit_deadline - LOCAL_CAPACITY_APPLY_RESERVE;
         // The client's request timeout began before the body was received
         // and parsed, so measure the relief wait from the request's arrival.
-        let received_at = crate::shared_kernel::request_arrival::received_at()
+        let received_at = crate::ingest::application::request_arrival::received_at()
             .unwrap_or_else(tokio::time::Instant::now);
         let capacity_deadline = admission_deadline.min(received_at + LOCAL_CAPACITY_RELIEF_TIMEOUT);
         let mut diagnostic = WritePhase::begin(

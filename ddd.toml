@@ -4,9 +4,9 @@
 # Lumen's own. See docs/architecture.md for what each context owns.
 schema = 1
 
-# Report only while the DDD split (P1) is in progress.
+# Enforced: the shared-kernel move, the thin lumen main and the fields split are in place.
 [migration]
-enforce = false
+enforce = true
 
 [policy]
 version = 1
@@ -1111,6 +1111,8 @@ rule = "B4"
 paths = [
   "src/index/application/apply/committed_index_apply.rs",
   "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/apply/committed_index_apply/fields/attach.rs",
+  "src/index/application/apply/committed_index_apply/fields/stage.rs",
   "src/index/application/apply/committed_index_plan.rs",
   "src/index/application/apply/committed_index_plan/pass.rs",
   "src/index/application/apply/committed_replace_apply.rs",
@@ -1128,6 +1130,7 @@ rule = "B4"
 paths = [
   "src/index/application/apply/committed_index_apply.rs",
   "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/apply/committed_index_apply/fields/attach.rs",
   "src/index/application/apply/committed_replace_apply.rs",
   "src/index/application/apply/committed_text_apply.rs",
   "src/index/application/apply/record_apply.rs",
@@ -1140,6 +1143,7 @@ rule = "B4"
 paths = [
   "src/index/application/apply/committed_index_apply.rs",
   "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/apply/committed_index_apply/fields/stage.rs",
 ]
 subject = "persistence.infrastructure"
 reason = "The field apply stages a scalar field's winning rows as a private delta over its ComposedSegmentReader (with_private_delta, or from_private_empty_base when the field has no segment yet) and keeps the before and after readers in its FieldPlan until publication. P2: the sealed-segment reader port in the index domain (see the persistence.infrastructure exceptions above)."
@@ -1216,6 +1220,7 @@ paths = [
   "src/index/application/apply.rs",
   "src/index/application/apply/committed_index_apply.rs",
   "src/index/application/apply/committed_index_apply/fields.rs",
+  "src/index/application/apply/committed_index_apply/fields/stage.rs",
   "src/index/application/checkpoint_capture.rs",
 ]
 subject = "application->infrastructure"

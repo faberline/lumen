@@ -119,7 +119,8 @@ async fn record_subject_to_span(req: Request, next: Next) -> axum::response::Res
 /// Record when the request arrived, before its body is read, so write
 /// admission can bound its relief wait by the client's request timeout.
 async fn record_request_arrival(req: Request, next: Next) -> axum::response::Response {
-    crate::shared_kernel::request_arrival::scope(tokio::time::Instant::now(), next.run(req)).await
+    crate::ingest::application::request_arrival::scope(tokio::time::Instant::now(), next.run(req))
+        .await
 }
 
 pub fn router(state: AppState) -> Router {
