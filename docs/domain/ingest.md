@@ -1,11 +1,11 @@
 # Ingest
 
-This context owns mutation admission, pending-change capacity, record staging, WAL delivery and the ordered apply coordinator.
+This context owns mutation admission, pending-change capacity, record staging, WAL delivery, the ordered apply coordinator and the raft state machine (`EngineSm`).
 
 Source: `crates/lumen-index/src/ingest`.
 Layers: domain, application, infrastructure and interfaces.
 
-The coordinator applies committed records to the shard Engine. Capacity refusal must preserve committed records and their order. Existing connections to index and persistence remain declared exceptions during P1.
+The coordinator applies committed records to the shard Engine. With raft-wal, `application/engine_sm` applies committed raft entries to the same Engine. Capacity refusal must preserve committed records and their order. Existing connections to index and persistence remain declared exceptions during P1.
 
 [Indexing](../indexing.md) defines the related product contract.
 `ddd.toml` records the current dependency rules and P1 exceptions.

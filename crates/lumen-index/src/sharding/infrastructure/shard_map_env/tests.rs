@@ -8,10 +8,9 @@ use crate::sharding::infrastructure::shard_map_env::{
     routed_pod_topology, routed_shard_count_from_env, shard_map_from_env,
 };
 
-// Every test here and in `crate::app::config`'s tests that mutates process
-// env (`ClusterConfig::from_env`'s SHARD_COUNT/REPLICAS_PER_SHARD/
-// VOTER_COUNT/POD_NAME and `shard_map_from_env`'s SHARD_MAP_VERSION/
-// SHARD_MAP_ASSIGNMENTS/VIRTUAL_BUCKET_COUNT) shares this one lock — env vars are
+// Every test here that mutates process env (`shard_map_from_env`'s
+// SHARD_MAP_VERSION/SHARD_MAP_ASSIGNMENTS/VIRTUAL_BUCKET_COUNT and the
+// StatefulSet SHARD_COUNT/REPLICAS_PER_SHARD/POD_NAME) shares this one lock — env vars are
 // process-global, and `cargo test`'s default parallel runner would
 // otherwise interleave two tests' `set_var`/`remove_var` calls (a
 // per-function-local `static LOCK` does *not* serialize across

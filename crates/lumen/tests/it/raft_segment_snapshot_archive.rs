@@ -23,20 +23,20 @@
 //!   `tests/it/raft_segment_snapshot_archive.rs:738`,
 //!   `tests/it/raft_segment_snapshot_archive.rs:751`, and
 //!   `tests/it/raft_segment_snapshot_archive.rs:761`. These exercise
-//!   `src/replication/application/engine_sm/` and
+//!   `src/ingest/application/engine_sm/` and
 //!   `src/persistence/infrastructure/segment_rdb_store/`.
 //! - Security: `tests/it/raft_segment_snapshot_archive.rs:295`, `tests/it/raft_segment_snapshot_archive.rs:299`,
 //!   `tests/it/raft_segment_snapshot_archive.rs:303`, `tests/it/raft_segment_snapshot_archive.rs:310`, and
 //!   `tests/it/raft_segment_snapshot_archive.rs:314` reject each malformed archive and retain the Raft watermark and CURRENT.
 //!   `tests/it/raft_segment_snapshot_archive.rs:259`, `tests/it/raft_segment_snapshot_archive.rs:264`,
 //!   `tests/it/raft_segment_snapshot_archive.rs:269`, and `tests/it/raft_segment_snapshot_archive.rs:274` retain live queries.
-//!   The peer/file archive boundary changes at `src/replication/application/engine_sm/` with
+//!   The peer/file archive boundary changes at `src/ingest/application/engine_sm/` with
 //!   segment archive files from
 //!   `src/persistence/infrastructure/segment_rdb_store/`.
 //! - Performance: the approved work-item workload is a separate pending gate: 30 min on 2.5 CPU/16 GiB with checkpoint and merge,
 //!   10 QPS, 100 doc ops/s, p99 <= 1 s, each query <= 5 s, zero errors/timeouts, drain <= 60 s, and RSS <= 12 GiB.
 //!   `SNAPSHOT_OUTPUT_WATCHDOG` is test cleanup only, not an archive SLA; periodic wiring remains pending at
-//!   `src/replication/application/engine_sm/` and
+//!   `src/ingest/application/engine_sm/` and
 //!   `src/persistence/infrastructure/segment_rdb_store/`.
 #![cfg(feature = "raft-wal")]
 

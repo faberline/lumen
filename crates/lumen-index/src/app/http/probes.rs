@@ -7,7 +7,8 @@ use axum::http::StatusCode;
 use axum::response::Json;
 
 use crate::app::http::app_state::AppState;
-use crate::replication::domain::cluster_state_view::ClusterStateView;
+use crate::shared_kernel::types::cluster_state_view::ClusterStateView;
+use crate::shared_kernel::types::raft_role::RaftRole;
 
 #[utoipa::path(
     get,
@@ -43,7 +44,7 @@ pub(super) async fn debug_cluster(State(state): State<AppState>) -> Json<Cluster
             pod_name: "local".into(),
             shard_index: 0,
             replica_index: 0,
-            role: crate::replication::domain::raft_role::RaftRole::Leader,
+            role: RaftRole::Leader,
             peers: vec![],
             applied_index: 0,
             leader_term: 0,

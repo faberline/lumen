@@ -3143,6 +3143,7 @@ dependencies = [
  "lumen-access",
  "lumen-index",
  "lumen-operator",
+ "lumen-replication",
  "lumen-shared-kernel",
  "lz4_flex",
  "memory-stats",
@@ -3282,6 +3283,16 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+]
+
+[[package]]
+name = "lumen-replication"
+version = "0.6.2"
+dependencies = [
+ "anyhow",
+ "lumen-shared-kernel",
+ "raft-runtime",
+ "serde",
 ]
 
 [[package]]

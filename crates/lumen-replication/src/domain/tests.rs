@@ -1,7 +1,8 @@
-use crate::replication::domain::cluster_state::ClusterState;
-use crate::replication::domain::cluster_state_view::ClusterStateView;
-use crate::replication::domain::peer_addr::{PeerAddr, RaftGroup};
-use crate::replication::domain::raft_role::RaftRole;
+use crate::domain::cluster_state::ClusterState;
+use crate::domain::peer_addr::RaftGroup;
+use crate::domain::runtime_shapes;
+use crate::shared_kernel::types::peer_addr::PeerAddr;
+use crate::shared_kernel::types::raft_role::RaftRole;
 
 #[test]
 fn wrapper_types_convert_from_raft_runtime_canonical_shape() {
@@ -13,7 +14,7 @@ fn wrapper_types_convert_from_raft_runtime_canonical_shape() {
         (raft_runtime::RaftRole::Learner, RaftRole::Learner),
         (raft_runtime::RaftRole::Candidate, RaftRole::Candidate),
     ] {
-        assert_eq!(RaftRole::from(host_role), local_role);
+        assert_eq!(runtime_shapes::raft_role(host_role), local_role);
     }
 
     let host_peer = raft_runtime::PeerAddr {
@@ -23,7 +24,7 @@ fn wrapper_types_convert_from_raft_runtime_canonical_shape() {
         client_port: 8080,
         role: raft_runtime::RaftRole::Follower,
     };
-    let peer: PeerAddr = host_peer.clone().into();
+    let peer: PeerAddr = runtime_shapes::peer_addr(host_peer.clone());
     assert_eq!(peer.pod_name, host_peer.pod_name);
     assert_eq!(peer.role, RaftRole::Follower);
 
@@ -37,14 +38,14 @@ fn wrapper_types_convert_from_raft_runtime_canonical_shape() {
         leader_term: 2,
         replication_lag_ms: 10,
     };
-    let view: ClusterStateView = host_view.into();
+    let view = runtime_shapes::cluster_state_view(host_view);
     assert_eq!(view.pod_name, "lumen-1");
     assert_eq!(view.role, RaftRole::Follower);
     assert_eq!(view.peers.len(), 1);
     assert_eq!(view.applied_index, 5);
 }
 
-use crate::app::config::ClusterConfig;
+use crate::domain::cluster_config::ClusterConfig;
 use std::sync::Mutex;
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());

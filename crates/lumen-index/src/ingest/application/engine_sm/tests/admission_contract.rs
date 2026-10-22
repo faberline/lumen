@@ -8,12 +8,12 @@ use raft_runtime::{
 use tower::ServiceExt;
 
 use crate::index::application::engine::Engine;
+use crate::ingest::application::engine_sm::write_sink::RaftWriteSink;
+use crate::ingest::application::engine_sm::EngineSm;
 use crate::ingest::application::write_coordinator::WriteSink;
 use crate::ingest::domain::change_admission::PendingChangeCapacity;
 use crate::ingest::domain::change_budget::{ChangeBudget, HARD_LIMIT};
 use crate::ingest::domain::wal_record::WalRecord;
-use crate::replication::application::engine_sm::write_sink::RaftWriteSink;
-use crate::replication::application::engine_sm::EngineSm;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::{
     document::{FieldValue, IndexItem, IndexRequest},

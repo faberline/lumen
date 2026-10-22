@@ -23,7 +23,7 @@ pub struct AppState {
     pub engine: Arc<Engine>,
     pub auth: Arc<AuthConfig>,
     pub(super) verifier: Arc<LumenVerifier>,
-    pub cluster: Option<Arc<crate::replication::domain::cluster_state::ClusterState>>,
+    pub cluster: Option<Arc<dyn crate::shared_kernel::ports::cluster_status::ClusterStatus>>,
     /// Read/search backend. Defaults to the local engine; sharded serving can
     /// replace it with a fan-in router while keeping writes/stats local.
     pub search_backend: Arc<dyn SearchBackend>,
@@ -32,7 +32,7 @@ pub struct AppState {
     /// Writes go through a [`WriteSink`]: the WAL-seam coordinator for
     /// embedded, or the raft host for `--wal raft`. Reads use
     /// `engine` directly. See `ingest::application::write_coordinator`,
-    /// `ingest::infrastructure::wal` and `replication::application::engine_sm`.
+    /// `ingest::infrastructure::wal` and `ingest::application::engine_sm`.
     pub writer: Arc<dyn WriteSink>,
     /// Write/mutation backend. Defaults to the local coordinator; sharded
     /// serving can replace it with a document-router that fans out writes
@@ -106,7 +106,7 @@ impl AppState {
 
     pub fn with_cluster(
         mut self,
-        cluster: Arc<crate::replication::domain::cluster_state::ClusterState>,
+        cluster: Arc<dyn crate::shared_kernel::ports::cluster_status::ClusterStatus>,
     ) -> Self {
         self.cluster = Some(cluster);
         self

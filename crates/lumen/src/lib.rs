@@ -50,7 +50,8 @@ pub use crate::compat::backup_sink;
 mod compat;
 
 use lumen_access as access;
-use lumen_index::{app, index, ingest, persistence, replication, sharding};
+use lumen_index::{app, index, ingest, persistence, sharding};
+use lumen_replication as replication;
 use lumen_shared_kernel as shared_kernel;
 pub use crate::compat::config;
 pub use crate::compat::coordinator;

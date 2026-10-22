@@ -2,15 +2,13 @@
 //! against this pod's cluster state, the reshard write fence, the
 //! restart-required and storage-full states, and the direct-mutation permit.
 
-use std::sync::atomic::Ordering;
-
 use anyhow::Result;
 use axum::http::{HeaderMap, StatusCode};
 
 use crate::app::http::api_err::ApiErr;
 use crate::app::http::app_state::AppState;
-use crate::replication::domain::cluster_state::ReadConsistency;
-use crate::replication::domain::raft_role::RaftRole;
+use crate::shared_kernel::types::raft_role::RaftRole;
+use raft_runtime::ReadConsistency;
 
 #[cfg(doc)]
 use crate::app::http::write_fence::WriteFence;
@@ -76,7 +74,7 @@ pub(crate) fn enforce_read_consistency(
                     format!(
                         "replica `{}` is not the shard {} leader (current leader is `{}`); \
                          leader-consistency reads must reach it",
-                        cluster.pod_name, cluster.shard_index, leader.pod_name
+                        cluster.pod_name(), cluster.shard_index(), leader.pod_name
                     ),
                 ),
                 None => ApiErr::new(
@@ -84,7 +82,7 @@ pub(crate) fn enforce_read_consistency(
                     "read_consistency_no_leader",
                     format!(
                         "shard {} has no reachable leader; leader-consistency reads cannot be satisfied",
-                        cluster.shard_index
+                        cluster.shard_index()
                     ),
                 ),
             })
@@ -93,7 +91,7 @@ pub(crate) fn enforce_read_consistency(
             if cluster.role() == RaftRole::Leader {
                 return Ok(());
             }
-            let lag_ms = cluster.replication_lag_ms.load(Ordering::Relaxed);
+            let lag_ms = cluster.replication_lag_ms();
             if lag_ms <= bound_ms {
                 Ok(())
             } else {
@@ -102,7 +100,7 @@ pub(crate) fn enforce_read_consistency(
                     "read_consistency_lag_exceeded",
                     format!(
                         "replica `{}` lag {lag_ms}ms exceeds bounded({bound_ms}ms) consistency",
-                        cluster.pod_name
+                        cluster.pod_name()
                     ),
                 ))
             }

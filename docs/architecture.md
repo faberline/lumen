@@ -19,12 +19,15 @@ Lumen is one Cargo workspace with the faberline `saas-service` crates:
 | `crates/lumen` | The binary, the library facade, `compat`, tests, and benches |
 | `crates/lumen-shared-kernel` | The wire types, log entry, and capture barrier every context shares |
 | `crates/lumen-access` | The `access` context: identity, authorization, and peer TLS |
-| `crates/lumen-index` | `index`, `ingest`, `persistence`, `sharding`, `replication`, and the `app` root |
+| `crates/lumen-index` | `index`, `ingest`, `persistence`, `sharding`, and the `app` root |
+| `crates/lumen-replication` | The `replication` context: raft group, pod role, and cluster config |
 | `crates/lumen-operator` | The `operator` context: the Kubernetes operator |
 
-`lumen-index` holds five contexts because they still call each other in both
-directions. The `lumen-storage` and `lumen-replication` crates come when that
-cycle is cut.
+`lumen-index` holds four contexts because they still call each other in both
+directions. The `lumen-storage` crate comes when that cycle is cut.
+`lumen-replication` depends only on the shared kernel and `raft-runtime`.
+`lumen-index` reads the pod's cluster state through the kernel's
+`ports::cluster_status` port.
 The [domain guide](domain/README.md) maps source modules to their owners.
 `crates/lumen-index/src/app` connects those modules into the running service.
 `crates/lumen/src/compat` keeps the public Rust module paths used by existing callers.
