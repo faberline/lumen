@@ -2,7 +2,7 @@
 
 This context owns the wire types, committed-mutation log vocabulary and apply/capture barrier shared by the contexts.
 
-Source: `src/shared_kernel`.
+Source: `crates/lumen-shared-kernel/src`.
 Layers: shared modules.
 
 The shared kernel has a small common vocabulary. It does not own configuration, HTTP wiring or the command line. Those belong to app and the binary modules.

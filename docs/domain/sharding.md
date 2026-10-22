@@ -2,7 +2,7 @@
 
 This context owns versioned virtual-bucket ownership, routed requests and bucket transfer during resharding.
 
-Source: `src/sharding`.
+Source: `crates/lumen-index/src/sharding`.
 Layers: domain, application, infrastructure and interfaces.
 
 A document hashes to a stable virtual bucket. The versioned map assigns that bucket to a physical shard. Changing shard count does not change the document hash contract.

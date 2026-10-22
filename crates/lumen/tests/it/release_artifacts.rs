@@ -89,7 +89,7 @@ fn render_release() -> String {
 fn live() -> Inputs {
     let root = root();
     let read = |path: &str| fs::read_to_string(root.join(path)).unwrap_or_else(|e| panic!("read {path}: {e}"));
-    Inputs { docs: read("docs/deployment.md"), dockerfile: read("Dockerfile.release"), installer: read("install.sh"), cases: read("tests/it/main.rs"), rendered: render_release() }
+    Inputs { docs: read("docs/deployment.md"), dockerfile: read("Dockerfile.release"), installer: read("install.sh"), cases: read("crates/lumen/tests/it/main.rs"), rendered: render_release() }
 }
 #[rustfmt::skip]
 fn replace_once(source: &str, from: &str, to: &str) -> String {

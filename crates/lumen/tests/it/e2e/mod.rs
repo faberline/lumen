@@ -36,7 +36,7 @@ mod support;
 /// to that workflow with `suite: all`.
 #[test]
 fn gke_suite_filters_match_modules() {
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
     let read = |path: &str| {
         std::fs::read_to_string(root.join(path)).unwrap_or_else(|e| panic!("read {path}: {e}"))
     };
@@ -62,7 +62,7 @@ fn gke_suite_filters_match_modules() {
             job.contains(&format!("args: [\"e2e::{suite}::\"]")),
             "k8s/gke-test-job/{suite} must filter e2e::{suite}::"
         );
-        let module = read(&format!("tests/it/e2e/{suite}.rs"));
+        let module = read(&format!("crates/lumen/tests/it/e2e/{suite}.rs"));
         assert!(
             module.contains("#[ignore = \"e2e: needs E2E_ENDPOINT\"]\nasync fn journey()"),
             "tests/it/e2e/{suite}.rs must hold the ignored `journey`"
@@ -96,7 +96,7 @@ fn gke_suite_filters_match_modules() {
 /// and `durable`, so a rename cannot turn the gate into "running 0 tests".
 #[test]
 fn standalone_filter_matches_module() {
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
     let read = |path: &str| {
         std::fs::read_to_string(root.join(path)).unwrap_or_else(|e| panic!("read {path}: {e}"))
     };
@@ -115,7 +115,7 @@ fn standalone_filter_matches_module() {
             "{workflow} must run `{command}` exactly {runs} time(s)"
         );
     }
-    let module = read("tests/it/e2e/standalone_container.rs");
+    let module = read("crates/lumen/tests/it/e2e/standalone_container.rs");
     for test in ["bind", "durable"] {
         assert!(
             module.contains(&format!(

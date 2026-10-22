@@ -669,8 +669,8 @@ fn every_runbook_url_resolves_to_a_file_in_this_repository() {
         .expect("alert rules");
     assert!(!rules.is_empty());
 
-    // Lumen's crate root is the repository root.
-    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    // The lumen crate lives in crates/lumen; the repository root is two up.
+    let repo_root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
 
     for entry in rules {
         let annotations = &entry["annotations"];
@@ -1079,13 +1079,14 @@ fn the_control_plane_paths_reach_for_no_other_credential() {
         ),
     ];
 
-    let lumen_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    // The lumen crate lives in crates/lumen; the repository root is two up.
+    let lumen_root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
     let mut scanned = 0usize;
     let mut files = Vec::new();
-    collect_text_files(&lumen_root.join("src/operator"), &mut files);
+    collect_text_files(&lumen_root.join("crates/lumen-operator/src"), &mut files);
     collect_text_files(&lumen_root.join("k8s/operator"), &mut files);
-    files.push(lumen_root.join("src/persistence/application/backup.rs"));
-    collect_text_files(&lumen_root.join("src/bin/lumen"), &mut files);
+    files.push(lumen_root.join("crates/lumen-index/src/persistence/application/backup.rs"));
+    collect_text_files(&lumen_root.join("crates/lumen/src/bin/lumen"), &mut files);
     files.sort();
 
     for file in &files {

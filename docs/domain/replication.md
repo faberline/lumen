@@ -2,7 +2,7 @@
 
 This context owns the live Raft role of a pod and the adapter that applies a replicated log to its Engine.
 
-Source: `src/replication`.
+Source: `crates/lumen-index/src/replication`.
 Layers: domain and application.
 
 The raft-runtime library owns the Raft host and peer mechanisms. Lumen owns its cluster view and the engine state-machine adapter. The application adapter is enabled by raft-wal.

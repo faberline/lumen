@@ -22,10 +22,10 @@ Most contexts use four layers.
 `interfaces` contains adapters for callers.
 A context can omit a layer it does not need.
 
-`src/app` joins the contexts into the service.
+`crates/lumen-index/src/app` joins the contexts into the service.
 It is the composition root, which means it owns configuration and wiring.
-`src/compat` preserves the public module paths from before the split.
-The binary modules under `src/bin/lumen/` own command-line work.
+`crates/lumen/src/compat` preserves the public module paths from before the split.
+The binary modules under `crates/lumen/src/bin/lumen/` own command-line work.
 
 P1 moves and splits files within one crate.
 It preserves behavior and the compatibility paths.

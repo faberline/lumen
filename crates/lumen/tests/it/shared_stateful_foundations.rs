@@ -59,23 +59,27 @@ const LUMEN_BIN: &str = concat!(
     include_str!("../../src/bin/lumen/standalone/gke/manifest.rs"),
     include_str!("../../src/bin/lumen/standalone/gke/validate.rs"),
 );
-const LUMEN_MANIFEST: &str = include_str!("../../../../Cargo.toml");
-const LUMEN_AUTH: &str = concat!(
-    include_str!("../../src/access/domain/identity.rs"),
-    include_str!("../../src/access/application/authorization.rs"),
-    include_str!("../../src/access/application/auth_config.rs"),
-    include_str!("../../src/access/application/control_plane_token.rs"),
-    include_str!("../../src/access/infrastructure/lumen_verifier.rs"),
-    include_str!("../../src/access/interfaces/http.rs"),
+/// The workspace manifest and the lumen crate manifest.
+const LUMEN_MANIFEST: &str = concat!(
+    include_str!("../../../../Cargo.toml"),
+    include_str!("../../Cargo.toml"),
 );
-const LUMEN_API: &str = include_str!("../../src/app/http/router.rs");
+const LUMEN_AUTH: &str = concat!(
+    include_str!("../../../lumen-access/src/domain/identity.rs"),
+    include_str!("../../../lumen-access/src/application/authorization.rs"),
+    include_str!("../../../lumen-access/src/application/auth_config.rs"),
+    include_str!("../../../lumen-access/src/application/control_plane_token.rs"),
+    include_str!("../../../lumen-access/src/infrastructure/lumen_verifier.rs"),
+    include_str!("../../../lumen-access/src/interfaces/http.rs"),
+);
+const LUMEN_API: &str = include_str!("../../../lumen-index/src/app/http/router.rs");
 const LUMEN_OPERATOR: &str = concat!(
-    include_str!("../../src/operator/application/render.rs"),
-    include_str!("../../src/operator/application/render/identity.rs"),
-    include_str!("../../src/operator/application/render/backup.rs"),
-    include_str!("../../src/operator/application/render/serving_statefulset.rs"),
-    include_str!("../../src/operator/application/render/serving_config.rs"),
-    include_str!("../../src/operator/application/render/monitoring.rs"),
+    include_str!("../../../lumen-operator/src/application/render.rs"),
+    include_str!("../../../lumen-operator/src/application/render/identity.rs"),
+    include_str!("../../../lumen-operator/src/application/render/backup.rs"),
+    include_str!("../../../lumen-operator/src/application/render/serving_statefulset.rs"),
+    include_str!("../../../lumen-operator/src/application/render/serving_config.rs"),
+    include_str!("../../../lumen-operator/src/application/render/monitoring.rs"),
 );
 const LUMEN_RIG_ADAPTER: &str = include_str!("rig_stateful_adapter.rs");
 

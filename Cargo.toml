@@ -15,6 +15,149 @@ authors = ["Chris Cheng <chris.cheng.c4@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/faberline/lumen"
 
+[workspace.dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["ws"] }
+base64 = "0.22"
+byteorder = "1.5"
+# On-disk snapshots: CBOR (self-describing binary) + lz4, replacing serde_json.
+# Self-describing is required because the persisted types reuse the wire types,
+# which use `skip_serializing_if` / untagged / internally-tagged serde — none of
+# which a non-self-describing codec (bincode/postcard) can round-trip.
+ciborium = "0.2"
+bytemuck = { version = "1", features = ["derive"] }
+roaring = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive", "string", "env"] }
+crc32fast = "1.4"
+sha2 = "0.10"
+futures = "0.3"
+# Shared h2c client for the Lumen-owned raft WAL and online CLI ops. The serving
+# binary links it only when a feature that needs outbound HTTP is enabled.
+reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-tls-native-roots", "json", "cookies", "gzip", "brotli", "multipart", "stream"] }
+# Shared h2c transport: `server` powers `serve` (HTTP/1.1 + h2c on one port via
+# hyper auto-builder, replacing the HTTP/1-only `axum::serve`).
+transport-h2c = { git = "https://github.com/faberline/core", tag = "v0.4.14", features = ["server"] }
+# `lumen upgrade` / `lumen issue` — the standard agent-facing CLI ops,
+# shared across the ecosystem (CONTRIBUTING.md "CLI convention"). Offline paths
+# always build; the HTTPS paths are pulled in by lumen's `self-update` /
+# `issue` features via `cli-std/online`. `k8s` pulls in `cli_std::connect`
+# (#1376) — `lumen connect`'s port-forward lifecycle + token-registry Secret
+# resolution, always built (not behind a lumen feature flag).
+cli-std = { git = "https://github.com/faberline/core", tag = "v0.4.14", default-features = false, features = ["k8s"] }
+# Shared request-auth plumbing. Lumen holds no credentials: `service_auth::k8s`
+# delegates authentication to TokenReview and authorization to
+# SubjectAccessReview, and Lumen supplies only the mapping from its own
+# operations onto Kubernetes resource attributes (#2869).
+service-auth = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+# Shared k8s-native HTTP service shell: standard probe routes, request tracing,
+# h2c serve wrapper, and SIGTERM drain sequencing.
+service-http = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+# One absolute shutdown deadline shared by Lumen's public HTTP drain and its
+# Raft host. The serving binary consumes it directly during SIGINT/SIGTERM.
+server-lifecycle = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+# Shared backup destination/policy/sink/runner contract. Lumen still owns
+# producing a consistent engine snapshot; this lib owns where/how bytes are kept.
+service-backup = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+# Shared durable local storage primitives: fsync policy, atomic snapshot replace,
+# and CRC-framed append logs. Lumen owns the domain codecs layered on top.
+storage-durable = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+# Shared analyzer and rebuildable text-index core. Lumen keeps its collection,
+# routing, scoring, and distributed state above this product-neutral base.
+index-text = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+# Lumen-owned HA: writes replicated through the shared raft-core engine (behind
+# the `raft-wal` feature). Peer RPCs ride the same h2c transport.
+raft-core = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+# Non-optional (#1002): `lumen-index` `app/config.rs`/`replication/domain/cluster_state.rs` delegate the StatefulSet
+# shard/replica/voter math + peer-DNS/`LUMEN_PEERS` override parsing to
+# `raft_runtime::cluster` unconditionally (those modules compile with no
+# feature), so the actual raft engine and lumen's serving-side topology
+# surface can't fork the derivation. Adds no new crate to the default build:
+# every transitive dep it pulls in (raft-core, h2c, axum, tokio, reqwest via
+# h2c) is already unconditional in this graph; only `raft-wal` still gates the
+# replication engine (raft-core) + peer-RPC HTTP client (reqwest) themselves.
+raft-runtime = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+# `lumen spec gen` — generate a typed client from lumen's own OpenAPI.
+openapi-codegen = { git = "https://github.com/faberline/core", tag = "v0.4.14", version = "0.5" }
+rayon = "1.10"
+# simdeez_f compiles anndists' SIMD distance kernels (aarch64 NEON `asimd`,
+# x86 AVX2/SSE2) for DistL2/DistDot. The cosine path routes through DistDot on
+# internally unit-normalized vectors to use the NEON kernel (DistCosine has no
+# SIMD path and recomputes both operand norms per comparison).
+hnsw_rs = { version = "0.3", features = ["simdeez_f"] }
+self_cell = "=1.2.2"
+jieba-rs = { version = "=0.7.4" }
+# K8s Operator (feature `operator`).
+kube = { version = "0.98", features = ["runtime", "derive", "client"] }
+k8s-openapi = { version = "0.24", features = ["v1_32"] }
+schemars = { version = "0.8" }
+# Shared operator scaffolding (reconcile loop + leader-election lease); lumen
+# supplies the `Lumen` CRD + render and composes the rest (epic #580).
+service-k8s = { git = "https://github.com/faberline/core", tag = "v0.4.14", default-features = false, features = ["render-only"] }
+serde_yaml = "0.9"
+lz4_flex = "0.11"
+memmap2 = "0.9"
+# Private bounded spools retain generic committed replacement values on disk.
+tempfile = "3"
+# Query destination filesystem path limits before allocating peer archive metadata.
+libc = "0.2"
+moka = { version = "0.12", features = ["sync"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+serde_path_to_error = "0.1"
+rustc-hash = "2.1"
+# Types only — `ServerConfig` / `ClientConfig` appear in
+# `access/infrastructure/tls.rs`'s signatures.
+# Every builder, PEM loader, and client verifier lives in `libs/peer-tls`
+# (#2890 R6), which is why there is no `rustls-pemfile` here to parse anything
+# locally.
+rustls = "0.23"
+# Shared peer-mTLS material loading (PEM cert/key/CA + rustls builders +
+# crypto-provider install); lumen keeps a thin adapter with its
+# `LUMEN_PEER_TLS_*`/`LUMEN_PEER_MTLS` env names (#971).
+peer-tls = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+# Shared lock-free counter/gauge/latency primitives + Prometheus text
+# encoder; lumen's `Metrics` reimplements on top with byte-identical
+# `render()` output (#974).
+metrics-prometheus = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+smallvec = "1"
+thiserror = "2.0"
+tokio = { version = "1.40", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "request-id", "util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# OpenTelemetry metrics (feature `otel`): service-http owns trace export;
+# Lumen retains only the observable engine-counter metrics exporter.
+opentelemetry = { version = "0.21" }
+opentelemetry-otlp = { version = "0.14", features = ["tonic", "metrics"] }
+opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"] }
+utoipa = { version = "4", features = ["axum_extras"] }
+
+# Test-only crates.
+axum-test = "17"
+criterion = "0.5"
+proptest = "1"
+rand = "0.8"
+rig = { git = "https://github.com/faberline/rig", rev = "1fbe487eb4a94d745447227dbc974c3eb3e9fbd5" }
+service-observability = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+tokio-postgres = "0.7"
+toml = "0.8"
+memory-stats = "1"
+wiremock = "0.6"
+jsonwebtoken = "9"
+rcgen = "0.13"
+
+# Build scripts.
+build-stamp = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
+
+# Workspace members.
+lumen-shared-kernel = { path = "crates/lumen-shared-kernel" }
+lumen-access = { path = "crates/lumen-access" }
+lumen-index = { path = "crates/lumen-index" }
+lumen-operator = { path = "crates/lumen-operator" }
+
 [workspace.lints.clippy]
 mod_module_files = "deny"
 

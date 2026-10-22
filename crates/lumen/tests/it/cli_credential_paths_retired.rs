@@ -44,8 +44,9 @@ fn needle(parts: &[&str]) -> String {
     parts.concat()
 }
 
+/// The repository root; the lumen crate lives two levels down in crates/lumen.
 fn lumen_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 
 /// Every shipped text file under `apps/lumen`, excluding `tests/` (see the
@@ -62,8 +63,14 @@ fn lumen_dir() -> PathBuf {
 fn shipped_files() -> Vec<PathBuf> {
     let root = lumen_dir();
     let mut out = Vec::new();
+    // Every crate's shipped `src/`, but not its `tests/` (see the scope note).
+    if let Ok(crates) = std::fs::read_dir(root.join("crates")) {
+        for krate in crates.flatten() {
+            collect(&krate.path().join("src"), &mut out);
+        }
+    }
+    collect(&root.join("crates/lumen/benches"), &mut out);
     for sub in [
-        "src",
         "examples",
         "docs",
         "k8s",
@@ -71,7 +78,6 @@ fn shipped_files() -> Vec<PathBuf> {
         "clients",
         "scripts",
         "observability",
-        "benches",
     ] {
         collect(&root.join(sub), &mut out);
     }
@@ -79,6 +85,7 @@ fn shipped_files() -> Vec<PathBuf> {
         "README.md",
         "CONTRIBUTING.md",
         "Cargo.toml",
+        "crates/lumen/Cargo.toml",
         "aw.toml",
         "vat.toml",
         "compose.yaml",
@@ -122,7 +129,7 @@ fn read(path: &Path) -> String {
 /// order.
 fn lumen_bin() -> String {
     let mut files = Vec::new();
-    collect(&lumen_dir().join("src/bin/lumen"), &mut files);
+    collect(&lumen_dir().join("crates/lumen/src/bin/lumen"), &mut files);
     files.sort();
     files.iter().map(|file| read(file)).collect()
 }

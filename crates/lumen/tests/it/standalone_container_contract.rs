@@ -4,8 +4,9 @@ use std::{fs, path::PathBuf};
 
 const EXPECTED_DOCKERFILES: &[&str] = &["Dockerfile", "Dockerfile.release", "Dockerfile.test"];
 
+/// The repository root; the lumen crate lives two levels down in crates/lumen.
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 
 fn discover_dockerfiles() -> Vec<String> {
@@ -52,7 +53,7 @@ fn insert_after_first_from(source: &str, instruction: &str) -> String {
     output
 }
 
-const DURABLE_SUITE: &str = "tests/it/e2e/standalone_container.rs";
+const DURABLE_SUITE: &str = "crates/lumen/tests/it/e2e/standalone_container.rs";
 /// Pins the bytes of the suite file. A comment-only edit keeps the durable
 /// semantics below but still has to update this pin, so every change to the
 /// suite is reviewed against this contract.

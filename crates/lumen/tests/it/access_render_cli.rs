@@ -252,10 +252,16 @@ fn the_instance_admin_grant_is_the_admin_resource_at_one_verb() {
 /// look like a misconfigured cluster. Pin the fact, not the consequence.
 #[test]
 fn every_admin_endpoint_still_checks_the_admin_role() {
-    // The HTTP handlers live under each context's `interfaces/http`.
-    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    // The HTTP handlers live under each context's `interfaces/http`: in
+    // `lumen-access/src/interfaces/http` and in `lumen-index/src/<context>/interfaces/http`.
+    let crates = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut handlers = Vec::new();
-    for context in std::fs::read_dir(&src).expect("read src").flatten() {
+    collect_rs(
+        &crates.join("lumen-access/src/interfaces/http"),
+        &mut handlers,
+    );
+    let index_src = crates.join("lumen-index/src");
+    for context in std::fs::read_dir(&index_src).expect("read lumen-index/src").flatten() {
         collect_rs(
             &context.path().join("interfaces").join("http"),
             &mut handlers,

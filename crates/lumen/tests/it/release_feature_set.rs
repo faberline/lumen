@@ -305,7 +305,8 @@ fn test_manifest_release_features() {
 
 #[test]
 fn test_build_surfaces_release_invocation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // The lumen crate lives in crates/lumen; the repository root is two up.
+    let base_dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
     let repo_root = base_dir;
     let surfaces = [
         base_dir.join("build.sh"),
@@ -389,7 +390,7 @@ fn test_build_surfaces_release_invocation() {
 
 #[test]
 fn test_release_preparation_updates_all_checked_in_image_pins() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let base_dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
     let build_script =
         std::fs::read_to_string(base_dir.join("build.sh")).expect("read build.sh");
     validate_release_image_pin_contract(&build_script)
@@ -479,7 +480,7 @@ fn test_release_preparation_updates_all_checked_in_image_pins() {
 
 #[test]
 fn test_release_preparation_rejects_retired_routes_and_stale_llms_guidance() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let base_dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
     let build_script = std::fs::read_to_string(base_dir.join("build.sh")).expect("read build.sh");
     let llms = std::fs::read_to_string(base_dir.join("llms.txt")).expect("read llms.txt");
     validate_release_image_pin_contract(&build_script).expect("live build route is current");

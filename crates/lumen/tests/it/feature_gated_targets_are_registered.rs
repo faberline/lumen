@@ -220,9 +220,15 @@ struct Repo {
     commands: Vec<(String, String)>,
 }
 
+/// The lumen crate: `tests/`, `Cargo.toml`.
 fn repo_root() -> PathBuf {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     manifest_dir.to_path_buf()
+}
+
+/// The repository: workflows, scripts, and docs that run test commands.
+fn workspace_root() -> PathBuf {
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).to_path_buf()
 }
 
 fn rs_stems(dir: &Path) -> Vec<String> {
@@ -263,11 +269,12 @@ fn load_repo() -> Repo {
         .filter(|s| s != "main" && s != "support")
         .collect();
     case_files.sort();
-    let commands = command_files(&root)
+    let workspace = workspace_root();
+    let commands = command_files(&workspace)
         .into_iter()
         .filter(|p| p.is_file())
         .map(|p| {
-            let rel = p.strip_prefix(&root).unwrap().display().to_string();
+            let rel = p.strip_prefix(&workspace).unwrap().display().to_string();
             (rel, read(&p))
         })
         .collect();
@@ -277,7 +284,7 @@ fn load_repo() -> Repo {
         dir_cases,
         standalone_files: rs_stems(&root.join("tests")),
         cargo_toml: read(&root.join("Cargo.toml")),
-        contributing: read(&root.join("CONTRIBUTING.md")),
+        contributing: read(&workspace.join("CONTRIBUTING.md")),
         commands,
     }
 }

@@ -1,0 +1,36 @@
+[package]
+name = "lumen-operator"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "lumen-operator — the Lumen and LumenFleet custom resources, the reconcile loops and the reshard driver"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+k8s-openapi.workspace = true
+kube.workspace = true
+lumen-access.workspace = true
+lumen-index = { workspace = true, features = ["operator", "backup"] }
+peer-tls.workspace = true
+raft-runtime.workspace = true
+reqwest.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error.workspace = true
+serde_yaml.workspace = true
+service-auth.workspace = true
+service-backup.workspace = true
+service-http.workspace = true
+service-k8s = { workspace = true, features = ["full"] }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+wiremock.workspace = true
+
+[lints]
+workspace = true

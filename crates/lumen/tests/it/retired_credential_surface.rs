@@ -84,46 +84,46 @@ struct Inventory {
 // Symbol markers use their retired_symbols() indexes. The source therefore
 // contains no literal retired symbol and cannot match itself.
 const EXPECTED_ROWS: &str = r#"
-P|src/app/spec/llm_auth.rs|4|The CRD configures **no** credential source. `spec.@4@`,
-P|src/app/spec/llm_auth.rs|6|`spec.identities` and `spec.@6@` are gone (#2872): a Lumen CR
-P|src/bin/lumen/query/tests.rs|5|// shared module (`select_token`, `cr_@5@`, `secret_data_bytes`)
-P|src/operator/domain/lumen_fleet/tests.rs|4|json!({ "@4@": "lumen-tokens" }),
-P|src/operator/domain/lumen_fleet/tests.rs|6|json!({ "@6@": ["https://lumen.example.com"] }),
-P|src/operator/infrastructure/crd_manifest/tests.rs|4,6|for retired in ["@6@", "identities", "@4@"] {
-P|src/operator/infrastructure/crd_manifest/tests.rs|4,8|assert!(!yaml.contains("@8@"), "{yaml}");
-E|tests/it/cli_convention.rs|4|"@4@",
-E|tests/it/cli_convention.rs|4,8|"@8@",
-E|tests/it/cli_convention.rs|6|"@6@",
-E|tests/it/cli_credential_paths_retired.rs|0|/// telling readers to send `Authorization: Bearer <@0@>` for as long as
-E|tests/it/cli_credential_paths_retired.rs|5|needle(&["resolve_cr_@5@", "("]),
-E|tests/it/operator_render.rs|1|assert!(!names.contains(&"@1@".to_string()));
-E|tests/it/operator_render.rs|1|"@1@",
-E|tests/it/operator_render.rs|2|"@2@",
-E|tests/it/operator_render.rs|4|// #2870: the CRD no longer teaches the retired registry. `@4@` and
-E|tests/it/operator_render.rs|1|"@1@",
-E|tests/it/operator_render.rs|2|"@2@",
-E|tests/it/operator_render.rs|6|/// checked for came from `spec.@6@`, and both are gone. The
-E|tests/it/operator_render.rs|3|"@3@",
-E|tests/it/operator_render.rs|1|"@1@",
-E|tests/it/operator_retired_credential_projection.rs|6|"@6@": ["https://lumen.acme.internal"],
-E|tests/it/operator_retired_credential_projection.rs|4|json!({ "auth": auth, "@4@": "lumen-tokens" }),
-E|tests/it/operator_retired_credential_projection.rs|4|"@4@": "lumen-tokens",
-E|tests/it/operator_retired_credential_projection.rs|6|"@6@": ["https://lumen.acme.internal"],
-E|tests/it/operator_retired_credential_projection.rs|4,8|"@8@": "lumen-tokens-spc",
-E|tests/it/operator_retired_credential_projection.rs|2|"@2@",
-E|tests/it/operator_retired_credential_projection.rs|1|"@1@",
-E|tests/it/operator_retired_credential_projection.rs|3|"@3@",
-E|tests/it/operator_retired_credential_projection.rs|1|"@1@",
-E|tests/it/operator_retired_credential_projection.rs|2|"@2@",
-E|tests/it/operator_retired_credential_projection.rs|3|"@3@",
-E|tests/it/operator_retired_credential_projection.rs|4|"@4@",
-E|tests/it/operator_retired_credential_projection.rs|4,8|"@8@",
-E|tests/it/operator_retired_credential_projection.rs|6|"@6@",
-E|tests/it/spec_cli.rs|4|"@4@",
-E|tests/it/spec_cli.rs|1|"@1@",
-E|tests/it/spec_cli.rs|3|!storage.contains("@3@"),
-E|tests/it/spec_cli.rs|1|for retired in ["Authorization: Bearer", "@1@"] {
-E|tests/it/spec_cli.rs|1|!q.contains("@1@"),
+P|crates/lumen-index/src/app/spec/llm_auth.rs|4|The CRD configures **no** credential source. `spec.@4@`,
+P|crates/lumen-index/src/app/spec/llm_auth.rs|6|`spec.identities` and `spec.@6@` are gone (#2872): a Lumen CR
+P|crates/lumen/src/bin/lumen/query/tests.rs|5|// shared module (`select_token`, `cr_@5@`, `secret_data_bytes`)
+P|crates/lumen-operator/src/domain/lumen_fleet/tests.rs|4|json!({ "@4@": "lumen-tokens" }),
+P|crates/lumen-operator/src/domain/lumen_fleet/tests.rs|6|json!({ "@6@": ["https://lumen.example.com"] }),
+P|crates/lumen-operator/src/infrastructure/crd_manifest/tests.rs|4,6|for retired in ["@6@", "identities", "@4@"] {
+P|crates/lumen-operator/src/infrastructure/crd_manifest/tests.rs|4,8|assert!(!yaml.contains("@8@"), "{yaml}");
+E|crates/lumen/tests/it/cli_convention.rs|4|"@4@",
+E|crates/lumen/tests/it/cli_convention.rs|4,8|"@8@",
+E|crates/lumen/tests/it/cli_convention.rs|6|"@6@",
+E|crates/lumen/tests/it/cli_credential_paths_retired.rs|0|/// telling readers to send `Authorization: Bearer <@0@>` for as long as
+E|crates/lumen/tests/it/cli_credential_paths_retired.rs|5|needle(&["resolve_cr_@5@", "("]),
+E|crates/lumen/tests/it/operator_render.rs|1|assert!(!names.contains(&"@1@".to_string()));
+E|crates/lumen/tests/it/operator_render.rs|1|"@1@",
+E|crates/lumen/tests/it/operator_render.rs|2|"@2@",
+E|crates/lumen/tests/it/operator_render.rs|4|// #2870: the CRD no longer teaches the retired registry. `@4@` and
+E|crates/lumen/tests/it/operator_render.rs|1|"@1@",
+E|crates/lumen/tests/it/operator_render.rs|2|"@2@",
+E|crates/lumen/tests/it/operator_render.rs|6|/// checked for came from `spec.@6@`, and both are gone. The
+E|crates/lumen/tests/it/operator_render.rs|3|"@3@",
+E|crates/lumen/tests/it/operator_render.rs|1|"@1@",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|6|"@6@": ["https://lumen.acme.internal"],
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|4|json!({ "auth": auth, "@4@": "lumen-tokens" }),
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|4|"@4@": "lumen-tokens",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|6|"@6@": ["https://lumen.acme.internal"],
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|4,8|"@8@": "lumen-tokens-spc",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|2|"@2@",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|1|"@1@",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|3|"@3@",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|1|"@1@",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|2|"@2@",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|3|"@3@",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|4|"@4@",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|4,8|"@8@",
+E|crates/lumen/tests/it/operator_retired_credential_projection.rs|6|"@6@",
+E|crates/lumen/tests/it/spec_cli.rs|4|"@4@",
+E|crates/lumen/tests/it/spec_cli.rs|1|"@1@",
+E|crates/lumen/tests/it/spec_cli.rs|3|!storage.contains("@3@"),
+E|crates/lumen/tests/it/spec_cli.rs|1|for retired in ["Authorization: Bearer", "@1@"] {
+E|crates/lumen/tests/it/spec_cli.rs|1|!q.contains("@1@"),
 E|examples/lumen-cr.yaml|4|# SubjectAccessReview. A CR that still set `@4@`, `identities` or
 E|examples/lumen-cr.yaml|6|# `@6@` is rejected by the API server, not silently ignored.
 "#;
@@ -170,17 +170,24 @@ fn expected_inventory() -> Inventory {
         inventory
             .production
             .iter()
-            .all(|row| row.path.starts_with("src/")),
+            .all(|row| is_production(&row.path)),
         "production inventory path"
     );
     assert!(
         inventory
             .evidence
             .iter()
-            .all(|row| !row.path.starts_with("src/")),
+            .all(|row| !is_production(&row.path)),
         "evidence inventory path"
     );
     inventory
+}
+
+/// Production code is a crate's `src/` tree; everything else is evidence.
+fn is_production(path: &str) -> bool {
+    path.strip_prefix("crates/")
+        .and_then(|rest| rest.split_once('/'))
+        .is_some_and(|(_, inside)| inside.starts_with("src/"))
 }
 
 fn counts(rows: &[Row]) -> BTreeMap<Row, usize> {
@@ -224,7 +231,7 @@ fn verify_inventory(actual: &[Row], expected: &Inventory) -> Result<(), String> 
     let (production, evidence): (Vec<_>, Vec<_>) = actual
         .iter()
         .cloned()
-        .partition(|row| row.path.starts_with("src/"));
+        .partition(|row| is_production(&row.path));
     let mut errors = Vec::new();
     compare_category("production", &production, &expected.production, &mut errors);
     compare_category("evidence", &evidence, &expected.evidence, &mut errors);
@@ -439,7 +446,7 @@ fn exact_inventory_rejects_required_mutations() {
 
     let mut eighth_production = baseline.clone();
     let mut extra = expected.production[0].clone();
-    extra.path = "src/extra.rs".to_string();
+    extra.path = "crates/lumen/src/extra.rs".to_string();
     eighth_production.push(extra);
     assert_ne!(eighth_production, baseline, "production fixture changed");
     assert!(
@@ -450,9 +457,9 @@ fn exact_inventory_rejects_required_mutations() {
     let mut moved_evidence = baseline.clone();
     let evidence = moved_evidence
         .iter_mut()
-        .find(|row| !row.path.starts_with("src/"))
+        .find(|row| !is_production(&row.path))
         .expect("live evidence row");
-    evidence.path = "tests/it/moved_surface.rs".to_string();
+    evidence.path = "crates/lumen/tests/it/moved_surface.rs".to_string();
     assert_ne!(moved_evidence, baseline, "evidence fixture changed");
     assert!(
         verify_inventory(&moved_evidence, &expected).is_err(),
@@ -461,7 +468,7 @@ fn exact_inventory_rejects_required_mutations() {
 
     let mut stale_expected = expected.clone();
     let mut stale = stale_expected.evidence[0].clone();
-    stale.path = "tests/it/stale_surface.rs".to_string();
+    stale.path = "crates/lumen/tests/it/stale_surface.rs".to_string();
     stale_expected.evidence.push(stale);
     assert_ne!(
         stale_expected.evidence.len(),

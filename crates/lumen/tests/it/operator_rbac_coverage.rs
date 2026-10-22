@@ -367,7 +367,7 @@ fn test_no_secrets_grant_in_rendered_cluster_role() {
 
 #[test]
 fn test_no_secret_client_in_operator_source() {
-    let operator_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/operator");
+    let operator_dir = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../lumen-operator/src"));
     let hits = scan_dir_recursive(&operator_dir);
 
     if !hits.is_empty() {

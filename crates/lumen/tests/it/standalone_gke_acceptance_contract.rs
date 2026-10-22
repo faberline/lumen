@@ -12,8 +12,9 @@ use std::process::{Command, Output};
 
 use serde_json::{json, Value};
 
+/// The repository root; the lumen crate lives two levels down in crates/lumen.
 fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 
 fn full_script() -> String {

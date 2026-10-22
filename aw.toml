@@ -29,6 +29,13 @@ target = "rust"
 test_cmd = "cargo test -p lumen --lib --bins"
 codegen.profile = "rust/score-crate"
 
+# lumen#158 cuts the index/ingest/persistence/sharding/replication cycle;
+# until then those contexts share lumen-index.
+[[standards.saas_service.exception]]
+check = "SV3"
+reason = "lumen-storage and lumen-replication wait for the context cycle cut in lumen#158"
+path = "crates/"
+
 # AW-EC-BEGIN
 [aw.ec.generated]
 version = 1

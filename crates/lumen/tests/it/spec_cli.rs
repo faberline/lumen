@@ -626,8 +626,8 @@ fn llm_storage_documents_embedded_mode_persistence_wiring() {
         "LUMEN_PERSISTENCE=segment",
         "/var/lib/lumen/raft",
         "everysec",
-        "src/persistence/infrastructure/aof.rs",
-        "src/persistence/infrastructure/segment_rdb_store.rs",
+        "crates/lumen-index/src/persistence/infrastructure/aof.rs",
+        "crates/lumen-index/src/persistence/infrastructure/segment_rdb_store.rs",
         "~1s",
         "LUMEN_SNAPSHOT_SECS",
         "Dev mode: bare `lumen serve` stays in-memory",
@@ -1808,7 +1808,8 @@ fn operator_tls_ownership_is_consistently_documented_across_surfaces() {
     let deployment_md = llm_deployment_md();
     // README carries the capability contract; there is no separate
     // CAPABILITIES.md to read, so the two canonical surfaces are these.
-    let readme = std::fs::read_to_string("README.md").expect("read README.md");
+    let readme = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../README.md"))
+        .expect("read README.md");
 
     // Both canonical surfaces describe externally provisioned TLS and no
     // longer teach the retired operator issuer/CAS/controller path.

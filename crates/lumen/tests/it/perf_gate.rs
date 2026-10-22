@@ -5800,7 +5800,7 @@ mod durable_workload {
     #[test]
     fn kube_gke_perf_overlay_passes_the_pod_contract() {
         let path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("k8s/overlays/gke-perf/statefulset.yaml");
+            Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join("k8s/overlays/gke-perf/statefulset.yaml");
         let statefulset: Value = serde_yaml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
         let mut spec = statefulset["spec"]["template"]["spec"].clone();
         assert_eq!(spec["containers"][0]["image"], "lumen");
@@ -6203,7 +6203,7 @@ mod durable_workload {
 
     #[test]
     fn kube_gke_perf_overlay_claims_dynamic_rwo_and_reads_the_cluster() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
         let statefulset: Value = serde_yaml::from_str(
             &fs::read_to_string(root.join("k8s/overlays/gke-perf/statefulset.yaml")).unwrap(),
         )

@@ -50,23 +50,23 @@ const WORKFLOW_BYTES_SHA256: &str =
     "f30ae02b3db5d81326f582a55e439e9bdab91dfe7182cfc0045603c2f77829ce";
 /// .github/workflows/gke-test.yml, which the gke-e2e job calls: deploy only.
 const GKE_TEST_WORKFLOW_BYTES_SHA256: &str =
-    "ade32fb32a0598d33ee1aee60084269113d3a94873c4da0a019e8a8556277fbc";
+    "61ea7f3d2f2173540fc75bb7b59059db75834ea77e1e49d78869a9e68e78f864";
 /// The Rust suites the GKE test Job runs, which decide pass or fail.
 const E2E_SUITE_BYTES_SHA256: &[(&str, &str)] = &[
     (
-        "tests/it/e2e/cluster.rs",
+        "crates/lumen/tests/it/e2e/cluster.rs",
         "81e86c38807cb8539a8aa172e5a7e7f995267b9099f847e1e0e101086c45bb06",
     ),
     (
-        "tests/it/e2e/operator.rs",
+        "crates/lumen/tests/it/e2e/operator.rs",
         "97a2ce1cc6cc18c0e310938e7f2ebfc3c1e38d299f08477b8a7cfb6afbee2cb6",
     ),
     (
-        "tests/it/e2e/overlay.rs",
+        "crates/lumen/tests/it/e2e/overlay.rs",
         "1f144865c047a8a265bd163635c348454eb47029f4dedc27255ebab4f488deb4",
     ),
     (
-        "tests/it/e2e/identity.rs",
+        "crates/lumen/tests/it/e2e/identity.rs",
         "a8a160d0881f0692adbf690c1b783c72a58221b74b41ea74bf7a4f873f67e0f9",
     ),
 ];
@@ -2773,19 +2773,19 @@ fn e2e_sources() -> E2eSources {
     let read = |path: &str| fs::read_to_string(root().join(path)).unwrap();
     E2eSources {
         workflow: read(".github/workflows/gke-test.yml"),
-        cluster: read("tests/it/e2e/cluster.rs"),
-        operator: read("tests/it/e2e/operator.rs"),
-        overlay: read("tests/it/e2e/overlay.rs"),
+        cluster: read("crates/lumen/tests/it/e2e/cluster.rs"),
+        operator: read("crates/lumen/tests/it/e2e/operator.rs"),
+        overlay: read("crates/lumen/tests/it/e2e/overlay.rs"),
     }
 }
 fn perf_gate_source() -> String {
-    fs::read_to_string(root().join("tests/it/perf_gate.rs")).unwrap()
+    fs::read_to_string(root().join("crates/lumen/tests/it/perf_gate.rs")).unwrap()
 }
 fn perf_workload_ledger_source() -> String {
-    fs::read_to_string(root().join("tests/it/support/perf_workload_ledger.rs")).unwrap()
+    fs::read_to_string(root().join("crates/lumen/tests/it/support/perf_workload_ledger.rs")).unwrap()
 }
 fn perf_gate_vs_db_source() -> String {
-    fs::read_to_string(root().join("tests/perf_gate_vs_db.rs")).unwrap()
+    fs::read_to_string(root().join("crates/lumen/tests/perf_gate_vs_db.rs")).unwrap()
 }
 fn lumen_scale_script() -> String {
     fs::read_to_string(root().join("scripts/lumen_scale.sh")).unwrap()

@@ -49,7 +49,7 @@ fn rust_files(dir: &Path) -> Vec<PathBuf> {
 
 #[test]
 fn lumen_owns_certificate_profiles_and_nothing_else() {
-    let lumen_cert = repo_root().join("src/operator/application/certificate.rs");
+    let lumen_cert = repo_root().join("crates/lumen-operator/src/application/certificate.rs");
     assert!(
         lumen_cert.is_file(),
         "expected Lumen's certificate profiles at {}",
@@ -92,7 +92,7 @@ fn lumen_owns_certificate_profiles_and_nothing_else() {
     for (needle, why) in forbidden {
         assert!(
             !source.contains(needle),
-            "src/operator/application/certificate.rs mentions `{needle}`: {why}"
+            "crates/lumen-operator/src/application/certificate.rs mentions `{needle}`: {why}"
         );
     }
 }
@@ -100,8 +100,8 @@ fn lumen_owns_certificate_profiles_and_nothing_else() {
 #[test]
 fn no_other_lumen_source_file_implements_a_certificate_lifecycle() {
     let root = repo_root();
-    let lumen_src = root.join("src");
-    let profiles = root.join("src/operator/application/certificate.rs");
+    let lumen_src = root.join("crates");
+    let profiles = root.join("crates/lumen-operator/src/application/certificate.rs");
 
     // These names are how a lifecycle gets built, whatever the file is called.
     let lifecycle_markers = [
@@ -111,8 +111,13 @@ fn no_other_lumen_source_file_implements_a_certificate_lifecycle() {
         "next_action(",
     ];
 
+    // Only the crates' `src/` trees: the tests name the markers on purpose.
+    let mut sources = Vec::new();
+    for krate in std::fs::read_dir(&lumen_src).expect("read crates").flatten() {
+        sources.extend(rust_files(&krate.path().join("src")));
+    }
     let mut offenders = Vec::new();
-    for path in rust_files(&lumen_src) {
+    for path in sources {
         if path == profiles {
             continue;
         }
@@ -125,7 +130,7 @@ fn no_other_lumen_source_file_implements_a_certificate_lifecycle() {
     }
     assert!(
         offenders.is_empty(),
-        "certificate lifecycle machinery appeared under src/ outside the profile module: \
+        "certificate lifecycle machinery appeared under crates/ outside the profile module: \
          {offenders:#?}"
     );
 }

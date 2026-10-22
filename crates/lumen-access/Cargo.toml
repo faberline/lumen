@@ -1,0 +1,32 @@
+[package]
+name = "lumen-access"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "lumen-access — who a caller is and what they may do, plus the serving and peer TLS material"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+lumen-shared-kernel.workspace = true
+peer-tls.workspace = true
+raft-runtime.workspace = true
+rustls.workspace = true
+service-auth.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+rcgen.workspace = true
+tempfile.workspace = true
+
+[features]
+default = []
+# The live TokenReview/SubjectAccessReview transport (see the lumen crate).
+delegated-auth = ["service-auth/k8s"]
+
+[lints]
+workspace = true

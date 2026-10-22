@@ -56,7 +56,7 @@ const POINTER: &str = "@spec";
 
 /// Files whose job is to name the retired mechanism. Each is asserted to exist,
 /// so renaming one fails this suite instead of silently widening the exemption.
-const EXEMPT: [&str; 1] = ["tests/it/design_trees_stay_retired.rs"];
+const EXEMPT: [&str; 1] = ["crates/lumen/tests/it/design_trees_stay_retired.rs"];
 
 /// Tracked files under the fifteen at the commit that introduced this file: 593;
 /// under the sixteen when `apps/tape` joined: 663.
@@ -65,8 +65,8 @@ const EXEMPT: [&str; 1] = ["tests/it/design_trees_stay_retired.rs"];
 const MIN_FILES_SWEPT: usize = 400;
 
 fn repo_root() -> PathBuf {
-    // Lumen's crate root is the repository root.
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    // The lumen crate lives in crates/lumen; the repository root is two up.
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 
 /// Walk one project, collecting its files and any design directory found on the

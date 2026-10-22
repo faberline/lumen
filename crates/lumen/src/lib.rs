@@ -28,7 +28,6 @@
 //! - `lumen-claim-security-tls-rustls` — The rustls-backed TLS surface passes the
 //!   runtime TLS gate.
 
-mod access;
 /// Local append-only log (Stage 2 Phase 2f-3): the binary's "AOF" — a framed,
 /// crash-safe record of every APPLIED `(seq, WalRecord)`. Recovery is RDB (the
 /// segment checkpoint, up to seq S) → AOF replay (S+1..A) → broker tail (A+1..),
@@ -37,7 +36,6 @@ mod access;
 /// drives the apply loop + cold-start through it.
 pub use crate::compat::aof;
 pub use crate::compat::api;
-mod app;
 pub use crate::compat::auth;
 /// `lumen backup` (#808): fetches a consistent snapshot from a running
 /// serving fleet's existing `GET /admin/backup` endpoint and hands it to a
@@ -50,12 +48,14 @@ pub use crate::compat::auth;
 pub use crate::compat::backup;
 pub use crate::compat::backup_sink;
 mod compat;
+
+use lumen_access as access;
+use lumen_index::{app, index, ingest, persistence, replication, sharding};
+use lumen_shared_kernel as shared_kernel;
 pub use crate::compat::config;
 pub use crate::compat::coordinator;
 pub use crate::compat::dx;
 pub use crate::sharding::application::consumer;
-mod index;
-mod ingest;
 pub use crate::compat::metrics;
 /// Native length-prefixed CBOR search wire for Rust clients that need the engine
 /// over a lower fixed-cost transport than HTTP/JSON.
@@ -77,7 +77,6 @@ pub use crate::compat::raft;
 /// lumen's to own — they live in the shared lib.
 #[cfg(feature = "raft-wal")]
 pub use crate::compat::raft_sm;
-mod persistence;
 pub use crate::compat::rdb;
 pub use crate::compat::reshard;
 pub use crate::compat::routing;
@@ -88,7 +87,6 @@ pub use crate::compat::routing;
 /// it via `operator`'s `backup` feature, so this adds no new crate.
 #[cfg(feature = "operator")]
 pub use crate::compat::routing_remote;
-mod replication;
 pub use crate::compat::segment_checkpoint;
 /// Segment-checkpoint persistence store (Stage 2 Phase 2f-2): the disk engine
 /// as the running binary's "RDB" — a generation-versioned directory of per-
@@ -98,8 +96,6 @@ pub use crate::compat::segment_checkpoint;
 /// default binary keeps the CBOR RDB).
 pub use crate::compat::segment_rdb;
 pub use crate::compat::segment_restore;
-mod sharding;
-mod shared_kernel;
 pub use crate::access::infrastructure::tls;
 /// Offline machine-readable self-description (`lumen spec`): OpenAPI / JSON
 /// schema, the query-shape cookbook, and the field/analyzer catalog — the

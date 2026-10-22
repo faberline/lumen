@@ -39,7 +39,7 @@
 
 use std::collections::BTreeSet;
 
-const API_RS: &str = include_str!("../../src/app/http/router.rs");
+const API_RS: &str = include_str!("../../../lumen-index/src/app/http/router.rs");
 
 /// Extract `(METHOD, path)` pairs from every `.route(` invocation in
 /// `router.rs`. Handles multi-line calls by balanced-paren scanning and reads
