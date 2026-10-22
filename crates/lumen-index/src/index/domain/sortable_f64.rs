@@ -46,7 +46,7 @@ impl SortableF64 {
     /// The raw order-preserving `u64` bit key. UNSIGNED `u64` order == numeric
     /// order (the whole point of the transform), so this is exactly the key the
     /// on-disk sorted-value range index
-    /// ([`segment`](crate::persistence::infrastructure::segment) `ROLE_NUMBER_SORTED`)
+    /// ([`segment`](crate::storage::infrastructure::segment) `ROLE_NUMBER_SORTED`)
     /// stores and binary-searches. Phase 2h-3.
     #[inline]
     pub(in crate::index) fn bits(self) -> u64 {
@@ -89,7 +89,7 @@ pub(super) fn range_is_empty(
 }
 
 /// Lower a range `Bound<SortableF64>` into the `(bits, inclusive)` shape the
-/// on-disk sorted-value range index ([`crate::persistence::infrastructure::segment::SegmentReader::number_range`])
+/// on-disk sorted-value range index ([`crate::storage::infrastructure::segment::SegmentReader::number_range`])
 /// consumes: `Included(b) -> Some((b.bits(), true))`, `Excluded(b) -> Some((b.bits(),
 /// false))`, `Unbounded -> None`. The disk reader's `number_range_window` applies
 /// exactly the same inclusive/exclusive semantics `BTreeMap::range` does, so a

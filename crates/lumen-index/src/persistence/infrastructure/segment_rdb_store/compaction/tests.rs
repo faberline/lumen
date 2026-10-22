@@ -3,17 +3,17 @@ use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, LocalRowsReference, SegmentFormat, SegmentKind, SegmentReference,
     SegmentRole,
 };
-use crate::persistence::infrastructure::segment::eid_writer::write_eid_segment;
-use crate::persistence::infrastructure::segment::sparse_rows::encode_sparse_local_rows;
-use crate::persistence::infrastructure::segment::SegmentReader;
-use crate::persistence::infrastructure::segment::{
-    keyword_writer::write_keyword_segment, number_writer::write_number_segment,
-    text_writer::write_text_segment, vector_writer::write_vector_segment,
-};
 use crate::persistence::infrastructure::segment_rdb_store::compaction::{
     validate_compaction_inputs, write_compacted_field,
 };
 use crate::persistence::infrastructure::segment_rdb_store::field_deltas::delta_path_prefix;
+use crate::storage::infrastructure::segment::eid_writer::write_eid_segment;
+use crate::storage::infrastructure::segment::sparse_rows::encode_sparse_local_rows;
+use crate::storage::infrastructure::segment::SegmentReader;
+use crate::storage::infrastructure::segment::{
+    keyword_writer::write_keyword_segment, number_writer::write_number_segment,
+    text_writer::write_text_segment, vector_writer::write_vector_segment,
+};
 use std::collections::BTreeMap;
 
 fn reference(

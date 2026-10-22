@@ -13,7 +13,7 @@ use roaring::RoaringBitmap;
 use crate::index::domain::fast_hash::FastHashMap;
 use crate::index::domain::query::range::in_sortable_bits_range;
 use crate::index::domain::sortable_f64::{SortableF64, MISSING_SORTABLE_F64_BITS};
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 /// Order-statistic snapshot of the live `values` tree: distinct value bits
 /// ascending plus cumulative doc counts. Built lazily the first time a range

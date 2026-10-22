@@ -2,17 +2,17 @@ use crate::index::domain::postings::Postings;
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, SegmentKind, SegmentRole,
 };
-use crate::persistence::infrastructure::segment::eid_writer::write_eid_segment;
-use crate::persistence::infrastructure::segment::hash_writer::write_hash_segment;
-use crate::persistence::infrastructure::segment::number_writer::write_number_segment;
-use crate::persistence::infrastructure::segment::set_writer::write_set_segment;
-use crate::persistence::infrastructure::segment::sparse_rows::{
-    decode_sparse_local_rows, encode_sparse_local_rows,
-};
-use crate::persistence::infrastructure::segment::text_writer::write_text_segment;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::compaction::tests::{inputs, reference};
 use crate::persistence::infrastructure::segment_rdb_store::compaction::write_compacted_field;
+use crate::storage::infrastructure::segment::eid_writer::write_eid_segment;
+use crate::storage::infrastructure::segment::hash_writer::write_hash_segment;
+use crate::storage::infrastructure::segment::number_writer::write_number_segment;
+use crate::storage::infrastructure::segment::set_writer::write_set_segment;
+use crate::storage::infrastructure::segment::sparse_rows::{
+    decode_sparse_local_rows, encode_sparse_local_rows,
+};
+use crate::storage::infrastructure::segment::text_writer::write_text_segment;
+use crate::storage::infrastructure::segment::SegmentReader;
 use std::collections::BTreeMap;
 
 #[test]

@@ -8,8 +8,8 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 
 use crate::index::infrastructure::staging::large_text_row::MappedToken;
-use crate::persistence::infrastructure::segment::stream::text_projection::TextStreamView;
-use crate::persistence::infrastructure::segment::SegmentReader;
+use crate::storage::infrastructure::segment::stream::text_projection::TextStreamView;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 #[derive(Clone, Copy)]
 pub(super) struct Group {

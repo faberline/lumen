@@ -11,11 +11,11 @@ use crate::index::infrastructure::committed_scalar_files::selected::Selected;
 use crate::index::application::engine::index::MAX_INDEX_ITEMS;
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
-use crate::persistence::infrastructure::segment::{
+use crate::shared_kernel::types::schema::FieldType;
+use crate::storage::infrastructure::segment::{
     stream::{self, scalar_projection::ScalarProjectionScratch},
     SegmentReader,
 };
-use crate::shared_kernel::types::schema::FieldType;
 use anyhow::{bail, ensure, Context, Result};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

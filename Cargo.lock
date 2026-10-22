@@ -3222,6 +3222,7 @@ dependencies = [
  "libc",
  "lumen-access",
  "lumen-shared-kernel",
+ "lumen-storage",
  "lz4_flex",
  "memmap2",
  "metrics-prometheus",
@@ -3303,6 +3304,26 @@ dependencies = [
  "serde",
  "serde_json",
  "utoipa",
+]
+
+[[package]]
+name = "lumen-storage"
+version = "0.6.2"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "byteorder",
+ "ciborium",
+ "crc32fast",
+ "lz4_flex",
+ "memmap2",
+ "moka",
+ "rand 0.8.6",
+ "roaring",
+ "serde",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

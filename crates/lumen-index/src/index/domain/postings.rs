@@ -108,6 +108,16 @@ impl Postings {
     }
 }
 
+/// The text segment writer reads a token's posting list through this.
+impl crate::storage::infrastructure::segment::text_writer::TokenPostings for Postings {
+    fn docids(&self) -> &[u32] {
+        &self.docids
+    }
+    fn tfs(&self) -> &[u32] {
+        &self.tfs
+    }
+}
+
 /// A token's active posting resolved for a SMALL candidate set only (#4246):
 /// the exact composed `df` plus the `(docid, tf)` pairs of those candidates the
 /// token covers, ascending. Built by [`TextIndex::tok_postings_at`] without

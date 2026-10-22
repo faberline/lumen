@@ -4,13 +4,13 @@
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, SegmentGenerationManifest, SegmentReference, SegmentRole,
 };
-use crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::field_deltas::delta_path_prefix;
 use crate::persistence::infrastructure::segment_rdb_store::flat_layout::{
     collection_checkpoint_dir_name, flat_layout, flat_payload_name,
 };
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::PriorCatalog;
+use crate::storage::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
+use crate::storage::infrastructure::segment::SegmentReader;
 use anyhow::{anyhow, bail, Context, Result};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};

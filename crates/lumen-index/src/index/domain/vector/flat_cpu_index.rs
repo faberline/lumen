@@ -41,7 +41,7 @@ enum FlatLocation {
 }
 
 struct FlatLayer {
-    reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+    reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
 }
 
 /// A stable EID slot has one current source.  Mmap sources are immutable;
@@ -50,7 +50,7 @@ pub(super) struct FlatVecs {
     pub(super) data: HashMap<u32, Vec<f32>>,
     eids: Vec<String>,
     dim: usize,
-    pub(super) seg: Option<Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
+    pub(super) seg: Option<Arc<crate::storage::infrastructure::segment::SegmentReader>>,
     pub(super) n_base: usize,
     tomb: roaring::RoaringBitmap,
     eid_to_row: HashMap<String, u32>,
@@ -170,14 +170,13 @@ impl FlatCpuIndex {
             .iter()
             .map(|(_, value)| Some(value.as_slice()))
             .collect();
-        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+        crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
             path,
             sequence.unwrap_or(rows.len() as u64),
             flat.dim,
             &refs,
         )?;
-        let reader =
-            Arc::new(crate::persistence::infrastructure::segment::SegmentReader::open(path)?);
+        let reader = Arc::new(crate::storage::infrastructure::segment::SegmentReader::open(path)?);
         let eids: Vec<String> = rows.into_iter().map(|(eid, _)| eid).collect();
         flat.data.clear();
         flat.eid_to_row = eids
@@ -205,7 +204,7 @@ impl FlatCpuIndex {
 
     pub fn open_from_segment(
         spec: VectorSpec,
-        seg: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        seg: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         row_eids: Vec<String>,
     ) -> Result<Self> {
         let dim = spec.dim as usize;

@@ -10,8 +10,8 @@ use crate::index::domain::postings::Postings;
 use crate::index::domain::text_index::TextIndex;
 use crate::index::domain::text_index::{reset_staged_term_probes, staged_term_probes};
 use crate::index::infrastructure::staging::staged_text_row;
-use crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions;
 use crate::shared_kernel::types::schema::Analyzer;
+use crate::storage::infrastructure::segment::text_row_stage::TextRowStageOptions;
 
 fn staged_row(input: &str) -> Arc<staged_text_row::StagedTextRow> {
     Arc::new(

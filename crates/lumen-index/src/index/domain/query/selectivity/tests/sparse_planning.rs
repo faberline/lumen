@@ -18,7 +18,7 @@ use crate::shared_kernel::types::query::QueryNode;
 use crate::shared_kernel::types::schema::Analyzer;
 
 fn sparse_layered_match_does_not_materialize_for_planning(general: bool, analyzer: Analyzer) {
-    use crate::persistence::infrastructure::composed_segment::TextPostingAt;
+    use crate::storage::infrastructure::composed_segment::TextPostingAt;
 
     let e = Arc::new(Engine::new());
     let mut schema = schema();
@@ -62,7 +62,7 @@ fn sparse_layered_match_does_not_materialize_for_planning(general: bool, analyze
         posting.upsert(0, posting.tf(0).unwrap_or(0) + 1);
     }
     let layer_path = dir.path().join("replacement.lseg");
-    crate::persistence::infrastructure::segment::text_writer::write_text_segment(
+    crate::storage::infrastructure::segment::text_writer::write_text_segment(
         &layer_path,
         1,
         &postings,
@@ -73,7 +73,7 @@ fn sparse_layered_match_does_not_materialize_for_planning(general: bool, analyze
     )
     .unwrap();
     let reader = Arc::new(
-        crate::persistence::infrastructure::segment::SegmentReader::open(&layer_path).unwrap(),
+        crate::storage::infrastructure::segment::SegmentReader::open(&layer_path).unwrap(),
     );
     let segment = {
         let mut state = e.state.write().unwrap();
@@ -99,9 +99,9 @@ fn sparse_layered_match_does_not_materialize_for_planning(general: bool, analyze
         Some(TextPostingAt::Sparse { .. })
     ));
 
-    crate::persistence::infrastructure::composed_segment::reset_text_term_probes();
+    crate::storage::infrastructure::composed_segment::reset_text_term_probes();
     assert_eq!(run(&e, query), expected, "layered BM25 score bits");
-    let probes = crate::persistence::infrastructure::composed_segment::text_term_probes();
+    let probes = crate::storage::infrastructure::composed_segment::text_term_probes();
     let distinct = tokens.iter().collect::<BTreeSet<_>>().len() as u64;
     assert!(probes > 0, "the query must read the layered index");
     assert!(

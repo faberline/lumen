@@ -18,9 +18,9 @@ use crate::index::domain::text_index::TextIndex;
 use crate::index::domain::vector::flat_cpu_index::FlatCpuIndex;
 use crate::index::domain::vector::hnsw_cpu_index::HnswCpuIndex;
 use crate::index::domain::vector::VectorIndex;
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, FieldType};
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 pub(in crate::index) type VectorCoverageRecorder<'a> =
     &'a mut dyn FnMut(&SegmentReader, &[String], usize);
@@ -62,7 +62,7 @@ impl FieldIndex {
     ) -> Result<FieldIndex> {
         let path = dir.join(format!("{field_name}.lseg"));
         let reader = std::sync::Arc::new(
-            crate::persistence::infrastructure::segment::SegmentReader::open(&path)?,
+            crate::storage::infrastructure::segment::SegmentReader::open(&path)?,
         );
         // The per-arm reopen reads coverage straight off the reader (e.g. the Text
         // arm via `text_doc_count`/`text_total_doc_len`); no whole-`n_docs` rebuild.

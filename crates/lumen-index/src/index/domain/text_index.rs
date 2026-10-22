@@ -17,7 +17,7 @@ use crate::index::domain::fast_hash::FastHashMap;
 use crate::index::domain::postings::Postings;
 use crate::index::domain::query::rank::MatchRankCache;
 use crate::index::domain::token_set::TokenSet;
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 #[cfg(test)]
 thread_local! {

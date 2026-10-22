@@ -11,11 +11,11 @@ use crate::index::application::checkpoint_capture::{
 use crate::index::domain::collection::{Collection, FieldDirtySnapshot};
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::sortable_f64::{SortableF64, MISSING_SORTABLE_F64_BITS};
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 pub(super) fn attach_delta_reader(
     index: &mut FieldIndex,
-    reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+    reader: std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>,
     ids: Vec<u32>,
 ) -> Result<()> {
     let attach = |segment: &mut Option<std::sync::Arc<ComposedSegmentReader>>| {
@@ -37,7 +37,7 @@ pub(super) fn attach_delta_reader(
 
 pub(super) fn live_delta_readers(
     index: &FieldIndex,
-) -> Vec<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
+) -> Vec<std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>> {
     let segment = match index {
         FieldIndex::Keyword(index) => &index.segment,
         FieldIndex::Number(index) => &index.segment,
@@ -54,7 +54,7 @@ pub(super) fn live_delta_readers(
 
 pub(super) fn live_base_reader(
     index: &FieldIndex,
-) -> Option<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
+) -> Option<std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>> {
     let segment = match index {
         FieldIndex::Keyword(index) => &index.segment,
         FieldIndex::Number(index) => &index.segment,

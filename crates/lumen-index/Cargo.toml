@@ -25,6 +25,7 @@ jieba-rs = { workspace = true, optional = true }
 libc.workspace = true
 lumen-access.workspace = true
 lumen-shared-kernel.workspace = true
+lumen-storage.workspace = true
 lz4_flex.workspace = true
 memmap2.workspace = true
 metrics-prometheus.workspace = true
@@ -59,6 +60,7 @@ utoipa.workspace = true
 build-stamp.workspace = true
 
 [dev-dependencies]
+lumen-storage = { workspace = true, features = ["test-support"] }
 proptest.workspace = true
 rand.workspace = true
 service-observability.workspace = true

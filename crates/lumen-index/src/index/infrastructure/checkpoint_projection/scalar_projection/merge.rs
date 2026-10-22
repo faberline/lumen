@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 
 use anyhow::{anyhow, Result};
 
-use crate::persistence::infrastructure::segment::SegmentReader;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 pub(super) struct ReaderTerms<'a> {
     reader: &'a SegmentReader,

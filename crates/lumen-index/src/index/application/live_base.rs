@@ -10,7 +10,7 @@ use crate::index::application::checkpoint_capture::PreparedCheckpointField;
 use crate::index::application::live_delta::retire_live_delta_overlay;
 use crate::index::domain::collection::{Collection, FieldDirtySnapshot};
 use crate::index::domain::field_index::FieldIndex;
-use crate::persistence::infrastructure::composed_segment::{
+use crate::storage::infrastructure::composed_segment::{
     ComposedSegmentReader, PreparedScalarPublication,
 };
 

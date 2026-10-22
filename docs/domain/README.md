@@ -11,7 +11,8 @@ The [architecture guide](../architecture.md) explains the runtime boundaries.
 | `sharding` | Bucket ownership, request routing and resharding | [Sharding](sharding.md) |
 | `replication` | Raft group, pod role and cluster config | [Replication](replication.md) |
 | `ingest` | Write records, pending-change capacity, ordered apply and the raft state machine | [Ingest](ingest.md) |
-| `persistence` | Segments, checkpoints, AOF, restore and merge | [Persistence](persistence.md) |
+| `persistence` | Checkpoints, AOF, restore and merge | [Persistence](persistence.md) |
+| `storage` | The segment file format, its writers and its readers | [Storage](storage.md) |
 | `index` | Field indexes, queries and the engine | [Index](index.md) |
 | `shared_kernel` | Shared wire types, log entries, the capture barrier and cross-crate ports | [Shared kernel](shared-kernel.md) |
 

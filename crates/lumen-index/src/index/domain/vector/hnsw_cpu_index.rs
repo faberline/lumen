@@ -323,7 +323,7 @@ impl HnswCpuIndex {
     /// [`FlatCpuIndex::open_from_segment`]: super::flat_cpu_index::FlatCpuIndex::open_from_segment
     pub fn open_from_segment(
         spec: VectorSpec,
-        seg: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        seg: std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>,
         row_eids: Vec<String>,
     ) -> Result<Self> {
         let dim = spec.dim as usize;

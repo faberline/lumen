@@ -4,11 +4,11 @@ use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::index::infrastructure::checkpoint_projection::scalar_projection::write_checkpoint_rows;
 use crate::ingest::domain::change_journal::SharedValue;
-use crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment;
-use crate::persistence::infrastructure::segment::number_writer::write_number_segment;
-use crate::persistence::infrastructure::segment::set_writer::write_set_segment;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::shared_kernel::types::schema::FieldType;
+use crate::storage::infrastructure::segment::keyword_writer::write_keyword_segment;
+use crate::storage::infrastructure::segment::number_writer::write_number_segment;
+use crate::storage::infrastructure::segment::set_writer::write_set_segment;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 fn owned(value: CheckpointValue) -> SharedValue<CheckpointValue> {
     SharedValue::new(Arc::new(value), None)

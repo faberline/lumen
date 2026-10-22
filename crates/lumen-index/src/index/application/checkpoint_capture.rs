@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::index::domain::collection::FieldDirtySnapshot;
 use crate::index::domain::field_index::FieldIndex;
-use crate::persistence::infrastructure::composed_segment::{
+use crate::storage::infrastructure::composed_segment::{
     PreparedScalarPublication, PreparedScalarReplacement, ScalarCheckpointCut,
 };
 
@@ -26,7 +26,7 @@ pub(crate) enum CheckpointValue {
     /// File-backed value kept by the immutable dirty journal. The reader owns
     /// its private directory until every live reader and checkpoint releases it.
     StagedScalar {
-        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         row: u32,
     },
     Keyword(String),
@@ -44,7 +44,7 @@ pub(crate) struct PreparedCheckpointField {
     pub(super) name: String,
     pub(super) index: FieldIndex,
     pub(super) vector_base: Option<(
-        std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>,
         Vec<String>,
     )>,
 }
@@ -53,15 +53,15 @@ pub(crate) struct PreparedCheckpointField {
 /// installed only after the generation is durable and published.
 pub(crate) struct PreparedCheckpointDelta {
     pub field: String,
-    pub reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+    pub reader: std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>,
     pub external_ids: Vec<String>,
 }
 
 pub(crate) struct PreparedCheckpointCompaction {
     pub field: String,
-    pub base: Option<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
-    pub inputs: Vec<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
-    pub reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+    pub base: Option<std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>>,
+    pub inputs: Vec<std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>>,
+    pub reader: std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>,
     pub external_ids: Vec<String>,
     pub scalar: Option<PreparedScalarReplacement>,
 }
@@ -88,15 +88,12 @@ pub(crate) struct CheckpointCapture {
         String,
         BTreeMap<
             String,
-            Vec<std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>>,
+            Vec<std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>>,
         >,
     >,
     pub live_base_inputs: BTreeMap<
         String,
-        BTreeMap<
-            String,
-            std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
-        >,
+        BTreeMap<String, std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>>,
     >,
     pub collections: BTreeMap<String, CheckpointCollectionIdentity>,
     pub next_generation: u64,

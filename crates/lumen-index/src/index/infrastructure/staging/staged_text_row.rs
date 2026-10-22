@@ -19,11 +19,11 @@ use crate::index::domain::analysis::jieba_fallback_stream;
 use crate::index::domain::analysis::{ngram_stream, tokenize};
 #[cfg(feature = "jieba")]
 use crate::index::infrastructure::analysis::jieba_disk_route;
-use crate::persistence::infrastructure::segment::text_row_stage::{
+use crate::shared_kernel::types::schema::Analyzer;
+use crate::storage::infrastructure::segment::text_row_stage::{
     stage_text_row, TextRowStageOptions, TextTokenStream,
 };
-use crate::persistence::infrastructure::segment::SegmentReader;
-use crate::shared_kernel::types::schema::Analyzer;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 static STAGED_TEXT_ROW_NONCE: AtomicU64 = AtomicU64::new(0);
 

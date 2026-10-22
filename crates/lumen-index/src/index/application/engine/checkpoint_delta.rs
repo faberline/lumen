@@ -112,7 +112,7 @@ impl Engine {
         &self,
         collection_id: &str,
         field: &str,
-        reader: std::sync::Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        reader: std::sync::Arc<crate::storage::infrastructure::segment::SegmentReader>,
         external_ids: Vec<String>,
     ) -> Result<()> {
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;

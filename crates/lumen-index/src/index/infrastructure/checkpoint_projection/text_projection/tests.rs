@@ -5,12 +5,12 @@ use std::sync::Arc;
 use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::infrastructure::checkpoint_projection::text_projection::rows::RowsProjection;
 use crate::index::infrastructure::checkpoint_projection::text_projection::write_checkpoint_rows;
-use crate::persistence::infrastructure::segment::stream::text_projection::{
+use crate::shared_kernel::types::schema::Analyzer;
+use crate::storage::infrastructure::segment::stream::text_projection::{
     write_text_projection, TextStreamView,
 };
-use crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions;
-use crate::persistence::infrastructure::segment::SegmentReader;
-use crate::shared_kernel::types::schema::Analyzer;
+use crate::storage::infrastructure::segment::text_row_stage::TextRowStageOptions;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 use std::cell::Cell;
 

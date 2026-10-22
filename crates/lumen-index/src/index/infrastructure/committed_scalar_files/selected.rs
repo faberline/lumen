@@ -6,7 +6,7 @@ use anyhow::Result;
 
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexItem, FastIndexValue};
-use crate::persistence::infrastructure::segment::stream;
+use crate::storage::infrastructure::segment::stream;
 
 pub(super) struct Selected<'view, 'source> {
     pub(super) items: &'view [FastIndexItem<'source>],

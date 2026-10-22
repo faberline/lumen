@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use crate::index::domain::postings::{Postings, TokPostings};
 use crate::index::domain::text_index::query::count_common_sorted;
 use crate::index::domain::text_index::TextIndex;
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::types::schema::Analyzer;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 #[test]
 fn tok_probe_wiring_through_text_index_staged_overrides_live() {
@@ -26,7 +26,7 @@ fn tok_probe_wiring_through_text_index_staged_overrides_live() {
             crate::index::infrastructure::staging::staged_text_row::StagedTextRow::stage(
                 "tok",
                 Analyzer::WhitespaceLower,
-                crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes()
+                crate::storage::infrastructure::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes()
                     + 4096,
                 |_| Ok(()),
             )
@@ -92,12 +92,12 @@ pub(in crate::index::domain) fn sparse_fixture(
     let doc_count = present.iter().filter(|p| **p).count() as u64;
     let total_len: u64 = lens.iter().map(|&l| u64::from(l)).sum();
     let path = dir.join(format!("f{seed}.lseg"));
-    crate::persistence::infrastructure::segment::text_writer::write_text_segment(
+    crate::storage::infrastructure::segment::text_writer::write_text_segment(
         &path, 7, &sealed, &lens, &present, doc_count, total_len,
     )
     .expect("seal fixture");
-    let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)
-        .expect("open fixture");
+    let reader =
+        crate::storage::infrastructure::segment::SegmentReader::open(&path).expect("open fixture");
     if resident {
         for tok in &tokens {
             let _ = reader.text_postings_arc(tok);
@@ -144,7 +144,7 @@ pub(in crate::index::domain) fn sparse_fixture(
         let row = crate::index::infrastructure::staging::staged_text_row::StagedTextRow::stage(
             text.trim_end(),
             Analyzer::WhitespaceLower,
-            crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes() + 4096,
+            crate::storage::infrastructure::segment::text_row_stage::TextRowStageOptions::minimum_scratch_bytes() + 4096,
             |_| Ok(()),
         )
         .expect("stage row");

@@ -158,6 +158,7 @@ lumen-access = { path = "crates/lumen-access" }
 lumen-index = { path = "crates/lumen-index" }
 lumen-operator = { path = "crates/lumen-operator" }
 lumen-replication = { path = "crates/lumen-replication" }
+lumen-storage = { path = "crates/lumen-storage" }
 
 [workspace.lints.clippy]
 mod_module_files = "deny"

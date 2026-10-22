@@ -1,11 +1,11 @@
 use crate::index::application::engine::Engine;
-use crate::persistence::infrastructure::composed_segment::{
-    reset_text_posting_clones, reset_text_term_probes, text_posting_clones, text_term_probes,
-};
 use crate::persistence::infrastructure::segment_rdb_store::tests::{
     committed_text, index_kw, text_schema,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
+use crate::storage::infrastructure::composed_segment::{
+    reset_text_posting_clones, reset_text_term_probes, text_posting_clones, text_term_probes,
+};
 use std::sync::Arc;
 
 /// #4246: `/stats` counts distinct Text terms. Counting must not

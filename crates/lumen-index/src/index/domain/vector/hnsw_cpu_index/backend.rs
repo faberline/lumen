@@ -338,7 +338,7 @@ impl HnswCpuIndex {
             row_vecs.push(v);
         }
         let vectors: Vec<Option<&[f32]>> = row_vecs.iter().map(|v| Some(v.as_slice())).collect();
-        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+        crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
             path,
             sequence.unwrap_or(n as u64),
             dim,
@@ -351,8 +351,8 @@ impl HnswCpuIndex {
         // than at the next restart with nothing left to recover. The reopen is
         // one header read against a file the page cache still holds — it is not
         // the cost that would justify compiling it out.
-        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(path)
-            .map_err(|e| {
+        let reader =
+            crate::storage::infrastructure::segment::SegmentReader::open(path).map_err(|e| {
                 anyhow!(
                     "vector segment written to {} could not be read back: {e}",
                     path.display()

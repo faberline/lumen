@@ -8,7 +8,7 @@ use anyhow::Result;
 use roaring::RoaringBitmap;
 
 use crate::index::domain::fast_hash::FastHashMap;
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 #[derive(Debug, Default)]
 pub(in crate::index) struct KeywordIndex {

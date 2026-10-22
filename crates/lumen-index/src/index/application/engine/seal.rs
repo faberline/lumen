@@ -13,7 +13,7 @@ use roaring::RoaringBitmap;
 use crate::index::application::engine::Engine;
 use crate::index::domain::fast_hash::FastHashMap;
 use crate::index::domain::field_index::FieldIndex;
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 // ---------------------------------------------------------------------------
 // Test seam: seal a Number field to a disk segment (disk tier)
@@ -25,8 +25,8 @@ impl Engine {
     /// field into a columnar mmap segment under `dir`, then attach it so per-doc
     /// PREDICATE point lookups read the segment for the sealed id range. Mirrors
     /// what a real flush would do: dumps `forward` in dense docid order
-    /// `[0..n_docs)` (absent docs → `None`) via [`crate::persistence::infrastructure::segment::number_writer::write_number_segment`],
-    /// opens a [`crate::persistence::infrastructure::segment::SegmentReader`], and sets `NumberIndex::segment`.
+    /// `[0..n_docs)` (absent docs → `None`) via [`crate::storage::infrastructure::segment::number_writer::write_number_segment`],
+    /// opens a [`crate::storage::infrastructure::segment::SegmentReader`], and sets `NumberIndex::segment`.
     ///
     /// `n_docs` is the interner's dense id count, so any doc indexed AFTER
     /// sealing (id >= n_docs) is NOT covered by the segment and stays served
@@ -58,12 +58,12 @@ impl Engine {
             .collect();
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::persistence::infrastructure::segment::number_writer::write_number_segment(
+        crate::storage::infrastructure::segment::number_writer::write_number_segment(
             &path,
             n_docs as u64,
             &values,
         )?;
-        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+        let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
         n.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
             std::sync::Arc::new(reader),
@@ -91,7 +91,7 @@ impl Engine {
     /// Term/Terms/boolean driver (`term_postings`/`term_df`) serve the sealed id
     /// range from the segment. Dumps `forward` in dense docid order
     /// `[0..n_docs)` (absent docs → `None`) plus the INVERTED postings (folded
-    /// from `forward`) via [`crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment`] — a sorted
+    /// from `forward`) via [`crate::storage::infrastructure::segment::keyword_writer::write_keyword_segment`] — a sorted
     /// prefix-compressed string DICT + a fixed `u32[n_docs]` dict-id forward
     /// column + a parallel per-term [`ROLE_KEYWORD_POSTINGS`] posting column.
     ///
@@ -133,13 +133,13 @@ impl Engine {
         }
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
+        crate::storage::infrastructure::segment::keyword_writer::write_keyword_segment(
             &path,
             n_docs as u64,
             &values,
             &terms,
         )?;
-        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+        let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
         k.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
             std::sync::Arc::new(reader),
@@ -163,7 +163,7 @@ impl Engine {
     /// / `element_df`) serve the sealed id range from the segment. Dumps
     /// `forward` in dense docid order `[0..n_docs)` (absent docs → `None`,
     /// present-empty → `Some(&[])`) plus the INVERTED postings (folded from
-    /// `forward`) via [`crate::persistence::infrastructure::segment::set_writer::write_set_segment`] — a shared sorted
+    /// `forward`) via [`crate::storage::infrastructure::segment::set_writer::write_set_segment`] — a shared sorted
     /// string DICT + a fixed `u32[n_docs + 1]` CSR offsets column + a fixed
     /// packed dict-id column + a parallel per-element [`ROLE_SET_POSTINGS`]
     /// posting column.
@@ -212,13 +212,13 @@ impl Engine {
         }
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::persistence::infrastructure::segment::set_writer::write_set_segment(
+        crate::storage::infrastructure::segment::set_writer::write_set_segment(
             &path,
             n_docs as u64,
             &values,
             &elements,
         )?;
-        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+        let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
         s.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
             std::sync::Arc::new(reader),
@@ -242,7 +242,7 @@ impl Engine {
     /// so unlike the Keyword/Set seams the inverted postings ARE stored: a sorted
     /// token DICT + a parallel per-token STORED posting block + a fixed
     /// `u32[n_docs]` DocLen column + the BM25 corpus scalars in the header (see
-    /// [`crate::persistence::infrastructure::segment::text_writer::write_text_segment`]).
+    /// [`crate::storage::infrastructure::segment::text_writer::write_text_segment`]).
     ///
     /// This slice seals the whole field for ids `[0..n_docs)`. Phase 2h-4: after
     /// attaching, the bulky sealed-base `tokens` postings AND `distinct` AND
@@ -276,7 +276,7 @@ impl Engine {
         let tokens = idx.tokens_for_seal(&|_| true);
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::persistence::infrastructure::segment::text_writer::write_text_segment(
+        crate::storage::infrastructure::segment::text_writer::write_text_segment(
             &path,
             n_docs as u64,
             &tokens,
@@ -285,7 +285,7 @@ impl Engine {
             idx.doc_count,
             idx.total_doc_len,
         )?;
-        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+        let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
 
         idx.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
@@ -309,7 +309,7 @@ impl Engine {
     /// columnar mmap segment under `dir`, then attach it so the per-doc Hamming
     /// hash read (`hash_at`) serves the sealed id range from the segment. Dumps
     /// `forward` in dense docid order `[0..n_docs)` (absent docs → `None`) via
-    /// [`crate::persistence::infrastructure::segment::hash_writer::write_hash_segment`]. Mirrors the Number seam. Returns
+    /// [`crate::storage::infrastructure::segment::hash_writer::write_hash_segment`]. Mirrors the Number seam. Returns
     /// the sealed doc count.
     pub(in crate::index) fn __seal_hash_field_to_segment(
         &self,
@@ -335,12 +335,12 @@ impl Engine {
             .collect();
 
         let path = dir.join(format!("{field}.lseg"));
-        crate::persistence::infrastructure::segment::hash_writer::write_hash_segment(
+        crate::storage::infrastructure::segment::hash_writer::write_hash_segment(
             &path,
             n_docs as u64,
             &values,
         )?;
-        let reader = crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+        let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
         debug_assert_eq!(reader.n_docs() as usize, n_docs);
         h.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
             std::sync::Arc::new(reader),

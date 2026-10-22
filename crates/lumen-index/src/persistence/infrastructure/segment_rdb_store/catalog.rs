@@ -6,8 +6,6 @@ use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, SegmentFormat, SegmentGenerationManifest, SegmentKind, SegmentReference,
     SegmentRole,
 };
-use crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::delta_integrity::{
     base_payload_sha256, delta_payload_sha256, is_inherited_delta, validate_field_delta,
 };
@@ -18,6 +16,8 @@ use crate::persistence::infrastructure::segment_rdb_store::manifest_io::PriorCat
 use crate::persistence::infrastructure::segment_rdb_store::{
     CHECKPOINT_SCHEMA_FILE, GENERATION_MANIFEST_FILE, GENERATION_MANIFEST_V3,
 };
+use crate::storage::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
+use crate::storage::infrastructure::segment::SegmentReader;
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

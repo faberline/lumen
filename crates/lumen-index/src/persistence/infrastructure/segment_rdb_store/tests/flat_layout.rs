@@ -1,12 +1,12 @@
 use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::SegmentKind;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::catalog::validate_catalog_references;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::read_generation_manifest;
 use crate::persistence::infrastructure::segment_rdb_store::tests::{
     current_generation, index_kw, index_kw_in, kw_schema,
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
+use crate::storage::infrastructure::segment::SegmentReader;
 use std::path::Path;
 use std::sync::Arc;
 use storage_durable::CurrentTarget;
