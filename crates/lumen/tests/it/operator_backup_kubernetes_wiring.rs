@@ -131,7 +131,7 @@ fn backup_service_account_is_stable_when_schedule_is_disabled() {
 }
 
 fn operator_cluster_role() -> serde_yaml::Value {
-    let documents = serde_yaml::Deserializer::from_str(include_str!("../../k8s/operator/rbac.yaml"));
+    let documents = serde_yaml::Deserializer::from_str(include_str!("../../../../k8s/operator/rbac.yaml"));
     documents
         .map(|document| serde_yaml::Value::deserialize(document).expect("RBAC document parses"))
         .find(|document| document["kind"] == "ClusterRole")
@@ -318,8 +318,8 @@ fn operator_cli_renders_requested_immutable_image_and_preserves_default() {
 /// Every document the `k8s/operator` kustomization installs, parsed.
 fn operator_manifest_documents() -> Vec<serde_yaml::Value> {
     [
-        include_str!("../../k8s/operator/deployment.yaml"),
-        include_str!("../../k8s/operator/pdb.yaml"),
+        include_str!("../../../../k8s/operator/deployment.yaml"),
+        include_str!("../../../../k8s/operator/pdb.yaml"),
     ]
     .iter()
     .flat_map(|source| {
@@ -443,7 +443,7 @@ fn operator_render_and_static_manifest_agree_on_the_ha_shape() {
 
     // The kustomization must actually install what render emits, or the two
     // consumer paths silently diverge again the next time one side changes.
-    let kustomization = include_str!("../../k8s/operator/kustomization.yaml");
+    let kustomization = include_str!("../../../../k8s/operator/kustomization.yaml");
     assert!(
         kustomization.contains("- pdb.yaml"),
         "k8s/operator/kustomization.yaml does not install pdb.yaml"
@@ -457,7 +457,7 @@ fn operator_render_and_static_manifest_agree_on_the_ha_shape() {
 /// fails the render instead of silently handing out a stale image.
 #[test]
 fn operator_manifest_pins_this_workspaces_version() {
-    let deployment = include_str!("../../k8s/operator/deployment.yaml");
+    let deployment = include_str!("../../../../k8s/operator/deployment.yaml");
     assert!(
         deployment.contains(&format!(
             "image: ghcr.io/faberline/lumen:{}",
@@ -546,7 +546,7 @@ fn operator_metrics_service_selects_the_pods_on_the_port_they_publish() {
 
     // Both consumer paths install it, or they diverge again.
     assert!(
-        include_str!("../../k8s/operator/kustomization.yaml").contains("- service.yaml"),
+        include_str!("../../../../k8s/operator/kustomization.yaml").contains("- service.yaml"),
         "k8s/operator/kustomization.yaml does not install service.yaml"
     );
 }
@@ -596,7 +596,7 @@ fn monitoring_objects_are_opt_in_on_both_consumer_paths() {
     assert_eq!(monitor["spec"]["endpoints"][0]["path"], "/metrics");
 
     assert!(
-        include_str!("../../k8s/components/operator-monitoring/kustomization.yaml")
+        include_str!("../../../../k8s/components/operator-monitoring/kustomization.yaml")
             .contains("- servicemonitor.yaml"),
         "the operator-monitoring component does not install servicemonitor.yaml"
     );
@@ -716,7 +716,7 @@ fn promtool_accepts_the_rendered_expressions_and_annotation_templates() {
     // promtool reads a bare rules file, not the CRD wrapper — unwrap `spec`,
     // which is exactly what prometheus-operator hands the Prometheus pod.
     let rule: serde_yaml::Value = serde_yaml::from_str(include_str!(
-        "../../k8s/components/operator-monitoring/prometheusrule.yaml"
+        "../../../../k8s/components/operator-monitoring/prometheusrule.yaml"
     ))
     .expect("PrometheusRule parses");
     let path = std::env::temp_dir().join("lumen-operator-rules-2621.yaml");

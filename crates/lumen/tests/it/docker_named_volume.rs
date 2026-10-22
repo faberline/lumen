@@ -9,7 +9,7 @@ use std::process::Command;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn repo_root() -> PathBuf {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
     manifest
 }
 

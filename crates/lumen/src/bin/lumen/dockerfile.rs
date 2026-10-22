@@ -51,14 +51,14 @@ fn dockerfile_next_command(
 }
 
 fn render_source_dockerfile() -> String {
-    cli_std::artifact::strip_source_ownership_markers(include_str!("../../../Dockerfile"))
+    cli_std::artifact::strip_source_ownership_markers(include_str!("../../../../../Dockerfile"))
 }
 
 fn render_release_dockerfile(version: Option<&str>) -> String {
     let tag = cli_std::artifact::release_tag("lumen", version, env!("CARGO_PKG_VERSION"));
     let version = tag.trim_start_matches("lumen@");
     let template = cli_std::artifact::strip_source_ownership_markers(include_str!(
-        "../../../Dockerfile.release"
+        "../../../../../Dockerfile.release"
     ));
     let mut out = String::new();
     for line in template.lines() {

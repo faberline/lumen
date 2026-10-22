@@ -13,8 +13,8 @@
 
 use std::collections::BTreeSet;
 
-const AW_TOML: &str = include_str!("../../aw.toml");
-const README: &str = include_str!("../../README.md");
+const AW_TOML: &str = include_str!("../../../../aw.toml");
+const README: &str = include_str!("../../../../README.md");
 const CARGO_TOML: &str = include_str!("../../Cargo.toml");
 /// The `lumen` binary: every file under `src/bin/lumen/`.
 const CLI: &str = concat!(

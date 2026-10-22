@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 /// Lumen's crate root is the repository root.
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 
 fn read(path: &Path) -> String {

@@ -135,7 +135,7 @@ fn crd_yaml() -> String {
 
 #[cfg(not(feature = "operator"))]
 fn crd_yaml() -> String {
-    cli_std::artifact::ensure_trailing_newline(include_str!("../../../k8s/operator/crd.yaml"))
+    cli_std::artifact::ensure_trailing_newline(include_str!("../../../../../k8s/operator/crd.yaml"))
 }
 
 /// Write `body` to `--out` (or stream it to stdout when `out` is `None`).

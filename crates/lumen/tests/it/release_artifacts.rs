@@ -35,7 +35,7 @@ struct Inputs {
 }
 
 #[rustfmt::skip]
-fn root() -> PathBuf { PathBuf::from(env!("CARGO_MANIFEST_DIR")) }
+fn root() -> PathBuf { PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")) }
 fn between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     source
         .split_once(start)

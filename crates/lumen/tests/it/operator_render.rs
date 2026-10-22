@@ -1295,7 +1295,7 @@ fn crd_yaml_emits_lumen_definition() {
 #[test]
 fn checked_in_crd_yaml_matches_the_renderer() {
     let rendered = lumen::operator::crd_yaml();
-    let checked_in = include_str!("../../k8s/operator/crd.yaml");
+    let checked_in = include_str!("../../../../k8s/operator/crd.yaml");
     assert_eq!(
         checked_in, rendered,
         "k8s/operator/crd.yaml is stale — regenerate with \
@@ -2468,7 +2468,7 @@ fn run_lumen_with_env(args: &[&str], envs: &[(&str, &str)]) -> String {
 
 #[test]
 fn checked_in_and_rendered_operator_manifests_have_no_retired_issuer_surface() {
-    let manifest = include_str!("../../k8s/operator/deployment.yaml");
+    let manifest = include_str!("../../../../k8s/operator/deployment.yaml");
     let val: serde_yaml::Value =
         serde_yaml::from_str(manifest).expect("parse checked-in deployment.yaml");
     let spec = &val["spec"]["template"]["spec"];

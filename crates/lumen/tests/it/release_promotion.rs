@@ -264,7 +264,7 @@ fn write_archive_pair_for_version(
 }
 
 fn release_script() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/verify-release-artifacts.sh")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join("scripts/verify-release-artifacts.sh")
 }
 
 struct ReleaseFixture {
@@ -590,7 +590,7 @@ fn rewrite_receipt(fixture: &GkeReceiptFixture, receipt: &serde_json::Value) {
 }
 
 fn workflow_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/lumen-release.yml")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join(".github/workflows/lumen-release.yml")
 }
 
 const CANDIDATE_EXECUTION_NAMES: &[&str] = &[
@@ -902,7 +902,7 @@ fn execute_validate_receipt(
     tag: &str,
     attempt: &str,
 ) -> Output {
-    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
     let temp = TempDir::new("validate-receipt");
     let script = temp.0.join("verifier.sh");
     fs::write(&script, verifier).unwrap();
@@ -973,7 +973,7 @@ fn execute_public_release_note_binding(verifier: &str, release_json: &serde_json
 
 fn execute_page_flattener(function: &str, pages: &str) -> Value {
     let output = execute_verifier_function(
-        include_str!("../../scripts/verify-release-artifacts.sh"),
+        include_str!("../../../../scripts/verify-release-artifacts.sh"),
         function,
         pages,
     );
@@ -3105,7 +3105,7 @@ fn replace_last(text: &str, needle: &str, replacement: &str) -> String {
 }
 
 fn promotion_latest_run_script() -> String {
-    let workflow = include_str!("../../.github/workflows/lumen-release.yml");
+    let workflow = include_str!("../../../../.github/workflows/lumen-release.yml");
     let document: Value = serde_yaml::from_str(workflow).unwrap();
     let top = yaml_mapping(&document, "promotion workflow").unwrap();
     let jobs = yaml_mapping(
@@ -3327,7 +3327,7 @@ fn promotion_latest_policy_executes_fail_closed_registry_cases() {
 
 #[test]
 fn promotion_workflow_is_semantically_frozen_and_exactly_hashed() {
-    let workflow = include_str!("../../.github/workflows/lumen-release.yml");
+    let workflow = include_str!("../../../../.github/workflows/lumen-release.yml");
     validate_promotion_workflow(workflow)
         .expect("promotion workflow must satisfy the fail-closed contract");
     assert_eq!(sha256(&workflow_path()), RELEASE_WORKFLOW_SHA256, "promotion workflow bytes changed; review and update the semantic validator before changing this digest");
@@ -3335,7 +3335,7 @@ fn promotion_workflow_is_semantically_frozen_and_exactly_hashed() {
 
 #[test]
 fn promotion_workflow_rejects_high_risk_source_mutations() {
-    let workflow = include_str!("../../.github/workflows/lumen-release.yml");
+    let workflow = include_str!("../../../../.github/workflows/lumen-release.yml");
     let yaml_comment = workflow.replacen(
         "        run: |\n          set -euo pipefail\n          assets=(candidate/",
         "        # run: |\n          set -euo pipefail\n          assets=(candidate/",
@@ -3519,10 +3519,10 @@ fn promotion_workflow_rejects_high_risk_source_mutations() {
 
 #[test]
 fn recovery_workflow_is_frozen_and_rejects_high_risk_mutations() {
-    let workflow = include_str!("../../.github/workflows/lumen-release-recovery.yml");
+    let workflow = include_str!("../../../../.github/workflows/lumen-release-recovery.yml");
     validate_recovery_workflow(workflow)
         .expect("recovery workflow must satisfy its frozen contract");
-    assert_eq!(sha256(Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/lumen-release-recovery.yml").as_path()), RECOVERY_WORKFLOW_SHA256, "recovery workflow bytes changed; review the semantic validator before changing this digest");
+    assert_eq!(sha256(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join(".github/workflows/lumen-release-recovery.yml").as_path()), RECOVERY_WORKFLOW_SHA256, "recovery workflow bytes changed; review the semantic validator before changing this digest");
     let mutations = [
         ("extra trigger", workflow.replace("workflow_dispatch:\n", "push:\n    branches: [main]\n  workflow_dispatch:\n")),
         ("caller input", workflow.replace("workflow_dispatch:\n", "workflow_dispatch:\n    inputs:\n      version:\n        required: true\n        type: string\n")),
@@ -3559,12 +3559,12 @@ fn recovery_workflow_is_frozen_and_rejects_high_risk_mutations() {
 
 #[test]
 fn recovery_0429_workflow_is_frozen_and_rejects_high_risk_mutations() {
-    let workflow = include_str!("../../.github/workflows/lumen-release-0.4.29-recovery.yml");
+    let workflow = include_str!("../../../../.github/workflows/lumen-release-0.4.29-recovery.yml");
     validate_recovery_0429_workflow(workflow)
         .expect("0.4.29 recovery workflow must satisfy its frozen contract");
     assert_eq!(
         sha256(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
+            Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
                 .join(".github/workflows/lumen-release-0.4.29-recovery.yml")
                 .as_path(),
         ),
@@ -3709,12 +3709,12 @@ fn recovery_0429_workflow_is_frozen_and_rejects_high_risk_mutations() {
 
 #[test]
 fn recovery_0430_workflow_is_frozen_and_rejects_high_risk_mutations() {
-    let workflow = include_str!("../../.github/workflows/lumen-release-0.4.30-recovery.yml");
+    let workflow = include_str!("../../../../.github/workflows/lumen-release-0.4.30-recovery.yml");
     validate_recovery_0430_workflow(workflow)
         .expect("0.4.30 recovery workflow must satisfy its frozen contract");
     assert_eq!(
         sha256(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
+            Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
                 .join(".github/workflows/lumen-release-0.4.30-recovery.yml")
                 .as_path(),
         ),
@@ -3905,12 +3905,12 @@ fn recovery_0430_workflow_is_frozen_and_rejects_high_risk_mutations() {
 
 #[test]
 fn public_verify_0429_workflow_is_frozen_and_rejects_write_or_identity_mutations() {
-    let workflow = include_str!("../../.github/workflows/lumen-release-0.4.29-public-verify.yml");
+    let workflow = include_str!("../../../../.github/workflows/lumen-release-0.4.29-public-verify.yml");
     validate_public_verify_0429_workflow(workflow)
         .expect("0.4.29 public verifier workflow must satisfy its frozen read-only contract");
     assert_eq!(
         sha256(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
+            Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
                 .join(".github/workflows/lumen-release-0.4.29-public-verify.yml")
                 .as_path(),
         ),
@@ -3941,8 +3941,8 @@ fn public_verify_0429_workflow_is_frozen_and_rejects_write_or_identity_mutations
 
 #[test]
 fn public_release_notes_are_bound_to_candidate_and_promotion_evidence() {
-    let workflow = include_str!("../../.github/workflows/lumen-release.yml");
-    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let workflow = include_str!("../../../../.github/workflows/lumen-release.yml");
+    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
     for note_line in [
         "- Source commit: $GITHUB_SHA",
         "- Pull request: ${{ needs.verify-inputs.outputs.pr_url }}",
@@ -4007,7 +4007,7 @@ fn public_release_notes_are_bound_to_candidate_and_promotion_evidence() {
 
 #[test]
 fn public_release_note_body_helper_is_hermetic_and_fail_closed() {
-    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
     // Pin TAG: the sourced verifier runs under `set -u` and gates notes by tag.
     const PRE_DURABLE_PERF_TAG_ENV: &[(&str, &str)] = &[("TAG", "lumen@0.6.0")];
     assert!(verifier.contains("verify_public_release_notes <<<\"$release_json\""));
@@ -4138,7 +4138,7 @@ fn public_release_note_body_helper_is_hermetic_and_fail_closed() {
 
 #[test]
 fn durable_perf_release_notes_bind_summary_and_gke_claim() {
-    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
     let perf_sha256 = "c".repeat(64);
     let receipt_sha256 = "a".repeat(64);
     let env: &[(&str, &str)] = &[
@@ -4221,7 +4221,7 @@ fn durable_perf_release_notes_bind_summary_and_gke_claim() {
 
 #[test]
 fn public_release_note_binding_passes_and_missing_tag_argument_fails() {
-    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
     let release_json = json!({
         "tagName": "lumen@0.4.29",
         "isDraft": false,
@@ -4265,7 +4265,7 @@ fn public_release_note_binding_passes_and_missing_tag_argument_fails() {
 
 #[test]
 fn candidate_execution_inventory_is_exact_and_fail_closed() {
-    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
     validate_candidate_execution_bindings(verifier)
         .expect("candidate verifier must call the exact pagination and inventory helpers");
     let bypassed_candidate_check = verifier.replacen(
@@ -4440,7 +4440,7 @@ fn candidate_execution_inventory_is_exact_and_fail_closed() {
 
 #[test]
 fn candidate_execution_inventory_rejects_obsolete_durable_matrix_gate_name() {
-    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
     let mut obsolete = CANDIDATE_EXECUTION_NAMES.to_vec();
     obsolete[18] = "verify exact candidate gates (index-1-flat-cpu)";
     assert!(
@@ -4499,7 +4499,7 @@ fn add_durable_perf_evidence(fixture: &GkeReceiptFixture, attempt: &str) -> (Pat
     let summary = dir.join("durable-perf-summary.json");
     let output = Command::new("python3")
         .arg("-I")
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/verify-durable-perf.py"))
+        .arg(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join("scripts/verify-durable-perf.py"))
         .arg("--receipts-dir")
         .arg(&receipts)
         .args([
@@ -4686,7 +4686,7 @@ fn candidate_pagination_helpers_flatten_page_items_not_object_values() {
         .collect::<Vec<_>>();
     assert_eq!(artifact_names, ["one", "two"]);
 
-    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
     let old_jobs = verifier.replacen(
         "flatten_paginated_jobs() { jq -cs '[.[] | .jobs[]]'; }",
         "flatten_paginated_jobs() { jq -cs '[.[][]]'; }",
@@ -4727,7 +4727,7 @@ fn candidate_pagination_helpers_flatten_page_items_not_object_values() {
 
 #[test]
 fn promotion_oracle_freezes_the_exact_tag_ruleset_shape() {
-    let verifier = include_str!("../../scripts/verify-release-artifacts.sh");
+    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
     for needle in [
         ".target == \"tag\" and .enforcement == \"active\"",
         ".conditions.ref_name.include == [\"refs/tags/lumen@*\"]",

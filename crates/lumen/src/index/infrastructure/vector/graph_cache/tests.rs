@@ -216,7 +216,7 @@ fn graph_cache_restore_timing_distinguishes_hit_and_rejected_fallback() {
 
 #[test]
 fn graph_cache_format_requires_the_locked_codec_version() {
-    let lock: toml::Value = toml::from_str(include_str!("../../../../../Cargo.lock")).unwrap();
+    let lock: toml::Value = toml::from_str(include_str!("../../../../../../../Cargo.lock")).unwrap();
     let package = lock["package"]
         .as_array()
         .unwrap()

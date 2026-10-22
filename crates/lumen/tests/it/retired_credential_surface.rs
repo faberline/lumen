@@ -283,8 +283,8 @@ fn is_word_byte(b: u8) -> bool {
 }
 
 fn repo_root() -> PathBuf {
-    // Lumen's crate root is the repository root.
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    // The lumen crate lives in crates/lumen; the repository root is two up.
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 
 /// Text files under the swept roots. Binary and build output are skipped; a

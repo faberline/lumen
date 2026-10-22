@@ -59,7 +59,7 @@ const LUMEN_BIN: &str = concat!(
     include_str!("../../src/bin/lumen/standalone/gke/manifest.rs"),
     include_str!("../../src/bin/lumen/standalone/gke/validate.rs"),
 );
-const LUMEN_MANIFEST: &str = include_str!("../../Cargo.toml");
+const LUMEN_MANIFEST: &str = include_str!("../../../../Cargo.toml");
 const LUMEN_AUTH: &str = concat!(
     include_str!("../../src/access/domain/identity.rs"),
     include_str!("../../src/access/application/authorization.rs"),

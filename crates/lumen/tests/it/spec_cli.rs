@@ -1189,7 +1189,7 @@ fn openapi_json_declares_3_2_and_describes_query_twins() {
 /// describes. Modeled on `openapi_is_valid_json_with_search_path`.
 #[test]
 fn openapi_committed_snapshot_matches_live_generation() {
-    let committed = include_str!("../../clients/openapi.json");
+    let committed = include_str!("../../../../clients/openapi.json");
     let live = openapi_json();
     assert_eq!(
         committed, live,
@@ -1712,7 +1712,7 @@ fn llm_deployment_documents_reshard_convergence_observability() {
 fn every_generated_client_takes_a_private_ca_and_the_name_it_verifies() {
     use openapi_codegen::{generate_for_target, GenOptions, HttpClient, Lang, TargetPolicy};
 
-    const TARGET_POLICY: &str = include_str!("../../clients/codegen.toml");
+    const TARGET_POLICY: &str = include_str!("../../../../clients/codegen.toml");
     let policy = TargetPolicy::from_toml(TARGET_POLICY).expect("client target policy");
 
     // (language, entrypoint carrying the seam, what the seam has to say)

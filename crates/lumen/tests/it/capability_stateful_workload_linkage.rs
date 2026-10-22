@@ -21,7 +21,7 @@
 //! artifact that states the linkage for a test to bind to.
 // HANDWRITE-BEGIN gap="missing-generator:unit-test:d81257e0" tracker="#2144" reason="Add a deterministic structural regression test that requires the TD primary capability reference, active #2144 linkage, retained #1553 provenance, and the existing stateful capability gate. generator gap: missing-generator:test:capability-td-linkage (#2144)."
 
-const README: &str = include_str!("../../README.md");
+const README: &str = include_str!("../../../../README.md");
 
 #[test]
 fn capability_contract_carries_no_work_item_reference() {

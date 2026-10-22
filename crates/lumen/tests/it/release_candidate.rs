@@ -96,7 +96,7 @@ fn sha256_bytes(bytes: &[u8]) -> String {
 }
 
 fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 fn key(name: &str) -> Yaml {
     Yaml::String(name.into())

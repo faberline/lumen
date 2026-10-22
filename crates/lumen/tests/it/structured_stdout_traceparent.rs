@@ -264,7 +264,7 @@ async fn real_lumen_process_correlates_structured_stdout() {
     assert_ne!(invalid_trace, missing_trace);
 
     assert!(
-        !include_str!("../../Cargo.toml").contains("sift ="),
+        !include_str!("../../../../Cargo.toml").contains("sift ="),
         "Lumen must not depend on Sift"
     );
 }

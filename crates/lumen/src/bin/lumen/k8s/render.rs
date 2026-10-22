@@ -22,7 +22,7 @@ pub(super) fn render_operator_yaml(args: &K8sOperatorRenderArgs) -> Result<Strin
     let mut out = String::new();
     out.push_str(&cli_std::artifact::replace_kubernetes_namespace(
         &cli_std::artifact::strip_source_ownership_markers(include_str!(
-            "../../../../k8s/operator/rbac.yaml"
+            "../../../../../../k8s/operator/rbac.yaml"
         )),
         "lumen-system",
         namespace,
@@ -30,7 +30,7 @@ pub(super) fn render_operator_yaml(args: &K8sOperatorRenderArgs) -> Result<Strin
     out.push_str("\n---\n");
     let deployment = cli_std::artifact::replace_kubernetes_namespace(
         &cli_std::artifact::strip_source_ownership_markers(include_str!(
-            "../../../../k8s/operator/deployment.yaml"
+            "../../../../../../k8s/operator/deployment.yaml"
         )),
         "lumen-system",
         namespace,
@@ -58,7 +58,7 @@ pub(super) fn render_operator_yaml(args: &K8sOperatorRenderArgs) -> Result<Strin
     out.push_str("\n---\n");
     out.push_str(&cli_std::artifact::replace_kubernetes_namespace(
         &cli_std::artifact::strip_source_ownership_markers(include_str!(
-            "../../../../k8s/operator/service.yaml"
+            "../../../../../../k8s/operator/service.yaml"
         )),
         "lumen-system",
         namespace,
@@ -69,7 +69,7 @@ pub(super) fn render_operator_yaml(args: &K8sOperatorRenderArgs) -> Result<Strin
     out.push_str("\n---\n");
     out.push_str(&cli_std::artifact::replace_kubernetes_namespace(
         &cli_std::artifact::strip_source_ownership_markers(include_str!(
-            "../../../../k8s/operator/pdb.yaml"
+            "../../../../../../k8s/operator/pdb.yaml"
         )),
         "lumen-system",
         namespace,
@@ -82,8 +82,8 @@ pub(super) fn render_operator_yaml(args: &K8sOperatorRenderArgs) -> Result<Strin
     // the alerts.
     if monitoring {
         for manifest in [
-            include_str!("../../../../k8s/components/operator-monitoring/servicemonitor.yaml"),
-            include_str!("../../../../k8s/components/operator-monitoring/prometheusrule.yaml"),
+            include_str!("../../../../../../k8s/components/operator-monitoring/servicemonitor.yaml"),
+            include_str!("../../../../../../k8s/components/operator-monitoring/prometheusrule.yaml"),
         ] {
             out.push_str("\n---\n");
             out.push_str(&rewrite_monitoring_namespace(

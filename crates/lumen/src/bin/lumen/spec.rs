@@ -15,7 +15,7 @@ pub(crate) fn spec_gen(args: GenArgs) -> Result<()> {
         MANIFEST_FILE,
     };
 
-    const TARGET_POLICY: &str = include_str!("../../../clients/codegen.toml");
+    const TARGET_POLICY: &str = include_str!("../../../../../clients/codegen.toml");
 
     let lang = match args.lang {
         GenLang::Ts => Lang::Ts,

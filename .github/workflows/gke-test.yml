@@ -3,7 +3,7 @@
 # faberline/aw's reusable gke-test workflow deploys k8s/overlays/gke-test with
 # the image under test on pool-lumen-server, then runs the in-cluster test Job
 # of one suite on pool-lumen-client: the Rust e2e suite `e2e::<suite>::`
-# (tests/it/e2e, faberline/aw docs/standards/rust-tests.md) from the
+# (crates/lumen/tests/it/e2e, faberline/aw docs/standards/rust-tests.md) from the
 # test-client image, through the Services, no port-forward. The suite also
 # ties every pod and /version to the image under test, so the call passes only
 # when the Job completes. aw uploads the evidence artifact
@@ -29,7 +29,7 @@
 #                                            job calls it at the candidate root)
 # Either way the image is pinned to ghcr.io/faberline/lumen@sha256:<root>, and
 # the run hands the suite its expected image, linux/amd64 runtime digest,
-# version, and git sha in the ConfigMap gke-test-env (tests/it/e2e/identity.rs).
+# version, and git sha in the ConfigMap gke-test-env (crates/lumen/tests/it/e2e/identity.rs).
 # The expected version must equal the test binary's Cargo version, so a given
 # `image` is tested from a ref of the same version.
 #
@@ -44,9 +44,9 @@ on:
       - ".github/workflows/lumen-test-image.yml"
       - "Dockerfile.test"
       - "k8s/**"
-      - "tests/it/e2e/**"
-      - "src/compat/operator/**"
-      - "src/operator/**"
+      - "crates/lumen/tests/it/e2e/**"
+      - "crates/lumen/src/compat/operator/**"
+      - "crates/lumen-operator/**"
   workflow_dispatch:
     inputs:
       image:

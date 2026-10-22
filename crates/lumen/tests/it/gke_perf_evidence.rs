@@ -17,7 +17,7 @@ const CELL: &str = "index-1000-hnsw-cpu";
 const POD: &str = "lumen-perf-cell-x7k2p";
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf()
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).to_path_buf()
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
