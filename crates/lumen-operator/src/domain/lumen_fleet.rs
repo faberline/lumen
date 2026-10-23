@@ -45,6 +45,8 @@
 
 pub mod plan;
 
+pub use plan::{decide_prune, decide_prune_object, plan_prune, PruneDecision, ORPHANED_MESSAGE};
+
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
