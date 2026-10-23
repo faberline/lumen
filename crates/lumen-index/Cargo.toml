@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "lumen-index — the search engine and the contexts that still form one dependency cycle: index, ingest, persistence, sharding, replication and the app composition root"
+description = "lumen-index — the search engine and the contexts that still form one dependency cycle: index, ingest, persistence, sharding and the app composition root"
 
 [dependencies]
 anyhow.workspace = true

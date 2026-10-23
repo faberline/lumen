@@ -926,7 +926,7 @@ fn prometheus_rule_covers_slow_queries() {
 
 /// #2516: the storage-degraded alert binds to `lumen_storage_degraded`
 /// (`src/app/observability/metrics/observe.rs`'s `Metrics::mark_storage_degraded`, flipped by
-/// `src/ingest/application/write_coordinator/`/`src/bin/lumen/serve.rs`/`src/replication/application/engine_sm/`
+/// `src/ingest/application/write_coordinator/`/`src/bin/lumen/serve.rs`/`src/ingest/application/engine_sm/`
 /// on a real
 /// ENOSPC), pages at `critical` (writes are actively failing, not just
 /// nearing capacity like `LumenPvcNearFull`), and its runbook cross-references

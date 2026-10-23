@@ -1,0 +1,17 @@
+[package]
+name = "lumen-replication"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "lumen-replication — a shard's raft group, this pod's live role in it, and the StatefulSet topology it comes from"
+
+[dependencies]
+anyhow.workspace = true
+lumen-shared-kernel.workspace = true
+raft-runtime.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

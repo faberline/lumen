@@ -152,10 +152,10 @@ interfaces = "crates/lumen-index/src/sharding/interfaces"
 
 [[contexts]]
 name = "replication"
-depends_on = ["index", "ingest", "persistence"]
+depends_on = []
 [contexts.layers]
-domain = "crates/lumen-index/src/replication/domain"
-application = "crates/lumen-index/src/replication/application"
+domain = "crates/lumen-replication/src/domain"
+application = "crates/lumen-replication/src/application"
 
 [[contexts]]
 name = "ingest"
@@ -330,38 +330,29 @@ paths = ["crates/lumen-index/src/sharding/domain/virtual_bucket_shard_map.rs"]
 subject = "crc32fast"
 reason = "route_hash is CRC-32 over the collection id and the routing key. Every stored document's bucket depends on it, so the algorithm is part of the routing contract and cannot change. P2: decide whether the domain may use crc32fast (pure, no I/O) or takes the hash from the shared kernel."
 
-# The replication domain moved as-is (D2): it wraps raft_runtime's canonical
-# cluster shapes for OpenAPI, and its constructors report errors through anyhow.
+# The replication domain (lumen-replication) reads raft_runtime's canonical
+# cluster shapes, and its constructors report errors through anyhow.
 
 [[exceptions]]
 rule = "B2"
 paths = [
-  "crates/lumen-index/src/replication/domain/cluster_state_view.rs",
-  "crates/lumen-index/src/replication/domain/peer_addr.rs",
-  "crates/lumen-index/src/replication/domain/raft_role.rs",
-]
-subject = "utoipa"
-reason = "E1: #[derive(ToSchema)] on ClusterStateView, PeerAddr and RaftRole, the /debug/cluster response that clients/openapi.json publishes. These wrappers exist so raft_runtime's shared types need not derive ToSchema. P2: OpenAPI DTOs outside the domain."
-
-[[exceptions]]
-rule = "B2"
-paths = [
-  "crates/lumen-index/src/replication/domain/cluster_state.rs",
-  "crates/lumen-index/src/replication/domain/cluster_state_view.rs",
-  "crates/lumen-index/src/replication/domain/peer_addr.rs",
-  "crates/lumen-index/src/replication/domain/raft_role.rs",
+  "crates/lumen-replication/src/domain/cluster_config.rs",
+  "crates/lumen-replication/src/domain/cluster_state.rs",
+  "crates/lumen-replication/src/domain/peer_addr.rs",
+  "crates/lumen-replication/src/domain/runtime_shapes.rs",
 ]
 subject = "raft_runtime"
-reason = "ReadConsistency is raft_runtime's, re-exported; RaftRole, PeerAddr and ClusterStateView convert from raft_runtime's canonical shapes; RaftGroup::from_config takes peer ordinals and the LUMEN_PEERS override from raft_runtime::cluster, so the peers it lists match the ones the raft-wal wiring dials. P2: the conversions and the LUMEN_PEERS read move to an infrastructure adapter, and the domain decides whether raft_runtime's pure cluster types count as a shared kernel."
+reason = "ReadConsistency is raft_runtime's, re-exported; runtime_shapes maps raft_runtime's RaftRole, PeerAddr and ClusterStateView onto the kernel's wire types; RaftGroup::from_config takes peer ordinals and the LUMEN_PEERS override from raft_runtime::cluster, so the peers it lists match the ones the raft-wal wiring dials. P2: the conversions and the LUMEN_PEERS read move to an infrastructure adapter, and the domain decides whether raft_runtime's pure cluster types count as a shared kernel."
 
 [[exceptions]]
 rule = "B2"
 paths = [
-  "crates/lumen-index/src/replication/domain/cluster_state.rs",
-  "crates/lumen-index/src/replication/domain/peer_addr.rs",
+  "crates/lumen-replication/src/domain/cluster_config.rs",
+  "crates/lumen-replication/src/domain/cluster_state.rs",
+  "crates/lumen-replication/src/domain/peer_addr.rs",
 ]
 subject = "anyhow"
-reason = "ClusterState::new and RaftGroup::from_config return anyhow::Result, which the bin's --wal raft setup wraps with .context() and propagates. P2: a replication domain error type (thiserror) that the callers convert."
+reason = "ClusterConfig::from_env, ClusterState::new and RaftGroup::from_config return anyhow::Result, which the bin's --wal raft setup wraps with .context() and propagates. P2: a replication domain error type (thiserror) that the callers convert."
 
 # The shared kernel moved as-is (D2): the wire types carry their OpenAPI schema
 # and report a malformed vector field through anyhow, and the capture barrier
@@ -372,14 +363,17 @@ rule = "B2"
 paths = [
   "crates/lumen-shared-kernel/Cargo.toml",
   "crates/lumen-shared-kernel/src/types/api_error.rs",
+  "crates/lumen-shared-kernel/src/types/cluster_state_view.rs",
   "crates/lumen-shared-kernel/src/types/document.rs",
+  "crates/lumen-shared-kernel/src/types/peer_addr.rs",
   "crates/lumen-shared-kernel/src/types/query.rs",
+  "crates/lumen-shared-kernel/src/types/raft_role.rs",
   "crates/lumen-shared-kernel/src/types/schema.rs",
   "crates/lumen-shared-kernel/src/types/search.rs",
   "crates/lumen-shared-kernel/src/types/stats.rs",
 ]
 subject = "utoipa"
-reason = "E1: #[derive(ToSchema)] on the public HTTP API's request and response types, which clients/openapi.json publishes. The engine uses the same types as its domain vocabulary. P2: OpenAPI DTOs outside the kernel, with mappers; their serde is also the RDB, AOF and WAL CBOR format, so the wire bytes must stay identical."
+reason = "E1: #[derive(ToSchema)] on the public HTTP API's request and response types, which clients/openapi.json publishes, and on the /debug/cluster response (ClusterStateView, PeerAddr, RaftRole), so raft_runtime's shared types need not derive ToSchema. The engine uses the same types as its domain vocabulary. P2: OpenAPI DTOs outside the kernel, with mappers; their serde is also the RDB, AOF and WAL CBOR format, so the wire bytes must stay identical."
 
 [[exceptions]]
 rule = "B2"
@@ -468,28 +462,33 @@ paths = [
 subject = "application->infrastructure"
 reason = "PendingApply and MappedApply hold the WalDelivery the log handed the apply loop, and the committed scalar path parses the pinned payload with FastIndexScanner before it applies. Both stay in ingest/infrastructure/wal beside MemWal (see the wal_log exception above). P2: the delivery handle trait decided there, and scanning behind a port the application layer defines."
 
-# Replication's raft state machine admits and frames records with ingest's own
-# domain and WAL code. Now that ingest has an application layer, those uses
-# cross into layers other contexts may not use.
+# EngineSm, ingest's raft write path, bounds and scans a raft command with the
+# same WAL code the WAL write path uses.
 
 [[exceptions]]
-rule = "B4"
+rule = "B3"
 paths = [
-  "crates/lumen-index/src/replication/application/engine_sm.rs",
-  "crates/lumen-index/src/replication/application/engine_sm/state_machine.rs",
-  "crates/lumen-index/src/replication/application/engine_sm/write_sink.rs",
+  "crates/lumen-index/src/ingest/application/engine_sm.rs",
+  "crates/lumen-index/src/ingest/application/engine_sm/state_machine.rs",
 ]
-subject = "ingest.domain"
-reason = "EngineSm admits each raft command against the change budget (it matches AdmissionError::Full and sizes against HARD_LIMIT), maps a refusal before publication to PendingChangeCapacity, and RaftWriteSink wraps each entry in a WalRecord before it proposes it. P2: ingest's application layer exposes the admission and record API both write paths call."
-
-[[exceptions]]
-rule = "B4"
-paths = [
-  "crates/lumen-index/src/replication/application/engine_sm.rs",
-  "crates/lumen-index/src/replication/application/engine_sm/state_machine.rs",
-]
-subject = "ingest.infrastructure"
+subject = "application->infrastructure"
 reason = "EngineSm bounds a raft command's decode workspace with wire_cost::scan_workspace_bytes and applies a retained oversized fast-Index command through FastIndexScanner, the same bound and scanner the WAL path uses. P2: ingest's application layer exposes both."
+
+[[exceptions]]
+rule = "B4"
+paths = [
+  "crates/lumen-index/src/ingest/application/engine_sm.rs",
+  "crates/lumen-index/src/ingest/application/engine_sm/state_machine.rs",
+  "crates/lumen-index/src/ingest/application/engine_sm/write_sink.rs",
+]
+subject = "index.application"
+reason = "EngineSm is ingest's raft write path, the sibling of the write coordinator: it holds the shard's Arc<Engine>, reserves, prices, admits and applies each committed raft entry on it, and takes and restores the engine's raft snapshots; RaftWriteSink sizes each record with the Engine before it proposes it. It reaches the Engine's crate-private apply and admission API, so it stays in lumen-index rather than lumen-replication. The Engine uses ingest's change budget, so ingest does not list index in depends_on. P2: the apply port of the write coordinator exception above, which the Engine implements, serves both write paths."
+
+[[exceptions]]
+rule = "B4"
+paths = ["crates/lumen-index/src/ingest/application/engine_sm.rs"]
+subject = "persistence.application"
+reason = "EngineSm owns the layer-capacity fallback (capacity::Fallback) that its checkpoints release, the same one the write coordinator holds. Persistence uses ingest's records, so ingest does not list persistence in depends_on. P2: persistence's application layer exposes snapshot capture, restore and capacity behind a port ingest defines."
 
 # The save gate is compiled twice: once as the checkpoint store's child and
 # once under the capacity worker, which must take the same gate type.
@@ -646,8 +645,8 @@ reason = "Replay bounds a frame's decode workspace with wire_cost::scan_workspac
 [[exceptions]]
 rule = "B4"
 paths = [
-  "crates/lumen-index/src/replication/application/engine_sm.rs",
-  "crates/lumen-index/src/replication/application/engine_sm/state_machine.rs",
+  "crates/lumen-index/src/ingest/application/engine_sm.rs",
+  "crates/lumen-index/src/ingest/application/engine_sm/state_machine.rs",
 ]
 subject = "persistence.infrastructure"
 reason = "EngineSm holds the SegmentRdbStore it checkpoints into, builds and restores Raft snapshots through the store's raft_capture and raft_archive (write_archive, the LSEGRAFT MAGIC sniff), and hands a SegmentRaftPreparation between the two phases. Without a segment store it writes the Raft snapshot as an encoded RdbSnapshot, and it decodes a legacy RdbSnapshot on restore. P2: persistence's application layer exposes snapshot capture and restore."

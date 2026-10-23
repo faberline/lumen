@@ -5,6 +5,8 @@
 //! data-plane router received the request, which admission measures its relief
 //! deadline from.
 
+#[cfg(feature = "raft-wal")]
+pub mod engine_sm;
 pub mod ports;
 pub mod request_arrival;
 pub mod write_coordinator;

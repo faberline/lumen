@@ -6,8 +6,11 @@
 //! integrate against.
 
 pub mod api_error;
+pub mod cluster_state_view;
 pub mod document;
+pub mod peer_addr;
 pub mod query;
+pub mod raft_role;
 pub mod schema;
 pub mod search;
 pub mod stats;

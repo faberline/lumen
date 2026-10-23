@@ -9,11 +9,11 @@ The [architecture guide](../architecture.md) explains the runtime boundaries.
 | `access` | Caller identity, permissions and TLS material | [Access](access.md) |
 | `operator` | Kubernetes declarations, rendering and reconciliation | [Operator](operator.md) |
 | `sharding` | Bucket ownership, request routing and resharding | [Sharding](sharding.md) |
-| `replication` | Raft role and the engine state-machine adapter | [Replication](replication.md) |
-| `ingest` | Write records, pending-change capacity and ordered apply | [Ingest](ingest.md) |
+| `replication` | Raft group, pod role and cluster config | [Replication](replication.md) |
+| `ingest` | Write records, pending-change capacity, ordered apply and the raft state machine | [Ingest](ingest.md) |
 | `persistence` | Segments, checkpoints, AOF, restore and merge | [Persistence](persistence.md) |
 | `index` | Field indexes, queries and the engine | [Index](index.md) |
-| `shared_kernel` | Shared wire types, log entries and the capture barrier | [Shared kernel](shared-kernel.md) |
+| `shared_kernel` | Shared wire types, log entries, the capture barrier and cross-crate ports | [Shared kernel](shared-kernel.md) |
 
 Most contexts use four layers.
 `domain` holds the local vocabulary and rules.

@@ -33,7 +33,7 @@ codegen.profile = "rust/score-crate"
 # until then those contexts share lumen-index.
 [[standards.saas_service.exception]]
 check = "SV3"
-reason = "lumen-storage and lumen-replication wait for the context cycle cut in lumen#158"
+reason = "lumen-storage waits for the context cycle cut in lumen#158"
 path = "crates/"
 
 # AW-EC-BEGIN

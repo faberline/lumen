@@ -2,10 +2,10 @@
 //! `LUMEN_PEERS` local-dev override.
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
-use crate::app::config::ClusterConfig;
-use crate::replication::domain::raft_role::RaftRole;
+use crate::domain::cluster_config::ClusterConfig;
+use crate::shared_kernel::types::peer_addr::PeerAddr;
+use crate::shared_kernel::types::raft_role::RaftRole;
 
 /// Peer list for one shard. The address scheme is the same for every
 /// deployment: `lumen-{ordinal}.{headless_service}:{port}` where the
@@ -14,27 +14,6 @@ use crate::replication::domain::raft_role::RaftRole;
 pub struct RaftGroup {
     pub shard_index: u32,
     pub peers: Vec<PeerAddr>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct PeerAddr {
-    pub pod_name: String,
-    pub host: String,
-    pub raft_port: u16,
-    pub client_port: u16,
-    pub role: RaftRole,
-}
-
-impl From<raft_runtime::PeerAddr> for PeerAddr {
-    fn from(p: raft_runtime::PeerAddr) -> Self {
-        Self {
-            pod_name: p.pod_name,
-            host: p.host,
-            raft_port: p.raft_port,
-            client_port: p.client_port,
-            role: p.role.into(),
-        }
-    }
 }
 
 impl RaftGroup {

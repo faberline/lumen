@@ -9,9 +9,9 @@ use raft_runtime::{ProposalBackpressure, RaftHost, RaftStateMachine};
 
 use crate::index::application::admission::RecordAdmissionError;
 use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
+use crate::ingest::application::engine_sm::EngineSm;
 use crate::ingest::application::write_coordinator::WriteSink;
 use crate::ingest::domain::wal_record::WalRecord;
-use crate::replication::application::engine_sm::EngineSm;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 
 /// The [`WriteSink`] for `--wal raft`: a write proposes through the shared

@@ -17,6 +17,7 @@ kube = { workspace = true, optional = true }
 lumen-access.workspace = true
 lumen-index.workspace = true
 lumen-operator = { workspace = true, optional = true }
+lumen-replication.workspace = true
 lumen-shared-kernel.workspace = true
 openapi-codegen.workspace = true
 opentelemetry = { workspace = true, optional = true }

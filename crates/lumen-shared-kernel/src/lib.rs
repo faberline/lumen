@@ -4,4 +4,5 @@
 
 pub mod capture_barrier;
 pub mod log_entry;
+pub mod ports;
 pub mod types;

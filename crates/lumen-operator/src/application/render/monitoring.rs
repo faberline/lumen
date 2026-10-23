@@ -30,7 +30,7 @@ pub(super) fn service_monitor(cx: &RenderCtx<'_>) -> Value {
 // moment a durable write path (AOF append, segment/RDB checkpoint save, or
 // raft log append) actually hits ENOSPC and the pod enters sticky degraded
 // read-only mode (`Metrics::mark_storage_degraded`, `src/ingest/application/write_coordinator/` /
-// `src/bin/lumen/serve.rs` / `src/replication/application/engine_sm/`) — it is the "disk is now
+// `src/bin/lumen/serve.rs` / `src/ingest/application/engine_sm/`) — it is the "disk is now
 // actually
 // full and writes are failing" companion to `LumenPvcNearFull`'s "disk is
 // nearly full" early warning. `LumenReshardWorkflowStalled` is a PARTIAL proxy:

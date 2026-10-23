@@ -30,14 +30,28 @@
 
 use std::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
 
-use crate::app::config::ClusterConfig;
-use crate::replication::domain::cluster_state_view::ClusterStateView;
-use crate::replication::domain::peer_addr::{PeerAddr, RaftGroup};
-use crate::replication::domain::raft_role::RaftRole;
+use crate::domain::cluster_config::ClusterConfig;
+use crate::domain::peer_addr::RaftGroup;
+use crate::shared_kernel::types::cluster_state_view::ClusterStateView;
+use crate::shared_kernel::types::peer_addr::PeerAddr;
+use crate::shared_kernel::types::raft_role::RaftRole;
 
 /// Sentinel for [`ClusterState::leader_index`]: no leader currently known
 /// (mid-election, or the group hasn't elected one yet).
 const NO_LEADER: u32 = u32::MAX;
+
+/// Decode the `AtomicU8` encoding [`ClusterState::role`] stores (the enum's
+/// own discriminant order — see the `as u8` encode side in
+/// [`ClusterState::set_role`]). Unknown values fall back to `Candidate` (never
+/// silently claim `Leader`/a stale role for a corrupt byte).
+fn role_from_u8(v: u8) -> RaftRole {
+    match v {
+        v if v == RaftRole::Leader as u8 => RaftRole::Leader,
+        v if v == RaftRole::Follower as u8 => RaftRole::Follower,
+        v if v == RaftRole::Learner as u8 => RaftRole::Learner,
+        _ => RaftRole::Candidate,
+    }
+}
 
 pub use raft_runtime::ReadConsistency;
 
@@ -55,7 +69,7 @@ pub struct ClusterState {
     pub shard_index: u32,
     pub replica_index: u32,
     /// This pod's own role, as an `AtomicU8` encoding of [`RaftRole`] (see
-    /// [`RaftRole::from_u8`]/[`ClusterState::set_role`]) so a background
+    /// [`role_from_u8`]/[`ClusterState::set_role`]) so a background
     /// task can update it without replacing the whole `Arc<ClusterState>`.
     /// Read via [`ClusterState::role`], not this field directly.
     role: AtomicU8,
@@ -146,7 +160,7 @@ impl ClusterState {
     /// (`--wal raft`); a fixed bootstrap value otherwise (see `new`/
     /// `from_snapshot`).
     pub fn role(&self) -> RaftRole {
-        RaftRole::from_u8(self.role.load(Ordering::Relaxed))
+        role_from_u8(self.role.load(Ordering::Relaxed))
     }
 
     /// Set this pod's live role (background poller only).

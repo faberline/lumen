@@ -1,11 +1,11 @@
 # Replication
 
-This context owns the live Raft role of a pod and the adapter that applies a replicated log to its Engine.
+This context owns a shard's Raft group, the live Raft role of a pod and the StatefulSet topology (`ClusterConfig`) they come from.
 
-Source: `crates/lumen-index/src/replication`.
+Source: `crates/lumen-replication/src`.
 Layers: domain and application.
 
-The raft-runtime library owns the Raft host and peer mechanisms. Lumen owns its cluster view and the engine state-machine adapter. The application adapter is enabled by raft-wal.
+The raft-runtime library owns the Raft host and peer mechanisms. Lumen owns its cluster view. The crate depends only on the shared kernel and raft-runtime. The application layer implements the kernel's `ClusterStatus` port, which the HTTP layer reads. The engine state-machine adapter (`EngineSm`) is part of [ingest](ingest.md).
 
 [Architecture](../architecture.md) and [indexing](../indexing.md) define the related product contract.
 `ddd.toml` records the current dependency rules and P1 exceptions.

@@ -1,6 +1,6 @@
 # Shared kernel
 
-This context owns the wire types, committed-mutation log vocabulary and apply/capture barrier shared by the contexts.
+This context owns the wire types, committed-mutation log vocabulary, apply/capture barrier and cross-crate ports shared by the contexts. A port is a trait one crate implements and another reads, so neither crate depends on the other: `ports::cluster_status` lets `lumen-index` read the cluster state that `lumen-replication` owns.
 
 Source: `crates/lumen-shared-kernel/src`.
 Layers: shared modules.

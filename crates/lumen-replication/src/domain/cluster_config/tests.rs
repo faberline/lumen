@@ -1,5 +1,8 @@
-use crate::app::config::ClusterConfig;
-use crate::sharding::infrastructure::shard_map_env::tests::ENV_LOCK;
+use crate::domain::cluster_config::ClusterConfig;
+
+// Tests in one binary share the process environment. Each test that sets the
+// StatefulSet variables holds this lock.
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn cfg(shard_count: u32, replicas_per_shard: u32, voter_count: u32, pod: &str) -> ClusterConfig {
     ClusterConfig {

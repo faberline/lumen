@@ -77,7 +77,7 @@ impl EngineSm {
     /// sticky degraded-storage gauge when the raft log append itself hits
     /// ENOSPC (before there is any committed entry to apply).
     ///
-    /// [`RaftWriteSink::submit`]: crate::replication::application::engine_sm::write_sink::RaftWriteSink#method.submit
+    /// [`RaftWriteSink::submit`]: crate::ingest::application::engine_sm::write_sink::RaftWriteSink#method.submit
     pub fn engine(&self) -> &Arc<Engine> {
         &self.engine
     }

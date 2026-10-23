@@ -69,7 +69,7 @@ index-text = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
 # Lumen-owned HA: writes replicated through the shared raft-core engine (behind
 # the `raft-wal` feature). Peer RPCs ride the same h2c transport.
 raft-core = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
-# Non-optional (#1002): `lumen-index` `app/config.rs`/`replication/domain/cluster_state.rs` delegate the StatefulSet
+# Non-optional (#1002): `lumen-replication` `domain/cluster_config.rs`/`domain/cluster_state.rs` delegate the StatefulSet
 # shard/replica/voter math + peer-DNS/`LUMEN_PEERS` override parsing to
 # `raft_runtime::cluster` unconditionally (those modules compile with no
 # feature), so the actual raft engine and lumen's serving-side topology
@@ -157,6 +157,7 @@ lumen-shared-kernel = { path = "crates/lumen-shared-kernel" }
 lumen-access = { path = "crates/lumen-access" }
 lumen-index = { path = "crates/lumen-index" }
 lumen-operator = { path = "crates/lumen-operator" }
+lumen-replication = { path = "crates/lumen-replication" }
 
 [workspace.lints.clippy]
 mod_module_files = "deny"
