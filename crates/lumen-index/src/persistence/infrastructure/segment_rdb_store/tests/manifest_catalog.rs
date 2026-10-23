@@ -3,7 +3,6 @@ use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, LocalRowsReference, SegmentFormat, SegmentGenerationManifest, SegmentKind,
     SegmentReference, SegmentRole,
 };
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::catalog::validate_catalog_references;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::{
     read_generation_manifest, write_generation_manifest,
@@ -16,6 +15,7 @@ use crate::persistence::infrastructure::segment_rdb_store::tests::{
 use crate::persistence::infrastructure::segment_rdb_store::{
     SegmentRdbStore, GENERATION_MANIFEST_FILE,
 };
+use crate::storage::infrastructure::segment::SegmentReader;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 

@@ -6,17 +6,17 @@ use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, LocalRowsReference, SegmentFormat, SegmentKind, SegmentReference,
     SegmentRole,
 };
-use crate::persistence::infrastructure::segment::hash_writer::write_hash_segment;
-use crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment;
-use crate::persistence::infrastructure::segment::number_writer::write_number_segment;
-use crate::persistence::infrastructure::segment::set_writer::write_set_segment;
-use crate::persistence::infrastructure::segment::sparse_rows::{
-    decode_sparse_local_rows, encode_sparse_local_rows,
-};
-use crate::persistence::infrastructure::segment::vector_writer::write_vector_segment;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::delta_integrity::delta_payload_sha256;
 use crate::persistence::infrastructure::segment_rdb_store::flat_layout::collection_checkpoint_dir_name;
+use crate::storage::infrastructure::segment::hash_writer::write_hash_segment;
+use crate::storage::infrastructure::segment::keyword_writer::write_keyword_segment;
+use crate::storage::infrastructure::segment::number_writer::write_number_segment;
+use crate::storage::infrastructure::segment::set_writer::write_set_segment;
+use crate::storage::infrastructure::segment::sparse_rows::{
+    decode_sparse_local_rows, encode_sparse_local_rows,
+};
+use crate::storage::infrastructure::segment::vector_writer::write_vector_segment;
+use crate::storage::infrastructure::segment::SegmentReader;
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 use std::path::Path;

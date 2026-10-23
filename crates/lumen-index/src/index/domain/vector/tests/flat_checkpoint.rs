@@ -15,7 +15,7 @@ fn flat_base_publication_retires_both_payload_stores_and_keeps_newer_changes() {
     };
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("base.lseg");
-    crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+    crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
         &path,
         1,
         2,
@@ -31,9 +31,7 @@ fn flat_base_publication_retires_both_payload_stores_and_keeps_newer_changes() {
     index.add("new", &[4.0, 4.0]).unwrap();
     index
         .install_checkpoint_base(
-            Arc::new(
-                crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap(),
-            ),
+            Arc::new(crate::storage::infrastructure::segment::SegmentReader::open(&path).unwrap()),
             &["ack".into(), "updated".into(), "deleted".into()],
             &HashMap::from([
                 ("ack".into(), true),
@@ -88,7 +86,7 @@ fn flat_compacted_base_keeps_absent_rows_deleted_on_open_and_install() {
     };
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("mapped-base.lseg");
-    crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+    crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
         &path,
         7,
         2,
@@ -96,7 +94,7 @@ fn flat_compacted_base_keeps_absent_rows_deleted_on_open_and_install() {
     )
     .unwrap();
     let reader =
-        Arc::new(crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap());
+        Arc::new(crate::storage::infrastructure::segment::SegmentReader::open(&path).unwrap());
     let ids = vec!["a".to_owned(), "b".to_owned(), "c".to_owned()];
     let cold = FlatCpuIndex::open_from_segment(spec, reader.clone(), ids.clone()).unwrap();
     assert_eq!(

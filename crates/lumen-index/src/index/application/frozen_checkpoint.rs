@@ -202,7 +202,7 @@ impl FrozenCheckpoint {
                         serde_json::to_vec_pretty(&sidecar)?,
                     )?;
                     let ids: Vec<&str> = eids.iter().map(String::as_str).collect();
-                    crate::persistence::infrastructure::segment::eid_writer::write_eid_segment(
+                    crate::storage::infrastructure::segment::eid_writer::write_eid_segment(
                         &dir.join(EID_META_FILE),
                         sequence,
                         &ids,
@@ -245,7 +245,7 @@ impl FrozenCheckpoint {
                                     .iter()
                                     .map(|(_, value)| Some(value.as_slice()))
                                     .collect();
-                                crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+                                crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
                                     &dir.join(format!("{stem}.lseg")),
                                     sequence,
                                     spec.dim as usize,
@@ -253,7 +253,7 @@ impl FrozenCheckpoint {
                                 )?;
                                 let ids: Vec<_> =
                                     rows.iter().map(|(eid, _)| eid.as_str()).collect();
-                                crate::persistence::infrastructure::segment::eid_writer::write_eid_segment(
+                                crate::storage::infrastructure::segment::eid_writer::write_eid_segment(
                                     &dir.join(format!("{stem}.eids.lseg")),
                                     sequence,
                                     &ids,
@@ -262,7 +262,7 @@ impl FrozenCheckpoint {
                                     == crate::shared_kernel::types::schema::VectorBackend::FlatCpu
                                 {
                                     let reader =
-                                        std::sync::Arc::new(crate::persistence::infrastructure::segment::SegmentReader::open(
+                                        std::sync::Arc::new(crate::storage::infrastructure::segment::SegmentReader::open(
                                             &dir.join(format!("{stem}.lseg")),
                                         )?);
                                     let row_eids: Vec<String> =

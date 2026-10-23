@@ -164,7 +164,7 @@ impl Registry {
     }
 
     pub(crate) fn append_limit(&self) -> usize {
-        crate::persistence::infrastructure::composed_segment::MAX_INCREMENTAL_LAYERS
+        crate::storage::infrastructure::composed_segment::MAX_INCREMENTAL_LAYERS
             - usize::from(self.frozen_windows.load(Ordering::Acquire) != 0)
     }
 }

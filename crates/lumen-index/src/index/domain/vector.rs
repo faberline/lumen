@@ -204,7 +204,7 @@ pub trait VectorIndex: Send + Sync {
 
     fn attach_checkpoint_delta(
         &self,
-        _reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        _reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         _external_ids: &[String],
         _acknowledged: &[bool],
     ) -> Result<()> {
@@ -214,21 +214,21 @@ pub trait VectorIndex: Send + Sync {
     /// Immutable inputs used to verify a staged compaction at publication.
     fn checkpoint_delta_readers(
         &self,
-    ) -> Vec<Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
+    ) -> Vec<Arc<crate::storage::infrastructure::segment::SegmentReader>> {
         Vec::new()
     }
 
     fn checkpoint_base_reader(
         &self,
-    ) -> Option<Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
+    ) -> Option<Arc<crate::storage::infrastructure::segment::SegmentReader>> {
         None
     }
 
     fn replace_checkpoint_base(
         &self,
-        _base: &Arc<crate::persistence::infrastructure::segment::SegmentReader>,
-        _inputs: &[Arc<crate::persistence::infrastructure::segment::SegmentReader>],
-        _reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        _base: &Arc<crate::storage::infrastructure::segment::SegmentReader>,
+        _inputs: &[Arc<crate::storage::infrastructure::segment::SegmentReader>],
+        _reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         _external_ids: &[String],
     ) -> Result<()> {
         bail!("vector backend does not support mapped base replacement")
@@ -236,8 +236,8 @@ pub trait VectorIndex: Send + Sync {
 
     fn replace_checkpoint_deltas(
         &self,
-        _inputs: &[Arc<crate::persistence::infrastructure::segment::SegmentReader>],
-        _reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        _inputs: &[Arc<crate::storage::infrastructure::segment::SegmentReader>],
+        _reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         _external_ids: &[String],
     ) -> Result<()> {
         bail!("vector backend does not support checkpoint delta replacement")
@@ -261,7 +261,7 @@ pub trait VectorIndex: Send + Sync {
     /// above the new mmap base.
     fn install_checkpoint_base(
         &self,
-        _reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        _reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         _external_ids: &[String],
         _acknowledged: &HashMap<String, bool>,
     ) -> Result<()> {

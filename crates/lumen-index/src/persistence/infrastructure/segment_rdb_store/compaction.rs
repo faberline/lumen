@@ -12,9 +12,6 @@ use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, LocalRowsReference, SegmentFormat, SegmentKind, SegmentReference,
     SegmentRole,
 };
-use crate::persistence::infrastructure::composed_segment::replacement::compose_checkpoint_layers;
-use crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
-use crate::persistence::infrastructure::segment::{stream, SegmentReader};
 use crate::persistence::infrastructure::segment_rdb_store::compaction::sidecar_files::{
     checked_bytes, file_len, write_eids_atomic, write_sparse_rows_atomic,
 };
@@ -26,6 +23,9 @@ use crate::persistence::infrastructure::segment_rdb_store::flat_layout::{
     collection_checkpoint_dir_name, collection_output_relative, collection_schema_path, flat_layout,
 };
 use crate::shared_kernel::types::schema::FieldType;
+use crate::storage::infrastructure::composed_segment::replacement::compose_checkpoint_layers;
+use crate::storage::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
+use crate::storage::infrastructure::segment::{stream, SegmentReader};
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

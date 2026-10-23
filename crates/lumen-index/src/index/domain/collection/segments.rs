@@ -15,9 +15,9 @@ use crate::index::domain::field_coverage::FieldCoverage;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::interner::Interner;
 use crate::index::infrastructure::checkpoint_fs::CheckpointLayout;
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 #[cfg(test)]
 thread_local! {
@@ -103,7 +103,7 @@ impl Collection {
         // 1) The collection EID column: external_id of docid i at position i.
         let eids: Vec<&str> = self.interner.to_eid.iter().map(|s| s.as_str()).collect();
         let meta_path = dir.join(EID_META_FILE);
-        crate::persistence::infrastructure::segment::eid_writer::write_eid_segment(
+        crate::storage::infrastructure::segment::eid_writer::write_eid_segment(
             &meta_path,
             applied_seq,
             &eids,
@@ -121,7 +121,7 @@ impl Collection {
             if let Some(row_eids) = row_eids {
                 let sidecar = dir.join(format!("{stem}.eids.lseg"));
                 let refs: Vec<&str> = row_eids.iter().map(|s| s.as_str()).collect();
-                crate::persistence::infrastructure::segment::eid_writer::write_eid_segment(
+                crate::storage::infrastructure::segment::eid_writer::write_eid_segment(
                     &sidecar,
                     applied_seq,
                     &refs,
@@ -168,7 +168,7 @@ impl Collection {
         CHECKPOINT_COLLECTION_OPENS.with(|count| count.set(count.get() + 1));
         // 1) Rebuild the interner from the EID column.
         let meta_path = dir.join(EID_META_FILE);
-        let meta = crate::persistence::infrastructure::segment::SegmentReader::open(&meta_path)
+        let meta = crate::storage::infrastructure::segment::SegmentReader::open(&meta_path)
             .map_err(|e| anyhow!("open eid meta {}: {e}", meta_path.display()))?;
         let to_eid = meta
             .eids_all()
@@ -196,7 +196,7 @@ impl Collection {
             // Vector fields carry a row→eid sidecar.
             let vec_row_eids = if spec.field_type == FieldType::Vector {
                 let sidecar = dir.join(format!("{stem}.eids.lseg"));
-                let r = crate::persistence::infrastructure::segment::SegmentReader::open(&sidecar)
+                let r = crate::storage::infrastructure::segment::SegmentReader::open(&sidecar)
                     .map_err(|e| anyhow!("open vector eid sidecar {}: {e}", sidecar.display()))?;
                 Some(
                     r.eids_all()

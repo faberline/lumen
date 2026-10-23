@@ -10,7 +10,7 @@ use roaring::RoaringBitmap;
 use crate::index::domain::fast_hash::FastHashMap;
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::infrastructure::checkpoint_projection::text_projection;
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 #[cfg_attr(not(test), allow(dead_code))]
 impl FieldIndex {
@@ -37,7 +37,7 @@ impl FieldIndex {
                             .flatten()
                     })
                     .collect();
-                crate::persistence::infrastructure::segment::number_writer::write_number_segment(
+                crate::storage::infrastructure::segment::number_writer::write_number_segment(
                     &path,
                     applied_seq,
                     &values,
@@ -47,7 +47,7 @@ impl FieldIndex {
                 let values: Vec<Option<u64>> = (0..n_docs)
                     .map(|id| if live(id) { h.hash_at(id) } else { None })
                     .collect();
-                crate::persistence::infrastructure::segment::hash_writer::write_hash_segment(
+                crate::storage::infrastructure::segment::hash_writer::write_hash_segment(
                     &path,
                     applied_seq,
                     &values,
@@ -68,7 +68,7 @@ impl FieldIndex {
                             .insert(id as u32);
                     }
                 }
-                crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
+                crate::storage::infrastructure::segment::keyword_writer::write_keyword_segment(
                     &path,
                     applied_seq,
                     &values,
@@ -99,7 +99,7 @@ impl FieldIndex {
                         }
                     }
                 }
-                crate::persistence::infrastructure::segment::set_writer::write_set_segment(
+                crate::storage::infrastructure::segment::set_writer::write_set_segment(
                     &path,
                     applied_seq,
                     &values,
@@ -158,13 +158,12 @@ impl FieldIndex {
                         n.number_at(id).map(|s| s.to_f64())
                     })
                     .collect();
-                crate::persistence::infrastructure::segment::number_writer::write_number_segment(
+                crate::storage::infrastructure::segment::number_writer::write_number_segment(
                     &path,
                     applied_seq,
                     &values,
                 )?;
-                let reader =
-                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+                let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
                 // Attach the NEW reader (dropping any prior segment Arc) and free
                 // BOTH the forward tail AND the inverted/range `values` driver —
                 // the whole [0..n_docs) index (sorted-value column + per-value
@@ -193,13 +192,12 @@ impl FieldIndex {
                 let values: Vec<Option<u64>> = (0..n_docs)
                     .map(|id| if live(id) { h.hash_at(id) } else { None })
                     .collect();
-                crate::persistence::infrastructure::segment::hash_writer::write_hash_segment(
+                crate::storage::infrastructure::segment::hash_writer::write_hash_segment(
                     &path,
                     applied_seq,
                     &values,
                 )?;
-                let reader =
-                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+                let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
                 h.segment = Some(std::sync::Arc::new(ComposedSegmentReader::from_base(
                     std::sync::Arc::new(reader),
                 )));
@@ -230,14 +228,13 @@ impl FieldIndex {
                         terms.entry((*s).to_string()).or_default().insert(id as u32);
                     }
                 }
-                crate::persistence::infrastructure::segment::keyword_writer::write_keyword_segment(
+                crate::storage::infrastructure::segment::keyword_writer::write_keyword_segment(
                     &path,
                     applied_seq,
                     &values,
                     &terms,
                 )?;
-                let reader =
-                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+                let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
                 // Attach the NEW reader (dropping any prior segment Arc) and free
                 // BOTH the forward tail AND the inverted `terms` driver — the
                 // whole [0..n_docs) index is now on disk; reopen/queries drive
@@ -287,14 +284,13 @@ impl FieldIndex {
                         }
                     }
                 }
-                crate::persistence::infrastructure::segment::set_writer::write_set_segment(
+                crate::storage::infrastructure::segment::set_writer::write_set_segment(
                     &path,
                     applied_seq,
                     &values,
                     &elements,
                 )?;
-                let reader =
-                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+                let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
                 // Attach the NEW reader (dropping any prior segment Arc) and free
                 // BOTH the forward tail AND the inverted `elements` driver — the
                 // whole [0..n_docs) index is now on disk. The RAM win 2h-2 targets.
@@ -312,8 +308,7 @@ impl FieldIndex {
             }
             FieldIndex::Text { idx, .. } => {
                 text_projection::write_live(&path, applied_seq, idx, n_docs, live)?;
-                let reader =
-                    crate::persistence::infrastructure::segment::SegmentReader::open(&path)?;
+                let reader = crate::storage::infrastructure::segment::SegmentReader::open(&path)?;
                 // Phase 2h-4: DROP the bulky `tokens` postings AND `distinct` to
                 // disk — neither is rebuilt. `drop_eid` no longer consumes
                 // `distinct` for a sealed base id (it records the id in

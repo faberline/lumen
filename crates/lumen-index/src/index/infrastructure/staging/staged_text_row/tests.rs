@@ -7,9 +7,9 @@ use crate::index::domain::analysis::tokenize;
 use crate::index::infrastructure::staging::staged_text_row::{
     token_stream, StagedTextRow, LAST_STAGE_DIRECTORY,
 };
-use crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::shared_kernel::types::schema::Analyzer;
+use crate::storage::infrastructure::segment::text_row_stage::TextRowStageOptions;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 #[cfg(any(feature = "jieba", unix))]
 use crate::index::infrastructure::staging::staged_text_row::StageDirectory;
@@ -158,7 +158,7 @@ fn ngram_stream_preserves_retryable_workspace_callback_error() {
     .unwrap();
     let error = stream(&mut |_| {
         Err(anyhow::Error::new(
-            crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace {
+            crate::storage::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace {
                 required_bytes: TextRowStageOptions::minimum_scratch_bytes() + 1,
             },
         ))
@@ -166,7 +166,7 @@ fn ngram_stream_preserves_retryable_workspace_callback_error() {
     .unwrap_err();
     assert!(
         error
-            .downcast_ref::<crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace>()
+            .downcast_ref::<crate::storage::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace>()
             .is_some(),
         "the caller must be able to retry a bounded Ngram workspace request"
     );
@@ -180,14 +180,14 @@ fn dictionary_stream_preserves_retryable_workspace_error_and_cleans_route() {
     let stream = token_stream("南京市长江大桥", Analyzer::Jieba, Some(route)).unwrap();
     let error = stream(&mut |_| {
         Err(anyhow::Error::new(
-            crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace {
+            crate::storage::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace {
                 required_bytes: TextRowStageOptions::minimum_scratch_bytes() + 1,
             },
         ))
     })
     .unwrap_err();
     assert!(error
-        .downcast_ref::<crate::persistence::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace>()
+        .downcast_ref::<crate::storage::infrastructure::segment::text_row_stage::RequiredTextRowWorkspace>()
         .is_some());
     assert!(!directory.path().join("jieba-route.tmp").exists());
 }

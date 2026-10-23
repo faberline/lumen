@@ -96,7 +96,7 @@ fn reopen_base_seg_plus_tail_plus_tombstone_equals_inram_oracle() {
             .unwrap()
             .expect("flat-cpu seal returns row eids");
         let reader = std::sync::Arc::new(
-            crate::persistence::infrastructure::segment::SegmentReader::open(&seg_path).unwrap(),
+            crate::storage::infrastructure::segment::SegmentReader::open(&seg_path).unwrap(),
         );
         let reopened = FlatCpuIndex::open_from_segment(s, reader, row_eids).unwrap();
 

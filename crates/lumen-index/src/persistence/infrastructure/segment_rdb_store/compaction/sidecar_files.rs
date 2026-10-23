@@ -2,8 +2,8 @@
 //! local-row or EID sidecar is written under a unique temporary name, fsynced,
 //! and renamed into place.
 
-use crate::persistence::infrastructure::segment::eid_writer::write_eid_segment;
-use crate::persistence::infrastructure::segment::sparse_rows::encode_sparse_local_rows;
+use crate::storage::infrastructure::segment::eid_writer::write_eid_segment;
+use crate::storage::infrastructure::segment::sparse_rows::encode_sparse_local_rows;
 use anyhow::{anyhow, bail, Context, Result};
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};

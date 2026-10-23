@@ -11,8 +11,8 @@ use crate::persistence::domain::generation_manifest::{
     SegmentGenerationManifest, SegmentKind, SegmentRole,
 };
 use crate::persistence::infrastructure::merge_worker::queue_sender;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
+use crate::storage::infrastructure::segment::SegmentReader;
 use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

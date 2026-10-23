@@ -9,7 +9,7 @@ use roaring::RoaringBitmap;
 
 use crate::index::domain::number_index::NumberIndex;
 use crate::index::domain::sortable_f64::{bound_to_bits, SortableF64};
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 impl NumberIndex {
     /// Every distinct value (as a `SortableF64` key) with its LIVE posting

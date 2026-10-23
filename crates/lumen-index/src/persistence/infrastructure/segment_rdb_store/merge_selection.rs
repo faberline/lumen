@@ -4,8 +4,8 @@
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, SegmentKind, SegmentReference, SegmentRole,
 };
-use crate::persistence::infrastructure::composed_segment::MAX_INCREMENTAL_LAYERS;
 use crate::persistence::infrastructure::segment_rdb_store::compacted_fields::segment_reference_bytes;
+use crate::storage::infrastructure::composed_segment::MAX_INCREMENTAL_LAYERS;
 use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
 use std::path::Path;

@@ -7,8 +7,8 @@ use std::cmp::Ordering as CmpOrdering;
 use crate::index::domain::postings::{Postings, SparsePosting, TokPostings};
 use crate::index::domain::text_index::{note_staged_term_probes, TextIndex};
 use crate::index::domain::tok_probe::TokProbe;
-use crate::persistence::infrastructure::composed_segment::TextPostingAt;
-use crate::persistence::infrastructure::segment::codecs::SortedIdCursor;
+use crate::storage::infrastructure::composed_segment::TextPostingAt;
+use crate::storage::infrastructure::segment::codecs::SortedIdCursor;
 
 impl TextIndex {
     /// A token's active postings for BM25 scoring: sealed base postings minus

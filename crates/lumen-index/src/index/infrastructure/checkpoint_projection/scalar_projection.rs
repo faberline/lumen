@@ -13,7 +13,8 @@ use crate::index::infrastructure::checkpoint_projection::scalar_projection::merg
 
 use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::domain::sortable_f64::SortableF64;
-use crate::persistence::infrastructure::segment::stream::{
+use crate::shared_kernel::types::schema::FieldType;
+use crate::storage::infrastructure::segment::stream::{
     keyword::write_keyword_projection,
     number::write_number_projection,
     scalar_projection::{
@@ -22,8 +23,7 @@ use crate::persistence::infrastructure::segment::stream::{
     },
     set::write_set_projection,
 };
-use crate::persistence::infrastructure::segment::{ScalarPayloadKind, SegmentReader};
-use crate::shared_kernel::types::schema::FieldType;
+use crate::storage::infrastructure::segment::{ScalarPayloadKind, SegmentReader};
 use anyhow::{anyhow, bail, Result};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BinaryHeap, HashMap};

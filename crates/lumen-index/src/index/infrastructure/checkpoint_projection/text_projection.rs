@@ -13,10 +13,10 @@ use anyhow::{anyhow, bail, Result};
 use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::domain::postings::TokPostings;
 use crate::index::domain::text_index::TextIndex;
-use crate::persistence::infrastructure::segment::stream::text_projection::{
+use crate::storage::infrastructure::segment::stream::text_projection::{
     write_text_projection, TextStreamView,
 };
-use crate::persistence::infrastructure::segment::SegmentReader;
+use crate::storage::infrastructure::segment::SegmentReader;
 use std::borrow::Cow;
 #[cfg(test)]
 use std::cell::Cell;

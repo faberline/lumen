@@ -4,13 +4,13 @@
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, SegmentKind, SegmentReference, SegmentRole,
 };
-use crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::compaction::{
     write_compacted_field, CompactedField,
 };
 use crate::persistence::infrastructure::segment_rdb_store::merge_selection::StagedMergeCandidate;
 use crate::persistence::infrastructure::segment_rdb_store::{MergeObserver, MergePhase};
+use crate::storage::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
+use crate::storage::infrastructure::segment::SegmentReader;
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 use std::path::Path;

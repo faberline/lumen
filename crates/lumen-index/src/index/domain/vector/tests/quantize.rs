@@ -61,7 +61,7 @@ fn one_item_insert_search_and_reopen_works_with_and_without_sq() {
         let segment = dir.path().join("vectors.lseg");
         let row_eids = idx.seal_to_segment_prod(&segment).unwrap().unwrap();
         let reader = std::sync::Arc::new(
-            crate::persistence::infrastructure::segment::SegmentReader::open(&segment).unwrap(),
+            crate::storage::infrastructure::segment::SegmentReader::open(&segment).unwrap(),
         );
         let reopened = HnswCpuIndex::open_from_segment(spec, reader, row_eids).unwrap();
         assert_eq!(reopened.search_knn(&vector, 1).unwrap()[0].0, "one");

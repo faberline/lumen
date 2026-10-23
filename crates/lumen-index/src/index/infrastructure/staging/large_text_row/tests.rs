@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::index::infrastructure::staging::large_text_row::stage_large_whitespace_row;
-use crate::persistence::infrastructure::segment::text_row_stage::TextRowStageOptions;
-use crate::persistence::infrastructure::segment::SegmentReader;
+use crate::storage::infrastructure::segment::text_row_stage::TextRowStageOptions;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 use crate::index::infrastructure::staging::large_text_row::{
     set_token_failure_for_test, TokenFailure,

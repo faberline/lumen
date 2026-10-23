@@ -4,7 +4,6 @@
 use crate::persistence::domain::generation_manifest::{
     CollectionCatalog, SegmentGenerationManifest, SegmentReference,
 };
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::catalog::validate_catalog_references_with_prior;
 use crate::persistence::infrastructure::segment_rdb_store::delta_integrity::is_inherited_base;
 use crate::persistence::infrastructure::segment_rdb_store::flat_layout::collection_checkpoint_dir_name;
@@ -16,6 +15,7 @@ use crate::persistence::infrastructure::segment_rdb_store::{
     GenerationRecord, CHECKPOINT_SCHEMA_FILE, FLAT_PAYLOAD_DIR, GENERATION_MANIFEST_FILE,
     GENERATION_MANIFEST_V2, GENERATION_MANIFEST_V3,
 };
+use crate::storage::infrastructure::segment::SegmentReader;
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::BTreeMap;
 use std::path::Path;

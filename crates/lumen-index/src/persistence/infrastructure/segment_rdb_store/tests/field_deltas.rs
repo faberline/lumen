@@ -1,6 +1,5 @@
 use crate::index::application::engine::Engine;
 use crate::persistence::domain::generation_manifest::SegmentKind;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::read_generation_manifest;
 use crate::persistence::infrastructure::segment_rdb_store::tests::{
     committed_text, has_keyword, index_kw, kw_schema, text_schema,
@@ -8,6 +7,7 @@ use crate::persistence::infrastructure::segment_rdb_store::tests::{
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
 use crate::shared_kernel::types::schema::FieldType;
+use crate::storage::infrastructure::segment::SegmentReader;
 use std::sync::Arc;
 
 #[test]

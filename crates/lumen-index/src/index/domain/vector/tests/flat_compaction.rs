@@ -15,11 +15,11 @@ fn flat_base_compaction_preserves_newer_layers_ram_and_deletions() {
     let dir = tempfile::tempdir().unwrap();
     let write = |name: &str, rows: &[Option<&[f32]>]| {
         let path = dir.path().join(name);
-        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+        crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
             &path, 1, 2, rows,
         )
         .unwrap();
-        Arc::new(crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap())
+        Arc::new(crate::storage::infrastructure::segment::SegmentReader::open(&path).unwrap())
     };
     let base = write("base.lseg", &[Some(&[0., 0.]), Some(&[9., 9.])]);
     let first = write("first.lseg", &[Some(&[1., 1.]), Some(&[2., 2.])]);
@@ -94,11 +94,11 @@ fn flat_compaction_retargets_only_selected_layers_and_releases_input_readers() {
     let dir = tempfile::tempdir().unwrap();
     let write = |name: &str, values: &[Option<&[f32]>]| {
         let path = dir.path().join(name);
-        crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+        crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
             &path, 1, 2, values,
         )
         .unwrap();
-        Arc::new(crate::persistence::infrastructure::segment::SegmentReader::open(&path).unwrap())
+        Arc::new(crate::storage::infrastructure::segment::SegmentReader::open(&path).unwrap())
     };
     let index = FlatCpuIndex::open_from_segment(
         spec,
@@ -172,7 +172,7 @@ fn flat_mmap_deltas_release_acknowledged_payload_and_preserve_newer_ram() {
     };
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().join("base.lseg");
-    crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+    crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
         &base,
         1,
         2,
@@ -181,7 +181,7 @@ fn flat_mmap_deltas_release_acknowledged_payload_and_preserve_newer_ram() {
     .unwrap();
     let index = FlatCpuIndex::open_from_segment(
         spec,
-        Arc::new(crate::persistence::infrastructure::segment::SegmentReader::open(&base).unwrap()),
+        Arc::new(crate::storage::infrastructure::segment::SegmentReader::open(&base).unwrap()),
         vec!["a".into(), "b".into()],
     )
     .unwrap();
@@ -189,7 +189,7 @@ fn flat_mmap_deltas_release_acknowledged_payload_and_preserve_newer_ram() {
     oracle.add("a", &[0.0, 0.0]).unwrap();
     oracle.add("b", &[4.0, 4.0]).unwrap();
     let first = dir.path().join("one.lseg");
-    crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+    crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
         &first,
         2,
         2,
@@ -198,9 +198,7 @@ fn flat_mmap_deltas_release_acknowledged_payload_and_preserve_newer_ram() {
     .unwrap();
     index
         .attach_checkpoint_delta(
-            Arc::new(
-                crate::persistence::infrastructure::segment::SegmentReader::open(&first).unwrap(),
-            ),
+            Arc::new(crate::storage::infrastructure::segment::SegmentReader::open(&first).unwrap()),
             &["a".into(), "c".into()],
             &[true, true],
         )
@@ -210,7 +208,7 @@ fn flat_mmap_deltas_release_acknowledged_payload_and_preserve_newer_ram() {
     assert_eq!(index.resident_vector_payload_rows(), 0);
     assert_eq!(index.checkpoint_resident_bytes(), Some(0));
     let second = dir.path().join("two.lseg");
-    crate::persistence::infrastructure::segment::vector_writer::write_vector_segment(
+    crate::storage::infrastructure::segment::vector_writer::write_vector_segment(
         &second,
         3,
         2,
@@ -220,7 +218,7 @@ fn flat_mmap_deltas_release_acknowledged_payload_and_preserve_newer_ram() {
     index
         .attach_checkpoint_delta(
             Arc::new(
-                crate::persistence::infrastructure::segment::SegmentReader::open(&second).unwrap(),
+                crate::storage::infrastructure::segment::SegmentReader::open(&second).unwrap(),
             ),
             &["a".into(), "b".into()],
             &[true, true],

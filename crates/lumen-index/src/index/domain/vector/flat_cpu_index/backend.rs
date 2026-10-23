@@ -238,7 +238,7 @@ impl VectorIndex for FlatCpuIndex {
 
     fn install_checkpoint_base(
         &self,
-        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         external_ids: &[String],
         acknowledged: &HashMap<String, bool>,
     ) -> Result<()> {
@@ -308,7 +308,7 @@ impl VectorIndex for FlatCpuIndex {
 
     fn checkpoint_delta_readers(
         &self,
-    ) -> Vec<Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
+    ) -> Vec<Arc<crate::storage::infrastructure::segment::SegmentReader>> {
         self.inner
             .lock()
             .expect("flat lock poisoned")
@@ -325,7 +325,7 @@ impl VectorIndex for FlatCpuIndex {
 
     fn checkpoint_base_reader(
         &self,
-    ) -> Option<Arc<crate::persistence::infrastructure::segment::SegmentReader>> {
+    ) -> Option<Arc<crate::storage::infrastructure::segment::SegmentReader>> {
         self.inner
             .lock()
             .expect("flat lock poisoned")
@@ -336,9 +336,9 @@ impl VectorIndex for FlatCpuIndex {
 
     fn replace_checkpoint_base(
         &self,
-        base: &Arc<crate::persistence::infrastructure::segment::SegmentReader>,
-        inputs: &[Arc<crate::persistence::infrastructure::segment::SegmentReader>],
-        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        base: &Arc<crate::storage::infrastructure::segment::SegmentReader>,
+        inputs: &[Arc<crate::storage::infrastructure::segment::SegmentReader>],
+        reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         external_ids: &[String],
     ) -> Result<()> {
         if reader.n_docs() as usize != external_ids.len() {
@@ -400,8 +400,8 @@ impl VectorIndex for FlatCpuIndex {
 
     fn replace_checkpoint_deltas(
         &self,
-        inputs: &[Arc<crate::persistence::infrastructure::segment::SegmentReader>],
-        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        inputs: &[Arc<crate::storage::infrastructure::segment::SegmentReader>],
+        reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         external_ids: &[String],
     ) -> Result<()> {
         if inputs.is_empty() || reader.n_docs() as usize != external_ids.len() {
@@ -467,7 +467,7 @@ impl VectorIndex for FlatCpuIndex {
 
     fn attach_checkpoint_delta(
         &self,
-        reader: Arc<crate::persistence::infrastructure::segment::SegmentReader>,
+        reader: Arc<crate::storage::infrastructure::segment::SegmentReader>,
         external_ids: &[String],
         acknowledged: &[bool],
     ) -> Result<()> {

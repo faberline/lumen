@@ -1,9 +1,12 @@
 # Persistence
 
-This context owns sealed segment files and readers, checkpoint generations, AOF, restore, background merge, compaction and capacity.
+This context owns checkpoint generations, AOF, restore, background merge, compaction and capacity.
 
 Source: `crates/lumen-index/src/persistence`.
 Layers: domain, application, infrastructure and interfaces.
+
+The segment file format and its readers are in [storage](storage.md).
+Persistence publishes the sealed segments as checkpoint generations.
 
 Persistence publishes a checkpoint at an apply boundary. It reopens durable state and replays the retained log tail. The capture barrier coordinates this work with apply and restore.
 

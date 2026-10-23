@@ -151,6 +151,12 @@ infrastructure = "crates/lumen-index/src/sharding/infrastructure"
 interfaces = "crates/lumen-index/src/sharding/interfaces"
 
 [[contexts]]
+name = "storage"
+depends_on = []
+[contexts.layers]
+infrastructure = "crates/lumen-storage/src/infrastructure"
+
+[[contexts]]
 name = "replication"
 depends_on = []
 [contexts.layers]
@@ -168,7 +174,7 @@ interfaces = "crates/lumen-index/src/ingest/interfaces"
 
 [[contexts]]
 name = "persistence"
-depends_on = ["access", "index", "ingest"]
+depends_on = ["access", "index", "ingest", "storage"]
 [contexts.layers]
 domain = "crates/lumen-index/src/persistence/domain"
 application = "crates/lumen-index/src/persistence/application"
@@ -177,7 +183,7 @@ interfaces = "crates/lumen-index/src/persistence/interfaces"
 
 [[contexts]]
 name = "index"
-depends_on = ["access"]
+depends_on = ["access", "storage"]
 [contexts.layers]
 domain = "crates/lumen-index/src/index/domain"
 application = "crates/lumen-index/src/index/application"
@@ -770,14 +776,13 @@ paths = [
   "crates/lumen-index/src/index/domain/vector/hnsw_cpu_index.rs",
   "crates/lumen-index/src/index/domain/vector/hnsw_cpu_index/backend.rs",
 ]
-subject = "persistence.infrastructure"
-reason = "VectorIndex's checkpoint methods take and return Arc<SegmentReader>, the mmap reader of a sealed vector segment: the flat backend serves rows from its base and delta readers, both backends seal with write_vector_segment and reopen with SegmentReader::open, and HnswCpuIndex::open_from_segment rebuilds from one. P2: a vector-segment port in the index domain (row reads and a sealed writer) that the persistence segment implements."
+subject = "storage.infrastructure"
+reason = "VectorIndex's checkpoint methods take and return Arc<SegmentReader>, the mmap reader of a sealed vector segment: the flat backend serves rows from its base and delta readers, both backends seal with write_vector_segment and reopen with SegmentReader::open, and HnswCpuIndex::open_from_segment rebuilds from one. P2: a vector-segment port in the index domain (row reads and a sealed writer) that lumen-storage's segment implements."
 
 # The storage building blocks moved to index/domain as-is: the fast hash maps,
 # StorageError, SortableF64 and its range helpers, the Interner, the posting
 # lists and TokProbe. They still use rustc_hash, anyhow and roaring directly,
-# and persistence's text segment writer and sharding's fan-out still reach into
-# them (E16: persistence and index depend on each other).
+# and sharding's fan-out still reaches into them.
 
 [[exceptions]]
 rule = "B2"
@@ -802,12 +807,6 @@ reason = "TokProbe borrows the text index's tombstone RoaringBitmap and skips th
 
 [[exceptions]]
 rule = "B4"
-paths = ["crates/lumen-index/src/persistence/infrastructure/segment/text_writer.rs"]
-subject = "index.domain"
-reason = "write_text_segment takes the text index's live BTreeMap<String, Postings> and delta-encodes each token's docids and tfs into the posting block. P2: a text-segment writer port in the index domain that takes the token postings as plain docid and tf slices, implemented by the persistence segment, as the vector-segment port above."
-
-[[exceptions]]
-rule = "B4"
 paths = [
   "crates/lumen-index/src/sharding/application/search_fanout.rs",
   "crates/lumen-index/src/sharding/infrastructure/routed_router/scatter.rs",
@@ -818,9 +817,8 @@ reason = "The fan-out rejects a bad offset or cursor with StorageError::InvalidP
 # The value field indexes moved to index/domain as-is: TextIndex, KeywordIndex,
 # NumberIndex and SetIndex, with their query, term, range and sorted-walk
 # splits. They still keep their postings and tombstones in roaring bitmaps,
-# return anyhow from the sorted-walk callbacks, and hold persistence's composed
-# segment reader as their sealed base (E16: persistence and index depend on
-# each other).
+# return anyhow from the sorted-walk callbacks, and hold lumen-storage's
+# composed segment reader as their sealed base.
 
 [[exceptions]]
 rule = "B2"
@@ -850,20 +848,20 @@ paths = [
   "crates/lumen-index/src/index/domain/keyword_index.rs",
   "crates/lumen-index/src/index/domain/number_index.rs",
   "crates/lumen-index/src/index/domain/number_index/sorted.rs",
+  "crates/lumen-index/src/index/domain/postings.rs",
   "crates/lumen-index/src/index/domain/set_index.rs",
   "crates/lumen-index/src/index/domain/text_index.rs",
   "crates/lumen-index/src/index/domain/text_index/query.rs",
   "crates/lumen-index/src/index/domain/text_index/terms.rs",
 ]
-subject = "persistence.infrastructure"
-reason = "Each field index holds its sealed base as an Arc<ComposedSegmentReader>, the composed reader over the field's segment chain, and reads terms, values, members and postings through it; text_index/query also decodes a token's posting with TextPostingAt and walks it with SortedIdCursor. P2: a sealed-segment reader port in the index domain (term, value and posting reads) that the persistence composed segment implements, as the vector-segment port above."
+subject = "storage.infrastructure"
+reason = "Postings implements the text segment writer's TokenPostings, so a seal hands the writer the live token map. Each field index holds its sealed base as an Arc<ComposedSegmentReader>, the composed reader over the field's segment chain, and reads terms, values, members and postings through it; text_index/query also decodes a token's posting with TextPostingAt and walks it with SortedIdCursor. P2: a sealed-segment reader port in the index domain (term, value and posting reads) that lumen-storage's composed segment implements, as the vector-segment port above."
 
 # The per-field index enum moved to index/domain as-is, with the hash field
 # index, the per-doc field coverage and the text row's token set. FieldIndex's
 # snapshot, seal and reopen build and hide docs with roaring bitmaps, return
-# anyhow, and write and reopen the field's segment through persistence's
-# segment writers, SegmentReader and composed reader (E16: persistence and
-# index depend on each other).
+# anyhow, and write and reopen the field's segment through lumen-storage's
+# segment writers, SegmentReader and composed reader.
 
 [[exceptions]]
 rule = "B2"
@@ -901,15 +899,15 @@ paths = [
   "crates/lumen-index/src/index/domain/field_index/seal.rs",
   "crates/lumen-index/src/index/domain/hash_index.rs",
 ]
-subject = "persistence.infrastructure"
-reason = "HashIndex holds its sealed base as an Arc<ComposedSegmentReader>, like the other field indexes. FieldIndex's seal writes each scalar field through the persistence segment's number, hash, keyword and set writers, and the seal and reopen open the written file with SegmentReader::open and wrap it in ComposedSegmentReader::from_base. P2: the sealed-segment reader port above, plus a scalar-segment writer port in the index domain that the persistence segment implements, as the vector-segment port."
+subject = "storage.infrastructure"
+reason = "HashIndex holds its sealed base as an Arc<ComposedSegmentReader>, like the other field indexes. FieldIndex's seal writes each scalar field through lumen-storage's number, hash, keyword and set writers, and the seal and reopen open the written file with SegmentReader::open and wrap it in ComposedSegmentReader::from_base. P2: the sealed-segment reader port above, plus a scalar-segment writer port in the index domain that lumen-storage's segment implements, as the vector-segment port."
 
 # The collection entity moved to index/domain as-is, with the schema and value
 # checks and the record RAM bound. Collection returns anyhow, reads the clock
 # for its request-id window and the recovery profile, creates its seal
 # directory, holds ingest's ChangeJournal and journals each write against the
-# change budget's RetainedCharge, and seals and reopens through persistence's
-# segment writers and readers (E16: persistence and index depend on each other).
+# change budget's RetainedCharge, and seals and reopens through lumen-storage's
+# segment writers and readers.
 
 [[exceptions]]
 rule = "B2"
@@ -952,7 +950,7 @@ reason = "Collection holds a ChangeJournal<CheckpointValue> of the rows written 
 [[exceptions]]
 rule = "B4"
 paths = ["crates/lumen-index/src/index/domain/collection/segments.rs"]
-subject = "persistence.infrastructure"
+subject = "storage.infrastructure"
 reason = "The seal writes the collection's external-id column and each vector field's row-id sidecar with eid_writer::write_eid_segment, and the reopen reads them back with SegmentReader::open and maps a field's loaded base rows with ComposedSegmentReader::from_mapped_base. P2: the sealed-segment reader port and the scalar-segment writer port above, with an external-id column in each."
 
 # Query evaluation moved to index/domain/query as-is: the general evaluator, the
@@ -1032,7 +1030,7 @@ paths = [
   "crates/lumen-index/src/index/domain/collection/checkpoint.rs",
 ]
 subject = "domain->application"
-reason = "Collection journals its dirty rows as a ChangeJournal<CheckpointValue>, and checkpoint_value reads a row back as one. CheckpointValue moved with the checkpoint capture, which freezes the journal, and a file-backed scalar row holds persistence's SegmentReader. P2: CheckpointValue moves to the index domain beside the Collection, its file-backed row read through the sealed-segment reader port (see the persistence.infrastructure exceptions above)."
+reason = "Collection journals its dirty rows as a ChangeJournal<CheckpointValue>, and checkpoint_value reads a row back as one. CheckpointValue moved with the checkpoint capture, which freezes the journal, and a file-backed scalar row holds lumen-storage's SegmentReader. P2: CheckpointValue moves to the index domain beside the Collection, its file-backed row read through the sealed-segment reader port (see the storage.infrastructure exceptions above)."
 
 [[exceptions]]
 rule = "B3"
@@ -1063,17 +1061,9 @@ reason = "The Engine holds persistence's capacity Registry as layer_maintenance:
 
 [[exceptions]]
 rule = "B4"
-paths = [
-  "crates/lumen-index/src/index/application/checkpoint_capture.rs",
-  "crates/lumen-index/src/index/application/engine.rs",
-  "crates/lumen-index/src/index/application/engine/checkpoint_delta.rs",
-  "crates/lumen-index/src/index/application/engine/checkpoint_freeze.rs",
-  "crates/lumen-index/src/index/application/frozen_checkpoint.rs",
-  "crates/lumen-index/src/index/application/live_base.rs",
-  "crates/lumen-index/src/index/application/live_delta.rs",
-]
+paths = ["crates/lumen-index/src/index/application/engine.rs"]
 subject = "persistence.infrastructure"
-reason = "The checkpoint protocol runs on persistence's segment files: the capture pins delta and base SegmentReaders and the composed segment's scalar cut, publication and replacement, recovery attaches a delta SegmentReader, the frozen checkpoint writes the external-id and vector sidecars with eid_writer and vector_writer and reopens them with SegmentReader::open, the live base and deltas install ComposedSegmentReaders, and the Engine keeps the segment store's CheckpointRootGuards until its readers drop. P2: the sealed-segment reader and segment writer ports in the index domain (see the persistence.infrastructure exceptions above), and a checkpoint-root lease the segment store hands the Engine as an opaque guard."
+reason = "The Engine keeps the segment store's CheckpointRootGuards until its readers drop, so a checkpoint root the readers still map is not reclaimed. P2: a checkpoint-root lease the segment store hands the Engine as an opaque guard."
 
 [[exceptions]]
 rule = "B4"
@@ -1149,7 +1139,7 @@ paths = [
   "crates/lumen-index/src/index/application/apply/committed_index_apply/fields/stage.rs",
 ]
 subject = "persistence.infrastructure"
-reason = "The field apply stages a scalar field's winning rows as a private delta over its ComposedSegmentReader (with_private_delta, or from_private_empty_base when the field has no segment yet) and keeps the before and after readers in its FieldPlan until publication. P2: the sealed-segment reader port in the index domain (see the persistence.infrastructure exceptions above)."
+reason = "The field apply stages a scalar field's winning rows as a private delta over its ComposedSegmentReader (with_private_delta, or from_private_empty_base when the field has no segment yet) and keeps the before and after readers in its FieldPlan until publication. P2: the sealed-segment reader port in the index domain (see the storage.infrastructure exceptions above)."
 
 [[exceptions]]
 rule = "B4"
@@ -1199,12 +1189,6 @@ reason = "Borrowed Text preparation walks a retained record in place with FastIn
 
 [[exceptions]]
 rule = "B4"
-paths = ["crates/lumen-index/src/index/application/text_preparation/staging.rs"]
-subject = "persistence.infrastructure"
-reason = "Staging a Text row retries with a larger workspace when text_row_stage refuses with RequiredTextRowWorkspace, whose required_bytes the reservation grows to. P2: the segment writer port in the index domain (see the persistence.infrastructure exceptions above) reports the workspace a row needs as an error type the index domain defines."
-
-[[exceptions]]
-rule = "B4"
 paths = ["crates/lumen-index/src/ingest/domain/change_admission.rs"]
 subject = "index.application"
 reason = "PendingChangeCapacity::from_record_prepublication maps the Engine's RecordAdmissionError, a Capacity or Overflow refusal before publication, to the pending-capacity error the write coordinator and EngineSm return. The Engine uses ingest's change budget (see the ingest.domain exceptions above), so ingest does not list index in depends_on. P2: the apply port ingest defines (see the index.application exception above) reports admission refusals with its own error type, which the Engine's adapter maps RecordAdmissionError onto."
@@ -1214,7 +1198,7 @@ reason = "PendingChangeCapacity::from_record_prepublication maps the Engine's Re
 # committed record, and the checkpoint projections that write the journal's
 # rows as segments. The index domain and application hold the staged rows
 # and call the projections, the projections read the journal's
-# CheckpointValue, and every row is a persistence segment. field_deltas.rs
+# CheckpointValue, and every row is a lumen-storage segment. field_deltas.rs
 # called the projections through storage.rs, which the checker did not see.
 
 [[exceptions]]
@@ -1237,7 +1221,7 @@ paths = [
   "crates/lumen-index/src/index/domain/text_index/terms.rs",
 ]
 subject = "domain->infrastructure"
-reason = "TextIndex keeps each prepared row's StagedTextRow in staged_rows until the next checkpoint and folds their terms and postings into its reads, its term count falls back to text_projection::live_term_count when a staged row cannot list its terms, and the field seal writes a Text field's live postings with text_projection::write_live. P2: TextIndex holds its staged rows as the staged-row port (see the application->infrastructure exception above), and the seal and term count go through the text-segment writer port (see the index.domain exception on text_writer above)."
+reason = "TextIndex keeps each prepared row's StagedTextRow in staged_rows until the next checkpoint and folds their terms and postings into its reads, its term count falls back to text_projection::live_term_count when a staged row cannot list its terms, and the field seal writes a Text field's live postings with text_projection::write_live. P2: TextIndex holds its staged rows as the staged-row port (see the application->infrastructure exception above), and the seal and term count go through lumen-storage's text segment writer, which reads the postings as TokenPostings."
 
 [[exceptions]]
 rule = "B3"
@@ -1249,22 +1233,6 @@ paths = [
 ]
 subject = "infrastructure->application"
 reason = "The checkpoint projections read each journal row as the checkpoint capture's CheckpointValue (an owned value, a StagedText or StagedVector row, or a file-backed scalar row), and committed_scalar_files refuses an unvalidated field with more items than the Engine's MAX_INDEX_ITEMS. P2: CheckpointValue moves to the index domain beside the Collection (see the domain->application exception above), and MAX_INDEX_ITEMS becomes an index domain limit the Engine and the scalar files share."
-
-[[exceptions]]
-rule = "B4"
-paths = [
-  "crates/lumen-index/src/index/infrastructure/checkpoint_projection/scalar_projection.rs",
-  "crates/lumen-index/src/index/infrastructure/checkpoint_projection/scalar_projection/merge.rs",
-  "crates/lumen-index/src/index/infrastructure/checkpoint_projection/text_projection.rs",
-  "crates/lumen-index/src/index/infrastructure/checkpoint_projection/text_projection/rows.rs",
-  "crates/lumen-index/src/index/infrastructure/committed_scalar_files.rs",
-  "crates/lumen-index/src/index/infrastructure/committed_scalar_files/selected.rs",
-  "crates/lumen-index/src/index/infrastructure/staging/large_text_row.rs",
-  "crates/lumen-index/src/index/infrastructure/staging/large_text_row/one_row.rs",
-  "crates/lumen-index/src/index/infrastructure/staging/staged_text_row.rs",
-]
-subject = "persistence.infrastructure"
-reason = "Every file-backed row is a persistence segment: the checkpoint projections and the committed scalar files lend their rows to the segment stream writers (the keyword, number, set and Text projections, with ScalarProjectionScratch) and read staged dictionaries and postings through SegmentReader, a staged Text row is a one-row segment text_row_stage writes (the long-token path through write_text_projection) and SegmentReader maps, and the scalar files open their private output with SegmentReader::open_owned_stage. P2: the segment writer and sealed-segment reader ports in the index domain (see the persistence.infrastructure exceptions above), which the persistence segment implements and index/infrastructure is handed."
 
 [[exceptions]]
 rule = "B4"

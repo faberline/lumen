@@ -15,8 +15,8 @@ use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::infrastructure::committed_scalar_files;
 use crate::index::infrastructure::staging::staged_vector_row;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::shared_kernel::types::schema::FieldType;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 pub(super) fn stage_committed_files(
     scanner: &FastIndexScanner<'_>,

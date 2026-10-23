@@ -5,7 +5,7 @@
 use crate::index::domain::fast_hash::FastHashSet;
 use crate::index::domain::text_index::{note_staged_term_probes, LiveTermCache, TextIndex};
 use crate::index::infrastructure::checkpoint_projection::text_projection;
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 impl TextIndex {
     /// Count of distinct tokens with >=1 LIVE doc on the ACTIVE source — the
@@ -28,7 +28,7 @@ impl TextIndex {
     ///   `|live composed terms| + |(staged tokens U tail tokens) \ live composed terms|`
     ///
     /// and NEITHER half walks the composed dictionary. The first half is
-    /// [`crate::persistence::infrastructure::composed_segment::ComposedSegmentReader::known_distinct_terms`],
+    /// [`crate::storage::infrastructure::composed_segment::ComposedSegmentReader::known_distinct_terms`],
     /// an O(1) number maintained at publication (see its own doc block) and
     /// exact whenever there are no pending deletes; the second folds one
     /// dictionary binary search per staged/tail token, and both of those sets

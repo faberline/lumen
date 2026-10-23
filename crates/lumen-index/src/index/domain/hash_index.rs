@@ -5,7 +5,7 @@ use anyhow::{anyhow, Result};
 use roaring::RoaringBitmap;
 
 use crate::index::domain::fast_hash::FastHashMap;
-use crate::persistence::infrastructure::composed_segment::ComposedSegmentReader;
+use crate::storage::infrastructure::composed_segment::ComposedSegmentReader;
 
 /// A `hash` field: docid → 64-bit hash, answered by a brute-force Hamming scan.
 /// No LSH bucketing yet (linear over the forward map) — correct, not yet

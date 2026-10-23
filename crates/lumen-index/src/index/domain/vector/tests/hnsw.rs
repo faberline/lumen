@@ -303,8 +303,8 @@ fn cold_vector_coverage_fixture(
     tempfile::TempDir,
     std::collections::BTreeMap<String, crate::shared_kernel::types::schema::FieldSpec>,
 ) {
-    use crate::persistence::infrastructure::segment::{eid_writer, vector_writer};
     use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
+    use crate::storage::infrastructure::segment::{eid_writer, vector_writer};
     let root = tempfile::tempdir().unwrap();
     let eids = ["live", "missing", "retired"];
     eid_writer::write_eid_segment(&root.path().join("_collection.lmeta.lseg"), 7, &eids).unwrap();
@@ -408,8 +408,8 @@ fn hnsw_cold_collection_reopen_still_rejects_missing_vector_rows() {
 fn hnsw_cold_collection_flat_sidecar_mismatch_still_fails_closed() {
     use crate::index::domain::collection::Collection;
     use crate::index::infrastructure::checkpoint_fs::CheckpointLayout;
-    use crate::persistence::infrastructure::segment::eid_writer;
     use crate::shared_kernel::types::schema::VectorBackend;
+    use crate::storage::infrastructure::segment::eid_writer;
     for (backend, deferred) in [
         (VectorBackend::FlatCpu, false),
         (VectorBackend::HnswCpu, true),

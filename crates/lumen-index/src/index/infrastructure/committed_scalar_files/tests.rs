@@ -8,10 +8,10 @@ use crate::index::infrastructure::committed_scalar_files::{
 };
 use crate::ingest::domain::wal_record::WalRecord;
 use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::shared_kernel::log_entry::RaftLogEntry;
 use crate::shared_kernel::types::document::{FieldValue, IndexItem, IndexRequest};
 use crate::shared_kernel::types::schema::FieldType;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 fn command(rows: Vec<(&str, FieldValue)>) -> Vec<u8> {
     WalRecord::new(RaftLogEntry::Index {

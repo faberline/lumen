@@ -3,8 +3,6 @@
 
 use crate::index::application::{engine::Engine, recovery_profile::RecoveryPhase};
 use crate::persistence::domain::generation_manifest::SegmentKind;
-use crate::persistence::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
-use crate::persistence::infrastructure::segment::SegmentReader;
 use crate::persistence::infrastructure::segment_rdb_store::field_deltas::read_delta_values;
 use crate::persistence::infrastructure::segment_rdb_store::flat_layout::materialize_flat_reopen_tree;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::read_generation_manifest;
@@ -12,6 +10,8 @@ use crate::persistence::infrastructure::segment_rdb_store::{
     GenerationRecord, SegmentRdbStore, GENERATION_MANIFEST_V2, GENERATION_MANIFEST_V3,
     HNSW_GRAPH_CACHE_DIR,
 };
+use crate::storage::infrastructure::segment::sparse_rows::decode_sparse_local_rows;
+use crate::storage::infrastructure::segment::SegmentReader;
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;

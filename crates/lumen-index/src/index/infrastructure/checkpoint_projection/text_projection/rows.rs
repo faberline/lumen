@@ -12,8 +12,8 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::index::application::checkpoint_capture::CheckpointValue;
 use crate::index::infrastructure::checkpoint_projection::text_projection::Terms;
-use crate::persistence::infrastructure::segment::stream::text_projection::TextStreamView;
-use crate::persistence::infrastructure::segment::SegmentReader;
+use crate::storage::infrastructure::segment::stream::text_projection::TextStreamView;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 #[cfg(test)]
 use std::cell::Cell;

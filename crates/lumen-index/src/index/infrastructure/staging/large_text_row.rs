@@ -22,11 +22,11 @@ use memmap2::{Mmap, MmapOptions};
 use crate::index::infrastructure::analysis::unicode_lower_stream::{
     lowercase_stream_workspace_bytes, write_streaming_lowercase,
 };
-use crate::persistence::infrastructure::segment::stream::text_projection::write_text_projection;
-use crate::persistence::infrastructure::segment::text_row_stage::{
+use crate::storage::infrastructure::segment::stream::text_projection::write_text_projection;
+use crate::storage::infrastructure::segment::text_row_stage::{
     stage_text_row, TextRowStageOptions,
 };
-use crate::persistence::infrastructure::segment::SegmentReader;
+use crate::storage::infrastructure::segment::SegmentReader;
 
 pub(in crate::index) const LARGE_TOKEN_SOURCE_BYTES: usize = 64 * 1024;
 const MAPPED_TOKEN_BYTES: usize = 256;
