@@ -176,6 +176,7 @@ impl AsyncVerifier for LumenVerifier {
                     principal: Arc::new(principal),
                     authenticator: Arc::clone(authenticator),
                     namespace: Arc::clone(namespace),
+                    runtime_authorized: false,
                 })
             }
         }

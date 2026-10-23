@@ -123,6 +123,49 @@ async fn record_request_arrival(req: Request, next: Next) -> axum::response::Res
         .await
 }
 
+/// The four routes that stay anonymous under Managed auth (#managed-auth-unification).
+pub const ANONYMOUS_ROUTES: &[&str] = &["/healthz", "/readyz", "/metrics", "/version"];
+
+/// Whether `path` is one of the four anonymous endpoints.
+pub fn is_anonymous_route(path: &str) -> bool {
+    ANONYMOUS_ROUTES.contains(&path)
+}
+
+/// Authentication middleware for the full router surface: skips anonymous probe
+/// routes, and delegates non-anonymous routes to `service_auth`.
+async fn routing_auth_middleware(
+    axum::extract::State(verifier): axum::extract::State<Arc<LumenVerifier>>,
+    req: Request,
+    next: Next,
+) -> axum::response::Response {
+    if is_anonymous_route(req.uri().path()) {
+        return next.run(req).await;
+    }
+    auth_middleware(axum::extract::State(verifier), req, next).await
+}
+
+/// Whole-runtime authorization middleware: under Managed auth (`required`),
+/// asks one `SubjectAccessReview` on `lumen.axiom.dev/lumenruntimes`,
+/// name = this runtime's name, verb `use`, for every non-anonymous route.
+async fn authorize_runtime_middleware(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    mut req: Request,
+    next: Next,
+) -> axum::response::Response {
+    if is_anonymous_route(req.uri().path()) {
+        return next.run(req).await;
+    }
+    if let Some(auth) = req.extensions().get::<AuthContext>().cloned() {
+        let runtime = &state.auth.runtime;
+        if let Err(auth_err) = auth.ensure_runtime(runtime).await {
+            use axum::response::IntoResponse;
+            return auth_err.into_response();
+        }
+        req.extensions_mut().insert(auth.into_runtime_authorized());
+    }
+    next.run(req).await
+}
+
 pub fn router(state: AppState) -> Router {
     router_with_admission(state, None)
 }
@@ -220,8 +263,6 @@ pub fn router_with_admission(
             "/admin/restart:seal-hnsw-cache",
             post(admin_restart_seal_hnsw_cache),
         )
-        .layer(from_fn(record_subject_to_span))
-        .layer(from_fn_with_state(auth_state, auth_middleware))
         // Bound request bodies: a bulk index is ~MBs (the item cap is the real
         // guard); 8MiB is the broker payload budget. Enforces the cap at the HTTP
         // layer with a structured 413 envelope and streams/chunked bodies bounded
@@ -282,7 +323,10 @@ pub fn router_with_admission(
 
     probes
         .merge(admin.with_state(state.clone()))
-        .merge(data_plane.with_state(state))
+        .merge(data_plane.with_state(state.clone()))
+        .layer(from_fn_with_state(state, authorize_runtime_middleware))
+        .layer(from_fn(record_subject_to_span))
+        .layer(from_fn_with_state(auth_state, routing_auth_middleware))
         // One tracing span per HTTP request — structured request logs always, and
         // the source spans the OTLP layer exports as traces when LUMEN_OTLP_ENDPOINT
         // is set. INFO level so the default `info` EnvFilter keeps it.
@@ -292,4 +336,18 @@ pub fn router_with_admission(
         .layer(axum::middleware::from_fn(
             service_http::server_timing_middleware,
         ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// AC: A test lists the anonymous routes and fails if one is added or removed.
+    #[test]
+    fn test_anonymous_routes_set() {
+        let expected = ["/healthz", "/metrics", "/readyz", "/version"];
+        let mut actual = ANONYMOUS_ROUTES.to_vec();
+        actual.sort();
+        assert_eq!(actual, expected, "anonymous routes must match exactly");
+    }
 }
