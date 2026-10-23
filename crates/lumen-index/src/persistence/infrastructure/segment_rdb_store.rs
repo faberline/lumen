@@ -149,8 +149,32 @@ pub struct SegmentRdbStore {
     root_guard: Option<CheckpointRootGuard>,
     pub(in crate::persistence) publication_fence:
         Option<crate::persistence::application::capacity::PublicationFence>,
+    pub(in crate::persistence) inventory: Arc<Mutex<Option<telemetry::RetainedInventory>>>,
     recovery_profile: RecoveryProfile,
     recovery_timings: Arc<Mutex<RecoveryTimings>>,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub use telemetry::{inspected_file_entries, reset_inspected_file_entries};
+
+impl SegmentRdbStore {
+    pub(crate) fn ensure_inventory(&self) -> Result<()> {
+        let mut guard = self
+            .inventory
+            .lock()
+            .map_err(|_| anyhow::anyhow!("segment inventory lock poisoned"))?;
+        if guard.is_none() {
+            let inv = telemetry::RetainedInventory::full_walk(&self.root)?;
+            *guard = Some(inv);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn mark_inventory_stale(&self) {
+        if let Ok(mut guard) = self.inventory.lock() {
+            *guard = None;
+        }
+    }
 }
 
 /// Aggregate timings for the pre-bind portion of durable recovery.

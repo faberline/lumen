@@ -161,6 +161,7 @@ impl SegmentRdbStore {
         let store = Self {
             save_gate: shared_save_gate(&root)?,
             pending_frozen: shared_pending_frozen(&root)?,
+            inventory: shared_inventory(&root)?,
             merge_observer: observer,
             background: shared(&root)?,
             root_guard: None,
@@ -174,6 +175,7 @@ impl SegmentRdbStore {
         };
         let _guard = store.save_gate.lock_owned();
         let bootstrap = store.prepare_startup_root()?;
+        let _ = store.ensure_inventory();
         drop(_guard);
         Ok(Self { bootstrap, ..store })
     }
@@ -238,4 +240,36 @@ fn shared_pending_frozen(root: &Path) -> Result<Arc<Mutex<Option<PendingFrozenCh
     let pending = Arc::new(Mutex::new(None));
     registry.insert(root.to_path_buf(), Arc::downgrade(&pending));
     Ok(pending)
+}
+
+fn shared_inventory(
+    root: &Path,
+) -> Result<
+    Arc<
+        Mutex<
+            Option<
+                crate::persistence::infrastructure::segment_rdb_store::telemetry::RetainedInventory,
+            >,
+        >,
+    >,
+> {
+    static ROOT_INVENTORY: OnceLock<
+        Mutex<
+            HashMap<
+                PathBuf,
+                Weak<Mutex<Option<crate::persistence::infrastructure::segment_rdb_store::telemetry::RetainedInventory>>>,
+            >,
+        >,
+    > = OnceLock::new();
+    let registry = ROOT_INVENTORY.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut registry = registry
+        .lock()
+        .map_err(|_| anyhow!("segment inventory registry poisoned"))?;
+    registry.retain(|_, inventory| inventory.strong_count() > 0);
+    if let Some(inventory) = registry.get(root).and_then(Weak::upgrade) {
+        return Ok(inventory);
+    }
+    let inventory = Arc::new(Mutex::new(None));
+    registry.insert(root.to_path_buf(), Arc::downgrade(&inventory));
+    Ok(inventory)
 }

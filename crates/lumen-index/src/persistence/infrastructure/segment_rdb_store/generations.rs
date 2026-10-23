@@ -39,6 +39,7 @@ impl SegmentRdbStore {
         let current = history.first();
 
         let mut removed = 0usize;
+        let mut removed_names = Vec::new();
         for (name, path) in all {
             if retain.contains(&name) {
                 continue;
@@ -56,12 +57,23 @@ impl SegmentRdbStore {
             {
                 continue;
             }
-            std::fs::remove_dir_all(&path)
-                .with_context(|| format!("remove segment generation {}", path.display()))?;
+            if let Err(error) = std::fs::remove_dir_all(&path) {
+                self.mark_inventory_stale();
+                return Err(error)
+                    .with_context(|| format!("remove segment generation {}", path.display()));
+            }
             self.background.reclaimed(&name);
             removed += 1;
+            removed_names.push(name);
         }
         if removed > 0 {
+            if let Ok(mut guard) = self.inventory.lock() {
+                if let Some(inventory) = guard.as_mut() {
+                    for name in &removed_names {
+                        inventory.remove_generation(name);
+                    }
+                }
+            }
             sync_directory(&self.root).context("fsync checkpoint root after prune")?;
         }
         Ok(removed)
