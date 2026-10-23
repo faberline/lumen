@@ -25,7 +25,10 @@ use crate::index::interfaces::http::query_method::collection_id_query_dispatch;
     post,
     path = "/collections/{collection_id}/search",
     tag = "Query",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
+    params(
+        ("collection_id" = String, Path, description = "Collection namespace"),
+        ("X-Read-Consistency" = Option<String>, Header, description = "Read consistency level: `leader` (default), `any`, or `bounded(<ms>)` (e.g. `bounded(250)`).")
+    ),
     request_body = SearchRequest,
     responses((status = 200, description = "Search hits", body = SearchResponse))
 )]
@@ -49,7 +52,10 @@ pub(crate) async fn search(
     post,
     path = "/collections/{collection_id}/search:all",
     tag = "Query",
-    params(("collection_id" = String, Path, description = "Collection namespace")),
+    params(
+        ("collection_id" = String, Path, description = "Collection namespace"),
+        ("X-Read-Consistency" = Option<String>, Header, description = "Read consistency level: `leader` (default), `any`, or `bounded(<ms>)` (e.g. `bounded(250)`).")
+    ),
     request_body = SearchAllRequest,
     responses(
         (status = 200, description = "All matching external ids; materializes the complete result set", body = SearchAllResponse),
