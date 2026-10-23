@@ -19,7 +19,7 @@ use crate::persistence::infrastructure::segment_rdb_store::manifest_io::{
 };
 use crate::persistence::infrastructure::segment_rdb_store::save_gate::SavePermit;
 use crate::persistence::infrastructure::segment_rdb_store::telemetry::{
-    manifest_bytes, new_file_bytes, pending_deltas, MeasuredCapture,
+    self, pending_deltas, MeasuredCapture,
 };
 use crate::persistence::infrastructure::segment_rdb_store::{
     GenerationRecord, GenerationStaging, PendingFrozenCheckpoint, PendingFrozenLease,
@@ -266,10 +266,42 @@ impl SegmentRdbStore {
         // staged files are still private. CURRENT must never expose a catalog
         // whose live view has not retained its post-capture private suffix.
         engine.prepare_scalar_checkpoint_publications(&mut capture)?;
-        let checkpoint_payload_bytes = new_file_bytes(
+        let mut inv_guard = self
+            .inventory
+            .lock()
+            .map_err(|_| anyhow!("segment inventory lock poisoned"))?;
+        if inv_guard.is_none() {
+            *inv_guard = Some(telemetry::RetainedInventory::full_walk(&self.root)?);
+        }
+        let inventory = inv_guard.as_mut().expect("inventory initialized");
+        let idle_collections: std::collections::BTreeSet<String> = capture
+            .reused
+            .iter()
+            .filter(|id| {
+                !capture
+                    .field_deltas
+                    .get(*id)
+                    .is_some_and(|fields| fields.values().any(|rows| !rows.is_empty()))
+            })
+            .cloned()
+            .collect();
+        let changed_files = telemetry::collect_staged_changed_files(
             &staging_path,
-            current.as_ref().map(|record| record.path.as_path()),
+            &collections,
+            &idle_collections,
         )?;
+        let mut seen = std::collections::BTreeSet::new();
+        let mut checkpoint_payload_bytes = 0u64;
+        for files in changed_files.values() {
+            for &(id, len) in files {
+                if seen.insert(id) && !inventory.contains_identity(&id) {
+                    checkpoint_payload_bytes = checkpoint_payload_bytes
+                        .checked_add(len)
+                        .ok_or_else(|| anyhow!("checkpoint payload byte count overflow"))?;
+                }
+            }
+        }
+        drop(inv_guard);
         let manifest = SegmentGenerationManifest {
             schema_version: GENERATION_MANIFEST_SCHEMA_VERSION,
             checkpoint_sequence: up_to_seq,
@@ -280,10 +312,12 @@ impl SegmentRdbStore {
         };
         if let Err(error) = write_generation_manifest(&staging_path, &manifest) {
             let _ = std::fs::remove_dir_all(&staging_path);
+            self.mark_inventory_stale();
             return Err(error);
         }
+        let manifest_identity = telemetry::manifest_identity(&staging_path)?;
         let written_bytes = checkpoint_payload_bytes
-            .checked_add(manifest_bytes(&staging_path)?)
+            .checked_add(manifest_identity.1)
             .ok_or_else(|| anyhow!("checkpoint byte count overflow"))?;
 
         let staged_record = GenerationRecord {
@@ -292,7 +326,7 @@ impl SegmentRdbStore {
             sequence: up_to_seq,
             revision,
             legacy: false,
-            previous,
+            previous: previous.clone(),
         };
         // Validate the catalog and physical segment envelopes. Reopening an
         // Engine here would reconstruct every interner and HNSW graph merely
@@ -306,6 +340,7 @@ impl SegmentRdbStore {
             .collect();
         if let Err(error) = validate_generation_layout_with_prior(&staged_record, &inherited) {
             let _ = std::fs::remove_dir_all(&staging_path);
+            self.mark_inventory_stale();
             return Err(error).context("validate staged segment generation");
         }
         let (pending_bytes, pending_layers) = pending_deltas(&staging_path, &manifest.collections)?;
@@ -340,6 +375,7 @@ impl SegmentRdbStore {
             Ok(pin)
         });
         if let Err(error) = commit {
+            self.mark_inventory_stale();
             if error.class() == storage_durable::CommitFailureClass::CommitUncertain {
                 engine.capture_barrier.apply().mark_uncertain();
                 // A durable pointer may have advanced. Keep the actual payload
@@ -359,6 +395,19 @@ impl SegmentRdbStore {
             .lock()
             .unwrap_or_else(|p| p.into_inner()) =
             Some((staged_record.name.clone(), serde_json::to_vec(&manifest)?));
+        if let Ok(mut guard) = self.inventory.lock() {
+            if let Some(inventory) = guard.as_mut() {
+                if !inventory.record_published_generation(
+                    staged_record.name.as_str(),
+                    manifest_identity,
+                    changed_files,
+                    &capture.reused,
+                    previous.as_ref().map(|p| p.as_str()),
+                ) {
+                    *guard = None;
+                }
+            }
+        }
         // Publication is durable. Bind only collections whose captured tuple
         // still matches; concurrent mutations retain their dirty state.
         let acknowledge_started = trace_context.map(|_| Instant::now());
