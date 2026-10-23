@@ -1,7 +1,5 @@
 use crate::domain::lumen_spec::serving::AuthMode;
-use crate::infrastructure::crd_manifest::{
-    crd_yaml, fleet_crd_yaml, FORBIDDEN_CEL_OPERATOR,
-};
+use crate::infrastructure::crd_manifest::{crd_yaml, fleet_crd_yaml, FORBIDDEN_CEL_OPERATOR};
 
 /// A namespaced fleet could not legally own objects in other namespaces:
 /// Kubernetes rejects cross-namespace owner references and its garbage
@@ -77,4 +75,23 @@ fn one_apply_installs_both_custom_resources() {
 fn auth_defaults_to_required() {
     assert_eq!(AuthMode::default(), AuthMode::Required);
     assert_eq!(AuthMode::default().as_env(), "required");
+}
+
+/// The Fleet CRD OpenAPI schema declares the rollout status fields.
+#[test]
+fn the_fleet_crd_names_rollout_status_fields() {
+    let yaml = fleet_crd_yaml();
+    for field in [
+        "phase",
+        "observedGeneration",
+        "desiredHash",
+        "phaseSince",
+        "stallReason",
+        "lastStall",
+    ] {
+        assert!(
+            yaml.contains(field),
+            "fleet CRD must contain rollout status field `{field}`: {yaml}"
+        );
+    }
 }
