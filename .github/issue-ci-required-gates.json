@@ -1,0 +1,24 @@
+{
+  "controller_source": "faberline/aw@84e9b72b4a63cc30b47449a2e321981525fa9c34:plugins/faberline/skills/issue-ci/scripts/handoff.py",
+  "qualification_blockers": [
+    "No general pull_request unit workflow exists on the default branch.",
+    "Existing gke-test is path-filtered and does not establish affected functional and E2E coverage for every product change.",
+    "No declared affected performance pull_request gate exists; manual/release workflows are not PR qualification.",
+    "A reviewed coverage selection policy and real qualifying jobs are needed before clearing these blockers; no blanket docs-only zero-check bypass is approved."
+  ],
+  "workflows": [
+    {
+      "path": ".github/workflows/gke-test.yml",
+      "jobs": [
+        "build the e2e test client",
+        "build test image / build (x86_64-unknown-linux-musl)",
+        "build test image / build (aarch64-unknown-linux-musl)",
+        "build test image / publish ghcr test image",
+        "resolve image identity",
+        "standalone container e2e",
+        "GKE e2e (overlay) / deploy + test on shared GKE",
+        "GKE e2e (operator) / deploy + test on shared GKE"
+      ]
+    }
+  ]
+}

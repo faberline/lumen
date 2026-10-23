@@ -1,0 +1,15 @@
+{
+  "workflow_name": "gke-test",
+  "path": ".github/workflows/gke-test.yml",
+  "jobs": [
+    "build the e2e test client",
+    "build test image / build (x86_64-unknown-linux-musl)",
+    "build test image / build (aarch64-unknown-linux-musl)",
+    "build test image / publish ghcr test image",
+    "resolve image identity",
+    "standalone container e2e",
+    "GKE e2e (overlay) / deploy + test on shared GKE",
+    "GKE e2e (operator) / deploy + test on shared GKE"
+  ],
+  "inventory_run_url": "https://github.com/faberline/lumen/actions/runs/39818094295"
+}

@@ -1,0 +1,43 @@
+# Controller vendored unchanged from faberline/aw@84e9b72b4a63cc30b47449a2e321981525fa9c34.
+# Staged: qualification blockers intentionally prevent lifecycle writes.
+# This is a trusted default-branch workflow, NOT pull_request_target execution.
+name: Issue CI handoff
+on:
+  workflow_run:
+    workflows: ["gke-test"]
+    types: [completed]
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+  issues: write
+# All handoff invocations share this group. Default pending replacement is
+# safe because EVERY wake reconciles ALL managed PRs, including displaced wakes.
+concurrency:
+  group: issue-ci-handoff
+  cancel-in-progress: false
+jobs:
+  handoff:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      # Pin actions/checkout to a reviewed immutable commit in the consumer.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Refuse incomplete qualification policy
+        run: python3 scripts/issue-ci/check-policy.py .github/issue-ci-required-gates.json
+      - name: Reconcile current PRs using trusted controller and config
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reconcile all managed PRs from fresh metadata, not just this event's
+          # PR. This prevents pending replacement from stranding another PR.
+          python3 scripts/issue-ci/handoff.py \
+            --repo "$REPO" --run-id "$RUN_ID" --reconcile \
+            --config .github/issue-ci-required-gates.json
