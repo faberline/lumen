@@ -10,7 +10,9 @@ use service_auth::k8s::{
 use service_auth::{AsyncVerifier, Role};
 
 use crate::application::authorization::{verb, AuthContext, AuthTarget};
-use crate::domain::identity::{AUDIENCE, COLLECTIONS_RESOURCE};
+use crate::domain::identity::{
+    API_GROUP, AUDIENCE, COLLECTIONS_RESOURCE, RUNTIMES_RESOURCE, RUNTIME_VERB,
+};
 use crate::infrastructure::lumen_verifier::LumenVerifier;
 
 /// Which half of the apiserver is unreachable, so an outage in
@@ -47,6 +49,7 @@ impl Cluster {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_user(mut self, username: &str) -> Self {
         self.username = username.to_string();
         self
@@ -194,6 +197,18 @@ fn the_admin_surface_is_a_separate_resource_not_a_wildcard_collection() {
     assert_eq!(attributes.resource, "lumenadmin");
     assert_eq!(attributes.name, None);
     assert_ne!(attributes.resource, COLLECTIONS_RESOURCE);
+}
+
+/// R7: the runtime surface asks about this runtime's name under group
+/// `lumen.axiom.dev`, resource `lumenruntimes`, with verb `use`.
+#[test]
+fn a_runtime_target_asks_about_that_runtime_with_verb_use() {
+    let attributes = AuthTarget::Runtime("lumen-prod").attributes("serving", Role::Read);
+    assert_eq!(attributes.group, API_GROUP);
+    assert_eq!(attributes.namespace, "serving");
+    assert_eq!(attributes.resource, RUNTIMES_RESOURCE);
+    assert_eq!(attributes.name.as_deref(), Some("lumen-prod"));
+    assert_eq!(attributes.verb, RUNTIME_VERB);
 }
 
 mod authentication;
