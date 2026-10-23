@@ -10,52 +10,52 @@
 - Non-goals: Source-record hydration and embedding execution.
 - Neighbours: Protocol documents the wire contract; indexing owns schema changes.
 
-## Unified search contract (Milestone #17)
+## Unified search contract (Milestone #28)
 
 - Problem: Scoring, filtering, cursors, and totals need one deterministic contract.
 - Who: Search callers and generated clients.
 - Promise: Search separates scoring and filtering with stable result controls.
-- Outcome: `unified-search-contract`. Tracking: [Milestone #17](https://github.com/faberline/lumen/milestone/17).
+- Outcome: `unified-search-contract`. Tracking: [Milestone #28](https://github.com/faberline/lumen/milestone/28).
 - Non-goals: Cross-collection joins.
 - Open: Finalize compatibility and failure semantics.
 - Neighbours: Search v2 migration and generated-client parity.
 
-## Exact search facets metrics (Milestone #19)
+## Exact search facets metrics (Milestone #29)
 
 - Problem: Callers need exact reported facet and metric values.
 - Who: Search dashboards and APIs.
 - Promise: Search can return declared exact facets and metrics.
-- Outcome: `exact-search-facets-metrics`. Tracking: [Milestone #19](https://github.com/faberline/lumen/milestone/19).
+- Outcome: `exact-search-facets-metrics`. Tracking: [Milestone #29](https://github.com/faberline/lumen/milestone/29).
 - Non-goals: General OLAP.
 - Open: Define exact limits and failures.
 - Neighbours: Facet governance and distributed convergence.
 
-## Facet resource governance (Milestone #20)
+## Facet resource governance (Milestone #30)
 
 - Problem: A facet request can consume unbounded resources.
 - Who: Operators and search callers.
 - Promise: Facet work has explicit admission and resource limits.
-- Outcome: `facet-resource-governance`. Tracking: [Milestone #20](https://github.com/faberline/lumen/milestone/20).
+- Outcome: `facet-resource-governance`. Tracking: [Milestone #30](https://github.com/faberline/lumen/milestone/30).
 - Non-goals: Silent approximate results.
 - Open: Define budgets and refusal classes.
 - Neighbours: Exact facets and runtime configuration.
 
-## Distributed facet convergence (Milestone #21)
+## Distributed facet convergence (Milestone #31)
 
 - Problem: Shards must merge exact facet state safely.
 - Who: Distributed-search callers.
 - Promise: Routed search merges declared exact facet state across shards.
-- Outcome: `distributed-facet-convergence`. Tracking: [Milestone #21](https://github.com/faberline/lumen/milestone/21).
+- Outcome: `distributed-facet-convergence`. Tracking: [Milestone #31](https://github.com/faberline/lumen/milestone/31).
 - Non-goals: Best-effort partial answers.
 - Open: Define shard-failure and cleanup behavior.
 - Neighbours: Distributed routing and merge.
 
-## Vector hybrid facets (Milestone #128)
+## Vector hybrid facets (Milestone #35)
 
 - Problem: Vector and hybrid candidates need a clear facet scope.
 - Who: Vector-search callers.
 - Promise: Governed facets define their exact or labelled approximate candidate scope.
-- Outcome: `vector-hybrid-facets`. Tracking: [Milestone #128](https://github.com/faberline/lumen/milestone/128).
+- Outcome: `vector-hybrid-facets`. Tracking: [Milestone #35](https://github.com/faberline/lumen/milestone/35).
 - Non-goals: Claiming approximate counts are exact.
 - Open: Choose the candidate and match scope.
 - Neighbours: Exact facets and distributed convergence.
