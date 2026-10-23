@@ -1,5 +1,5 @@
 {
-  "controller_source": "faberline/aw@84e9b72b4a63cc30b47449a2e321981525fa9c34:plugins/faberline/skills/issue-ci/scripts/handoff.py",
+  "controller_source": "faberline/aw@67af8d020df3ca2ec4b064289408cfb0c2f8b299:plugins/faberline/skills/issue-ci/scripts/handoff.py",
   "qualification_blockers": [
     "No general pull_request unit workflow exists on the default branch.",
     "Existing gke-test is path-filtered and does not establish affected functional and E2E coverage for every product change.",
@@ -20,5 +20,6 @@
         "GKE e2e (operator) / deploy + test on shared GKE"
       ]
     }
-  ]
+  ],
+  "lifecycle_mode": "failure-only"
 }

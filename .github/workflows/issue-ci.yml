@@ -1,5 +1,5 @@
-# Controller vendored unchanged from faberline/aw@84e9b72b4a63cc30b47449a2e321981525fa9c34.
-# Staged: qualification blockers intentionally prevent lifecycle writes.
+# Controller vendored unchanged from faberline/aw@67af8d020df3ca2ec4b064289408cfb0c2f8b299.
+# Failure-only: current-head failures may return doing to todo; done is disabled.
 # This is a trusted default-branch workflow, NOT pull_request_target execution.
 name: Issue CI handoff
 on:
@@ -26,7 +26,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-      - name: Refuse incomplete qualification policy
+      - name: Validate failure-only qualification policy
         run: python3 scripts/issue-ci/check-policy.py .github/issue-ci-required-gates.json
       - name: Reconcile current PRs using trusted controller and config
         env:

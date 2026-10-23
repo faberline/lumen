@@ -1,5 +1,7 @@
 """Affected handoff wiring tests: fixtures only, no network or product suites."""
 import argparse
+import contextlib
+import io
 import hashlib
 import importlib.util
 import json
@@ -37,8 +39,8 @@ def evidence():
 
 class HandoffTests(unittest.TestCase):
     def test_controller_matches_verified_aw_merge(self):
-        self.assertEqual(hashlib.sha256((SCRIPTS / 'handoff.py').read_bytes()).hexdigest(), '1abb5570032eaf294a50c5fa0bfb9ae7edd1db7e3f0a98a1f56601720916caf1')
-        self.assertIn('84e9b72b4a63cc30b47449a2e321981525fa9c34', CONFIG['controller_source'])
+        self.assertEqual(hashlib.sha256((SCRIPTS / 'handoff.py').read_bytes()).hexdigest(), 'c67533b39d45ad62d407af3748856be396941647c349b63464424fa6aff1c198')
+        self.assertIn('67af8d020df3ca2ec4b064289408cfb0c2f8b299', CONFIG['controller_source'])
 
     def test_exact_complete_inventory(self):
         inventory = json.loads((SCRIPTS / 'tests/fixtures/gate-inventory.json').read_text())
@@ -59,18 +61,33 @@ class HandoffTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     ci.load_config(path)
 
-    def test_blocked_rollout_cannot_invoke_controller(self):
-        with patch.object(ci, 'api', side_effect=AssertionError('must not call GitHub')):
-            with self.assertRaisesRegex(RuntimeError, 'rollout blocked'):
-                policy.check(ROOT / '.github/issue-ci-required-gates.json')
+    def test_guard_requires_explicit_failure_only_policy_and_new_controller(self):
+        policy.check(ROOT / '.github/issue-ci-required-gates.json')
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'policy.json'
-            for config in ({'workflows': GATES}, {'workflows': [], 'qualification_blockers': []}, CONFIG):
-                path.write_text(json.dumps(config))
+            for bad in ({'workflows': GATES}, dict(CONFIG, lifecycle_mode='full'),
+                        dict(CONFIG, qualification_blockers=None), dict(CONFIG, qualification_blockers=[]),
+                        dict(CONFIG, qualification_blockers=['']),
+                        dict(CONFIG, workflows=[])):
+                path.write_text(json.dumps(bad))
+                with self.assertRaises((RuntimeError, KeyError)):
+                    policy.check(path)
+            path.write_text(json.dumps(CONFIG))
+            with patch.object(policy, 'load_controller', return_value=type('OldController', (), {'load_config': ci.load_config})()):
                 with self.assertRaises(RuntimeError):
                     policy.check(path)
-            path.write_text(json.dumps({'workflows': GATES, 'qualification_blockers': []}))
-            policy.check(path)
+
+    def test_failure_only_success_missing_and_skipped_stay_pending(self):
+        self.assertEqual(ci.evaluate_policy(CONFIG, evidence())[0], 'pending')
+        self.assertEqual(ci.evaluate_policy(dict(CONFIG, qualification_blockers=[]), evidence())[0], 'pending')
+        self.assertEqual(ci.evaluate_policy(CONFIG, {})[0], 'pending')
+        snapshots = evidence()
+        snapshots[GATES[0]['path']][1][0]['conclusion'] = 'skipped'
+        self.assertEqual(ci.evaluate_policy(CONFIG, snapshots)[0], 'pending')
+        snapshots[GATES[0]['path']][1][1]['conclusion'] = 'failure'
+        state, reasons, _ = ci.evaluate_policy(CONFIG, snapshots)
+        self.assertEqual(state, 'todo')
+        self.assertIn(snapshots[GATES[0]['path']][1][1]['html_url'], '\n'.join(reasons))
 
     def test_every_job_is_required(self):
         self.assertEqual(ci.evaluate(GATES, evidence())[0], 'done')
@@ -127,6 +144,72 @@ class HandoffTests(unittest.TestCase):
         self.assertNotIn('pull_request_target', workflow.replace('# This is a trusted default-branch workflow, NOT pull_request_target execution.', ''))
         for forbidden in ('pull_request.head', 'download-artifact', 'workflow_dispatch:', 'id-token:', 'packages:'):
             self.assertNotIn(forbidden, workflow)
+
+class FailureOnlyApplyTests(unittest.TestCase):
+    def setUp(self):
+        self.pr = dict(state='open', body='Closes #7', head=dict(sha=SHA, ref='issue/7', repo={'full_name': 'o/r'}))
+        self.labels = {'doing', 'priority:p1'}
+        self.comments, self.writes = [], []
+        self.failed = evidence()
+        self.failed[GATES[0]['path']][1][0]['conclusion'] = 'failure'
+
+    def api(self, path, method='GET', data=None):
+        if method == 'GET':
+            if '/pulls/' in path:
+                return self.pr
+            return dict(state='open', labels=[dict(name=n) for n in self.labels])
+        self.writes.append((path, method, data))
+        if method == 'POST' and path.endswith('/comments'):
+            c = dict(id=len(self.comments)+1, body=data['body'], user={'login': 'github-actions[bot]'})
+            self.comments.append(c)
+            return c
+        if method == 'PATCH':
+            self.comments[int(path.rsplit('/',1)[1])-1]['body'] = data['body']
+        if method == 'POST' and path.endswith('/labels'):
+            self.labels.update(data['labels'])
+        if method == 'DELETE':
+            self.labels.discard(path.rsplit('/',1)[1])
+        return {}
+
+    def invoke(self, snapshots=None):
+        args = argparse.Namespace(repo='o/r', pr=8, head=SHA, apply=True, run_id=1)
+        with patch.object(ci, 'api', side_effect=self.api), patch.object(ci, 'pages', side_effect=lambda *a: self.comments), patch.object(ci, 'snapshot', return_value=self.failed if snapshots is None else snapshots), contextlib.redirect_stdout(io.StringIO()):
+            return ci.process_head(args, CONFIG, check_event=False)
+
+    def test_success_and_missing_have_no_writes(self):
+        self.invoke(evidence())
+        self.invoke({})
+        self.assertEqual(self.writes, [])
+
+    def test_only_doing_returns_todo_and_preserves_other_labels(self):
+        self.invoke()
+        self.assertEqual(self.labels, {'todo', 'priority:p1'})
+        self.assertIn(self.failed[GATES[0]['path']][1][0]['html_url'], self.comments[0]['body'])
+        self.assertFalse(any('/labels/done' in x[0] for x in self.writes))
+
+    def test_done_todo_and_mixed_issues_cannot_be_mutated(self):
+        for labels in ({'done'}, {'done','doing'}, {'todo'}, {'todo','doing'}):
+            self.labels = labels.copy()
+            self.invoke()
+            self.assertEqual(self.writes, [])
+
+    def test_duplicate_failure_preserves_later_agy_claim(self):
+        self.invoke()
+        self.labels = {'doing', 'priority:p1'}
+        self.writes.clear()
+        self.invoke()
+        self.assertEqual(self.writes, [])
+        self.assertEqual(self.labels, {'doing', 'priority:p1'})
+
+    def test_ready_recovery_does_not_readd_consumed_todo(self):
+        self.invoke()
+        self.comments[0]['body'] = self.comments[0]['body'].replace(':applied -->', ':ready -->')
+        self.labels = {'doing', 'priority:p1'}
+        self.writes.clear()
+        self.invoke()
+        self.assertEqual(self.labels, {'doing', 'priority:p1'})
+        self.assertTrue(self.writes)
+        self.assertTrue(all('/issues/comments/' in w[0] for w in self.writes))
 
 
 if __name__ == '__main__':

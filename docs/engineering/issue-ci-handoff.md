@@ -1,30 +1,40 @@
-# CI lifecycle handoff (blocked staging)
+# CI lifecycle handoff (failure-only)
 
-This change stages the reviewed `aw issue-ci` interface. **It does not enable
-`doing -> done/todo` mutations yet.** The first workflow step refuses every
-handoff while `qualification_blockers` is nonempty. The workflow starts only on
+This change wires the reviewed `aw issue-ci` interface in explicit
+`lifecycle_mode: failure-only`. A failed required current-head gate can return
+a linked issue from `doing` to `todo` with failure/run links. **Success cannot
+mark `done`.** Missing or skipped evidence remains pending; nonempty
+`qualification_blockers` remain in force. The first workflow step validates
+the exact policy and requires the controller policy API before reconciliation. The workflow starts only on
 completion of existing `gke-test` runs and adds no product test triggers, cloud
 resources, credentials, manual dispatch, or release actions.
 
 ## Trusted implementation and policy
 
 `scripts/issue-ci/handoff.py` is an unchanged copy from
-`faberline/aw@84e9b72b4a63cc30b47449a2e321981525fa9c34` at
+`faberline/aw@67af8d020df3ca2ec4b064289408cfb0c2f8b299` at
 `plugins/faberline/skills/issue-ci/scripts/handoff.py`.
-SHA-256: `1abb5570032eaf294a50c5fa0bfb9ae7edd1db7e3f0a98a1f56601720916caf1`.
+SHA-256: `c67533b39d45ad62d407af3748856be396941647c349b63464424fa6aff1c198`.
 The workflow checks out only the repository default branch with persisted
 credentials disabled. It never checks out or executes PR code, reads a PR gate
 manifest, or accepts artifacts as authorization. All writers share the
 `issue-ci-handoff` concurrency group. Each wake reconciles all managed PRs.
 Permissions are contents/actions/PR read and issues write only.
 
-Once a separate reviewed change resolves the coverage decisions and explicitly
-sets `qualification_blockers: []`, CI alone can mark `done` after every listed
-workflow and exact expanded job succeeds on the CURRENT PR head. Required job
-failure returns the linked issue to `todo` with concise failure and run/job links.
-Missing, pending, skipped, cancelled, neutral, stale-head and earlier rerun
-attempt evidence cannot qualify. AGY owns only `todo -> doing`. Review follows
-passing CI and does not merge automatically. No review schedule is created here.
+The workflow guard requires explicit failure-only mode and an explicit nonempty list of
+qualification blockers. It uses the pinned controller's `load_config` and
+requires its `evaluate_policy` API; older controllers refuse before execution.
+All-green evidence remains pending even if blockers are accidentally cleared.
+A separate reviewed rollout decision is required to authorize any future done
+transition; this guard refuses full mode.
+
+CI alone may return a submitted `doing` issue to `todo` after a required current-
+head run/job failure. It does not touch an already `done` issue or an unclaimed
+`todo` issue. Existing journal checkpoints can finish interrupted recovery
+without undoing an AGY claim. Other labels are preserved. Missing/pending/
+skipped/cancelled/neutral/stale evidence is never a pass. Reruns use the latest
+attempt. AGY owns only `todo -> doing`; review after eventual complete CI
+qualification never merges automatically. No review schedule is created here.
 
 The controller requires a same-repository `issue/N` or `agy/issue-N` branch
 and the exact body line `Closes #N`. Other branch conventions and forks are
@@ -55,7 +65,7 @@ be reported as a pass. There is no supported docs-only zero-check policy.
 The user-approved direction is affected local unit checks, affected cloud
 unit/functional/E2E/performance qualification for product MRs, and complete
 declared release qualification. Rolling that architecture out is separate work.
-Do not remove gates, add costly jobs/triggers, or clear blockers merely to get a
+Do not remove gates, add costly jobs/triggers, or enable full mode merely to get a
 green handoff. Branch protection is neither changed nor inferred as policy.
 
 ## Local affected verification
