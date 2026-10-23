@@ -92,3 +92,73 @@ fn validate_rejects_out_of_range_body_limit() {
         );
     }
 }
+
+#[test]
+fn validate_accepts_valid_zones() {
+    let mut spec = test_spec();
+    spec.placement.zones = vec!["us-central1-a".into()];
+    assert!(spec.validate().is_ok());
+
+    spec.replicas_per_shard = 3;
+    spec.placement.zones = vec![
+        "us-central1-a".into(),
+        "us-central1-b".into(),
+        "us-central1-c".into(),
+    ];
+    assert!(spec.validate().is_ok());
+}
+
+#[test]
+fn validate_rejects_empty_or_blank_zone() {
+    let mut spec = test_spec();
+    for empty in ["", "  ", "\t"] {
+        spec.placement.zones = vec![empty.into()];
+        let err = spec.validate().expect_err("expected error");
+        assert!(
+            err.contains("placement.zones"),
+            "error message should name placement.zones: {err}"
+        );
+    }
+}
+
+#[test]
+fn validate_rejects_duplicate_zones() {
+    let mut spec = test_spec();
+    spec.placement.zones = vec!["us-central1-a".into(), "us-central1-a".into()];
+    let err = spec.validate().expect_err("expected error");
+    assert!(
+        err.contains("placement.zones"),
+        "error message should name placement.zones: {err}"
+    );
+}
+
+#[test]
+fn validate_rejects_insufficient_zones_for_multi_replica() {
+    let mut spec = test_spec();
+    spec.replicas_per_shard = 3;
+    spec.placement.zones = vec!["us-central1-a".into(), "us-central1-b".into()];
+    let err = spec.validate().expect_err("expected error");
+    assert!(
+        err.contains("placement.zones"),
+        "error message should name placement.zones: {err}"
+    );
+
+    spec.replicas_per_shard = 2;
+    spec.placement.zones = vec!["us-central1-a".into()];
+    let err = spec.validate().expect_err("expected error");
+    assert!(
+        err.contains("placement.zones"),
+        "error message should name placement.zones: {err}"
+    );
+}
+
+#[test]
+fn validate_rejects_machine_type_in_zones() {
+    let mut spec = test_spec();
+    spec.placement.zones = vec!["e2-standard-2".into()];
+    let err = spec.validate().expect_err("expected error");
+    assert!(
+        err.contains("placement.zones"),
+        "error message should name placement.zones: {err}"
+    );
+}

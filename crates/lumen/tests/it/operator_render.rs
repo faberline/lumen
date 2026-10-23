@@ -1332,6 +1332,7 @@ fn placement_names_a_node_pool_without_replacing_the_anti_affinity() {
             effect: Some("NoSchedule".into()),
             toleration_seconds: None,
         }],
+        zones: Vec::new(),
     };
     let objs = render(&lumen("search", spec));
     let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
@@ -1457,6 +1458,8 @@ fn the_crd_accepts_placement() {
             "toleration schema must carry `{field}`"
         );
     }
+    assert_eq!(props["zones"]["type"], "array");
+    assert_eq!(props["zones"]["items"]["type"], "string");
 
     // The whole point of the narrow surface: `affinity` stays operator-owned,
     // so there is no CR field that can replace the anti-affinity.
@@ -1466,6 +1469,159 @@ fn the_crd_accepts_placement() {
             .is_none(),
         "exposing spec.affinity would let a deployer drop the anti-affinity"
     );
+}
+
+#[test]
+fn render_topology_1x1_with_zones() {
+    let mut spec = prod_spec();
+    spec.shard_count = 1;
+    spec.replicas_per_shard = 1;
+    spec.voter_count = 1;
+    spec.placement.zones = vec!["us-central1-a".into()];
+    assert!(spec.validate().is_ok());
+
+    let objs = render(&lumen("search", spec));
+    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+
+    let node_terms = &pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
+    assert_eq!(node_terms[0]["matchExpressions"][0]["key"], "topology.kubernetes.io/zone");
+    assert_eq!(node_terms[0]["matchExpressions"][0]["operator"], "In");
+    assert_eq!(node_terms[0]["matchExpressions"][0]["values"], serde_json::json!(["us-central1-a"]));
+
+    assert_eq!(
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
+        "kubernetes.io/hostname"
+    );
+
+    let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
+    let zone_spread = spreads.iter().find(|s| s["topologyKey"] == "topology.kubernetes.io/zone").unwrap();
+    assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
+    let host_spread = spreads.iter().find(|s| s["topologyKey"] == "kubernetes.io/hostname").unwrap();
+    assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
+
+#[test]
+fn render_topology_nx1_with_zones() {
+    let mut spec = prod_spec();
+    spec.shard_count = 3;
+    spec.replicas_per_shard = 1;
+    spec.voter_count = 1;
+    spec.placement.zones = vec!["us-central1-a".into()];
+    assert!(spec.validate().is_ok());
+
+    let objs = render(&lumen("search", spec));
+    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+
+    let node_terms = &pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
+    assert_eq!(node_terms[0]["matchExpressions"][0]["key"], "topology.kubernetes.io/zone");
+    assert_eq!(node_terms[0]["matchExpressions"][0]["operator"], "In");
+    assert_eq!(node_terms[0]["matchExpressions"][0]["values"], serde_json::json!(["us-central1-a"]));
+
+    let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
+    let zone_spread = spreads.iter().find(|s| s["topologyKey"] == "topology.kubernetes.io/zone").unwrap();
+    assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
+
+#[test]
+fn render_topology_nx3_three_zones() {
+    let mut spec = prod_spec();
+    spec.shard_count = 2;
+    spec.replicas_per_shard = 3;
+    spec.voter_count = 3;
+    spec.placement.zones = vec![
+        "us-central1-a".into(),
+        "us-central1-b".into(),
+        "us-central1-c".into(),
+    ];
+    assert!(spec.validate().is_ok());
+
+    let objs = render(&lumen("search", spec));
+    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+
+    let node_terms = &pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
+    assert_eq!(node_terms[0]["matchExpressions"][0]["key"], "topology.kubernetes.io/zone");
+    assert_eq!(node_terms[0]["matchExpressions"][0]["operator"], "In");
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["values"],
+        serde_json::json!(["us-central1-a", "us-central1-b", "us-central1-c"])
+    );
+
+    assert_eq!(
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
+        "kubernetes.io/hostname"
+    );
+
+    let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
+    let zone_spread = spreads.iter().find(|s| s["topologyKey"] == "topology.kubernetes.io/zone").unwrap();
+    assert_eq!(zone_spread["whenUnsatisfiable"], "DoNotSchedule");
+
+    let host_spread = spreads.iter().find(|s| s["topologyKey"] == "kubernetes.io/hostname").unwrap();
+    assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
+
+#[test]
+fn render_topology_two_replica_compatibility_zones_unset() {
+    let mut spec = prod_spec();
+    spec.replicas_per_shard = 2;
+    spec.voter_count = 2;
+    assert!(spec.validate().is_ok());
+
+    let objs = render(&lumen("search", spec));
+    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+
+    assert!(pod["affinity"].get("nodeAffinity").is_none());
+
+    assert_eq!(
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
+        "kubernetes.io/hostname"
+    );
+
+    let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
+    let zone_spread = spreads.iter().find(|s| s["topologyKey"] == "topology.kubernetes.io/zone").unwrap();
+    assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
+    let host_spread = spreads.iter().find(|s| s["topologyKey"] == "kubernetes.io/hostname").unwrap();
+    assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
+
+#[test]
+fn render_topology_nx3_missing_zones_rejected() {
+    let mut spec = prod_spec();
+    spec.shard_count = 2;
+    spec.replicas_per_shard = 3;
+    spec.voter_count = 3;
+    spec.placement.zones = vec!["us-central1-a".into(), "us-central1-b".into()];
+
+    let err = spec.validate().expect_err("Nx3 with 2 zones must be rejected");
+    assert!(err.contains("placement.zones"));
+}
+
+#[test]
+fn render_never_creates_cluster_or_node_pool_and_zones_rejects_machine_type() {
+    let mut spec = prod_spec();
+    spec.replicas_per_shard = 3;
+    spec.voter_count = 3;
+    spec.placement.zones = vec![
+        "us-central1-a".into(),
+        "us-central1-b".into(),
+        "us-central1-c".into(),
+    ];
+    let objs = render(&lumen("search", spec.clone()));
+    for obj in &objs {
+        let kind = obj["kind"].as_str().unwrap_or("");
+        assert_ne!(kind, "Cluster", "render must never emit a Cluster object");
+        assert_ne!(kind, "NodePool", "render must never emit a NodePool object");
+        assert_ne!(kind, "Node", "render must never emit a Node object");
+    }
+
+    let mut bad_spec = spec;
+    bad_spec.placement.zones = vec![
+        "e2-standard-2".into(),
+        "us-central1-b".into(),
+        "us-central1-c".into(),
+    ];
+    let err = bad_spec.validate().expect_err("machine type in placement.zones must be rejected");
+    assert!(err.contains("placement.zones"));
+    assert!(err.contains("machine type"));
 }
 
 /// A private registry needs a pull secret on every pod that pulls `spec.image`.

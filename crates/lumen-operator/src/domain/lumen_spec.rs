@@ -288,6 +288,11 @@ pub struct PlacementSpec {
     /// the cluster's general pool.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tolerations: Vec<Toleration>,
+
+    /// Failure domains (zones) the serving replicas must spread across.
+    /// Empty means unconstrained zone placement.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zones: Vec<String>,
 }
 
 impl Default for PlacementSpec {
@@ -296,6 +301,7 @@ impl Default for PlacementSpec {
             initial_machine_type: default_initial_machine_type(),
             node_selector: BTreeMap::new(),
             tolerations: Vec::new(),
+            zones: Vec::new(),
         }
     }
 }
