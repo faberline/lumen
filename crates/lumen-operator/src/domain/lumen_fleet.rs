@@ -44,6 +44,9 @@
 //! [`super::reshard_driver`]: crate::application::reshard_driver
 
 pub mod plan;
+pub mod rollout;
+
+pub use rollout::{derive_rollout_status, desired_hash, RolloutStatus};
 
 use kube::CustomResource;
 use schemars::JsonSchema;
@@ -178,6 +181,78 @@ pub struct FleetEntryStatus {
     pub state: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<FleetEntryPhase>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_generation: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desired_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase_since: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stall_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_stall: Option<FleetEntryLastStall>,
+}
+
+/// Closed enum for per-entry rollout phase.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "PascalCase")]
+pub enum FleetEntryPhase {
+    Healthy,
+    Stalled,
+}
+
+impl FleetEntryPhase {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Healthy => "Healthy",
+            Self::Stalled => "Stalled",
+        }
+    }
+}
+
+impl std::fmt::Display for FleetEntryPhase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Closed list of stable string tokens for stall reasons.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum FleetStallReason {
+    Rejected,
+    NamespaceMissing,
+    NotAdopted,
+    ApplyFailed,
+    UnobservedGeneration,
+}
+
+impl FleetStallReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Rejected => "Rejected",
+            Self::NamespaceMissing => "NamespaceMissing",
+            Self::NotAdopted => "NotAdopted",
+            Self::ApplyFailed => "ApplyFailed",
+            Self::UnobservedGeneration => "UnobservedGeneration",
+        }
+    }
+}
+
+impl std::fmt::Display for FleetStallReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Transition history kept after recovery: the previous stall's reason and start time.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FleetEntryLastStall {
+    pub reason: String,
+    #[serde(default, alias = "since", alias = "startTime")]
+    pub time: String,
 }
 
 /// A `Lumen` the fleet wants to exist, or the reason one entry cannot produce

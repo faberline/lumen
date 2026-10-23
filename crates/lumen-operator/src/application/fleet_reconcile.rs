@@ -8,8 +8,8 @@ use serde_json::json;
 
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
 use crate::domain::lumen_fleet::{
-    FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, PrunePolicy, FLEET_LABEL,
-    FLEET_MANAGER, FLEET_SEED_MANAGER,
+    derive_rollout_status, desired_hash, FleetEntryStatus, LumenFleet, PlanOutcome,
+    PlannedInstance, PrunePolicy, FLEET_LABEL, FLEET_MANAGER, FLEET_SEED_MANAGER,
 };
 use crate::domain::lumen_spec::Lumen;
 
@@ -83,21 +83,44 @@ async fn converge(
     let mut applied = 0;
     let mut declared: BTreeSet<(String, String)> = BTreeSet::new();
 
+    let prev_entries: std::collections::BTreeMap<(String, String), &FleetEntryStatus> = fleet
+        .status
+        .as_ref()
+        .map(|s| {
+            s.entries
+                .iter()
+                .map(|e| ((e.namespace.clone(), e.name.clone()), e))
+                .collect()
+        })
+        .unwrap_or_default();
+    let now = chrono::Utc::now().to_rfc3339();
+
     for instance in &planned {
+        let prev = prev_entries
+            .get(&(instance.namespace.clone(), instance.name.clone()))
+            .copied();
         let spec = match &instance.outcome {
             PlanOutcome::Ready(spec) => spec,
             PlanOutcome::Rejected(reason) => {
-                entries.push(entry(instance, "Rejected", reason));
+                entries.push(rollout_entry(
+                    instance, "Rejected", reason, None, None, None, prev, &now,
+                ));
                 continue;
             }
         };
+        let hash = Some(desired_hash(spec));
         declared.insert((instance.namespace.clone(), instance.name.clone()));
 
         if !namespace_exists(client, &instance.namespace).await? {
-            entries.push(entry(
+            entries.push(rollout_entry(
                 instance,
                 "NamespaceMissing",
                 "the namespace does not exist; the fleet does not create namespaces",
+                hash,
+                None,
+                None,
+                prev,
+                &now,
             ));
             continue;
         }
@@ -111,12 +134,25 @@ async fn converge(
                     ..Default::default()
                 };
                 match lumens.create(&params, &body).await {
-                    Ok(_) => {
+                    Ok(created) => {
                         applied += 1;
-                        entries.push(entry(instance, "Created", ""));
+                        let child_gen = created.metadata.generation;
+                        let child_obs = created.status.as_ref().map(|s| s.observed_generation);
+                        entries.push(rollout_entry(
+                            instance, "Created", "", hash, child_gen, child_obs, prev, &now,
+                        ));
                     }
                     Err(err) => {
-                        entries.push(entry(instance, "ApplyFailed", &err.to_string()));
+                        entries.push(rollout_entry(
+                            instance,
+                            "ApplyFailed",
+                            &err.to_string(),
+                            hash,
+                            None,
+                            None,
+                            prev,
+                            &now,
+                        ));
                     }
                 }
             }
@@ -126,7 +162,9 @@ async fn converge(
                 // otherwise be silently replaced by the fleet's defaults.
                 let owner = live.labels().get(FLEET_LABEL).map(String::as_str);
                 if owner != Some(fleet_name.as_str()) {
-                    entries.push(entry(
+                    let child_gen = live.metadata.generation;
+                    let child_obs = live.status.as_ref().map(|s| s.observed_generation);
+                    entries.push(rollout_entry(
                         instance,
                         "NotAdopted",
                         &format!(
@@ -134,6 +172,11 @@ async fn converge(
                              (found {}); left untouched",
                             owner.unwrap_or("no label")
                         ),
+                        hash,
+                        child_gen,
+                        child_obs,
+                        prev,
+                        &now,
                     ));
                     continue;
                 }
@@ -146,11 +189,32 @@ async fn converge(
                     )
                     .await
                 {
-                    Ok(_) => {
+                    Ok(patched) => {
                         applied += 1;
-                        entries.push(entry(instance, "Applied", ""));
+                        let child_gen = patched.metadata.generation.or(live.metadata.generation);
+                        let child_obs = patched
+                            .status
+                            .as_ref()
+                            .map(|s| s.observed_generation)
+                            .or_else(|| live.status.as_ref().map(|s| s.observed_generation));
+                        entries.push(rollout_entry(
+                            instance, "Applied", "", hash, child_gen, child_obs, prev, &now,
+                        ));
                     }
-                    Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
+                    Err(err) => {
+                        let child_gen = live.metadata.generation;
+                        let child_obs = live.status.as_ref().map(|s| s.observed_generation);
+                        entries.push(rollout_entry(
+                            instance,
+                            "ApplyFailed",
+                            &err.to_string(),
+                            hash,
+                            child_gen,
+                            child_obs,
+                            prev,
+                            &now,
+                        ));
+                    }
                 }
             }
         }
@@ -224,15 +288,44 @@ async fn namespace_exists(client: &kube::Client, namespace: &str) -> anyhow::Res
     Ok(api.get_opt(namespace).await?.is_some())
 }
 
-pub(in crate) fn entry(
-    instance: &PlannedInstance,
-    state: &str,
-    message: &str,
-) -> FleetEntryStatus {
+pub(crate) fn entry(instance: &PlannedInstance, state: &str, message: &str) -> FleetEntryStatus {
     FleetEntryStatus {
         namespace: instance.namespace.clone(),
         name: instance.name.clone(),
         state: state.to_string(),
         message: message.to_string(),
+        ..Default::default()
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rollout_entry(
+    instance: &PlannedInstance,
+    state: &str,
+    message: &str,
+    desired_hash: Option<String>,
+    child_generation: Option<i64>,
+    child_observed_generation: Option<i64>,
+    prev: Option<&FleetEntryStatus>,
+    now: &str,
+) -> FleetEntryStatus {
+    let rollout = derive_rollout_status(
+        prev,
+        state,
+        child_generation,
+        child_observed_generation,
+        now,
+    );
+    FleetEntryStatus {
+        namespace: instance.namespace.clone(),
+        name: instance.name.clone(),
+        state: state.to_string(),
+        message: message.to_string(),
+        phase: Some(rollout.phase),
+        observed_generation: child_observed_generation,
+        desired_hash,
+        phase_since: Some(rollout.phase_since),
+        stall_reason: rollout.stall_reason,
+        last_stall: rollout.last_stall,
     }
 }
