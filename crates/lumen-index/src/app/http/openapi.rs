@@ -156,7 +156,7 @@ use crate::shared_kernel::types::stats::{CacheStats, FieldStats, StatsResponse, 
         HnswCacheSealMutationStamp,
         HnswCacheSealResponse,
     )),
-    modifiers(&SecurityAddon),
+    modifiers(&SecurityAddon, &SharedResponsesAddon),
     security(("bearerAuth" = []))
 )]
 pub struct ApiDoc;
@@ -188,6 +188,101 @@ impl Modify for SecurityAddon {
                         .build(),
                 ),
             );
+        }
+    }
+}
+
+struct SharedResponsesAddon;
+
+impl Modify for SharedResponsesAddon {
+    fn modify(&self, openapi: &mut openapi::OpenApi) {
+        let components = openapi.components.get_or_insert_with(Default::default);
+
+        let resp_401 = openapi::response::ResponseBuilder::new()
+            .description("Unauthorized")
+            .content(
+                "application/json",
+                openapi::ContentBuilder::new()
+                    .schema(openapi::Ref::new("#/components/schemas/ApiError"))
+                    .build(),
+            )
+            .build();
+
+        let resp_413 = openapi::response::ResponseBuilder::new()
+            .description("Payload Too Large")
+            .content(
+                "application/json",
+                openapi::ContentBuilder::new()
+                    .schema(openapi::Ref::new("#/components/schemas/ApiError"))
+                    .build(),
+            )
+            .build();
+
+        let resp_429 = openapi::response::ResponseBuilder::new()
+            .description("Too Many Requests")
+            .content(
+                "application/json",
+                openapi::ContentBuilder::new()
+                    .schema(openapi::Ref::new("#/components/schemas/ApiError"))
+                    .build(),
+            )
+            .header(
+                "Retry-After",
+                openapi::HeaderBuilder::new()
+                    .description(Some("Retry-After delay in seconds"))
+                    .schema(openapi::ObjectBuilder::new().schema_type(openapi::schema::SchemaType::Integer))
+                    .build(),
+            )
+            .build();
+
+        let resp_500 = openapi::response::ResponseBuilder::new()
+            .description("Internal Server Error")
+            .content(
+                "application/json",
+                openapi::ContentBuilder::new()
+                    .schema(openapi::Ref::new("#/components/schemas/ApiError"))
+                    .build(),
+            )
+            .build();
+
+        components.responses.insert("401".to_string(), openapi::RefOr::T(resp_401));
+        components.responses.insert("413".to_string(), openapi::RefOr::T(resp_413));
+        components.responses.insert("429".to_string(), openapi::RefOr::T(resp_429));
+        components.responses.insert("500".to_string(), openapi::RefOr::T(resp_500));
+
+        let ref_401 = openapi::RefOr::Ref(openapi::Ref::new("#/components/responses/401"));
+        let ref_413 = openapi::RefOr::Ref(openapi::Ref::new("#/components/responses/413"));
+        let ref_429 = openapi::RefOr::Ref(openapi::Ref::new("#/components/responses/429"));
+        let ref_500 = openapi::RefOr::Ref(openapi::Ref::new("#/components/responses/500"));
+
+        for (path_str, path_item) in &mut openapi.paths.paths {
+            for (_method, op) in &mut path_item.operations {
+                let requires_bearer = match &op.security {
+                    None => true,
+                    Some(sec) => sec.iter().any(|req| {
+                        serde_json::to_value(req)
+                            .map(|v| v.as_object().map_or(false, |m| m.contains_key("bearerAuth")))
+                            .unwrap_or(false)
+                    }),
+                };
+                if requires_bearer {
+                    op.responses.responses.insert("401".to_string(), ref_401.clone());
+                    op.responses.responses.insert("500".to_string(), ref_500.clone());
+                }
+
+                if path_str == "/collections/{collection_id}/index"
+                    || path_str == "/collections/{collection_id}/docs:replace"
+                {
+                    op.responses.responses.insert("413".to_string(), ref_413.clone());
+                    op.responses.responses.insert("429".to_string(), ref_429.clone());
+                } else if path_str == "/collections/{collection_id}/docs/{external_id}"
+                    || path_str == "/collections/{collection_id}/index/{external_id}"
+                    || path_str == "/collections/{collection_id}/docs:truncate"
+                    || path_str == "/collections/{collection_id}/docs:unindex"
+                {
+                    op.responses.responses.insert("429".to_string(), ref_429.clone());
+                }
+            }
         }
     }
 }
@@ -251,3 +346,6 @@ fn inject_query_twins(doc: &mut utoipa::openapi::OpenApi) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
