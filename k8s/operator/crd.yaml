@@ -179,6 +179,11 @@ spec:
                           type: string
                       type: object
                     type: array
+                  zones:
+                    description: Failure domains (zones) the serving replicas must spread across. Empty means unconstrained zone placement.
+                    items:
+                      type: string
+                    type: array
                 type: object
               replicasPerShard:
                 default: 1
@@ -733,6 +738,11 @@ spec:
                               nullable: true
                               type: string
                           type: object
+                        type: array
+                      zones:
+                        description: Failure domains (zones) the serving replicas must spread across. Empty means unconstrained zone placement.
+                        items:
+                          type: string
                         type: array
                     type: object
                   replicasPerShard:
