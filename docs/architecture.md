@@ -12,10 +12,22 @@ Use the [README](../README.md) for the product workflow. Use
 
 ## Source layout
 
-Lumen stays in one Cargo crate.
+Lumen is one Cargo workspace with the faberline `saas-service` crates:
+
+| Crate | Holds |
+|---|---|
+| `crates/lumen` | The binary, the library facade, `compat`, tests, and benches |
+| `crates/lumen-shared-kernel` | The wire types, log entry, and capture barrier every context shares |
+| `crates/lumen-access` | The `access` context: identity, authorization, and peer TLS |
+| `crates/lumen-index` | `index`, `ingest`, `persistence`, `sharding`, `replication`, and the `app` root |
+| `crates/lumen-operator` | The `operator` context: the Kubernetes operator |
+
+`lumen-index` holds five contexts because they still call each other in both
+directions. The `lumen-storage` and `lumen-replication` crates come when that
+cycle is cut.
 The [domain guide](domain/README.md) maps source modules to their owners.
-`src/app` connects those modules into the running service.
-`src/compat` keeps the public Rust module paths used by existing callers.
+`crates/lumen-index/src/app` connects those modules into the running service.
+`crates/lumen/src/compat` keeps the public Rust module paths used by existing callers.
 The [layout decision](adr/0001-ddd-context-layout.md) records the P1 boundary.
 [ddd.toml](../ddd.toml) records the layers and remaining exceptions.
 

@@ -1,0 +1,146 @@
+[package]
+name = "lumen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "lumen — standalone search and duplicate-detection index. Generic Collection / Field primitive, HTTP/2, sharded Raft."
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+clap.workspace = true
+cli-std.workspace = true
+index-text.workspace = true
+kube = { workspace = true, optional = true }
+lumen-access.workspace = true
+lumen-index.workspace = true
+lumen-operator = { workspace = true, optional = true }
+lumen-shared-kernel.workspace = true
+openapi-codegen.workspace = true
+opentelemetry = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+raft-core = { workspace = true, optional = true }
+raft-runtime.workspace = true
+reqwest = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+server-lifecycle.workspace = true
+service-auth.workspace = true
+service-backup.workspace = true
+service-http.workspace = true
+service-k8s.workspace = true
+storage-durable.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[build-dependencies]
+build-stamp.workspace = true
+
+[features]
+default = []
+jieba = ["lumen-index/jieba"]
+# raft-wal — lumen owns write ordering + replication via libs/raft-core (HA),
+# instead of an external broker. Peer RPCs use the h2c client. (#515)
+# raft-runtime itself is non-optional (#1002; see the dependency comment above) —
+# only the engine (raft-core) and its peer-RPC HTTP client (reqwest) are
+# feature-gated here.
+raft-wal = ["dep:raft-core", "dep:reqwest", "lumen-index/raft-wal"]
+# backup — `lumen backup` (#808): fetches a snapshot from a running fleet's
+# `/admin/backup` over HTTP and hands it to a `libs/service-backup`
+# destination sink. When linked, that shared sink can now speak local files or
+# S3-compatible object stores; Lumen still owns no upload client of its own.
+backup = ["dep:reqwest", "service-backup/http-client", "service-backup/s3", "lumen-index/backup"]
+# self-update / issue — enable the online (HTTPS) paths of the shared
+# CLI-ops lib. Offline builds still ship both commands (upgrade --check / the
+# issue create dry-run + pre-filled-URL fallback). The published binary enables
+# them (lumen-release.yml); both map to the lib's single `online` capability.
+self-update = ["cli-std/online"]
+issue = ["cli-std/online"]
+# Deprecated build-feature alias kept for release scripts or local invocations
+# that have not yet renamed their feature set. The CLI command itself is
+# `lumen issue`, not `lumen report-issue`.
+report-issue = ["issue"]
+operator = ["dep:lumen-operator", "dep:kube", "service-k8s/full", "backup", "lumen-index/operator"]
+# delegated-auth — the live TokenReview/SubjectAccessReview transport for
+# `LUMEN_AUTH=required` (#2869). Separate from `operator` on purpose: serving
+# auth is not a control-plane concern, and a serving binary should not have to
+# link the CRD/controller stack to authenticate its callers. The whole decision
+# path (audience binding, ServiceAccount-only admission, the resource mapping,
+# the fail-closed outage arm) compiles and is tested without this feature; only
+# the socket is behind it, so a build that omits it refuses to start under
+# `LUMEN_AUTH=required` rather than serving with authentication it cannot do.
+#
+# It carries `reqwest` because `lumen connect --ca-file` verifies the fleet's
+# serving certificate through the same client the loopback proxy forwards with
+# (#3113 R6); that client is only reachable on this path, which is also the only
+# path that can mint the token it carries.
+delegated-auth = ["service-auth/k8s", "dep:reqwest", "lumen-access/delegated-auth"]
+# OTLP domain metrics plus service-http's shared trace exporter. Runtime export
+# remains dormant unless LUMEN_OTLP_ENDPOINT is set.
+otel = ["dep:opentelemetry", "dep:opentelemetry-otlp", "dep:opentelemetry_sdk", "service-http/otlp"]
+# Canonical feature set compiled for published binaries and release containers.
+release = [
+    "otel",
+    "operator",
+    "raft-wal",
+    "self-update",
+    "issue",
+    "delegated-auth",
+]
+
+[dev-dependencies]
+async-trait.workspace = true
+axum-test.workspace = true
+base64.workspace = true
+ciborium.workspace = true
+crc32fast.workspace = true
+criterion.workspace = true
+futures.workspace = true
+jsonwebtoken.workspace = true
+libc.workspace = true
+lz4_flex.workspace = true
+memory-stats.workspace = true
+proptest.workspace = true
+rand.workspace = true
+rcgen.workspace = true
+reqwest.workspace = true
+rig.workspace = true
+serde_path_to_error.workspace = true
+service-observability.workspace = true
+sha2.workspace = true
+tokio-postgres.workspace = true
+toml.workspace = true
+tracing-subscriber = { workspace = true, features = ["fmt", "registry"] }
+transport-h2c.workspace = true
+utoipa.workspace = true
+wiremock.workspace = true
+
+[[bench]]
+name = "bench_index"
+harness = false
+
+[[bench]]
+name = "bench_search"
+harness = false
+
+[[bench]]
+name = "bench_duplicates"
+harness = false
+
+# Integration tests are one binary, `tests/it/`. Each other `tests/<name>.rs`
+# is its own binary because it changes process-global state or measures the
+# whole process; its header says which. Only a feature requirement needs a
+# stanza here.
+[[test]]
+name = "body_limit_configurable"
+required-features = ["operator"]
+
+[lints]
+workspace = true

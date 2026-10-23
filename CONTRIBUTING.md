@@ -30,10 +30,10 @@ Read these sources in order for the part you change:
     placement, the Standard Regional profile, and its acceptance contract.
 11. [Client integration](docs/client-integration.md) for connection profiles,
     workload projection, request mechanics, and source hydration helpers.
-12. `src/` and `tests/` for behavior and executable
+12. `crates/*/src/` and `crates/lumen/tests/` for behavior and executable
    contracts.
-13. `src/operator/domain/lumen_spec.rs` and
-   `src/operator/domain/lumen_fleet.rs` for the generated Kubernetes API.
+13. `crates/lumen-operator/src/domain/lumen_spec.rs` and
+   `crates/lumen-operator/src/domain/lumen_fleet.rs` for the generated Kubernetes API.
 14. [Deployment](docs/deployment.md), [configuration](docs/configuration.md), and
    [authentication](docs/authentication.md) for maintained operating context.
 

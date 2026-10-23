@@ -1,0 +1,77 @@
+[package]
+name = "lumen-index"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "lumen-index — the search engine and the contexts that still form one dependency cycle: index, ingest, persistence, sharding, replication and the app composition root"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+base64.workspace = true
+byteorder.workspace = true
+bytemuck.workspace = true
+chrono.workspace = true
+ciborium.workspace = true
+cli-std.workspace = true
+crc32fast.workspace = true
+futures.workspace = true
+hnsw_rs.workspace = true
+index-text.workspace = true
+jieba-rs = { workspace = true, optional = true }
+libc.workspace = true
+lumen-access.workspace = true
+lumen-shared-kernel.workspace = true
+lz4_flex.workspace = true
+memmap2.workspace = true
+metrics-prometheus.workspace = true
+moka.workspace = true
+openapi-codegen.workspace = true
+raft-runtime.workspace = true
+rayon.workspace = true
+reqwest = { workspace = true, optional = true }
+roaring.workspace = true
+rustc-hash.workspace = true
+self_cell.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+service-auth.workspace = true
+service-backup.workspace = true
+service-http.workspace = true
+service-k8s.workspace = true
+sha2.workspace = true
+smallvec.workspace = true
+storage-durable.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+transport-h2c.workspace = true
+utoipa.workspace = true
+
+[build-dependencies]
+build-stamp.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+rand.workspace = true
+service-observability.workspace = true
+toml.workspace = true
+wiremock.workspace = true
+
+[features]
+default = []
+jieba = ["dep:jieba-rs", "index-text/jieba"]
+raft-wal = ["dep:reqwest"]
+backup = ["dep:reqwest", "service-backup/http-client", "service-backup/s3"]
+# Cross-pod shard routing (sharding::infrastructure::routing_remote).
+operator = ["dep:reqwest"]
+
+[lints]
+workspace = true

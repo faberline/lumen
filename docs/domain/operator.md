@@ -2,7 +2,7 @@
 
 This context owns the Lumen and LumenFleet declarations, desired-state plans, Kubernetes resource rendering, reconciliation and status.
 
-Source: `src/operator`.
+Source: `crates/lumen-operator/src`.
 Layers: domain, application and infrastructure.
 
 The operator consumes externally provisioned TLS Secrets. It uses service-k8s for shared Kubernetes mechanisms. Feature-gated runtime work stays behind operator.

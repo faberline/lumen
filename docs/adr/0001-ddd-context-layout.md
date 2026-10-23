@@ -12,8 +12,8 @@ Callers still use the public module paths that existed before the split.
 
 Keep one crate and organize the source by context.
 Use the contexts and layers declared in `ddd.toml`.
-Keep `src/app` as the composition root.
-Keep `src/compat` as the bridge for existing public module paths.
+Keep `crates/lumen-index/src/app` as the composition root.
+Keep `crates/lumen/src/compat` as the bridge for existing public module paths.
 Keep command-line modules beside each binary's `main.rs`.
 Use `name.rs` with a `name/` directory for child modules.
 

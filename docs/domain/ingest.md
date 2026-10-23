@@ -2,7 +2,7 @@
 
 This context owns mutation admission, pending-change capacity, record staging, WAL delivery and the ordered apply coordinator.
 
-Source: `src/ingest`.
+Source: `crates/lumen-index/src/ingest`.
 Layers: domain, application, infrastructure and interfaces.
 
 The coordinator applies committed records to the shard Engine. Capacity refusal must preserve committed records and their order. Existing connections to index and persistence remain declared exceptions during P1.
