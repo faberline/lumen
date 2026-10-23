@@ -94,7 +94,11 @@ pub(super) fn serving_statefulset(
         .image_pull_policy
         .as_deref()
         .unwrap_or("IfNotPresent");
+    let pvc_labels = crate::application::render::identity::data_artifact_labels(lumen, COMPONENT);
     let mut pvc_template = json!({
+        "metadata": {
+            "labels": pvc_labels,
+        },
         "spec": {
             "accessModes": ["ReadWriteOnce"],
             "resources": { "requests": { "storage": s.raft_storage.clone() } },
@@ -165,7 +169,9 @@ pub(super) fn serving_statefulset(
         lifecycle: None,
         volumes,
         volume_mounts,
-        affinity: Some(crate::domain::capacity::placement::cross_namespace_dedicated_data_node_affinity()),
+        affinity: Some(
+            crate::domain::capacity::placement::cross_namespace_dedicated_data_node_affinity(),
+        ),
         // `profile` supplies the operator-resolved capacity selector and toleration;
         // `spec.placement` layers additional user selectors/tolerations.
         // The cross-namespace anti-affinity above stays operator-owned so data members of any
