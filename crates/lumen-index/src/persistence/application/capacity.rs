@@ -171,7 +171,8 @@ impl Registry {
 
 /// Caller-owned lazy fallback. Constructor and file IO run before apply; its
 /// EngineWatermarkSink does not retain a coordinator or Raft state machine.
-pub(crate) struct Fallback {
+#[derive(Default)]
+pub struct Fallback {
     owner: Option<Owner>,
     relay: Option<BudgetRelay>,
     endpoint: Option<Arc<Endpoint>>,
@@ -179,44 +180,72 @@ pub(crate) struct Fallback {
 }
 
 impl Fallback {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_store(configured: Option<Arc<SegmentRdbStore>>) -> Self {
+        Self {
+            owner: None,
+            relay: None,
+            endpoint: None,
+            _store: configured,
+        }
+    }
+
     pub(crate) fn ensure(
         slot: &mut Option<Self>,
         engine: &Arc<Engine>,
         configured: Option<Arc<SegmentRdbStore>>,
     ) -> Result<()> {
+        use crate::ingest::application::ports::CapacityOwner;
+        if slot.is_none() {
+            *slot = Some(Self::with_store(configured));
+        } else if let (Some(fallback), Some(store)) = (slot.as_mut(), configured) {
+            if fallback._store.is_none() {
+                fallback._store = Some(store);
+            }
+        }
+        slot.as_mut().unwrap().ensure(engine)
+    }
+
+    pub fn stop(&mut self) {
+        use crate::ingest::application::ports::CapacityOwner;
+        CapacityOwner::stop(self);
+    }
+}
+
+impl crate::ingest::application::ports::CapacityOwner for Fallback {
+    fn ensure(&mut self, engine: &Arc<Engine>) -> Result<()> {
         let live_endpoint = engine.layer_maintenance.owner();
-        if slot.as_ref().is_some_and(|fallback| {
-            fallback
-                .endpoint
-                .as_ref()
-                .zip(live_endpoint.as_ref())
-                .is_some_and(|(bound, live)| Arc::ptr_eq(bound, live))
-        }) {
-            // The caller already owns the relay for this live endpoint.  Do
+        if self
+            .endpoint
+            .as_ref()
+            .zip(live_endpoint.as_ref())
+            .is_some_and(|(bound, live)| Arc::ptr_eq(bound, live))
+        {
+            // The caller already owns the relay for this live endpoint. Do
             // not replace the slot: dropping its old fallback stops that
             // owner while its capacity waiters are still pending.
             return Ok(());
         }
         // A prior fallback can remain after its owner stops. Drop it before
         // creating the replacement so its stopped relay cannot outlive it.
-        let _ = slot.take();
+        self.stop();
         if let Some(endpoint) = engine.layer_maintenance.owner() {
             // A configured bootstrap owner may already exist before replay
-            // creates its caller-owned fallback.  Keep the owner as the sole
+            // creates its caller-owned fallback. Keep the owner as the sole
             // checkpoint writer, but attach the native relay to that same
             // endpoint so capacity waits can submit work to it.
             let relay = BudgetRelay::start(engine.clone(), endpoint.clone())?;
-            *slot = Some(Self {
-                owner: None,
-                relay: Some(relay),
-                endpoint: Some(endpoint),
-                _store: configured,
-            });
+            self.owner = None;
+            self.relay = Some(relay);
+            self.endpoint = Some(endpoint);
             return Ok(());
         }
-        let is_configured = configured.is_some();
-        let store = match configured {
-            Some(store) => store,
+        let is_configured = self._store.is_some();
+        let store = match &self._store {
+            Some(store) => store.clone(),
             None => crate::persistence::infrastructure::spill_directory::temporary_spill_store()?,
         };
         let sink = Arc::new(SegmentCheckpointSink {
@@ -231,24 +260,32 @@ impl Fallback {
             .as_ref()
             .map(|endpoint| BudgetRelay::start(engine.clone(), endpoint.clone()))
             .transpose()?;
-        *slot = Some(Self {
-            owner,
-            relay,
-            endpoint,
-            _store: Some(store),
-        });
+        self.owner = owner;
+        self.relay = relay;
+        self.endpoint = endpoint;
+        self._store = Some(store);
         Ok(())
+    }
+
+    fn is_active(&self) -> bool {
+        self.owner.is_some() || self.relay.is_some()
+    }
+
+    fn stop(&mut self) {
+        if let Some(relay) = &self.relay {
+            relay.stop();
+        }
+        self.relay = None;
+        if let Some(owner) = &mut self.owner {
+            owner.stop();
+        }
+        self.owner = None;
     }
 }
 
 impl Drop for Fallback {
     fn drop(&mut self) {
-        if let Some(relay) = &self.relay {
-            relay.stop();
-        }
-        if let Some(owner) = &mut self.owner {
-            owner.stop();
-        }
+        self.stop();
     }
 }
 

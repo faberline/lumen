@@ -63,7 +63,10 @@ pub struct AppState {
 impl AppState {
     /// Build state with an explicit write log. Spawns the apply loop.
     pub fn with_wal(engine: Arc<Engine>, auth: Arc<AuthConfig>, wal: SharedWal) -> Self {
-        let writer = WriteCoordinator::start(wal, engine.clone());
+        let capacity_owner =
+            Box::new(crate::persistence::application::capacity::Fallback::default());
+        let writer =
+            WriteCoordinator::start_with_capacity_owner(wal, engine.clone(), capacity_owner);
         Self::with_components(engine, auth, writer)
     }
 
