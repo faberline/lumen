@@ -8,6 +8,7 @@ use crate::types::search::default_min_group_size;
 
 /// One sort key. `order` defaults to ascending.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SortSpec {
     pub field: String,
     #[serde(default)]
@@ -103,6 +104,7 @@ pub enum QueryNode {
 
 /// `exists` predicate (see [`QueryNode::Exists`]).
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ExistsQuery {
     pub field: String,
 }
@@ -110,6 +112,7 @@ pub struct ExistsQuery {
 /// `duplicated` predicate (see [`QueryNode::Duplicated`]).
 /// Reuses `default_min_group_size` (defined with `DuplicatesRequest`).
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct DuplicatedQuery {
     pub field: String,
     /// Minimum group size to count as duplicated (default 2).
@@ -119,6 +122,7 @@ pub struct DuplicatedQuery {
 
 /// Reciprocal Rank Fusion query (see [`QueryNode::Rrf`]).
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RrfQuery {
     /// Sub-queries whose rankings are fused (≥1; typically a `knn` + a `match`).
     pub queries: Vec<QueryNode>,
@@ -133,6 +137,7 @@ fn default_rrf_k() -> u32 {
 
 /// Hamming near-duplicate query over a `hash` field (see [`QueryNode::Hamming`]).
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct HammingQuery {
     pub field: String,
     /// The query hash as a 64-bit hex string (optionally `0x`-prefixed).
@@ -143,6 +148,7 @@ pub struct HammingQuery {
 
 /// `has_child` sub-query (see [`QueryNode::HasChild`]).
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct HasChildQuery {
     /// The child collection to evaluate `query` against.
     pub collection: String,
@@ -152,6 +158,7 @@ pub struct HasChildQuery {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct MatchQuery {
     pub field: String,
     pub text: String,
@@ -171,12 +178,14 @@ fn default_match_op() -> MatchOp {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct TermQuery {
     pub field: String,
     pub value: FieldValue,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct TermsQuery {
     pub field: String,
     pub values: Vec<FieldValue>,
@@ -184,6 +193,7 @@ pub struct TermsQuery {
 
 /// Case-sensitive UTF-8 starts-with query for `keyword` fields.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PrefixQuery {
     pub field: String,
     pub value: String,
@@ -194,6 +204,7 @@ pub struct PrefixQuery {
 /// constant-scored and composes under and/or/not like term/terms. Removes the
 /// need to index a redundant row-id keyword field for `row_id_in`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct IdsQuery {
     pub values: Vec<String>,
 }
@@ -202,6 +213,7 @@ pub struct IdsQuery {
 /// `vector` under the field's declared metric. Scores are the negated
 /// distance — higher = better, consistent with BM25 / term scoring.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct KnnQuery {
     pub field: String,
     pub vector: Vec<f32>,
@@ -228,6 +240,7 @@ pub enum RangeBound {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RangeQuery {
     pub field: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

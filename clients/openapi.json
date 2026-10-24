@@ -1604,7 +1604,8 @@
             },
             "description": "At most [`MAX_BATCH_SEARCH_SIZE`] items; a longer batch is rejected\nwith 400 before any item runs."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "BatchSearchResponse": {
         "type": "object",
@@ -1824,7 +1825,8 @@
             "description": "Minimum group size to count as duplicated (default 2).",
             "minimum": 0
           }
-        }
+        },
+        "additionalProperties": false
       },
       "DuplicatesRequest": {
         "type": "object",
@@ -1886,7 +1888,8 @@
           "field": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "FieldSpec": {
         "type": "object",
@@ -2033,7 +2036,8 @@
             "description": "Inclusive maximum Hamming distance (0..=64) for a match.",
             "minimum": 0
           }
-        }
+        },
+        "additionalProperties": false
       },
       "HasChildQuery": {
         "type": "object",
@@ -2055,7 +2059,8 @@
           "query": {
             "$ref": "#/components/schemas/QueryNode"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "HnswCacheSealMutationStamp": {
         "type": "object",
@@ -2113,7 +2118,8 @@
               "type": "string"
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
       "IndexItem": {
         "type": "object",
@@ -2214,7 +2220,8 @@
               "format": "float"
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
       "MatchOp": {
         "type": "string",
@@ -2239,7 +2246,8 @@
           "text": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "PeerAddr": {
         "type": "object",
@@ -2286,7 +2294,8 @@
           "value": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "QueryNode": {
         "oneOf": [
@@ -2526,7 +2535,8 @@
             ],
             "nullable": true
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ReplaceDocBody": {
         "type": "object",
@@ -2706,7 +2716,8 @@
             },
             "description": "Sub-queries whose rankings are fused (≥1; typically a `knn` + a `match`)."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "SearchAllRequest": {
         "type": "object",
@@ -2828,7 +2839,8 @@
             "type": "boolean",
             "description": "Whether to compute the exact total match count. Defaults to `true`\n(back-compat). When `false`, the planner may early-terminate and\n`total` becomes a lower bound (≥ the returned page size)."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "SearchResponse": {
         "type": "object",
@@ -2898,7 +2910,8 @@
           "order": {
             "$ref": "#/components/schemas/SortOrder"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "StatsResponse": {
         "type": "object",
@@ -2962,7 +2975,8 @@
           "value": {
             "$ref": "#/components/schemas/FieldValue"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "TermsQuery": {
         "type": "object",
@@ -2980,7 +2994,8 @@
               "$ref": "#/components/schemas/FieldValue"
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
       "VectorBackend": {
         "type": "string",
