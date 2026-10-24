@@ -10,5 +10,6 @@ pub mod backup_sink;
 pub mod checkpoint_process_state;
 pub mod merge_worker;
 pub mod rdb;
+pub mod rebuild_operation_store;
 pub mod segment_rdb_store;
 pub mod spill_directory;
