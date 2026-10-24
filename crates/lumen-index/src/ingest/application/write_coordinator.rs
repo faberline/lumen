@@ -38,6 +38,8 @@ use std::sync::{Arc, Mutex, Weak};
 use anyhow::Result;
 use raft_runtime::OutcomeWindow;
 use rustc_hash::FxHashMap;
+
+use crate::ingest::application::ports::capacity_owner::{CapacityOwner, NoopCapacityOwner};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard};
 
 use crate::index::application::admission::record_reservation::{
@@ -142,7 +144,7 @@ pub struct WriteCoordinator {
     diagnostic_refusal_revision: AtomicU64,
     #[cfg(test)]
     diagnostic_capture: Mutex<Option<crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCaptureToken>>,
-    layer_capacity_owner: Mutex<Option<crate::persistence::application::capacity::Fallback>>,
+    pub(crate) layer_capacity_owner: Mutex<Box<dyn CapacityOwner>>,
     applied: AtomicU64,
     completions: Mutex<CompletionState>,
     /// A failed committed head can still retain its WAL source. Keep any
@@ -172,16 +174,33 @@ impl WriteCoordinator {
     /// Spawn the apply loop and return the coordinator. The loop tails
     /// the log from the beginning and folds it into `engine`.
     pub fn start(wal: SharedWal, engine: Arc<Engine>) -> Arc<Self> {
-        Self::start_from(wal, engine, 0)
+        Self::start_with_capacity_owner(wal, engine, Box::new(NoopCapacityOwner))
+    }
+
+    /// Like [`start`](Self::start) but attaches a specific capacity owner.
+    pub fn start_with_capacity_owner(
+        wal: SharedWal,
+        engine: Arc<Engine>,
+        capacity_owner: Box<dyn CapacityOwner>,
+    ) -> Arc<Self> {
+        Self::start_from_with_capacity_owner(wal, engine, 0, capacity_owner)
     }
 
     /// Like [`start`](Self::start) but begins applying after `from_seq`
     /// — used when a snapshot (RDB) already seeded the engine up to that
     /// sequence.
     pub fn start_from(wal: SharedWal, engine: Arc<Engine>, from_seq: u64) -> Arc<Self> {
-        // The default / non-AOF path. Delegates with no AOF, so the apply loop is
-        // byte-identical to today.
-        Self::start_from_inner(wal, engine, from_seq, None)
+        Self::start_from_with_capacity_owner(wal, engine, from_seq, Box::new(NoopCapacityOwner))
+    }
+
+    /// Like [`start_from`](Self::start_from) but attaches a specific capacity owner.
+    pub fn start_from_with_capacity_owner(
+        wal: SharedWal,
+        engine: Arc<Engine>,
+        from_seq: u64,
+        capacity_owner: Box<dyn CapacityOwner>,
+    ) -> Arc<Self> {
+        Self::start_from_inner(wal, engine, from_seq, None, capacity_owner)
     }
 
     /// Like [`start_from`](Self::start_from) but also appends every APPLIED
@@ -194,7 +213,24 @@ impl WriteCoordinator {
         from_seq: u64,
         aof: SharedAof,
     ) -> Arc<Self> {
-        Self::start_from_inner(wal, engine, from_seq, Some(aof))
+        Self::start_from_with_aof_and_capacity_owner(
+            wal,
+            engine,
+            from_seq,
+            Some(aof),
+            Box::new(NoopCapacityOwner),
+        )
+    }
+
+    /// Like [`start_from_with_aof`](Self::start_from_with_aof) but attaches a specific capacity owner.
+    pub fn start_from_with_aof_and_capacity_owner(
+        wal: SharedWal,
+        engine: Arc<Engine>,
+        from_seq: u64,
+        aof: Option<SharedAof>,
+        capacity_owner: Box<dyn CapacityOwner>,
+    ) -> Arc<Self> {
+        Self::start_from_inner(wal, engine, from_seq, aof, capacity_owner)
     }
 
     /// Highest sequence this node has applied.

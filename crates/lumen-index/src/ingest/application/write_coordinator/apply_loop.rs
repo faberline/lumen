@@ -39,6 +39,7 @@ impl WriteCoordinator {
         engine: Arc<Engine>,
         from_seq: u64,
         aof: Option<SharedAof>,
+        capacity_owner: Box<dyn crate::ingest::application::ports::CapacityOwner>,
     ) -> Arc<Self> {
         engine.capture_barrier.apply().initialize_sequence(from_seq);
         let coord = Arc::new_cyclic(|self_weak| Self {
@@ -50,7 +51,7 @@ impl WriteCoordinator {
             diagnostic_refusal_revision: AtomicU64::new(0),
             #[cfg(test)]
             diagnostic_capture: Mutex::new(None),
-            layer_capacity_owner: Mutex::new(None),
+            layer_capacity_owner: Mutex::new(capacity_owner),
             applied: AtomicU64::new(from_seq),
             completions: Mutex::new(CompletionState {
                 outcomes: OutcomeWindow::new(OUTCOME_WINDOW),
