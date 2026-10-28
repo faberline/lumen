@@ -12,6 +12,7 @@ use crate::types::query::{QueryNode, SortSpec};
 
 /// `POST /collections/{id}/search` body.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SearchRequest {
     pub query: QueryNode,
     #[serde(default = "default_limit")]
@@ -136,6 +137,7 @@ pub const MAX_BATCH_SEARCH_SIZE: usize = 32;
 /// per item. There is no cross-collection ranking or merged pagination:
 /// results, and cursors, stay independent per item.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct BatchSearchRequest {
     /// At most [`MAX_BATCH_SEARCH_SIZE`] items; a longer batch is rejected
     /// with 400 before any item runs.
@@ -146,11 +148,54 @@ pub struct BatchSearchRequest {
 /// looks like `{"collection": "...", "query": {...}, "limit": 20, ...}` —
 /// the same fields `POST /collections/{id}/search` accepts, plus the
 /// target `collection`.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct BatchSearchItem {
     pub collection: String,
     #[serde(flatten)]
     pub request: SearchRequest,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BatchSearchItemWire {
+    collection: String,
+    query: QueryNode,
+    #[serde(default = "default_limit")]
+    limit: u32,
+    #[serde(default)]
+    offset: u64,
+    #[serde(default)]
+    cursor: Option<String>,
+    #[serde(default)]
+    routing_key: Option<String>,
+    #[serde(default)]
+    sort: Option<Vec<SortSpec>>,
+    #[serde(default = "default_track_total")]
+    track_total: bool,
+    #[serde(default)]
+    collapse: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for BatchSearchItem {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let wire = BatchSearchItemWire::deserialize(deserializer)?;
+        Ok(BatchSearchItem {
+            collection: wire.collection,
+            request: SearchRequest {
+                query: wire.query,
+                limit: wire.limit,
+                offset: wire.offset,
+                cursor: wire.cursor,
+                routing_key: wire.routing_key,
+                sort: wire.sort,
+                track_total: wire.track_total,
+                collapse: wire.collapse,
+            },
+        })
+    }
 }
 
 /// `POST /collections:search` response: one [`BatchSearchResult`] per
