@@ -193,7 +193,7 @@ impl WritePhase {
         }
         static NEXT_ATTEMPT: AtomicU64 = AtomicU64::new(1);
         let Ok(attempt_id) =
-            NEXT_ATTEMPT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+            NEXT_ATTEMPT.try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
                 next.checked_add(1)
             })
         else {

@@ -37,7 +37,7 @@ fn reserve_refuses_before_descriptor_or_action_allocation() {
 fn outer_collection_failure_is_err_not_a_per_item_result() {
     let raw = wire(vec![item("new", "kw", FieldValue::String("v".into()))]);
     let scan = FastIndexScanner::parse(&raw).unwrap();
-    struct Gone(View);
+    struct Gone;
     impl PlanView for Gone {
         fn engine_epoch(&self) -> u64 {
             1
@@ -109,7 +109,7 @@ fn outer_collection_failure_is_err_not_a_per_item_result() {
             fields_end: 1
         }],
         &parsed(),
-        &Gone(view()),
+        &Gone,
         Instant::now(),
         |_| Ok(())
     )
@@ -196,5 +196,5 @@ fn thirty_two_docs_can_plan_more_than_one_thousand_flattened_fields() {
     )
     .unwrap();
     assert_eq!(p.outcomes.len(), 32);
-    assert!(p.scalar.source_items > 1000);
+    assert!(p.scalar._source_items > 1000);
 }

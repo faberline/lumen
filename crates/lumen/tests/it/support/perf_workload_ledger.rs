@@ -69,7 +69,7 @@ pub struct WorkloadCase {
     /// approved batch so a primary cell cannot omit a mutation class.
     pub primary_endpoint: Endpoint,
     pub primary_batch_size: usize,
-    pub backend: Backend,
+    pub _backend: Backend,
 }
 
 impl WorkloadCase {
@@ -77,7 +77,7 @@ impl WorkloadCase {
         Self {
             primary_endpoint,
             primary_batch_size,
-            backend,
+            _backend: backend,
         }
     }
 
@@ -303,7 +303,7 @@ pub enum GateFailure {
 
 #[derive(Debug, Clone)]
 pub struct WorkloadReport {
-    pub case: WorkloadCase,
+    pub _case: WorkloadCase,
     pub requests_offered: u64,
     pub requests_finished: u64,
     pub requests_completed: u64,
@@ -381,7 +381,7 @@ struct PendingItem {
 
 #[derive(Debug)]
 struct PendingRequest {
-    body_started_at: Duration,
+    _body_started_at: Duration,
     /// Start of the current attempt. A capacity refusal moves it to the
     /// resend time so the `Retry-After` wait is not counted as latency.
     attempt_started_at: Duration,
@@ -787,7 +787,7 @@ impl WorkloadLedger {
         self.requests.insert(
             request.id,
             PendingRequest {
-                body_started_at: request.body_started_at,
+                _body_started_at: request.body_started_at,
                 attempt_started_at: request.body_started_at,
                 capacity_refusals: 0,
                 body_started_in_input,
@@ -1103,7 +1103,7 @@ impl WorkloadLedger {
 
     pub fn report(&self) -> WorkloadReport {
         WorkloadReport {
-            case: self.case.clone(),
+            _case: self.case.clone(),
             requests_offered: self.requests_offered,
             requests_finished: self.requests_finished,
             requests_completed: self.requests_completed,
@@ -1446,7 +1446,7 @@ fn percentile_99(samples: &[Duration]) -> Option<Duration> {
     }
     let mut sorted = samples.to_vec();
     sorted.sort_unstable();
-    let rank = (sorted.len() * 99 + 99) / 100;
+    let rank = (sorted.len() * 99).div_ceil(100);
     sorted.get(rank.saturating_sub(1)).copied()
 }
 

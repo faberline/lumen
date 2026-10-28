@@ -54,8 +54,8 @@ fn selected_keyword_rows_keep_sparse_identity_and_only_the_selected_last_value()
         ("doc-7", FieldValue::String("".into())),
     ]);
     let output = staged(&bytes, &[3, 2], FieldType::Keyword, root.path());
-    assert_eq!(output.external_ids, ["doc-7", "doc-90000000"]);
-    assert_eq!(output.item_ordinals, [3, 2]);
+    assert_eq!(output._external_ids, ["doc-7", "doc-90000000"]);
+    assert_eq!(output._item_ordinals, [3, 2]);
     assert_eq!(output.reader.n_docs(), 2);
     assert_eq!(output.reader.keyword_at(0).as_deref(), Some(""));
     assert_eq!(output.reader.keyword_at(1).as_deref(), Some("new"));
@@ -213,7 +213,7 @@ fn a_real_1000_item_oversized_source_uses_bounded_reservations_and_sparse_files(
     assert!(peak > 0);
     assert_eq!(output.reader.n_docs(), 1000);
     for (local, ordinal) in rows.iter().enumerate() {
-        assert_eq!(output.external_ids[local], format!("doc-{ordinal}"));
+        assert_eq!(output._external_ids[local], format!("doc-{ordinal}"));
         let expected = format!("{ordinal:04}-{}", "x".repeat(270 * 1024));
         assert_eq!(
             output.reader.keyword_at(local as u32).as_deref(),

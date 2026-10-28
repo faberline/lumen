@@ -89,7 +89,7 @@ async fn dropping_private_spill_keeps_root_while_blocking_save_owns_store() {
     let spill = PendingChangeSpill {
         sink,
         driver: Some(driver),
-        temporary_root: Some(root),
+        _temporary_root: Some(root),
     };
     engine.request_pending_checkpoint();
     tokio::task::spawn_blocking(move || entered_rx.recv_timeout(Duration::from_secs(5)))
@@ -155,7 +155,7 @@ async fn private_spill_root_outlives_handle_store_and_live_cold_engines() {
     admitted_keyword(&engine, "kept", "kept");
     let mut spill =
         PendingChangeSpill::temporary(engine.clone(), Duration::from_secs(3600)).unwrap();
-    let root = spill.temporary_root.as_ref().unwrap().path.clone();
+    let root = spill._temporary_root.as_ref().unwrap().path.clone();
     assert!(spill.sink.checkpoint_now().await.unwrap());
     let escaped = spill.store().clone();
     let (cold, _) = escaped.load_latest().unwrap().unwrap();
@@ -291,7 +291,7 @@ async fn configured_replay_spill_checkpoints_but_never_trims_aof_tail() {
     let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
     let mut spill =
         PendingChangeSpill::configured_replay(engine, store.clone(), Duration::from_secs(3600));
-    assert!(spill.temporary_root.is_none());
+    assert!(spill._temporary_root.is_none());
     assert!(spill.sink.aof.is_none());
     assert!(spill.sink.checkpoint_now().await.unwrap());
     assert_eq!(

@@ -16,6 +16,8 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use storage_durable::{atomic_write, sync_parent_dir, FsyncPolicy};
 
+type StagedDocuments = (Vec<(String, Value)>, Vec<(String, Value)>);
+
 #[cfg(test)]
 use crate::standalone::gke::validate::{valid_dns, valid_dns_subdomain};
 
@@ -127,7 +129,7 @@ fn render(a: StandaloneGkeRenderArgs) -> Result<()> {
     Ok(())
 }
 
-fn write_stage(stage: &Path, docs: (Vec<(String, Value)>, Vec<(String, Value)>)) -> Result<()> {
+fn write_stage(stage: &Path, docs: StagedDocuments) -> Result<()> {
     let storage = stage.join("storage");
     let runtime = stage.join("runtime");
     fs::create_dir(&storage)?;

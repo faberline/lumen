@@ -44,12 +44,13 @@ impl Collection {
             .entry(field.to_owned())
             .or_default()
             .insert(external_id.to_owned(), self.next_field_dirty_revision);
-        let value = self.checkpoint_value(field, external_id).map_err(|error| {
-            // The live mutation already happened. A missing journal value must
-            // never authorize reusing older files as if this row were saved.
-            self.requires_full_checkpoint = true;
-            error
-        })?;
+        let value = self
+            .checkpoint_value(field, external_id)
+            .inspect_err(|_error| {
+                // The live mutation already happened. A missing journal value must
+                // never authorize reusing older files as if this row were saved.
+                self.requires_full_checkpoint = true;
+            })?;
         self.change_journal.record_charged(
             field.to_owned(),
             external_id.to_owned(),

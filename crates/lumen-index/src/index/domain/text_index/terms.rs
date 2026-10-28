@@ -20,8 +20,8 @@ impl TextIndex {
     ///   token (indexed after the seal into `tokens`) the dict did not carry. With NO
     ///   tombstones every dict token has a live posting, so this equals the dict size
     ///   + the disjoint tail — the same distinct-token count an un-dropped `tokens`
-    ///   map would hold. A FULLY-deleted token drops out, matching the in-RAM
-    ///   semantics where `drop_eid` removes an emptied token.
+    ///     map would hold. A FULLY-deleted token drops out, matching the in-RAM
+    ///     semantics where `drop_eid` removes an emptied token.
     ///
     /// STAGED ROWS AND COST (#4246). The count is
     ///

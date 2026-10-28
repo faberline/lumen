@@ -239,7 +239,7 @@ async fn external_wal_record_waits_for_restore_activation_after_current_publicat
     assert_eq!(fixture.writer.applied_seq(), sequence);
     assert_collections(fixture.live.as_ref(), &["external", "restored"]);
     let mut persisted = Vec::new();
-    AofReader::replay(&fixture.dir.path().join("aof.log"), WATERMARK, |seq, _| {
+    AofReader::replay(fixture.dir.path().join("aof.log"), WATERMARK, |seq, _| {
         persisted.push(seq)
     })
     .unwrap();

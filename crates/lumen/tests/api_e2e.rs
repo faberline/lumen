@@ -317,7 +317,7 @@ async fn index_can_use_injected_sharded_write_backend() {
 //
 // Process env is global, so these two tests (and any other SHARD_MAP_* env
 // user added later) must serialize on this lock.
-static SHARD_MAP_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static SHARD_MAP_ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 fn clear_shard_map_env() {
     unsafe {
@@ -346,7 +346,7 @@ fn routing_key_for_bucket(
 
 #[tokio::test]
 async fn search_routes_by_shard_map_from_env_assignments() {
-    let _g = SHARD_MAP_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _g = SHARD_MAP_ENV_LOCK.lock().await;
     clear_shard_map_env();
     // Reversed 2-bucket map: bucket 0 -> shard 1, bucket 1 -> shard 0 (the
     // opposite of the balanced `bucket % shard_count` default), simulating
@@ -389,7 +389,7 @@ async fn search_routes_by_shard_map_from_env_assignments() {
 
 #[tokio::test]
 async fn search_shard_map_from_env_falls_back_to_balanced_when_unset() {
-    let _g = SHARD_MAP_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _g = SHARD_MAP_ENV_LOCK.lock().await;
     clear_shard_map_env();
     let shard_map = lumen::config::shard_map_from_env(2).expect("shard map from env");
 
@@ -440,7 +440,7 @@ async fn search_shard_map_from_env_falls_back_to_balanced_when_unset() {
 // file's existing `search_routes_by_shard_map_from_env_assignments` pattern.
 #[tokio::test]
 async fn search_shard_segment_dirs_routes_across_all_loaded_dirs_without_shard_count() {
-    let _g = SHARD_MAP_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _g = SHARD_MAP_ENV_LOCK.lock().await;
     clear_shard_map_env();
 
     // Simulate `--search-shard-segment-dirs a,b,c` loading 3 segment roots
@@ -490,7 +490,7 @@ async fn search_shard_segment_dirs_routes_across_all_loaded_dirs_without_shard_c
 
 #[test]
 fn search_shard_segment_dirs_mismatched_explicit_shard_count_fails_fast() {
-    let _g = SHARD_MAP_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _g = SHARD_MAP_ENV_LOCK.blocking_lock();
     clear_shard_map_env();
 
     // An explicit --shard-count/SHARD_COUNT=3 with only 2 dirs actually
@@ -842,7 +842,7 @@ async fn batch_search_over_limit_returns_400() {
 
     let item =
         json!({ "collection": "users", "query": { "term": { "field": "tags", "value": "x" } } });
-    let searches: Vec<Value> = std::iter::repeat(item).take(33).collect();
+    let searches: Vec<Value> = std::iter::repeat_n(item, 33).collect();
 
     let resp = s
         .post("/collections:search")
@@ -1172,7 +1172,7 @@ async fn replace_docs_over_limit_returns_400() {
         .assert_status_ok();
 
     let item = json!({ "external_id": "row-1", "fields": { "state": "open" } });
-    let docs: Vec<Value> = std::iter::repeat(item).take(33).collect();
+    let docs: Vec<Value> = std::iter::repeat_n(item, 33).collect();
 
     let resp = s
         .put("/collections/rows/docs:replace")

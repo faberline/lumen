@@ -38,7 +38,7 @@ pub(in crate::index) fn load_timed(
     macro_rules! stage {
         ($field:ident, $body:expr) => {{
             let started = Instant::now();
-            let result = (|| -> Result<_> { $body })();
+            let result: Result<_> = $body;
             timing.$field = started.elapsed();
             result
         }};

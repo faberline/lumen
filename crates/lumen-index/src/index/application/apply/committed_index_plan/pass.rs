@@ -77,7 +77,7 @@ pub(in crate::index::application::apply) fn plan_with_hashes<V: PlanView>(
         interner_watermark: view.interner_len(),
     };
     if matches!(request, RequestOutcome::Duplicate { .. }) {
-        return Ok(PlanResult::Planned(ScalarPlan {
+        return Ok(PlanResult::Planned(Box::new(ScalarPlan {
             stamp,
             request,
             new_external_ids: vec![],
@@ -85,10 +85,10 @@ pub(in crate::index::application::apply) fn plan_with_hashes<V: PlanView>(
             winners: BTreeMap::new(),
             bytes_by_field: BTreeMap::new(),
             applied: 0,
-            source_items: scanner.cost().item_count,
+            _source_items: scanner.cost().item_count,
             business_error: None,
-            reservation,
-        }));
+            _reservation: reservation,
+        })));
     }
 
     let mut ids: BTreeMap<String, u32> = BTreeMap::new();
@@ -123,7 +123,7 @@ pub(in crate::index::application::apply) fn plan_with_hashes<V: PlanView>(
             continue;
         }
         let Some(kind) = view.field_type(item.field) else {
-            return Ok(PlanResult::Planned(finish(
+            return Ok(PlanResult::Planned(Box::new(finish(
                 stamp,
                 request,
                 new_external_ids,
@@ -136,7 +136,7 @@ pub(in crate::index::application::apply) fn plan_with_hashes<V: PlanView>(
                 Some(BusinessError::UnknownField {
                     field: item.field.to_owned(),
                 }),
-            )));
+            ))));
         };
         if !matches!(
             kind,
@@ -148,9 +148,9 @@ pub(in crate::index::application::apply) fn plan_with_hashes<V: PlanView>(
                 | FieldType::Vector
         ) {
             return Ok(PlanResult::Unsupported {
-                ordinal,
-                field: item.field.to_owned(),
-                kind,
+                _ordinal: ordinal,
+                _field: item.field.to_owned(),
+                _kind: kind,
             });
         }
         let cost = if kind == FieldType::Hash && matches!(item.value, FastIndexValue::String(_)) {
@@ -205,7 +205,7 @@ pub(in crate::index::application::apply) fn plan_with_hashes<V: PlanView>(
                     ordinal,
                     kind,
                 });
-                return Ok(PlanResult::Planned(finish(
+                return Ok(PlanResult::Planned(Box::new(finish(
                     stamp,
                     request,
                     new_external_ids,
@@ -216,11 +216,11 @@ pub(in crate::index::application::apply) fn plan_with_hashes<V: PlanView>(
                     scanner.cost().item_count,
                     reservation,
                     Some(error),
-                )));
+                ))));
             }
         }
     }
-    Ok(PlanResult::Planned(finish(
+    Ok(PlanResult::Planned(Box::new(finish(
         stamp,
         request,
         new_external_ids,
@@ -231,7 +231,7 @@ pub(in crate::index::application::apply) fn plan_with_hashes<V: PlanView>(
         scanner.cost().item_count,
         reservation,
         None,
-    )))
+    ))))
 }
 
 fn planned_id<V: PlanView>(
@@ -279,9 +279,9 @@ fn finish(
         winners,
         bytes_by_field,
         applied,
-        source_items,
+        _source_items: source_items,
         business_error,
-        reservation,
+        _reservation: reservation,
     }
 }
 

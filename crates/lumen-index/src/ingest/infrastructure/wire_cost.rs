@@ -34,6 +34,7 @@ fn allocation(bytes: usize) -> Result<usize> {
 /// Generic CBOR text growth and JSON escaped-token scratch can allocate while
 /// scanning. Six wire lengths cover their old/new token buffers; CBOR's fixed
 /// scratch and the typed visitor stack have a separate fixed allowance.
+#[cfg(any(test, feature = "raft-wal"))]
 pub(crate) fn scan_workspace_bytes(encoded_len: usize) -> Result<usize> {
     add(mul(encoded_len, 6)?, 8192)
 }

@@ -255,16 +255,16 @@ fn is_call_covered_by_role(role_val: &serde_yaml::Value, call: &DeclaredCall) ->
         let verbs = rule.get("verbs").and_then(|v| v.as_sequence());
         let resource_names = rule.get("resourceNames").and_then(|rn| rn.as_sequence());
 
-        let matches_group = api_groups.map_or(false, |groups| {
+        let matches_group = api_groups.is_some_and(|groups| {
             groups
                 .iter()
                 .any(|g| g.as_str() == Some(call.api_group) || g.as_str() == Some("*"))
         });
-        let matches_resource = resources.map_or(false, |res| {
+        let matches_resource = resources.is_some_and(|res| {
             res.iter()
                 .any(|r| r.as_str() == Some(call.resource) || r.as_str() == Some("*"))
         });
-        let matches_verb = verbs.map_or(false, |v_seq| {
+        let matches_verb = verbs.is_some_and(|v_seq| {
             v_seq
                 .iter()
                 .any(|v| v.as_str() == Some(call.verb) || v.as_str() == Some("*"))
@@ -297,10 +297,10 @@ fn is_secret_client_line(line: &str) -> bool {
     if s.starts_with("//") || s.starts_with("///") || s.starts_with("/*") || s.starts_with("*") {
         return false;
     }
-    if s.contains("Secret") {
-        if s.contains("Api<") || s.contains("Api::<") || s.contains("v1::Secret") {
-            return true;
-        }
+    if s.contains("Secret")
+        && (s.contains("Api<") || s.contains("Api::<") || s.contains("v1::Secret"))
+    {
+        return true;
     }
     false
 }
@@ -371,7 +371,7 @@ fn test_no_secret_client_in_operator_source() {
         env!("CARGO_MANIFEST_DIR"),
         "/../lumen-operator/src"
     ));
-    let hits = scan_dir_recursive(&operator_dir);
+    let hits = scan_dir_recursive(operator_dir);
 
     if !hits.is_empty() {
         let mut msg =

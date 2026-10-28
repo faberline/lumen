@@ -414,7 +414,7 @@ fn doc(i: u64) -> [Value; 2] {
         pick(LANG, i, 1_299_709),
         pick(HOBBY, i, 15_485_863)
     );
-    let email = if h(i, 32_452_843) % 20 == 0 {
+    let email = if h(i, 32_452_843).is_multiple_of(20) {
         format!("shared{}@example.com", h(i, 49_979_687) % 50)
     } else {
         format!("user{i}@example.com")

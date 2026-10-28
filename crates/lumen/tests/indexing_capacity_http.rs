@@ -175,7 +175,7 @@ mod capacity_http_contract {
 
     struct CapacityFixture {
         _dir: tempfile::TempDir,
-        root: PathBuf,
+        _root: PathBuf,
         server: TestServer,
         store: Arc<SegmentRdbStore>,
         checkpoint: Arc<SegmentCheckpointSink>,
@@ -228,7 +228,7 @@ mod capacity_http_contract {
         let server = TestServer::new(router(state)).expect("capacity HTTP server");
         CapacityFixture {
             _dir: dir,
-            root,
+            _root: root,
             server,
             store,
             checkpoint,
@@ -487,7 +487,7 @@ mod capacity_http_contract {
         budget
             .checkpointable_bytes()
             .checked_add(LARGE_KEYWORD_VALUE_BYTES as u64)
-            .map_or(true, |required| required > PENDING_HARD_LIMIT_BYTES as u64)
+            .is_none_or(|required| required > PENDING_HARD_LIMIT_BYTES as u64)
     }
 
     async fn fill_checkpointable_budget_until_external_value_cannot_fit(

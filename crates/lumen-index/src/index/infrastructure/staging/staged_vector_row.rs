@@ -74,10 +74,8 @@ impl StagedVectorRow {
         let mut native = Vec::with_capacity(scratch);
         for chunk in payload.chunks(DECODE_CHUNK_BYTES) {
             native.clear();
-            for word in chunk.chunks_exact(4) {
-                native.extend_from_slice(
-                    &f32::from_le_bytes(word.try_into().expect("four bytes")).to_ne_bytes(),
-                );
+            for word in chunk.as_chunks::<4>().0 {
+                native.extend_from_slice(&f32::from_le_bytes(*word).to_ne_bytes());
             }
             output.write_all(&native)?;
         }

@@ -546,16 +546,37 @@ fn test_release_preparation_rejects_retired_routes_and_stale_llms_guidance() {
 fn test_compiled_cfgs_when_release_feature_enabled() {
     #[cfg(feature = "release")]
     {
-        assert!(cfg!(feature = "otel"), "otel must be active");
-        assert!(cfg!(feature = "operator"), "operator must be active");
-        assert!(cfg!(feature = "raft-wal"), "raft-wal must be active");
-        assert!(cfg!(feature = "self-update"), "self-update must be active");
-        assert!(cfg!(feature = "issue"), "issue must be active");
         assert!(
-            cfg!(feature = "delegated-auth"),
+            std::hint::black_box(cfg!(feature = "otel")),
+            "otel must be active"
+        );
+        assert!(
+            std::hint::black_box(cfg!(feature = "operator")),
+            "operator must be active"
+        );
+        assert!(
+            std::hint::black_box(cfg!(feature = "raft-wal")),
+            "raft-wal must be active"
+        );
+        assert!(
+            std::hint::black_box(cfg!(feature = "self-update")),
+            "self-update must be active"
+        );
+        assert!(
+            std::hint::black_box(cfg!(feature = "issue")),
+            "issue must be active"
+        );
+        assert!(
+            std::hint::black_box(cfg!(feature = "delegated-auth")),
             "delegated-auth must be active"
         );
-        assert!(cfg!(feature = "backup"), "transitive backup must be active");
-        assert!(!cfg!(feature = "jieba"), "jieba must NOT be active");
+        assert!(
+            std::hint::black_box(cfg!(feature = "backup")),
+            "transitive backup must be active"
+        );
+        assert!(
+            std::hint::black_box(!cfg!(feature = "jieba")),
+            "jieba must NOT be active"
+        );
     }
 }

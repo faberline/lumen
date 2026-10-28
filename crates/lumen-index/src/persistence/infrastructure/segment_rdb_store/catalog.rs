@@ -136,6 +136,7 @@ pub(super) fn catalog_collections(
     Ok(collections)
 }
 
+#[cfg(test)]
 pub(super) fn validate_catalog_references(
     root: &Path,
     manifest: &SegmentGenerationManifest,

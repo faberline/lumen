@@ -108,19 +108,20 @@ pub(crate) struct StageStore {
 /// this module.  Its removal requires a caller-provided verified watermark.
 #[derive(Debug)]
 pub(crate) struct DurableStage {
-    store_root: PathBuf,
+    _store_root: PathBuf,
     sequence: u64,
     engine_epoch: u64,
     source: SourceIdentity,
     byte_len: u64,
     digest: [u8; 32],
     record_path: PathBuf,
-    marker_path: PathBuf,
+    _marker_path: PathBuf,
 }
 
 /// Caller-owned proof that a particular Engine epoch and source identity are
 /// covered by a durable watermark.  It cannot be constructed outside this
 /// module or reused for a different staging root.
+#[cfg(test)]
 pub(crate) struct CleanupProof {
     store_root: PathBuf,
     source: SourceIdentity,
@@ -141,6 +142,7 @@ impl DurableStage {
         &self.source
     }
 
+    #[cfg(test)]
     pub(crate) fn byte_len(&self) -> u64 {
         self.byte_len
     }

@@ -60,7 +60,7 @@ fn build_corpus() -> Engine {
         for j in i..upto {
             // 10% of writes pick a "hot" key (collides with ≥1 other),
             // 90% pick a globally unique key.
-            let value = if rng.next_u32() % 10 == 0 {
+            let value = if rng.next_u32().is_multiple_of(10) {
                 format!("hot{}@example.com", rng.next_u32() % HOT_KEYS as u32)
             } else {
                 format!("unique{j}@example.com")

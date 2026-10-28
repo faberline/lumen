@@ -169,6 +169,7 @@ impl WalSourceRecord {
         };
         stage.mapped_generic_cbor().map_err(Into::into)
     }
+    #[cfg(test)]
     pub(crate) fn sequence(&self) -> u64 {
         self.sequence
     }

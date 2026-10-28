@@ -97,8 +97,7 @@ pub(in crate::index) struct NumberIndex {
     /// instead of random-probing the numeric forward column. This is deliberately
     /// lazy per term, not whole-field, so the segment tier does not materialize a
     /// high-cardinality keyword field into RAM just because one hot term was read.
-    pub(in crate::index) keyword_range_cache:
-        RwLock<FastHashMap<String, std::sync::Arc<Vec<(u64, u32)>>>>,
+    pub(in crate::index) keyword_range_cache: KeywordRangeCache,
     /// Per `(keyword field, term, numeric range)` candidate bitmaps for hot
     /// `Match(text) ∩ Term(keyword) ∩ Range(number)` shapes. This is query-only
     /// derived state, invalidated with `keyword_range_cache`.
@@ -231,13 +230,6 @@ impl NumberIndex {
             + self.forward.len()
     }
 
-    /// `true` once the sealed forward payload has been dropped to disk
-    /// (Phase 2f-1) — the segment is attached. See `KeywordIndex::forward_dropped`.
-    #[inline]
-    fn forward_dropped(&self) -> bool {
-        self.segment.is_some()
-    }
-
     /// The attached disk segment, if any — the entry the SORT planner
     /// (`try_plan`) uses to drive `sorted_walk_segment` (Phase 2m). `None` when no
     /// segment is attached (the in-RAM `values` BTreeMap is the sort driver).
@@ -246,3 +238,5 @@ impl NumberIndex {
         self.segment.as_ref()
     }
 }
+
+type KeywordRangeCache = RwLock<FastHashMap<String, std::sync::Arc<Vec<(u64, u32)>>>>;

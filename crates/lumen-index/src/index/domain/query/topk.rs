@@ -35,7 +35,7 @@ pub(in crate::index) fn eval_predicable_and_topk(
     q: &QueryNode,
     interner: &Interner,
     k: usize,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> TopKPageResult {
     let QueryNode::And(children) = q else {
         return Ok(None);
     };
@@ -163,7 +163,7 @@ fn eval_single_token_keyword_range_topk(
     base: f32,
     interner: &Interner,
     k: usize,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> TopKPageResult {
     let QueryNode::Match(m) = match_node else {
         return Ok(None);
     };
@@ -314,3 +314,5 @@ fn score_single_token_candidate_bitmap_topk(
     }
     (finish_top_ranked(heap), total)
 }
+
+type TopKPageResult = Result<Option<(Vec<(u32, f32)>, u64)>>;

@@ -92,12 +92,12 @@ impl NumberIndex {
     ///     value, identical to the in-RAM `values` `Ord`; reversed for desc), and
     ///   * within-value docid order = ascending (base ids `< seg.n_docs` precede
     ///     tail ids, exactly the OR'd-bitmap iteration order the in-RAM walk used),
-    /// so the emitted (value, docid) sequence is BYTE-IDENTICAL to the in-RAM
-    /// `sorted_values().iter()[.rev()]` walk. `visit` returns `Ok(true)` to
-    /// continue or `Ok(false)` to stop early (page full + `!track_total`); the walk
-    /// short-circuits on `Ok(false)` so `pure_sort`/`filter_sort` only touch (and
-    /// cache) the first few values' postings. Returns `Ok(())` once every value is
-    /// visited or the callback stops.
+    ///     so the emitted (value, docid) sequence is BYTE-IDENTICAL to the in-RAM
+    ///     `sorted_values().iter()[.rev()]` walk. `visit` returns `Ok(true)` to
+    ///     continue or `Ok(false)` to stop early (page full + `!track_total`); the walk
+    ///     short-circuits on `Ok(false)` so `pure_sort`/`filter_sort` only touch (and
+    ///     cache) the first few values' postings. Returns `Ok(())` once every value is
+    ///     visited or the callback stops.
     ///
     /// Both sources are ascending; a value present in BOTH the segment column and
     /// the live tail is visited ONCE with the unioned posting (the merge advances
@@ -181,7 +181,7 @@ impl NumberIndex {
                 }
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     /// SEGMENT-ON standalone range page. Unlike `sorted_values()`, this streams only
@@ -241,6 +241,6 @@ impl NumberIndex {
         if !track_total {
             total = total.max(page.len() as u64);
         }
-        return Ok((page, total));
+        Ok((page, total))
     }
 }

@@ -404,7 +404,7 @@ impl Engine {
                 // through to the general `eval_query` map path unchanged.
                 let mut ranked: Vec<(u32, f32)>;
                 let total: u64;
-                if score_after.is_some() {
+                if let Some((after_score, after_eid)) = score_after.as_ref() {
                     // Keyset continuation: rank the strictly-after-cursor subset.
                     let universe: BTreeSet<u32> = if query_needs_universe(&req.query) {
                         coll.eid_fields.keys().copied().collect()
@@ -413,7 +413,6 @@ impl Engine {
                     };
                     let scored = eval_query(coll, collection_id, &req.query, &universe, &state)?;
                     total = scored.len() as u64;
-                    let (after_score, after_eid) = score_after.as_ref().unwrap();
                     ranked = scored
                         .into_iter()
                         .filter(|(id, s)| {

@@ -162,17 +162,11 @@ pub struct CapacitySpec {
     pub initial_machine_type: String,
 }
 
-impl CapacitySpec {
-    pub fn default() -> Self {
+impl Default for CapacitySpec {
+    fn default() -> Self {
         Self {
             initial_machine_type: DEFAULT_INITIAL_MACHINE_TYPE.to_string(),
         }
-    }
-}
-
-impl Default for CapacitySpec {
-    fn default() -> Self {
-        Self::default()
     }
 }
 
@@ -216,19 +210,13 @@ pub struct CapacityStorage {
     pub disk_type: String,
 }
 
-impl CapacityStorage {
-    pub fn default() -> Self {
+impl Default for CapacityStorage {
+    fn default() -> Self {
         Self {
             size: DEFAULT_DATA_STORAGE.to_string(),
             storage_class: DEFAULT_STORAGE_CLASS.to_string(),
             disk_type: DEFAULT_DISK_TYPE.to_string(),
         }
-    }
-}
-
-impl Default for CapacityStorage {
-    fn default() -> Self {
-        Self::default()
     }
 }
 

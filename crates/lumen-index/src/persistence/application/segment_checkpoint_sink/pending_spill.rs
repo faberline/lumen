@@ -23,7 +23,7 @@ use crate::persistence::infrastructure::spill_directory::SpillDirectory;
 pub struct PendingChangeSpill {
     pub(super) sink: Arc<SegmentCheckpointSink>,
     pub(super) driver: Option<SegmentCheckpointDriver>,
-    pub(super) temporary_root: Option<Arc<SpillDirectory>>,
+    pub(super) _temporary_root: Option<Arc<SpillDirectory>>,
 }
 
 impl PendingChangeSpill {
@@ -65,7 +65,7 @@ impl PendingChangeSpill {
         Self {
             sink,
             driver: Some(driver),
-            temporary_root,
+            _temporary_root: temporary_root,
         }
     }
 

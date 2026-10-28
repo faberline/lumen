@@ -87,11 +87,8 @@ impl<'a> Cursor<'a> {
     pub(super) fn text(&mut self) -> Result<ByteRange> {
         let head = self.tagged()?;
         ensure!(head.major == 3, "expected CBOR text");
-        let len = usize::try_from(
-            head.argument
-                .ok_or_else(|| NotHandled("fragmented CBOR text"))?,
-        )
-        .map_err(|_| anyhow!("CBOR text length exceeds usize"))?;
+        let len = usize::try_from(head.argument.ok_or(NotHandled("fragmented CBOR text"))?)
+            .map_err(|_| anyhow!("CBOR text length exceeds usize"))?;
         let start = self.pos;
         let end = start
             .checked_add(len)
@@ -107,11 +104,8 @@ impl<'a> Cursor<'a> {
     pub(super) fn trusted_text(&mut self) -> Result<ByteRange> {
         let head = self.tagged()?;
         ensure!(head.major == 3, "expected CBOR text");
-        let len = usize::try_from(
-            head.argument
-                .ok_or_else(|| NotHandled("fragmented CBOR text"))?,
-        )
-        .map_err(|_| anyhow!("CBOR text length exceeds usize"))?;
+        let len = usize::try_from(head.argument.ok_or(NotHandled("fragmented CBOR text"))?)
+            .map_err(|_| anyhow!("CBOR text length exceeds usize"))?;
         let start = self.pos;
         let end = start
             .checked_add(len)
@@ -199,9 +193,8 @@ impl<'a> Cursor<'a> {
                 })
             }
         }
-        .map(|container| {
+        .inspect(|_container| {
             self.pos = start;
-            container
         })
     }
     pub(super) fn finish(&mut self, container: Container) -> Result<()> {
@@ -230,23 +223,7 @@ impl<'a> Cursor<'a> {
         }
         Ok(())
     }
-    fn map_find<T>(
-        &mut self,
-        wanted: &str,
-        mut read: impl FnMut(&mut Self) -> Result<T>,
-    ) -> Result<Option<T>> {
-        let mut found = None;
-        self.map_each(|key, cursor| {
-            if key == wanted {
-                ensure!(found.is_none(), "duplicate {wanted}");
-                found = Some(read(cursor)?);
-            } else {
-                cursor.skip()?;
-            }
-            Ok(())
-        })?;
-        Ok(found)
-    }
+
     pub(super) fn skip(&mut self) -> Result<()> {
         let head = self.head()?;
         match head.major {

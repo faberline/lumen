@@ -34,7 +34,7 @@ impl Drop for MeasuredCapture<'_> {
         let nanos = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
         let _ = self
             .total
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |total| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |total| {
                 Some(total.saturating_add(nanos))
             });
     }

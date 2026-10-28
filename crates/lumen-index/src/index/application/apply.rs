@@ -78,18 +78,18 @@ fn apply_value(
                 }
             };
             let doc_len = match analyzer {
-                Analyzer::WhitespaceLower => tokenize::for_whitespace_lower_cow(&s, |tok| {
+                Analyzer::WhitespaceLower => tokenize::for_whitespace_lower_cow(s, |tok| {
                     apply_token(idx, tok.as_ref());
                 }),
                 Analyzer::Ngram => ngram_stream::stream_default_ngrams(
-                    &s,
+                    s,
                     |token| -> Result<(), std::convert::Infallible> {
                         apply_token(idx, token);
                         Ok(())
                     },
                 )?,
                 Analyzer::Jieba => {
-                    let tokens = tokenize::tokenize(&s, *analyzer);
+                    let tokens = tokenize::tokenize(s, *analyzer);
                     let doc_len = tokens.len() as u32;
                     for tok in &tokens {
                         apply_token(idx, tok);

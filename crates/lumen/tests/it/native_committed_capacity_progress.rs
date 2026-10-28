@@ -574,11 +574,9 @@ async fn require_progress_before_caller_checkpoint(
         filler_ordinal,
         "cleanup-resumed native committed source",
     );
-    assert!(
-        false,
+    panic!(
         "valid fitting generic native committed apply waited for a caller checkpoint instead of starting independent capacity maintenance; cleanup checkpoint released the retained source",
     );
-    unreachable!("the behavior assertion above always panics");
 }
 
 fn child_paths() -> Option<(PathBuf, PathBuf)> {

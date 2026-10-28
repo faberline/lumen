@@ -216,14 +216,16 @@ pub struct Reservation {
 }
 
 enum SourceRetentionHeld {
-    Reservation(Reservation),
-    Retained(RetainedCharge),
+    Reservation { _held: Reservation },
+    Retained { _held: RetainedCharge },
 }
 
 /// Keeps one source-backed reservation charged while a failed worker still
 /// owns the source but cannot safely resume application.
 #[derive(Clone)]
-pub(crate) struct SourceRetention(Arc<Mutex<Option<SourceRetentionHeld>>>);
+pub(crate) struct SourceRetention {
+    _held: Arc<Mutex<Option<SourceRetentionHeld>>>,
+}
 
 /// A committed charge.  Dropping it deliberately does not release memory.
 pub struct ActiveCharge {
@@ -235,6 +237,7 @@ pub struct ActiveCharge {
 
 /// Pre-apply RAM ownership. Unlike [`ActiveCharge`], this may be released only
 /// by the private durable-stage proof emitted after its payload is destroyed.
+#[cfg(test)]
 pub(crate) struct RamCharge {
     budget: ChangeBudget,
     owner: u64,
@@ -249,7 +252,9 @@ pub(crate) struct RamCharge {
 /// Cloning this handle shares one accounting entry; only the last drop frees
 /// its bytes.
 #[derive(Clone)]
-pub(crate) struct RetainedCharge(Arc<RetainedChargeInner>);
+pub(crate) struct RetainedCharge {
+    _inner: Arc<RetainedChargeInner>,
+}
 
 struct RetainedChargeInner {
     budget: ChangeBudget,

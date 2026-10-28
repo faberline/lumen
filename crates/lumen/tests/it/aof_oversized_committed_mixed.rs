@@ -213,7 +213,7 @@ fn initial_items(primary_keyword: String) -> Vec<IndexItem> {
 
 fn oversized_mixed_record() -> WalRecord {
     assert!(
-        HUGE_KEYWORD_BYTES > PENDING_HARD_LIMIT_BYTES,
+        std::hint::black_box(HUGE_KEYWORD_BYTES > PENDING_HARD_LIMIT_BYTES),
         "the one giant Keyword must exceed the documented 256 MiB pending budget",
     );
     WalRecord::new(RaftLogEntry::Index {

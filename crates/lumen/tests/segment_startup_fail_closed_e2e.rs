@@ -221,7 +221,11 @@ impl LumenProcess {
     }
 
     fn finish_exited_child(&mut self) -> String {
-        self.child.take().expect("lumen child is available");
+        self.child
+            .take()
+            .expect("lumen child is available")
+            .wait()
+            .expect("reap exited lumen child");
         self.port_bind_handoff.take();
         self.logs()
     }

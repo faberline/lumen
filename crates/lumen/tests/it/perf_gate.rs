@@ -963,6 +963,7 @@ use crate::support::perf_cell_receipt;
 use crate::support::perf_workload_ledger;
 
 mod durable_workload {
+
     //! Approved #4246 durable workload in the existing `perf_gate` target.
     //!
     //! # Facets
@@ -979,6 +980,8 @@ mod durable_workload {
     //!   the approved 30-minute, 100 offered docops/s, 95% in-window completion,
     //!   10 QPS, latency, drain, RSS, checkpoint, and merge observations.
     //!   `perf_workload_ledger.rs:1068` records actual request/query drain.
+
+    type EvidenceMutation = (&'static str, fn(&mut serde_json::Value));
 
     use std::collections::{BTreeMap, BTreeSet, VecDeque};
     use std::env;
@@ -1299,7 +1302,7 @@ mod durable_workload {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         static MASK: OnceLock<u64> = OnceLock::new();
         let sequence = NEXT
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
                 next.checked_add(1)
             })
             .map_err(|_| {
@@ -2347,7 +2350,7 @@ mod durable_workload {
         let mut evidence = BoundedEvidence::new(limit, EvidenceRetention::Prefix);
         futures::pin_mut!(stream);
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|error| describe_error(error))?;
+            let chunk = chunk.map_err(&describe_error)?;
             evidence.push(chunk.as_ref());
         }
         Ok(evidence)
@@ -3157,7 +3160,7 @@ mod durable_workload {
         error: RequestFailure,
         outcome: Outcome,
         status: Option<u16>,
-        body: Option<String>,
+        body: Option<Box<str>>,
         /// Set only for a typed `pending_change_capacity` 429 with a numeric
         /// `Retry-After`. The server guarantees such a refusal changed
         /// nothing, so [`resend_on_capacity_refusal`] may send it again.
@@ -3181,7 +3184,7 @@ mod durable_workload {
             identifier: identifier.into(),
             error: failure.error,
             status: failure.status,
-            body: failure.body,
+            body: failure.body.map(String::from),
         });
         outcome
     }
@@ -3878,7 +3881,6 @@ mod durable_workload {
                     .and_then(|trace| trace.as_deref()),
             )
             .await;
-            drop(probe);
             self.cleanup_armed = false;
             Some(evidence.path)
         }
@@ -4103,8 +4105,7 @@ mod durable_workload {
                         outcome,
                     )
                 } else {
-                    let record = emit_restart_phase_diagnostics(diagnostics, phase, outcome);
-                    record
+                    emit_restart_phase_diagnostics(diagnostics, phase, outcome)
                 };
                 observe(&record, *diagnostics);
             };
@@ -4395,7 +4396,7 @@ mod durable_workload {
             })
             .await
             .map_err(|_| failure("published-port lookup exceeded request deadline".to_owned()))?
-            .map_err(&failure)?;
+            .map_err(failure)?;
             if !status.success() || stdout.truncated {
                 return Err(failure(format!(
                     "published-port lookup status={status}: {}",
@@ -5401,7 +5402,7 @@ mod durable_workload {
         })
         .await
         .map_err(|_| failure(format!("exceeded the {timeout:?} deadline")))?
-        .map_err(&failure)?;
+        .map_err(failure)?;
         if !status.success() || stdout.truncated {
             return Err(failure(format!(
                 "status={status}: {}",
@@ -5842,7 +5843,7 @@ mod durable_workload {
         let expected = expected_server_env(Some("1"), false);
         let other_digest =
             "ghcr.io/faberline/lumen@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let mutations: [(&str, fn(&mut Value)); 22] = [
+        let mutations: [EvidenceMutation; 22] = [
             ("image", |pod| {
                 pod["spec"]["containers"][0]["image"] = json!("ghcr.io/faberline/lumen:latest")
             }),
@@ -6039,7 +6040,7 @@ mod durable_workload {
 
     #[test]
     fn kube_hardware_rejects_each_unobserved_or_ambiguous_value() {
-        let node_mutations: [(&str, fn(&mut Value)); 6] = [
+        let node_mutations: [EvidenceMutation; 6] = [
             ("other node", |node| {
                 node["metadata"]["name"] = json!("other")
             }),
@@ -6080,7 +6081,7 @@ mod durable_workload {
             );
         }
 
-        let claim_mutations: [(&str, fn(&mut Value)); 5] = [
+        let claim_mutations: [EvidenceMutation; 5] = [
             ("other claim", |claim| {
                 claim["metadata"]["name"] = json!("other")
             }),
@@ -6107,7 +6108,7 @@ mod durable_workload {
             );
         }
 
-        let volume_mutations: [(&str, fn(&mut Value)); 10] = [
+        let volume_mutations: [EvidenceMutation; 10] = [
             ("other volume", |volume| {
                 volume["metadata"]["name"] = json!("other")
             }),
@@ -6778,7 +6779,10 @@ mod durable_workload {
             duration: Duration,
         ) {
             let second = scheduled_at.as_secs();
-            if !self.early_index_enabled || second >= EARLY_INDEX_TRACE_SECONDS || second % 3 != 0 {
+            if !self.early_index_enabled
+                || second >= EARLY_INDEX_TRACE_SECONDS
+                || !second.is_multiple_of(3)
+            {
                 return;
             }
             let sample = duration.as_micros().min(u64::MAX as u128) as u64;
@@ -6813,22 +6817,14 @@ mod durable_workload {
                     sample.blocked_pushes,
                     sample.blocked_push_us,
                     sample.blocked_push_max_us,
-                    if sample.task_start_lag_samples == 0 {
-                        0
-                    } else {
-                        sample.task_start_lag_us / sample.task_start_lag_samples
-                    },
+                    sample.task_start_lag_us.checked_div(sample.task_start_lag_samples).unwrap_or(0),
                     sample.task_start_lag_max_us,
-                    if sample.ledger_body_start_lag_samples == 0 { 0 } else { sample.ledger_body_start_lag_us / sample.ledger_body_start_lag_samples },
+                    sample.ledger_body_start_lag_us.checked_div(sample.ledger_body_start_lag_samples).unwrap_or(0),
                     sample.ledger_body_start_lag_max_us,
-                    if sample.send_call_lag_samples == 0 { 0 } else { sample.send_call_lag_us / sample.send_call_lag_samples },
+                    sample.send_call_lag_us.checked_div(sample.send_call_lag_samples).unwrap_or(0),
                     sample.send_call_lag_max_us,
                     sample.completed,
-                    if sample.completed == 0 {
-                        0
-                    } else {
-                        sample.latency_us / sample.completed
-                    },
+                    sample.latency_us.checked_div(sample.completed).unwrap_or(0),
                     sample.latency_max_us,
                 );
             }
@@ -7201,7 +7197,7 @@ mod durable_workload {
             error: RequestFailure::synthetic(message, false),
             outcome: Outcome::Failed,
             status: None,
-            body: Some(truncate_evidence_body(&response.to_string())),
+            body: Some(truncate_evidence_body(&response.to_string()).into_boxed_str()),
             capacity_retry_after: None,
         }
     }
@@ -7222,7 +7218,7 @@ mod durable_workload {
             outcome: Outcome::Failed,
             status: Some(status.as_u16()),
             capacity_retry_after: capacity_retry_after(status, retry_after.as_deref(), &body),
-            body: Some(truncate_evidence_body(&body)),
+            body: Some(truncate_evidence_body(&body).into_boxed_str()),
         }
     }
 
@@ -7893,7 +7889,7 @@ mod durable_workload {
                 .json(&schema(backend))
                 .send()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))
+                .map_err(HarnessError::request_failure)
         })
         .await?;
         if response.status().is_success() {
@@ -8081,12 +8077,12 @@ mod durable_workload {
                 .get(format!("{}/collections/{collection}/stats", server.base))
                 .send()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             let status = response.status();
             let body = response
                 .json::<Value>()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             Ok::<_, HarnessError>((status, body))
         })
         .await?;
@@ -8110,12 +8106,12 @@ mod durable_workload {
                 .get(format!("{}/collections/{collection}/stats", server.base))
                 .send()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             let status = response.status();
             let body = response
                 .json::<Value>()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             Ok::<_, HarnessError>((status, body))
         })
         .await
@@ -8201,12 +8197,12 @@ mod durable_workload {
                 .get(format!("{}/collections/{collection}/stats", server.base))
                 .send()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             let status = response.status();
             let stats = response
                 .json::<Value>()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             if !status.is_success() {
                 return Err(HarnessError::DataInvariant(format!(
                     "post-restart backend attestation could not read stats for {collection}: {status} {stats}"
@@ -8237,12 +8233,12 @@ mod durable_workload {
             }))
             .send()
             .await
-            .map_err(|error| HarnessError::request_failure(error))?;
+            .map_err(HarnessError::request_failure)?;
         let status = response.status();
         let body = response
             .json::<Value>()
             .await
-            .map_err(|error| HarnessError::request_failure(error))?;
+            .map_err(HarnessError::request_failure)?;
         if status.is_success() && body["hits"].as_array().is_some_and(|hits| !hits.is_empty()) {
             Ok(())
         } else {
@@ -8441,11 +8437,9 @@ mod durable_workload {
             "embedding" => Err(HarnessError::DataInvariant(
                 "embedding readback requires the bounded two-document candidate pair".to_owned(),
             )),
-            unexpected => {
-                return Err(HarnessError::DataInvariant(format!(
-                    "semantic readback has no query for frozen field {unexpected}"
-                )));
-            }
+            unexpected => Err(HarnessError::DataInvariant(format!(
+                "semantic readback has no query for frozen field {unexpected}"
+            ))),
         }
     }
 
@@ -9651,7 +9645,11 @@ mod durable_workload {
         );
         fields.insert(
             "status".to_owned(),
-            json!(if number % 2 == 0 { "active" } else { "pending" }),
+            json!(if number.is_multiple_of(2) {
+                "active"
+            } else {
+                "pending"
+            }),
         );
         fields.insert("price".to_owned(), json!(number as f64 + 0.25));
         fields.insert("rank".to_owned(), json!((number % 10_000) as f64));
@@ -10066,7 +10064,7 @@ mod durable_workload {
                 )
             })?;
         eprintln!("PERF_STAGE_BEGIN seed");
-        match seed(&server, config.vector_backend, setup_deadline).await {
+        match seed(server, config.vector_backend, setup_deadline).await {
             Ok(()) => eprintln!("PERF_STAGE_END seed"),
             Err(error @ HarnessError::SetupTimeout { .. }) => {
                 eprintln!("PERF_STAGE_TIMEOUT seed");
@@ -10106,7 +10104,7 @@ mod durable_workload {
         // The clock and metric baseline are created only after seed work is
         // durable. This preparation checkpoint cannot satisfy interval gates.
         let (report, counter_delta, observed_input_duration, workload_failures) =
-            drive_workload(&server, config).await?;
+            drive_workload(server, config).await?;
         if !workload_failures.is_empty() {
             eprintln!("PERF_WORKLOAD_GATE_FAILURES {workload_failures:?}");
         }
@@ -10156,7 +10154,7 @@ mod durable_workload {
             post_input_deadline,
             POST_INPUT_TIMEOUT,
             "live_readback",
-            assert_mutation_readback(&server, "live after measured drain"),
+            assert_mutation_readback(server, "live after measured drain"),
         )
         .await?;
         eprintln!("PERF_STAGE_END live_readback");
@@ -10223,7 +10221,7 @@ mod durable_workload {
             post_input_deadline,
             POST_INPUT_TIMEOUT,
             "vector_attestation",
-            assert_post_restart_vector_backends(&server, config.vector_backend),
+            assert_post_restart_vector_backends(server, config.vector_backend),
         )
         .await?;
         eprintln!("PERF_STAGE_END vector_attestation");
@@ -10233,20 +10231,18 @@ mod durable_workload {
             POST_INPUT_TIMEOUT,
             "count_query_readback",
             async {
-                assert_document_count(&server, HOT_COLLECTION, HOT_DOCUMENTS)
+                assert_document_count(server, HOT_COLLECTION, HOT_DOCUMENTS)
                     .await
                     .map_err(|error| {
                         HarnessError::DataInvariant(format!(
                             "restart must recover the durable hot collection: {error}"
                         ))
                     })?;
-                assert_recovered_text_query(&server)
-                    .await
-                    .map_err(|error| {
-                        HarnessError::DataInvariant(format!(
-                            "restart must recover Text/BM25 query data: {error}"
-                        ))
-                    })?;
+                assert_recovered_text_query(server).await.map_err(|error| {
+                    HarnessError::DataInvariant(format!(
+                        "restart must recover Text/BM25 query data: {error}"
+                    ))
+                })?;
                 Ok(())
             },
         )
@@ -10258,7 +10254,7 @@ mod durable_workload {
             post_input_deadline,
             POST_INPUT_TIMEOUT,
             "cold_readback",
-            assert_mutation_readback(&server, "cold after restart"),
+            assert_mutation_readback(server, "cold after restart"),
         )
         .await;
         server
@@ -11009,13 +11005,10 @@ mod durable_workload {
         )
         .unwrap();
         assert!(sample_capped["samples"].as_array().unwrap().len() <= INTERVAL_TRACE_MAX_SAMPLES);
-        assert!(
-            sample_capped["omitted_request_failure_intervals"]
-                .as_array()
-                .unwrap()
-                .len()
-                > 0
-        );
+        assert!(!sample_capped["omitted_request_failure_intervals"]
+            .as_array()
+            .unwrap()
+            .is_empty());
         assert_eq!(
             interval_trace_failure_totals(&sample_capped),
             [
@@ -11077,13 +11070,10 @@ mod durable_workload {
         let byte_capped: Value = serde_json::from_str(&byte_capped_rendered).unwrap();
         assert!(byte_capped_rendered.len() <= 4 * 1024);
         assert!(byte_capped["samples"].as_array().unwrap().len() < 12);
-        assert!(
-            byte_capped["omitted_request_failure_intervals"]
-                .as_array()
-                .unwrap()
-                .len()
-                > 0
-        );
+        assert!(!byte_capped["omitted_request_failure_intervals"]
+            .as_array()
+            .unwrap()
+            .is_empty());
         // Detail samples can be omitted, but every interval keeps one and
         // only one aggregate request-failure total in the document.
         assert_eq!(
@@ -13948,8 +13938,10 @@ mod durable_workload {
             );
         }
         assert!(
-            MUTATION_DOCUMENTS_PER_CLASS * 2 < VECTOR_READBACK_REFERENCE_NUMBER
-                && VECTOR_READBACK_REFERENCE_NUMBER < HOT_DOCUMENTS,
+            std::hint::black_box(
+                MUTATION_DOCUMENTS_PER_CLASS * 2 < VECTOR_READBACK_REFERENCE_NUMBER
+                    && VECTOR_READBACK_REFERENCE_NUMBER < HOT_DOCUMENTS
+            ),
             "unindex and replace ranges must fit below the untouched vector reference"
         );
     }
@@ -13968,7 +13960,7 @@ mod durable_workload {
     fn restart_diagnostic_production_contains(region: &str, expected: &str) -> bool {
         region.lines().map(str::trim).any(|line| {
             !line.starts_with("//")
-                && !line.as_bytes().starts_with(&[b'/', b'*'])
+                && !line.as_bytes().starts_with(b"/*")
                 && line.contains(expected)
         })
     }

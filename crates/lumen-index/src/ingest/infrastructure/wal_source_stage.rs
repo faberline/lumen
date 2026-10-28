@@ -85,7 +85,7 @@ struct SourceStageRoot {
 /// Each receipt owns one child directory and removes only that directory on
 /// its final drop. The parent source root remains available to other slots.
 struct RecordStageRoot {
-    directory: StageDirectory,
+    _directory: StageDirectory,
     store: StageStore,
 }
 
@@ -102,7 +102,7 @@ pub(crate) struct WalSourceStager {
 pub(crate) struct StagedWalRecord {
     stage: DurableStage,
     source: Arc<SourceStageRoot>,
-    record_root: Arc<RecordStageRoot>,
+    _record_root: Arc<RecordStageRoot>,
     sequence: u64,
     decoded_owned_bytes: usize,
     codec: StageCodec,
@@ -151,7 +151,7 @@ impl WalSourceStager {
 
     fn with_directory(directory: StageDirectory) -> io::Result<Self> {
         let source_id = NEXT_MEM_WAL_SOURCE
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .map_err(|_| io::Error::other("MemWal stage source identity exhausted"))?;
         let source = SourceIdentity::new(SourceKind::Local, format!("mem-wal:{source_id}"))?;
         Ok(Self {
@@ -192,7 +192,10 @@ impl WalSourceStager {
         };
         #[cfg(not(test))]
         let store = StageStore::new(&directory.path)?;
-        let record_root = Arc::new(RecordStageRoot { directory, store });
+        let record_root = Arc::new(RecordStageRoot {
+            _directory: directory,
+            store,
+        });
         let stage = record_root.store.stage_with_writer(
             sequence,
             MEM_WAL_STAGE_EPOCH,
@@ -202,7 +205,7 @@ impl WalSourceStager {
         Ok(StagedWalRecord {
             stage,
             source: self.root.clone(),
-            record_root,
+            _record_root: record_root,
             sequence,
             decoded_owned_bytes,
             codec: StageCodec::Cbor,
@@ -227,7 +230,10 @@ impl WalSourceStager {
         };
         #[cfg(not(test))]
         let store = StageStore::new(&directory.path)?;
-        let record_root = Arc::new(RecordStageRoot { directory, store });
+        let record_root = Arc::new(RecordStageRoot {
+            _directory: directory,
+            store,
+        });
         let stage = record_root.store.stage_with_writer(
             sequence,
             MEM_WAL_STAGE_EPOCH,
@@ -239,7 +245,7 @@ impl WalSourceStager {
         Ok(Some(StagedWalRecord {
             stage,
             source: self.root.clone(),
-            record_root,
+            _record_root: record_root,
             sequence,
             decoded_owned_bytes,
             codec: StageCodec::FastIndex,
@@ -372,7 +378,7 @@ impl StagedWalRecord {
 
     #[cfg(test)]
     fn root_path(&self) -> &Path {
-        &self.record_root.directory.path
+        &self._record_root._directory.path
     }
 }
 

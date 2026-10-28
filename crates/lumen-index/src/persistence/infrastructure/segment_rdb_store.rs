@@ -35,8 +35,7 @@ pub mod records;
 pub mod reopen;
 pub mod save;
 pub mod save_attempt;
-#[path = "segment_save_gate.rs"]
-mod save_gate;
+use crate::persistence::infrastructure::segment_save_gate as save_gate;
 pub mod startup;
 pub mod telemetry;
 
@@ -142,7 +141,7 @@ pub struct SegmentRdbStore {
     bootstrap: StartupBootstrap,
     // Clones share proof of the last verified immutable manifest. Unknown
     // generations require payload validation before the hard-link fast path.
-    pub(in crate::persistence) verified_catalog: Arc<Mutex<Option<(GenerationName, Vec<u8>)>>>,
+    pub(in crate::persistence) verified_catalog: LiveManifest,
     pub(in crate::persistence) pending_frozen: Arc<Mutex<Option<PendingFrozenCheckpoint>>>,
     pub(in crate::persistence) merge_observer: Arc<dyn MergeObserver>,
     pub(in crate::persistence) background: Arc<RootWork>,
@@ -175,17 +174,19 @@ pub(crate) struct SegmentArchivePin {
     background: Arc<RootWork>,
     _root_guard: Option<CheckpointRootGuard>,
     name: String,
-    path: PathBuf,
-    sequence: u64,
+    _path: PathBuf,
+    _sequence: u64,
 }
 
 impl SegmentArchivePin {
+    #[cfg(feature = "raft-wal")]
     pub(crate) fn path(&self) -> &Path {
-        &self.path
+        &self._path
     }
 
+    #[cfg(feature = "raft-wal")]
     pub(crate) fn sequence(&self) -> u64 {
-        self.sequence
+        self._sequence
     }
 }
 
@@ -249,13 +250,6 @@ impl GenerationStaging {
         }
     }
 
-    pub(in crate::persistence) fn path(&self) -> &Path {
-        match self {
-            Self::Generic(staged) => staged.path(),
-            Self::Current(staged) => staged.path(),
-        }
-    }
-
     pub(in crate::persistence) fn commit_with_publication_guard<G>(
         self,
         store: &GenerationStore,
@@ -271,6 +265,13 @@ impl GenerationStaging {
             Self::Current(staged) => {
                 store.commit_from_current_with_publication_guard(staged, acquire)
             }
+        }
+    }
+
+    pub(in crate::persistence) fn path(&self) -> &Path {
+        match self {
+            Self::Generic(staged) => staged.path(),
+            Self::Current(staged) => staged.path(),
         }
     }
 }
@@ -352,3 +353,5 @@ impl fmt::Debug for SegmentRdbStore {
 
 #[cfg(test)]
 mod tests;
+
+type LiveManifest = Arc<Mutex<Option<(GenerationName, Vec<u8>)>>>;

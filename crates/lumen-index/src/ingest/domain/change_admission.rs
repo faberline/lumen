@@ -8,7 +8,10 @@
 use std::fmt;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 
-use crate::ingest::domain::change_budget::{AdmissionError, RamCharge, Reservation};
+use crate::ingest::domain::change_budget::AdmissionError;
+#[cfg(test)]
+use crate::ingest::domain::change_budget::{RamCharge, Reservation};
+#[cfg(test)]
 use crate::ingest::infrastructure::committed_stage::{DurableStage, SourceIdentity, StageStore};
 
 /// A local write could not reserve the pending-change budget before it was
@@ -140,6 +143,7 @@ mod prepublication_tests {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct CommittedRecord<P> {
     charge: RamCharge,
     payload: P,
@@ -148,10 +152,12 @@ pub(crate) struct CommittedRecord<P> {
     source: SourceIdentity,
 }
 
+#[cfg(test)]
 pub(crate) struct StagedCommitted {
     stage: DurableStage,
 }
 
+#[cfg(test)]
 pub(crate) struct StageFailure<P> {
     error: io::Error,
     record: CommittedRecord<P>,
@@ -160,14 +166,16 @@ pub(crate) struct StageFailure<P> {
 /// Admission can race a restore retiring the old budget owner. Return the
 /// committed bytes and their identity so the apply worker can route or stage
 /// them under the replacement owner. An error must not destroy this payload.
+#[cfg(test)]
 pub(crate) struct AdmissionFailure<P> {
     error: AdmissionError,
-    payload: P,
+    _payload: P,
     sequence: u64,
     engine_epoch: u64,
-    source: SourceIdentity,
+    _source: SourceIdentity,
 }
 
+#[cfg(test)]
 impl<P> fmt::Debug for AdmissionFailure<P> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -179,17 +187,8 @@ impl<P> fmt::Debug for AdmissionFailure<P> {
     }
 }
 
-impl<P> AdmissionFailure<P> {
-    pub(crate) fn into_parts(self) -> (AdmissionError, P, u64, u64, SourceIdentity) {
-        (
-            self.error,
-            self.payload,
-            self.sequence,
-            self.engine_epoch,
-            self.source,
-        )
-    }
-}
+#[cfg(test)]
+impl<P> AdmissionFailure<P> {}
 
 /// A retryable owned payload that writes its exact wire representation into a
 /// bounded staging sink. `Record` can implement this with `serde_json::to_writer`
@@ -212,12 +211,14 @@ impl<P: Read + Seek> StagePayload for RewindablePayload<P> {
 /// Private proof emitted only after `CommittedRecord::stage` has obtained a
 /// durable receipt and destroyed the RAM payload. Its fields cannot be forged
 /// outside this module.
+#[cfg(test)]
 pub(crate) struct RamReleased {
     sequence: u64,
     engine_epoch: u64,
     source: SourceIdentity,
 }
 
+#[cfg(test)]
 impl RamReleased {
     fn after_payload_drop(stage: &DurableStage) -> Self {
         Self {
@@ -236,6 +237,7 @@ impl RamReleased {
     }
 }
 
+#[cfg(test)]
 impl<P> fmt::Debug for StageFailure<P> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -245,6 +247,7 @@ impl<P> fmt::Debug for StageFailure<P> {
     }
 }
 
+#[cfg(test)]
 impl<P> CommittedRecord<P> {
     /// Commit an already admitted reservation and attach it to the payload.
     pub(crate) fn new(
@@ -259,10 +262,10 @@ impl<P> CommittedRecord<P> {
             Err(error) => {
                 return Err(AdmissionFailure {
                     error,
-                    payload,
+                    _payload: payload,
                     sequence,
                     engine_epoch,
-                    source,
+                    _source: source,
                 })
             }
         };
@@ -274,15 +277,12 @@ impl<P> CommittedRecord<P> {
             source,
         })
     }
-
-    pub(crate) fn charge_bytes(&self) -> usize {
-        self.charge.bytes()
-    }
 }
 
+#[cfg(test)]
 impl<P: StagePayload> CommittedRecord<P> {
     /// Stream the owned payload. Failure returns the exact carrier for retry.
-    pub(crate) fn stage(self, store: &StageStore) -> Result<StagedCommitted, StageFailure<P>> {
+    pub(crate) fn stage(self, store: &StageStore) -> Result<StagedCommitted, Box<StageFailure<P>>> {
         let Self {
             charge,
             mut payload,
@@ -303,7 +303,7 @@ impl<P: StagePayload> CommittedRecord<P> {
                 }
                 Ok(StagedCommitted { stage })
             }
-            Err(error) => Err(StageFailure {
+            Err(error) => Err(Box::new(StageFailure {
                 error,
                 record: Self {
                     charge,
@@ -312,11 +312,12 @@ impl<P: StagePayload> CommittedRecord<P> {
                     engine_epoch,
                     source,
                 },
-            }),
+            })),
         }
     }
 }
 
+#[cfg(test)]
 impl<P> StageFailure<P> {
     pub(crate) fn error(&self) -> &io::Error {
         &self.error
@@ -326,6 +327,7 @@ impl<P> StageFailure<P> {
     }
 }
 
+#[cfg(test)]
 impl StagedCommitted {
     pub(crate) fn stage(&self) -> &DurableStage {
         &self.stage

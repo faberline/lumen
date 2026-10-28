@@ -67,7 +67,7 @@ struct Cluster {
     subjects: HashMap<String, String>,
     /// `(username, resource, name, verb)`, exactly as a SubjectAccessReview
     /// would be asked.
-    grants: Mutex<HashSet<(String, String, Option<String>, String)>>,
+    grants: ReviewGrants,
     /// Every principal that successfully authenticated, in order.
     authenticated: Mutex<Vec<String>>,
 }
@@ -449,3 +449,5 @@ async fn revoking_one_binding_denies_one_caller() {
     assert_eq!(admin_backup(&server, &backup).await, 403);
 }
 // HANDWRITE-END
+
+type ReviewGrants = Mutex<HashSet<(String, String, Option<String>, String)>>;

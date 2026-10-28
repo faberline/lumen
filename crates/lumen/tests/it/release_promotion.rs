@@ -406,12 +406,12 @@ fn gke_receipt_fixture_for(version: &str) -> GkeReceiptFixture {
         let (archive, archive_sha, sidecar, sidecar_sha) =
             write_archive_pair_for_version(&release.candidate, target, version);
         fs::copy(
-            &release.candidate.join(&archive),
+            release.candidate.join(&archive),
             release.public.join(&archive),
         )
         .unwrap();
         fs::copy(
-            &release.candidate.join(&sidecar),
+            release.candidate.join(&sidecar),
             release.public.join(&sidecar),
         )
         .unwrap();
@@ -896,32 +896,6 @@ fn execute_verifier_function_with_env(
         command.env(key, value);
     }
     command.output().unwrap()
-}
-
-fn execute_validate_receipt(
-    fixture: &ReleaseFixture,
-    manifest: &Path,
-    tag: &str,
-    attempt: &str,
-) -> Output {
-    let verifier = include_str!("../../../../scripts/verify-release-artifacts.sh");
-    let temp = TempDir::new("validate-receipt");
-    let script = temp.0.join("verifier.sh");
-    fs::write(&script, verifier).unwrap();
-    Command::new("bash")
-        .args(["-c", "source \"$1\"; validate_receipt \"$2\" \"$3\" \"$4\""])
-        .arg("bash")
-        .arg(&script)
-        .arg(manifest)
-        .arg(manifest.with_extension("json.sha256"))
-        .arg(&fixture.candidate)
-        .env("TAG", tag)
-        .env("COMMIT", COMMIT)
-        .env("CANDIDATE_RUN_ID", RUN_ID)
-        .env("CANDIDATE_ATTEMPT", attempt)
-        .env("REPO", "faberline/lumen")
-        .output()
-        .unwrap()
 }
 
 fn execute_public_release_note_binding(verifier: &str, release_json: &serde_json::Value) -> Output {

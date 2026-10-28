@@ -3,19 +3,24 @@
 //! marker and payload pairs in sequence order, and removing a stage only once a
 //! verified watermark covers it.
 
+#[cfg(test)]
+use crate::ingest::infrastructure::committed_stage::{files::copy_reader_fixed, CleanupProof};
+#[cfg(test)]
 use std::collections::BTreeSet;
 use std::fs;
-use std::io::{self, ErrorKind, Read, Write};
+use std::io::{self, Write};
+#[cfg(test)]
+use std::io::{ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::ingest::infrastructure::committed_stage::files::{
-    copy_reader_fixed, digest_reader, ensure_directory, ensure_regular_file, open_regular_readonly,
-    path_exists, prepare_root, rename_new, sync_directory, sync_regular_file, write_and_hash,
+    digest_reader, ensure_directory, ensure_regular_file, open_regular_readonly, path_exists,
+    prepare_root, rename_new, sync_directory, sync_regular_file, write_and_hash,
 };
 use crate::ingest::infrastructure::committed_stage::marker::{read_marker, write_marker};
 use crate::ingest::infrastructure::committed_stage::{
-    invalid, stage_name, temp_name, CleanupProof, DurableStage, Marker, NoFailures, SourceIdentity,
+    invalid, stage_name, temp_name, DurableStage, Marker, NoFailures, SourceIdentity,
     StageFailureInjector, StageFailurePoint, StageStore, MARKER_SUFFIX, RECORD_SUFFIX,
 };
 
@@ -38,6 +43,7 @@ impl StageStore {
     ///
     /// The source reader is consumed once.  The implementation owns only a
     /// fixed 64 KiB buffer, the SHA-256 state, and small marker metadata.
+    #[cfg(test)]
     pub(crate) fn stage<R: Read>(
         &self,
         sequence: u64,
@@ -162,17 +168,18 @@ impl StageStore {
 
     fn receipt(&self, marker: Marker, record_path: PathBuf, marker_path: PathBuf) -> DurableStage {
         DurableStage {
-            store_root: self.root.clone(),
+            _store_root: self.root.clone(),
             sequence: marker.sequence,
             engine_epoch: marker.engine_epoch,
             source: marker.source,
             byte_len: marker.byte_len,
             digest: marker.digest,
             record_path,
-            marker_path,
+            _marker_path: marker_path,
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn cleanup_proof(
         &self,
         source: SourceIdentity,
@@ -189,6 +196,7 @@ impl StageStore {
 
     /// Recover only fully published marker/payload pairs.  Orphan data files
     /// and temporary names are intentionally retained and never cleaned here.
+    #[cfg(test)]
     pub(crate) fn recover(&self) -> io::Result<Vec<DurableStage>> {
         let records = self.records_dir();
         let markers = self.markers_dir();
@@ -239,14 +247,14 @@ impl StageStore {
                 ));
             }
             recovered.push(DurableStage {
-                store_root: self.root.clone(),
+                _store_root: self.root.clone(),
                 sequence: marker.sequence,
                 engine_epoch: marker.engine_epoch,
                 source: marker.source,
                 byte_len: marker.byte_len,
                 digest: marker.digest,
                 record_path,
-                marker_path: path,
+                _marker_path: path,
             });
         }
         recovered.sort_by(|left, right| {
@@ -262,12 +270,13 @@ impl StageStore {
     /// Delete a receipt only after the caller has verified a durable Engine
     /// watermark that includes this exact sequence.  There is intentionally no
     /// `Drop` cleanup path.
+    #[cfg(test)]
     pub(crate) fn remove_after_verified_watermark(
         &self,
         stage: DurableStage,
         proof: CleanupProof,
     ) -> io::Result<()> {
-        if stage.store_root != self.root || proof.store_root != self.root {
+        if stage._store_root != self.root || proof.store_root != self.root {
             return Err(invalid("committed-stage receipt belongs to another store"));
         }
         if proof.source != stage.source || proof.engine_epoch != stage.engine_epoch {
@@ -283,7 +292,7 @@ impl StageStore {
         }
         // Revalidate before removal so a caller cannot remove a path that a
         // corrupt or substituted marker no longer proves.
-        let marker = read_marker(&stage.marker_path)?;
+        let marker = read_marker(&stage._marker_path)?;
         if marker.sequence != stage.sequence
             || marker.engine_epoch != stage.engine_epoch
             || marker.source != stage.source
@@ -298,7 +307,7 @@ impl StageStore {
                 "committed-stage receipt payload changed before removal",
             ));
         }
-        fs::remove_file(&stage.marker_path)?;
+        fs::remove_file(&stage._marker_path)?;
         sync_directory(&self.markers_dir())?;
         fs::remove_file(&stage.record_path)?;
         sync_directory(&self.records_dir())?;

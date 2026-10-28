@@ -34,7 +34,7 @@ fn stub_client(status: StatusCode, body: serde_json::Value) -> Client {
     Client::new(service, "default")
 }
 
-fn recording_client(catalog_status: StatusCode) -> (Client, Arc<Mutex<Vec<(String, String)>>>) {
+fn recording_client(catalog_status: StatusCode) -> RecordingClient {
     let requests = Arc::new(Mutex::new(Vec::new()));
     let seen = requests.clone();
     let service = service_fn(move |req: Request<Body>| {
@@ -380,3 +380,5 @@ async fn fetch_capacity_catalog_malformed_json_rejected() {
         rejection.message
     );
 }
+
+type RecordingClient = (Client, Arc<Mutex<Vec<(String, String)>>>);

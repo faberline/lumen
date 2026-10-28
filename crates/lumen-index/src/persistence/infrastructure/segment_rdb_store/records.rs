@@ -193,6 +193,7 @@ impl SegmentRdbStore {
     }
 
     /// Validate a candidate without installing it, for legacy adoption.
+    #[cfg(test)]
     pub(super) fn validate_record(&self, record: &GenerationRecord) -> Result<usize> {
         let collections = validate_generation_layout(record)?;
         let verifier = Engine::new();
@@ -200,6 +201,7 @@ impl SegmentRdbStore {
         Ok(collections)
     }
 
+    #[cfg(any(test, feature = "raft-wal"))]
     pub(super) fn reopen_once(
         &self,
         engine: &Engine,

@@ -181,8 +181,8 @@ proptest! {
         let e = Arc::new(Engine::new());
         e.create_collection("c", schema()).unwrap();
         for (i, (tags, cat)) in docs.iter().enumerate() {
-            let ts: Option<Vec<&str>> = tags.as_ref().map(|v| v.iter().map(|s| *s).collect());
-            let cs: Option<Vec<&str>> = cat.as_ref().map(|v| v.iter().map(|s| *s).collect());
+            let ts: Option<Vec<&str>> = tags.as_ref().map(|v| v.to_vec());
+            let cs: Option<Vec<&str>> = cat.as_ref().map(|v| v.to_vec());
             index_set(&e, &format!("d{i}"), ts.as_deref(), cs.as_deref());
         }
 

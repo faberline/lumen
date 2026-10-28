@@ -105,7 +105,7 @@ fn coverage_driven_text_merge_matches_the_layered_reference() {
     use rand::seq::SliceRandom;
     use rand::{Rng, SeedableRng};
     let dir = tempfile::tempdir().unwrap();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(0x0424_6);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0x0000_4246);
     for round in 0..60 {
         let round_dir = dir.path().join(format!("r{round}"));
         std::fs::create_dir_all(&round_dir).unwrap();

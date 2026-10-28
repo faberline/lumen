@@ -117,7 +117,7 @@ fn forced_fallback_text() -> String {
         output: &mut Vec<usize>,
     ) {
         if position > order {
-            if order % period == 0 {
+            if order.is_multiple_of(period) {
                 output.extend_from_slice(&work[1..=period]);
             }
             return;
@@ -163,7 +163,7 @@ fn forced_fallback_text() -> String {
         "fixture scalar count must continue to force the fixed pending-budget path",
     );
     assert!(
-        CURRENT_JIEBA_COST_LOWER_BOUND_BYTES > PENDING_HARD_LIMIT_BYTES,
+        std::hint::black_box(CURRENT_JIEBA_COST_LOWER_BOUND_BYTES) > PENDING_HARD_LIMIT_BYTES,
         "fixture must exceed the current 256 MiB Jieba conservative admission lower bound: {CURRENT_JIEBA_COST_LOWER_BOUND_BYTES}",
     );
     text
@@ -289,7 +289,7 @@ async fn assert_fallback_semantics(server: &TestServer, phase: &str) -> Vec<Matc
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn jieba_fallback_oversized_row_stages_and_recovers_live_and_cold() {
     assert!(
-        !cfg!(feature = "jieba"),
+        !std::hint::black_box(cfg!(feature = "jieba")),
         "this target must run with the default feature set so it exercises the CJK-bigram fallback",
     );
 

@@ -73,6 +73,7 @@ pub fn replay_aof_into(
     replay_aof_into_with_capacity_owner(engine, path, from_seq, || {}, &mut capacity_owner)
 }
 
+#[cfg(test)]
 pub(super) fn replay_aof_into_observed(
     engine: &std::sync::Arc<crate::index::application::engine::Engine>,
     path: impl AsRef<Path>,

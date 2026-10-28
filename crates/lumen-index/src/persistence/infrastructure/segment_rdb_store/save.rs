@@ -5,9 +5,11 @@
 use crate::index::application::engine::Engine;
 use crate::persistence::application::background_merge::CapacityWait;
 use crate::persistence::domain::generation_manifest::SegmentGenerationManifest;
+#[cfg(test)]
+use crate::persistence::infrastructure::segment_rdb_store::diagnostic::checkpoint_diagnostic_enabled;
 use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
-    checkpoint_diagnostic_enabled, duration_ns, trace_capacity_wait_begin, trace_capacity_wait_end,
-    trace_save_gate_acquired, CheckpointDiagnosticContext, SaveGateTrace,
+    duration_ns, trace_capacity_wait_begin, trace_capacity_wait_end, trace_save_gate_acquired,
+    CheckpointDiagnosticContext, SaveGateTrace,
 };
 use crate::persistence::infrastructure::segment_rdb_store::generation_validation::validate_generation_layout;
 use crate::persistence::infrastructure::segment_rdb_store::manifest_io::read_generation_manifest;
@@ -47,6 +49,7 @@ impl SegmentRdbStore {
 
     /// Save with one trace-only scheduler label. The label does not affect
     /// checkpoint selection, bytes, locking, publication, or acknowledgement.
+    #[cfg(test)]
     pub(crate) fn save_with_sequence_diagnostic(
         &self,
         engine: &Arc<Engine>,
@@ -124,28 +127,6 @@ impl SegmentRdbStore {
         )
     }
 
-    pub(super) fn save_inner_permitted(
-        &self,
-        engine: &Arc<Engine>,
-        up_to_seq: u64,
-        required: bool,
-        permit: SavePermit,
-        intent: SaveIntent,
-        archive_pin: Option<&mut Option<SegmentArchivePin>>,
-    ) -> Result<GenerationName> {
-        self.save_inner_permitted_selected(
-            engine,
-            up_to_seq,
-            required,
-            permit,
-            intent,
-            archive_pin,
-            StagingSelection::Generic,
-            None,
-            None,
-        )
-    }
-
     fn save_inner_permitted_selected(
         &self,
         engine: &Arc<Engine>,
@@ -171,16 +152,18 @@ impl SegmentRdbStore {
             match self.save_inner_permitted_attempt(
                 engine,
                 up_to_seq,
-                required,
                 guard,
-                intent,
-                archive_pin.as_deref_mut(),
-                idle_revision,
-                capacity_deadline,
-                selection,
-                trace_context,
-                attempt_gate_trace,
-                checkpoint_pass,
+                super::save_attempt::SaveAttemptOptions {
+                    required,
+                    intent,
+                    archive_pin: archive_pin.as_deref_mut(),
+                    idle_revision,
+                    capacity_deadline,
+                    selection,
+                    trace_context,
+                    gate_trace: attempt_gate_trace,
+                    checkpoint_pass,
+                },
             )? {
                 SaveAttempt::Complete(name) => return Ok(name),
                 SaveAttempt::FreshCapture => {
@@ -320,5 +303,28 @@ impl SegmentRdbStore {
             .ok()?
             .as_ref()
             .map(|pending| std::ptr::from_ref(&pending.frozen) as usize)
+    }
+
+    #[cfg(feature = "raft-wal")]
+    pub(super) fn save_inner_permitted(
+        &self,
+        engine: &Arc<Engine>,
+        up_to_seq: u64,
+        required: bool,
+        permit: SavePermit,
+        intent: SaveIntent,
+        archive_pin: Option<&mut Option<SegmentArchivePin>>,
+    ) -> Result<GenerationName> {
+        self.save_inner_permitted_selected(
+            engine,
+            up_to_seq,
+            required,
+            permit,
+            intent,
+            archive_pin,
+            StagingSelection::Generic,
+            None,
+            None,
+        )
     }
 }

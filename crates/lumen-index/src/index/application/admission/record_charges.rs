@@ -21,8 +21,8 @@ struct State {
 
 /// All metadata charge owners covered by one live checkpoint cut.
 struct FrozenChargeGroup {
-    direct: Vec<RetainedCharge>,
-    adopted: Vec<Arc<DetachedRecordCharges>>,
+    _direct: Vec<RetainedCharge>,
+    _adopted: Vec<Arc<DetachedRecordCharges>>,
 }
 
 /// Engine-wide metadata ownership for records whose effects are not represented
@@ -63,8 +63,8 @@ impl RecordChargeJournal {
             .expect("record charge batch exhausted");
         let id = state.next_batch;
         let charges = Arc::new(FrozenChargeGroup {
-            direct: std::mem::take(&mut state.active),
-            adopted: std::mem::take(&mut state.adopted),
+            _direct: std::mem::take(&mut state.active),
+            _adopted: std::mem::take(&mut state.adopted),
         });
         state.frozen.insert(id, charges.clone());
         FrozenRecordCharges {
@@ -102,9 +102,9 @@ impl RecordChargeJournal {
     pub(in crate::index::application) fn discard_for_restore(&self) -> DetachedRecordCharges {
         let mut state = self.inner.lock().expect("record charge journal poisoned");
         DetachedRecordCharges {
-            active: std::mem::take(&mut state.active),
-            adopted: std::mem::take(&mut state.adopted),
-            frozen: std::mem::take(&mut state.frozen),
+            _active: std::mem::take(&mut state.active),
+            _adopted: std::mem::take(&mut state.adopted),
+            _frozen: std::mem::take(&mut state.frozen),
         }
     }
 
@@ -126,9 +126,9 @@ impl RecordChargeJournal {
 /// This has no acknowledgement method. Dropping it releases only the journal's
 /// own handles; retryable frozen capture clones remain their real owners.
 pub(in crate::index::application) struct DetachedRecordCharges {
-    active: Vec<RetainedCharge>,
-    adopted: Vec<Arc<DetachedRecordCharges>>,
-    frozen: BTreeMap<u64, Arc<FrozenChargeGroup>>,
+    _active: Vec<RetainedCharge>,
+    _adopted: Vec<Arc<DetachedRecordCharges>>,
+    _frozen: BTreeMap<u64, Arc<FrozenChargeGroup>>,
 }
 
 /// Retryable frozen ownership. Cloning is O(1), and dropping a publication

@@ -663,12 +663,10 @@ fn replay_before_caller_cleanup(
                     )
                 });
                 worker.join().expect("resumed replay worker must not panic");
-                assert!(
-                    false,
+                panic!(
                     "{}: valid committed generic AOF replay waited for a caller checkpoint instead of starting independent capacity maintenance; cleanup checkpoint released the retained source and replay result was {resumed:?}",
                     case.name(),
                 );
-                unreachable!("the behavior assertion above always panics");
             }
             Err(mpsc::TryRecvError::Disconnected) => {
                 worker

@@ -35,7 +35,7 @@ pub struct AofWriter {
 
 pub(crate) struct AofSyncPlan {
     sync: Option<Box<dyn FnOnce() -> Result<()> + Send>>,
-    complete: Option<Box<dyn FnOnce(&mut FramedLogWriter) -> Result<()> + Send>>,
+    complete: AppendCommand,
 }
 
 impl AofSyncPlan {
@@ -241,3 +241,5 @@ impl AofWriter {
         self.inner.truncate_through_mapped(through)
     }
 }
+
+type AppendCommand = Option<Box<dyn FnOnce(&mut FramedLogWriter) -> Result<()> + Send>>;

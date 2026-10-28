@@ -68,7 +68,7 @@ struct ByteRange {
 }
 
 impl ByteRange {
-    fn as_str<'a>(self, bytes: &'a [u8]) -> &'a str {
+    fn as_str(self, bytes: &[u8]) -> &str {
         // Every ByteRange is built by `Cursor::text`, which validates this
         // exact immutable byte span before storing it.
         unsafe { std::str::from_utf8_unchecked(&bytes[self.start..self.end]) }
@@ -192,7 +192,7 @@ impl<'a> BorrowedReplaceScanner<'a> {
         }
         let mut scanner = entry
             .ok_or_else(|| anyhow!("generic WAL record misses entry"))?
-            .ok_or_else(|| NotHandled("generic WAL entry"))?;
+            .ok_or(NotHandled("generic WAL entry"))?;
         scanner.consumed_bytes = cursor.pos;
         scanner.retained_metadata_bytes = accounting.retained_bytes;
         Ok(scanner)
@@ -205,6 +205,7 @@ impl<'a> BorrowedReplaceScanner<'a> {
     /// Byte length of the one CBOR item that was validated.  Generic replay
     /// may ignore a suffix like ciborium does; a private framed caller can
     /// require this to equal its decoded CBOR payload length.
+    #[cfg(test)]
     pub(crate) fn consumed_bytes(&self) -> usize {
         self.consumed_bytes
     }

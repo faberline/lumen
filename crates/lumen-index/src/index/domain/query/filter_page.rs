@@ -32,7 +32,7 @@ fn eval_range_with_single_filter_driver_page(
     negatives: &[&QueryNode],
     want: usize,
     score: f32,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> FilterPageResult {
     if negatives.is_empty() {
         if let Some(out) = eval_range_with_keyword_terms_driver_page_dense(
             coll, driver, range_idx, range_lo, range_hi, want, score,
@@ -62,7 +62,7 @@ fn eval_range_with_keyword_terms_driver_page_dense(
     range_hi: &std::ops::Bound<SortableF64>,
     want: usize,
     score: f32,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> FilterPageResult {
     let (keyword_field, terms): (&str, Vec<&str>) = match driver {
         QueryNode::Term(t) => {
             let FieldValue::String(s) = &t.value else {
@@ -214,7 +214,7 @@ fn eval_high_cardinality_range_filter_page(
     negatives: &[&QueryNode],
     want: usize,
     score: f32,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> FilterPageResult {
     if positives.len() < 2 {
         return Ok(None);
     }
@@ -275,7 +275,7 @@ pub(super) fn eval_filter_only_page(
     coll: &Collection,
     node: &QueryNode,
     want: usize,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> FilterPageResult {
     let QueryNode::And(children) = node else {
         return Ok(None);
     };
@@ -355,3 +355,5 @@ pub(super) fn eval_filter_only_bitmap(
         _ => Ok(None),
     }
 }
+
+type FilterPageResult = Result<Option<(Vec<(u32, f32)>, u64)>>;

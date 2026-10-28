@@ -58,7 +58,10 @@ pub(super) fn prepare_local_record<'a>(
     mut reservation: RecordReservation,
 ) -> Result<PreparedLocalRecord<'a>> {
     loop {
-        match engine.begin_admitted_record(entry, reservation) {
+        match engine
+            .begin_admitted_record(entry, reservation)
+            .map_err(|reprice| *reprice)
+        {
             Ok(guard) => return Ok(PreparedLocalRecord::Prepared(guard)),
             Err(RepriceRecord {
                 entry: repriced_entry,

@@ -59,6 +59,7 @@ impl PreparedTextRows {
     pub(super) fn retained_reader_bytes(&self) -> usize {
         self.retained_reader_bytes
     }
+    #[cfg(test)]
     fn scratch_growth_bytes(&self) -> usize {
         self.scratch_growth_bytes
     }
@@ -140,6 +141,7 @@ pub(super) fn borrowed_field_metadata_bound(scanner: &FastIndexScanner<'_>) -> R
 /// trimming match `index_text::for_whitespace_lower_cow`; no output string is
 /// built. Pricing only the largest token preserves valid large inputs made of
 /// many small words.
+#[cfg(any(test, not(feature = "jieba")))]
 fn lowercase_token_workspace_bound(input: &str) -> Result<usize> {
     let mut largest = 0usize;
     for raw in input.split(char::is_whitespace) {

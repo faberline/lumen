@@ -31,8 +31,8 @@ impl SegmentRdbStore {
             background: self.background.clone(),
             _root_guard: self.root_guard.clone(),
             name: name.as_str().to_owned(),
-            path: record.path,
-            sequence: record.sequence,
+            _path: record.path,
+            _sequence: record.sequence,
         })
     }
 
@@ -139,6 +139,7 @@ impl SegmentRdbStore {
         Self::open_with_injector_and_observer(root, Arc::new(NoFailures), Arc::new(NoMergeObserver))
     }
 
+    #[cfg(test)]
     fn open_with_injector(
         root: impl Into<PathBuf>,
         injector: Arc<dyn FailureInjector>,
@@ -224,9 +225,7 @@ fn shared_save_gate(root: &Path) -> Result<Arc<SaveGate>> {
 }
 
 fn shared_pending_frozen(root: &Path) -> Result<Arc<Mutex<Option<PendingFrozenCheckpoint>>>> {
-    static ROOT_PENDING: OnceLock<
-        Mutex<HashMap<PathBuf, Weak<Mutex<Option<PendingFrozenCheckpoint>>>>>,
-    > = OnceLock::new();
+    static ROOT_PENDING: PendingCheckpointRegistry = OnceLock::new();
     let registry = ROOT_PENDING.get_or_init(|| Mutex::new(HashMap::new()));
     let mut registry = registry
         .lock()
@@ -239,3 +238,6 @@ fn shared_pending_frozen(root: &Path) -> Result<Arc<Mutex<Option<PendingFrozenCh
     registry.insert(root.to_path_buf(), Arc::downgrade(&pending));
     Ok(pending)
 }
+
+type PendingCheckpointRegistry =
+    OnceLock<Mutex<HashMap<PathBuf, Weak<Mutex<Option<PendingFrozenCheckpoint>>>>>>;
