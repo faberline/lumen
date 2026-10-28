@@ -54,3 +54,32 @@ pub(super) fn summarize(
         budget_us: SORTED_PAGE_BUDGET_US,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{summarize, SORTED_PAGE_BUDGET_US};
+
+    #[test]
+    fn report_uses_measured_samples_instead_of_pages_walked() {
+        let report = summarize("sorted_page_deep", 20_000, 100, vec![30, 10, 20]);
+        assert_eq!(report.cell, "sorted_page_deep");
+        assert_eq!(report.documents, 20_000);
+        assert_eq!(report.pages_walked, 100);
+        assert_eq!(report.measured_pages, 3);
+        assert_eq!(report.min_us, 10);
+        assert_eq!(report.p50_us, 20);
+        assert_eq!(report.p99_us, 30);
+        assert_eq!(report.max_us, 30);
+        assert_eq!(report.budget_us, SORTED_PAGE_BUDGET_US);
+    }
+
+    #[test]
+    fn one_measured_page_is_both_percentiles_and_extrema() {
+        let report = summarize("bool_filter", 1, 1, vec![7]);
+        assert_eq!(report.measured_pages, 1);
+        assert_eq!(
+            (report.min_us, report.p50_us, report.p99_us, report.max_us),
+            (7, 7, 7, 7)
+        );
+    }
+}

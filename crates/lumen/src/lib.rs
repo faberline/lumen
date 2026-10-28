@@ -111,3 +111,6 @@ pub use crate::compat::wal;
 /// Product-neutral text-index contracts used by Lumen and other products.
 /// Lumen keeps its existing public collection API and storage engine.
 pub use index_text as text_index;
+
+#[cfg(test)]
+mod tests;

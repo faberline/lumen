@@ -59,3 +59,31 @@ pub(super) fn parse_types(raw: &str) -> Result<Vec<&'static str>> {
     }
     Ok(cells)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_types;
+
+    #[test]
+    fn cell_selection_preserves_requested_order_and_trims_empty_tokens() {
+        assert_eq!(
+            parse_types(" bool_filter, ,sorted_page_deep, ").unwrap(),
+            ["bool_filter", "sorted_page_deep"]
+        );
+    }
+
+    #[test]
+    fn unknown_cell_refuses_the_whole_selection() {
+        let error = parse_types("sorted_page_deep,typo")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown bench cell `typo`"));
+    }
+
+    #[test]
+    fn empty_selection_cannot_report_a_benchmark_pass() {
+        for raw in ["", " , , "] {
+            assert!(parse_types(raw).is_err());
+        }
+    }
+}

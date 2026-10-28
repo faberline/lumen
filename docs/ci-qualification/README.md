@@ -46,7 +46,10 @@ The checked-in qualification blockers are unchanged.
 Its narrow contract is to map the migrated milestone references to the native
 Lumen milestone with the same intended release identity. It changes labels,
 heading numbers and URLs together while retaining outcome text and scope.
-This candidate does not duplicate or rewrite its nine product documents.
+The dependency branch `codex/119-current-main-dependency` carries only its
+milestone-number changes onto current main. PR #185 uses that branch as its
+base. The original #119 head is unchanged. The bridge avoids importing old
+source history into the PR diff; outcome text is unchanged.
 
 `milestones.json` freezes 46 native GitHub milestone identities fetched on
 2026-10-28 and 87 proposed outcome/section mappings from that PR. The mapping
@@ -75,9 +78,8 @@ Local controls passed on 2026-10-28:
   unchanged and is still expected to refuse before creating storage.
 - Workflow YAML parsing and `git diff --check` passed.
 
-The milestone check is expected to remain red on this infrastructure branch
-until the separately reviewed #119 document correction is present. This is a
-reported dependency, not permission to exempt docs or close either issue.
+All 87 document assertions now pass with the dependency present. Independent
+review of the frozen mapping remains required; neither issue is closed.
 
 ## Current cloud retry evidence
 
@@ -92,21 +94,32 @@ Fresh cloud execution and independent review are still required.
 
 The first online PR attempt exposed existing workspace formatting differences,
 which initially suppressed the unit matrix. Formatting now runs independently;
-a red format result cannot skip the 31 unit rows. The original product files
-are not reformatted in this infrastructure change. The milestone job also
-correctly reported the outstanding #119 mapping errors online.
+a red format result cannot skip the 31 unit rows. Formatting-only Rust edits are isolated in commit `783f9f41`. The original
+milestone mapping failure is fixed through the document dependency, and the
+latest online formatting, document and inventory jobs pass.
 
 ## Latest CI repair
 
-PR #185 is stacked on the unchanged #119 branch, so the milestone correction
-is reviewed as its own dependency. All 87 document assertions now pass locally.
-The tracked Rust changes in the style commit were produced only by
-`cargo fmt --all`; the repeat format check passes.
+PR #185 is stacked on the current-main document bridge described above.
+The original #119 branch is unchanged. All 87 document assertions pass locally
+and online. The style commit was produced only by `cargo fmt --all`.
 
-Online unit jobs exposed the `lumen` library facade as a zero-test target.
-Its own code is principally compatibility re-exports; binary and bounded-context
-tests live in separate targets. Zero is still refused, pending an explicit
-reviewed applicability decision. The driver now collects every enabled target
-before failing, so this library result cannot hide binary test failures or
-passes. Clippy also runs after a failed unit step. No result is converted into
-coverage or trusted qualification.
+At head `48c9bd701f021fad0a238355061045cf59e83076`,
+[GKE run 40644554940](https://github.com/faberline/lumen/actions/runs/40644554940)
+passed all eight jobs, including standalone container, overlay and operator
+execution. This proves the N4 storage input repair at that source revision.
+The later head needs its own fresh GKE evidence.
+
+Online unit jobs exposed two empty targets: the `lumen` public compatibility
+library and `lumen-bench`. The driver still refuses zero-test targets, and now
+runs later targets before reporting all failures. The public CLI's 19 tests
+passed in the delegated-auth row at head `3a7ac4e9`; that row still failed on
+both empty targets and Clippy. No partial pass is treated as a full row pass.
+
+The repair adds real library caller contracts for versioned routing and exact
+keyword bounds through the public schema/index/search paths. It also tests
+benchmark cell rejection/selection and summary sample accounting. These are
+ordinary Rust unit tests, not a measured performance run. Existing product
+assertions and the nonzero evidence rule are unchanged. Clippy's diagnosed
+`VectorBackend` default-derivation finding is corrected without changing its
+default variant. The added Rust tests require online execution on the new head.
