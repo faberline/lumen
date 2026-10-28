@@ -62,7 +62,10 @@ fn lumen_owns_certificate_profiles_and_nothing_else() {
     // Anything that generates a key, speaks to a CA, writes a Secret, or decides
     // when to renew is generic and has a home already.
     let forbidden: [(&str, &str); 8] = [
-        ("KeyPair", "generating key material is the shared issuer's job"),
+        (
+            "KeyPair",
+            "generating key material is the shared issuer's job",
+        ),
         ("rcgen", "no service links a CSR builder directly"),
         (
             "IssuanceRequest",
@@ -113,7 +116,10 @@ fn no_other_lumen_source_file_implements_a_certificate_lifecycle() {
 
     // Only the crates' `src/` trees: the tests name the markers on purpose.
     let mut sources = Vec::new();
-    for krate in std::fs::read_dir(&lumen_src).expect("read crates").flatten() {
+    for krate in std::fs::read_dir(&lumen_src)
+        .expect("read crates")
+        .flatten()
+    {
         sources.extend(rust_files(&krate.path().join("src")));
     }
     let mut offenders = Vec::new();

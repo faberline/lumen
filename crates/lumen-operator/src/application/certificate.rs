@@ -167,9 +167,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::domain::lumen_spec::{
-        serving::ServingSpec, topology::ShardMapSpec, LumenSpec,
-    };
+    use crate::domain::lumen_spec::{serving::ServingSpec, topology::ShardMapSpec, LumenSpec};
 
     const TRUST_DOMAIN: &str = "lumen-prod.svc.id.goog";
 

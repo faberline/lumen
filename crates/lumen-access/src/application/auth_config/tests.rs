@@ -1,8 +1,6 @@
 use std::sync::Mutex;
 
-use crate::application::auth_config::{
-    AuthConfig, AuthProfile, SERVICE_ACCOUNT_NAMESPACE_FILE,
-};
+use crate::application::auth_config::{AuthConfig, AuthProfile, SERVICE_ACCOUNT_NAMESPACE_FILE};
 
 // Process-global env mutex shared across the env-mutating tests.
 static AUTH_ENV_LOCK: Mutex<()> = Mutex::new(());

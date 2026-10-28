@@ -6,8 +6,8 @@ use std::collections::BTreeSet;
 use anyhow::{bail, Context, Result};
 use serde_json::json;
 
-use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::application::reshard_driver::oversize::OversizedDocumentBlock;
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
 use crate::sharding::domain::{prune_chunk::ReshardPruneChunk, reshard_batch::ReshardBatch};
 
 pub(super) async fn fetch_scoped_backup(

@@ -193,11 +193,7 @@ fn test_checked_in_and_rendered_dockerfiles_satisfy_contract() {
     discovered.sort();
     assert_eq!(
         discovered,
-        [
-            "Dockerfile",
-            "Dockerfile.release",
-            "Dockerfile.test",
-        ]
+        ["Dockerfile", "Dockerfile.release", "Dockerfile.test",]
     );
     let targets = [
         ("Dockerfile", "builder", CC_BASE),

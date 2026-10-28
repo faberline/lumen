@@ -2507,8 +2507,13 @@ mod durable_workload {
                         evidence.write_text("volume.txt", volume)?;
                         if let HarnessError::DiagnosticSeedClientFailure(detail) = error {
                             let bytes = detail.json_bytes()?;
-                            fs::write(evidence.path.join("seed-client-attempt-failure.json"), bytes)
-                                .map_err(|_| "cannot write diagnostic seed client failure".to_owned())?;
+                            fs::write(
+                                evidence.path.join("seed-client-attempt-failure.json"),
+                                bytes,
+                            )
+                            .map_err(|_| {
+                                "cannot write diagnostic seed client failure".to_owned()
+                            })?;
                         }
                         return Ok(evidence);
                     }
@@ -2927,9 +2932,18 @@ mod durable_workload {
                 frozen: prometheus_counter(metrics, "lumen_pending_change_frozen_bytes")?,
                 total: prometheus_counter(metrics, "lumen_pending_change_total_bytes")?,
                 checkpoints: prometheus_counter(metrics, CHECKPOINT_COUNTER)?,
-                checkpoint_attempt_started: prometheus_counter(metrics, CHECKPOINT_ATTEMPT_STARTED_COUNTER)?,
-                checkpoint_attempt_in_flight: prometheus_counter(metrics, CHECKPOINT_ATTEMPT_IN_FLIGHT)?,
-                checkpoint_attempt_failed: prometheus_counter(metrics, CHECKPOINT_ATTEMPT_FAILED_COUNTER)?,
+                checkpoint_attempt_started: prometheus_counter(
+                    metrics,
+                    CHECKPOINT_ATTEMPT_STARTED_COUNTER,
+                )?,
+                checkpoint_attempt_in_flight: prometheus_counter(
+                    metrics,
+                    CHECKPOINT_ATTEMPT_IN_FLIGHT,
+                )?,
+                checkpoint_attempt_failed: prometheus_counter(
+                    metrics,
+                    CHECKPOINT_ATTEMPT_FAILED_COUNTER,
+                )?,
                 merges: prometheus_counter(metrics, MERGE_COUNTER)?,
                 state_write_lock: IntervalHistogram::parse(metrics, STATE_WRITE_LOCK_HISTOGRAM)?,
                 hnsw_add: IntervalHistogram::parse(metrics, HNSW_ADD_HISTOGRAM)?,
@@ -5799,8 +5813,8 @@ mod durable_workload {
     /// `kustomize edit set image lumen=...` turn it into a pod.
     #[test]
     fn kube_gke_perf_overlay_passes_the_pod_contract() {
-        let path =
-            Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join("k8s/overlays/gke-perf/statefulset.yaml");
+        let path = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+            .join("k8s/overlays/gke-perf/statefulset.yaml");
         let statefulset: Value = serde_yaml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
         let mut spec = statefulset["spec"]["template"]["spec"].clone();
         assert_eq!(spec["containers"][0]["image"], "lumen");
@@ -6222,8 +6236,7 @@ mod durable_workload {
             .unwrap();
             for resource in kustomization["resources"].as_array().unwrap() {
                 let source =
-                    fs::read_to_string(root.join(folder).join(resource.as_str().unwrap()))
-                        .unwrap();
+                    fs::read_to_string(root.join(folder).join(resource.as_str().unwrap())).unwrap();
                 for document in serde_yaml::Deserializer::from_str(&source) {
                     let document = <Value as serde::Deserialize>::deserialize(document).unwrap();
                     assert!(
@@ -6750,7 +6763,11 @@ mod durable_workload {
         let mut sorted = samples.to_vec();
         sorted.sort_unstable();
         let p95 = (sorted.len() * 95).div_ceil(100) - 1;
-        (sorted.len(), sorted[p95], *sorted.last().expect("non-empty samples"))
+        (
+            sorted.len(),
+            sorted[p95],
+            *sorted.last().expect("non-empty samples"),
+        )
     }
 
     impl PumpTrace {
@@ -6761,10 +6778,7 @@ mod durable_workload {
             duration: Duration,
         ) {
             let second = scheduled_at.as_secs();
-            if !self.early_index_enabled
-                || second >= EARLY_INDEX_TRACE_SECONDS
-                || second % 3 != 0
-            {
+            if !self.early_index_enabled || second >= EARLY_INDEX_TRACE_SECONDS || second % 3 != 0 {
                 return;
             }
             let sample = duration.as_micros().min(u64::MAX as u128) as u64;
@@ -6783,7 +6797,10 @@ mod durable_workload {
 
         fn record(&mut self, second: u64, endpoint: &'static str) -> &mut PumpSecond {
             self.seconds
-                .entry((second.min(INPUT_SECONDS + POST_INPUT_TIMEOUT.as_secs()), endpoint))
+                .entry((
+                    second.min(INPUT_SECONDS + POST_INPUT_TIMEOUT.as_secs()),
+                    endpoint,
+                ))
                 .or_default()
         }
 
@@ -6846,8 +6863,7 @@ mod durable_workload {
             let sample = self.record(elapsed.as_secs(), endpoint);
             sample.ledger_body_start_lag_us += lag_us;
             sample.ledger_body_start_lag_samples += 1;
-            sample.ledger_body_start_lag_max_us =
-                sample.ledger_body_start_lag_max_us.max(lag_us);
+            sample.ledger_body_start_lag_max_us = sample.ledger_body_start_lag_max_us.max(lag_us);
         }
 
         fn record_send_call(&mut self, elapsed: Duration, endpoint: &'static str, lag: Duration) {
@@ -7024,8 +7040,7 @@ mod durable_workload {
                 self.tasks.spawn(async move {
                     let task_started = clock.elapsed();
                     let task_start_lag = task_started.saturating_sub(scheduled_at);
-                    let task_start_lag_us =
-                        task_start_lag.as_micros().min(u64::MAX as u128) as u64;
+                    let task_start_lag_us = task_start_lag.as_micros().min(u64::MAX as u128) as u64;
                     {
                         let mut trace_guard =
                             trace.lock().expect("request pump trace mutex poisoned");
@@ -7324,12 +7339,7 @@ mod durable_workload {
         .await;
         let response_completed_at = clock.elapsed();
         record_pump_send_call(&pump_trace, "index", scheduled_at, send_called_at);
-        record_pump_completion(
-            &pump_trace,
-            "index",
-            send_called_at,
-            response_completed_at,
-        );
+        record_pump_completion(&pump_trace, "index", send_called_at, response_completed_at);
         if let Some(trace) = &pump_trace {
             trace
                 .lock()
@@ -7571,12 +7581,7 @@ mod durable_workload {
         let response = post_json(request).await;
         let response_completed_at = clock.elapsed();
         record_pump_send_call(&pump_trace, "query", scheduled_at, send_called_at);
-        record_pump_completion(
-            &pump_trace,
-            "query",
-            send_called_at,
-            response_completed_at,
-        );
+        record_pump_completion(&pump_trace, "query", send_called_at, response_completed_at);
         let outcome = match response {
             Ok(response)
                 if response["hits"]
@@ -7772,7 +7777,9 @@ mod durable_workload {
 
     fn parse_hnsw_cache_seal_receipt(value: Value) -> Result<HnswCacheSealReceipt> {
         let object = value.as_object().ok_or_else(|| {
-            HarnessError::DataInvariant("restart cache seal receipt must be a JSON object".to_owned())
+            HarnessError::DataInvariant(
+                "restart cache seal receipt must be a JSON object".to_owned(),
+            )
         })?;
         let keys = ["sealed", "cache_fields", "durability", "mutation_stamp"];
         if object.len() != keys.len() || keys.iter().any(|key| !object.contains_key(*key)) {
@@ -7812,21 +7819,17 @@ mod durable_workload {
                 )
             })?;
         let stamp_keys = ["epoch", "apply_revision"];
-        if stamp.len() != stamp_keys.len()
-            || stamp_keys.iter().any(|key| !stamp.contains_key(*key))
+        if stamp.len() != stamp_keys.len() || stamp_keys.iter().any(|key| !stamp.contains_key(*key))
         {
             return Err(HarnessError::DataInvariant(
                 "restart cache seal receipt has an unexpected mutation_stamp shape".to_owned(),
             ));
         }
-        let mutation_epoch = stamp
-            .get("epoch")
-            .and_then(Value::as_u64)
-            .ok_or_else(|| {
-                HarnessError::DataInvariant(
-                    "restart cache seal receipt mutation_stamp.epoch must be an integer".to_owned(),
-                )
-            })?;
+        let mutation_epoch = stamp.get("epoch").and_then(Value::as_u64).ok_or_else(|| {
+            HarnessError::DataInvariant(
+                "restart cache seal receipt mutation_stamp.epoch must be an integer".to_owned(),
+            )
+        })?;
         let mutation_apply_revision = stamp
             .get("apply_revision")
             .and_then(Value::as_u64)
@@ -7858,10 +7861,7 @@ mod durable_workload {
         .to_string()
     }
 
-    async fn seal_hnsw_cache(
-        client: &reqwest::Client,
-        base: &str,
-    ) -> Result<HnswCacheSealReceipt> {
+    async fn seal_hnsw_cache(client: &reqwest::Client, base: &str) -> Result<HnswCacheSealReceipt> {
         let response = client
             .post(format!("{base}/admin/restart:seal-hnsw-cache"))
             .send()
@@ -10072,10 +10072,12 @@ mod durable_workload {
                 eprintln!("PERF_STAGE_TIMEOUT seed");
                 return Err(error);
             }
-            Err(error @ HarnessError::DiagnosticSeedClientFailure(SeedClientFailure {
-                kind: SeedFailureKind::SetupDeadline,
-                ..
-            })) => {
+            Err(
+                error @ HarnessError::DiagnosticSeedClientFailure(SeedClientFailure {
+                    kind: SeedFailureKind::SetupDeadline,
+                    ..
+                }),
+            ) => {
                 eprintln!("PERF_STAGE_TIMEOUT seed");
                 return Err(error);
             }
@@ -10189,7 +10191,10 @@ mod durable_workload {
                 seal_hnsw_cache(&cache_seal_client, &server.base),
             )
             .await?;
-            eprintln!("PERF_CACHE_SEAL_RECEIPT {}", cache_seal_receipt_line(&receipt));
+            eprintln!(
+                "PERF_CACHE_SEAL_RECEIPT {}",
+                cache_seal_receipt_line(&receipt)
+            );
             eprintln!("PERF_STAGE_END hnsw_cache_seal");
         } else {
             eprintln!("PERF_STAGE_BEGIN flat_restart_checkpoint");
@@ -10869,26 +10874,27 @@ mod durable_workload {
             "pre_input",
             &complete_interval_trace_metrics(10, 5, 1, "0.001", 1, "0.002"),
         );
-        trace.record(
-            INTERVAL_TRACE_CADENCE,
-            "input",
-            &second,
-        );
-        trace.record(
-            INTERVAL_TRACE_CADENCE * 2,
-            "input",
-            &third,
-        );
+        trace.record(INTERVAL_TRACE_CADENCE, "input", &second);
+        trace.record(INTERVAL_TRACE_CADENCE * 2, "input", &third);
         let rendered = trace.render(&RequestErrorJournal::default()).unwrap();
         let document: Value = serde_json::from_str(&rendered).unwrap();
         assert_eq!(document["schema_version"], 3);
         assert_eq!(document["cadence_ms"], 5_000);
         assert_eq!(document["samples"].as_array().unwrap().len(), 3);
         assert_eq!(document["samples"][1]["checkpoint"]["delta"], 2);
-        assert_eq!(document["samples"][1]["checkpoint_attempt"]["started_delta"], 2);
+        assert_eq!(
+            document["samples"][1]["checkpoint_attempt"]["started_delta"],
+            2
+        );
         assert_eq!(document["samples"][1]["checkpoint_attempt"]["in_flight"], 1);
-        assert_eq!(document["samples"][1]["checkpoint_attempt"]["failed_delta"], 1);
-        assert_eq!(document["samples"][2]["checkpoint_attempt"]["failed_total"], 2);
+        assert_eq!(
+            document["samples"][1]["checkpoint_attempt"]["failed_delta"],
+            1
+        );
+        assert_eq!(
+            document["samples"][2]["checkpoint_attempt"]["failed_total"],
+            2
+        );
         assert_eq!(
             document["samples"][1]["state_write_lock_delta"]["sum_us"],
             2_000
@@ -11429,8 +11435,8 @@ mod durable_workload {
     }
 
     #[cfg(test)]
-    async fn fake_never_responding_hnsw_cache_seal_server() ->
-        (String, tokio::task::JoinHandle<()>) {
+    async fn fake_never_responding_hnsw_cache_seal_server() -> (String, tokio::task::JoinHandle<()>)
+    {
         let app = axum::Router::new().route(
             "/admin/restart:seal-hnsw-cache",
             axum::routing::post(|| async {
@@ -11462,7 +11468,10 @@ mod durable_workload {
         assert_eq!(line["sealed"], true);
         assert_eq!(line["cache_fields"], 1);
         assert_eq!(line["durability"], "aof_synced");
-        assert_eq!(line["mutation_stamp"], json!({"epoch": 7, "apply_revision": 42}));
+        assert_eq!(
+            line["mutation_stamp"],
+            json!({"epoch": 7, "apply_revision": 42})
+        );
         for invalid in [
             json!({"sealed": false, "cache_fields": 1, "durability": "aof_synced", "mutation_stamp": {"epoch": 7, "apply_revision": 42}}),
             json!({"sealed": true, "cache_fields": 0, "durability": "aof_synced", "mutation_stamp": {"epoch": 7, "apply_revision": 42}}),
@@ -11756,7 +11765,10 @@ mod durable_workload {
             .build()
             .expect("build post-input deadline unit-test runtime");
         runtime.block_on(async {
-            let (base, task) = fake_delayed_hnsw_cache_seal_server(Duration::from_secs(5) + Duration::from_millis(250)).await;
+            let (base, task) = fake_delayed_hnsw_cache_seal_server(
+                Duration::from_secs(5) + Duration::from_millis(250),
+            )
+            .await;
             let timeout = Duration::from_secs(8);
             let started = Instant::now();
             let result = post_input_step(
@@ -11767,7 +11779,10 @@ mod durable_workload {
             )
             .await;
             task.abort();
-            assert!(result.is_ok(), "seal must succeed before the outer deadline: {result:?}");
+            assert!(
+                result.is_ok(),
+                "seal must succeed before the outer deadline: {result:?}"
+            );
             assert!(
                 started.elapsed() > Duration::from_secs(5),
                 "delayed response must prove acceptance beyond the five-second request bound: {:?}",
@@ -11934,7 +11949,11 @@ mod durable_workload {
                 "capacity wait must return the typed input-window timeout: {error:?}"
             );
             let trace = trace.lock().expect("request pump trace mutex poisoned");
-            let sample = trace.seconds.values().next().expect("attempts are recorded");
+            let sample = trace
+                .seconds
+                .values()
+                .next()
+                .expect("attempts are recorded");
             assert_eq!(sample.attempts, 2);
             assert_eq!(sample.in_flight_high_water, 1);
             assert_eq!(sample.blocked_pushes, 1);
@@ -11978,20 +11997,10 @@ mod durable_workload {
                     );
                     tokio::time::sleep(Duration::from_millis(2)).await;
                     let send_called_at = body_clock.elapsed();
-                    record_pump_send_call(
-                        &body_trace,
-                        "index",
-                        Duration::ZERO,
-                        send_called_at,
-                    );
+                    record_pump_send_call(&body_trace, "index", Duration::ZERO, send_called_at);
                     tokio::time::sleep(Duration::from_millis(2)).await;
                     let completed_at = body_clock.elapsed();
-                    record_pump_completion(
-                        &body_trace,
-                        "index",
-                        send_called_at,
-                        completed_at,
-                    );
+                    record_pump_completion(&body_trace, "index", send_called_at, completed_at);
                     body_trace
                         .as_ref()
                         .expect("trace enabled")
@@ -12010,10 +12019,16 @@ mod durable_workload {
             )
             .await
             .expect("the request fits within capacity");
-            pump.drain("telemetry test").await.expect("request completes");
+            pump.drain("telemetry test")
+                .await
+                .expect("request completes");
 
             let mut trace = trace.lock().expect("request pump trace mutex poisoned");
-            let sample = trace.seconds.values().next().expect("telemetry sample exists");
+            let sample = trace
+                .seconds
+                .values()
+                .next()
+                .expect("telemetry sample exists");
             assert_eq!(sample.attempts, 1);
             assert_eq!(sample.in_flight_high_water, 1);
             assert_eq!(sample.task_start_lag_samples, 1);

@@ -32,14 +32,26 @@ async fn checkpoint_then_cold_replay_keeps_the_aof_tail() {
         aof: Some(aof.clone()),
     });
     let checkpoint_api: Arc<dyn CheckpointSink> = checkpoint.clone();
-    let state = AppState::with_components(engine.clone(), Arc::new(AuthConfig::open()), sink_writer)
-        .with_checkpoint(checkpoint_api);
+    let state =
+        AppState::with_components(engine.clone(), Arc::new(AuthConfig::open()), sink_writer)
+            .with_checkpoint(checkpoint_api);
     let server = TestServer::new(router(state)).expect("server");
-    server.put("/collections/aof").json(&json!({"fields":{"kw":{"type":"keyword"}}})).await.assert_status_ok();
-    server.post("/collections/aof/index").json(&json!({"items":[{"external_id":"before","field":"kw","value":"old"}]})).await.assert_status_ok();
+    server
+        .put("/collections/aof")
+        .json(&json!({"fields":{"kw":{"type":"keyword"}}}))
+        .await
+        .assert_status_ok();
+    server
+        .post("/collections/aof/index")
+        .json(&json!({"items":[{"external_id":"before","field":"kw","value":"old"}]}))
+        .await
+        .assert_status_ok();
     let apply_deadline = Instant::now() + Duration::from_secs(5);
     while writer.applied_seq() < 2 {
-        assert!(Instant::now() < apply_deadline, "create and pre-checkpoint index must apply");
+        assert!(
+            Instant::now() < apply_deadline,
+            "create and pre-checkpoint index must apply"
+        );
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     let cut = writer.applied_seq();
@@ -47,16 +59,35 @@ async fn checkpoint_then_cold_replay_keeps_the_aof_tail() {
         .await
         .expect("checkpoint");
     assert!(persisted, "checkpoint must publish a durable generation");
-    let current = SegmentRdbStore::new(&root).expect("store").load_current_generation().expect("CURRENT").expect("generation");
-    assert_eq!(current.sequence, cut, "checkpoint must persist the applied cut");
-    server.post("/collections/aof/index").json(&json!({"items":[{"external_id":"after","field":"kw","value":"new"}]})).await.assert_status_ok();
+    let current = SegmentRdbStore::new(&root)
+        .expect("store")
+        .load_current_generation()
+        .expect("CURRENT")
+        .expect("generation");
+    assert_eq!(
+        current.sequence, cut,
+        "checkpoint must persist the applied cut"
+    );
+    server
+        .post("/collections/aof/index")
+        .json(&json!({"items":[{"external_id":"after","field":"kw","value":"new"}]}))
+        .await
+        .assert_status_ok();
     let tail_deadline = Instant::now() + Duration::from_secs(5);
     while writer.applied_seq() <= cut {
-        assert!(Instant::now() < tail_deadline, "post-checkpoint record must apply");
+        assert!(
+            Instant::now() < tail_deadline,
+            "post-checkpoint record must apply"
+        );
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    let replayed = replay_aof_into(&current.engine, &aof_path, current.sequence).expect("AOF replay");
-    assert_eq!(replayed, cut + 1, "replay must advance exactly one sequence past the checkpoint cut");
+    let replayed =
+        replay_aof_into(&current.engine, &aof_path, current.sequence).expect("AOF replay");
+    assert_eq!(
+        replayed,
+        cut + 1,
+        "replay must advance exactly one sequence past the checkpoint cut"
+    );
     assert_eq!(writer.applied_seq(), replayed);
 }
 
@@ -128,12 +159,8 @@ fn stage1_capture_barrier_fixture() -> Stage1CaptureBarrierFixture {
     let wal = Arc::new(MemWal::new());
     let shared_wal: SharedWal = wal.clone();
     let writer = WriteCoordinator::start_from_with_aof(shared_wal, engine.clone(), 0, aof.clone());
-    let checkpoint = local_checkpoint_sink(
-        engine.clone(),
-        store.clone(),
-        writer.clone(),
-        aof.clone(),
-    );
+    let checkpoint =
+        local_checkpoint_sink(engine.clone(), store.clone(), writer.clone(), aof.clone());
     let state = AppState::with_components(
         engine.clone(),
         Arc::new(AuthConfig::open()),

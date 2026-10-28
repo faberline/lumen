@@ -104,7 +104,8 @@ fn the_post_cutover_fence_reports_reshard_in_progress_at_phase_complete() {
 #[test]
 fn a_stalled_fence_is_a_wedge() {
     let mut lumen = cutover_pending_convergence_lumen("search", "acme-cond-stalled", 1);
-    let stall_budget = crate::application::reshard_driver::convergence_stall::convergence_stall_budget_secs();
+    let stall_budget =
+        crate::application::reshard_driver::convergence_stall::convergence_stall_budget_secs();
     lumen
         .spec
         .reshard_policy

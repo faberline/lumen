@@ -17,9 +17,7 @@ use crate::application::reshard_driver::oversize::{
 use crate::application::reshard_driver::transfer::{
     apply_reshard_batch, apply_reshard_prune_chunk, fetch_all_collection_ids, fetch_scoped_backup,
 };
-use crate::application::reshard_driver::trigger::{
-    compute_target_map, current_shard_map,
-};
+use crate::application::reshard_driver::trigger::{compute_target_map, current_shard_map};
 use crate::application::reshard_driver::MAX_EXTERNAL_IDS_PER_BATCH;
 use crate::domain::lumen_spec::Lumen;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;

@@ -131,7 +131,8 @@ fn backup_service_account_is_stable_when_schedule_is_disabled() {
 }
 
 fn operator_cluster_role() -> serde_yaml::Value {
-    let documents = serde_yaml::Deserializer::from_str(include_str!("../../../../k8s/operator/rbac.yaml"));
+    let documents =
+        serde_yaml::Deserializer::from_str(include_str!("../../../../k8s/operator/rbac.yaml"));
     documents
         .map(|document| serde_yaml::Value::deserialize(document).expect("RBAC document parses"))
         .find(|document| document["kind"] == "ClusterRole")

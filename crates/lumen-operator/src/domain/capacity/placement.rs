@@ -6,9 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::capacity::preflight::resolve_machine_type;
-use crate::domain::capacity::{
-    CapacityCatalog, CapacitySpec, Rejection, RejectionReason,
-};
+use crate::domain::capacity::{CapacityCatalog, CapacitySpec, Rejection, RejectionReason};
 
 /// Resource dimension vector (CPU millicores, memory MiB).
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]

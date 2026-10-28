@@ -49,26 +49,27 @@ pub use crate::compat::backup;
 pub use crate::compat::backup_sink;
 mod compat;
 
-use lumen_access as access;
-use lumen_index::{app, index, ingest, persistence, sharding};
-use lumen_replication as replication;
-use lumen_shared_kernel as shared_kernel;
 pub use crate::compat::config;
 pub use crate::compat::coordinator;
 pub use crate::compat::dx;
-pub use crate::sharding::application::consumer;
 pub use crate::compat::metrics;
 /// Native length-prefixed CBOR search wire for Rust clients that need the engine
 /// over a lower fixed-cost transport than HTTP/JSON.
 pub use crate::compat::native_wire;
+pub use crate::sharding::application::consumer;
 /// Write-log entry vocabulary (always compiled; the active write path uses it).
 pub use crate::shared_kernel::log_entry;
+use lumen_access as access;
+use lumen_index::{app, index, ingest, persistence, sharding};
+use lumen_replication as replication;
+use lumen_shared_kernel as shared_kernel;
 /// K8s Operator: the `Lumen` CRD plus the reconcile loop that renders + applies
 /// the Lumen serving/data-plane resources. The CRD and reconcile loop are behind
 /// the `operator` feature so the serving binary never pulls in kube-rs; pure
 /// configuration stays in the operator and shared libraries; Lumen consumes
 /// externally provisioned TLS Secrets rather than resolving issuers.
 pub mod operator;
+pub use crate::access::infrastructure::tls;
 /// Cluster-state view types backing the read/admin API. This surface is the
 /// compatibility bridge for Lumen-owned primary/replica replication.
 pub use crate::compat::raft;
@@ -97,7 +98,6 @@ pub use crate::compat::segment_checkpoint;
 /// default binary keeps the CBOR RDB).
 pub use crate::compat::segment_rdb;
 pub use crate::compat::segment_restore;
-pub use crate::access::infrastructure::tls;
 /// Offline machine-readable self-description (`lumen spec`): OpenAPI / JSON
 /// schema, the query-shape cookbook, and the field/analyzer catalog — the
 /// agent-integration surface, emitted without a running server.

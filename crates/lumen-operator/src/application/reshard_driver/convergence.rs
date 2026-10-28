@@ -9,9 +9,7 @@ use crate::application::reshard_driver::cluster_control::ClusterControl;
 use crate::application::reshard_driver::convergence_stall::{
     clear_convergence_stall, convergence_stall_condition, now_epoch_secs, record_convergence_await,
 };
-use crate::application::reshard_driver::fence::{
-    buckets_on_newest_shard, set_write_fence,
-};
+use crate::application::reshard_driver::fence::{buckets_on_newest_shard, set_write_fence};
 use crate::application::reshard_driver::trigger::current_shard_map;
 use crate::application::reshard_driver::DriveOutcome;
 use crate::domain::lumen_spec::Lumen;

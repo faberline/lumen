@@ -14,7 +14,7 @@ use crate::domain::lumen_spec::Lumen;
 /// [`HpaControl`]: crate::application::reconcile::hpa::HpaControl
 /// [`KubeAuthDelegatorControl`]: crate::infrastructure::kube_auth_delegator_control::KubeAuthDelegatorControl
 #[async_trait::async_trait]
-pub(in crate) trait AuthDelegatorControl: Send + Sync {
+pub(crate) trait AuthDelegatorControl: Send + Sync {
     /// Server-side-apply the binding. Cluster-scoped: `Api::all_with`, not
     /// `Api::namespaced_with`, which is why this cannot ride the shared
     /// controller's child-apply loop.

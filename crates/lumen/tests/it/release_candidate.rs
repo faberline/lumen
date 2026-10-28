@@ -2782,7 +2782,8 @@ fn perf_gate_source() -> String {
     fs::read_to_string(root().join("crates/lumen/tests/it/perf_gate.rs")).unwrap()
 }
 fn perf_workload_ledger_source() -> String {
-    fs::read_to_string(root().join("crates/lumen/tests/it/support/perf_workload_ledger.rs")).unwrap()
+    fs::read_to_string(root().join("crates/lumen/tests/it/support/perf_workload_ledger.rs"))
+        .unwrap()
 }
 fn perf_gate_vs_db_source() -> String {
     fs::read_to_string(root().join("crates/lumen/tests/perf_gate_vs_db.rs")).unwrap()
@@ -4171,12 +4172,7 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         "schema:\"cclab.lumen.candidate-manifest.v3\"",
         "MANIFEST",
     );
-    expect_workflow(
-        &source,
-        "  gke-e2e:\n",
-        "  gke-e2e-missing:\n",
-        "JOBS",
-    );
+    expect_workflow(&source, "  gke-e2e:\n", "  gke-e2e-missing:\n", "JOBS");
     expect_workflow(
         &source,
         "\n  gke-e2e:\n",

@@ -264,7 +264,8 @@ fn write_archive_pair_for_version(
 }
 
 fn release_script() -> PathBuf {
-    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join("scripts/verify-release-artifacts.sh")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+        .join("scripts/verify-release-artifacts.sh")
 }
 
 struct ReleaseFixture {
@@ -590,7 +591,8 @@ fn rewrite_receipt(fixture: &GkeReceiptFixture, receipt: &serde_json::Value) {
 }
 
 fn workflow_path() -> PathBuf {
-    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join(".github/workflows/lumen-release.yml")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+        .join(".github/workflows/lumen-release.yml")
 }
 
 const CANDIDATE_EXECUTION_NAMES: &[&str] = &[
@@ -3905,7 +3907,8 @@ fn recovery_0430_workflow_is_frozen_and_rejects_high_risk_mutations() {
 
 #[test]
 fn public_verify_0429_workflow_is_frozen_and_rejects_write_or_identity_mutations() {
-    let workflow = include_str!("../../../../.github/workflows/lumen-release-0.4.29-public-verify.yml");
+    let workflow =
+        include_str!("../../../../.github/workflows/lumen-release-0.4.29-public-verify.yml");
     validate_public_verify_0429_workflow(workflow)
         .expect("0.4.29 public verifier workflow must satisfy its frozen read-only contract");
     assert_eq!(
@@ -4328,7 +4331,11 @@ fn candidate_execution_inventory_is_exact_and_fail_closed() {
     for (name, jobs) in [
         (
             "v4 with the skipped image build",
-            v4(CANDIDATE_V4_EXECUTION_NAMES, CANDIDATE_V4_GKE_NAMES, Some("skipped")),
+            v4(
+                CANDIDATE_V4_EXECUTION_NAMES,
+                CANDIDATE_V4_GKE_NAMES,
+                Some("skipped"),
+            ),
         ),
         (
             "v4 without the image build",
@@ -4375,15 +4382,27 @@ fn candidate_execution_inventory_is_exact_and_fail_closed() {
         ),
         (
             "v4 with a foreign GKE suite",
-            v4(CANDIDATE_V4_EXECUTION_NAMES, &foreign_suite, Some("skipped")),
+            v4(
+                CANDIDATE_V4_EXECUTION_NAMES,
+                &foreign_suite,
+                Some("skipped"),
+            ),
         ),
         (
             "v4 that built its own test image",
-            v4(CANDIDATE_V4_EXECUTION_NAMES, CANDIDATE_V4_GKE_NAMES, Some("success")),
+            v4(
+                CANDIDATE_V4_EXECUTION_NAMES,
+                CANDIDATE_V4_GKE_NAMES,
+                Some("success"),
+            ),
         ),
         (
             "v3 kind runs beside the GKE call",
-            v4(CANDIDATE_EXECUTION_NAMES, CANDIDATE_V4_GKE_NAMES, Some("skipped")),
+            v4(
+                CANDIDATE_EXECUTION_NAMES,
+                CANDIDATE_V4_GKE_NAMES,
+                Some("skipped"),
+            ),
         ),
         (
             "v4 with a failed suite",
@@ -4499,7 +4518,10 @@ fn add_durable_perf_evidence(fixture: &GkeReceiptFixture, attempt: &str) -> (Pat
     let summary = dir.join("durable-perf-summary.json");
     let output = Command::new("python3")
         .arg("-I")
-        .arg(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join("scripts/verify-durable-perf.py"))
+        .arg(
+            Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+                .join("scripts/verify-durable-perf.py"),
+        )
         .arg("--receipts-dir")
         .arg(&receipts)
         .args([

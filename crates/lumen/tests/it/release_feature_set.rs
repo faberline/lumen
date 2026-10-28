@@ -207,10 +207,7 @@ fn validate_release_image_pin_contract(content: &str) -> Result<(), String> {
         return Err("local preparation must direct the next candidate workflow step".to_string());
     }
 
-    for path in [
-        "k8s/base/deployment.yaml",
-        "k8s/operator/deployment.yaml",
-    ] {
+    for path in ["k8s/base/deployment.yaml", "k8s/operator/deployment.yaml"] {
         if content.matches(path).count() != 1 {
             return Err(format!(
                 "release image synchronization must name {path} exactly once"
@@ -391,8 +388,7 @@ fn test_build_surfaces_release_invocation() {
 #[test]
 fn test_release_preparation_updates_all_checked_in_image_pins() {
     let base_dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
-    let build_script =
-        std::fs::read_to_string(base_dir.join("build.sh")).expect("read build.sh");
+    let build_script = std::fs::read_to_string(base_dir.join("build.sh")).expect("read build.sh");
     validate_release_image_pin_contract(&build_script)
         .expect("release preparation must update every checked-in image pin");
 

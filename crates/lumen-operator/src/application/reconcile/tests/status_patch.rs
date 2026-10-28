@@ -177,7 +177,8 @@ fn status_patch_surfaces_topology_convergence_stall_as_distinct_condition() {
     // back-dating it past `convergence_stall_budget_secs()` directly,
     // exactly what a real long-running wait (or a wait that started
     // before the operator restarted) would leave behind in the CR.
-    let stall_budget = crate::application::reshard_driver::convergence_stall::convergence_stall_budget_secs();
+    let stall_budget =
+        crate::application::reshard_driver::convergence_stall::convergence_stall_budget_secs();
     lumen
         .spec
         .reshard_policy
@@ -223,7 +224,8 @@ fn status_patch_stalled_condition_survives_a_fresh_process_seeing_the_cr_for_the
         "acme-convergence-restart-durable",
         map_version,
     );
-    let stall_budget = crate::application::reshard_driver::convergence_stall::convergence_stall_budget_secs();
+    let stall_budget =
+        crate::application::reshard_driver::convergence_stall::convergence_stall_budget_secs();
     lumen
         .spec
         .reshard_policy

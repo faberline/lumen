@@ -8,9 +8,7 @@ use serde_json::json;
 use crate::application::reshard_driver::checkpoint::checkpoint_shards;
 use crate::application::reshard_driver::cluster_control::ClusterControl;
 use crate::application::reshard_driver::fence::{map_assignments, set_write_fence};
-use crate::application::reshard_driver::migration::{
-    evict_old_shards, run_migration_pass_impl,
-};
+use crate::application::reshard_driver::migration::{evict_old_shards, run_migration_pass_impl};
 use crate::application::reshard_driver::DriveOutcome;
 use crate::domain::lumen_spec::Lumen;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
