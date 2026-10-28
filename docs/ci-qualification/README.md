@@ -29,7 +29,10 @@ Single-feature plus all-feature checks do not prove every feature combination.
 In particular the separate combined `operator delegated-auth` behavior gate,
 integration tests, CLI/server/network tests, GKE assertions and performance
 checks remain obligations of their original contracts, including #114.
-No product suites were run locally. The snapshot JSON files are metadata,
+During the initial inventory preparation, no product suites were run locally.
+The human later authorized local compiler checks and diagnostic product runs
+to repair actual cloud failures. Those results are recorded below and do not
+replace current-head Linux cloud CI. The snapshot JSON files are metadata,
 not execution evidence. The 31 jobs run at most four at once with a 30-minute
 timeout each; configured timeout budgets are not measured runner cost.
 
