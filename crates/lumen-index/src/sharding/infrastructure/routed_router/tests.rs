@@ -209,3 +209,4 @@ fn drop_outcome_from_status_disambiguates_204_by_force() {
 }
 
 mod forwarded;
+mod scatter;
