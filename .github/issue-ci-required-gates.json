@@ -1,5 +1,5 @@
 {
-  "controller_source": "faberline/aw@67af8d020df3ca2ec4b064289408cfb0c2f8b299:plugins/faberline/skills/issue-ci/scripts/handoff.py",
+  "controller_source": "faberline/aw@28637704225692e5a1766b9c6b9778ef2b52e155:plugins/faberline/skills/issue-ci/scripts/native_merge.py",
   "qualification_blockers": [
     "No general pull_request unit workflow exists on the default branch.",
     "Existing gke-test is path-filtered and does not establish affected functional and E2E coverage for every product change.",
@@ -21,5 +21,76 @@
       ]
     }
   ],
-  "lifecycle_mode": "failure-only"
+  "lifecycle_mode": "failure-only",
+  "ci_handoff_policy": {
+    "controller_source": "faberline/aw@67af8d020df3ca2ec4b064289408cfb0c2f8b299:plugins/faberline/skills/issue-ci/scripts/handoff.py",
+    "qualification_blockers": [
+      "No general pull_request unit workflow exists on the default branch.",
+      "Existing gke-test is path-filtered and does not establish affected functional and E2E coverage for every product change.",
+      "No declared affected performance pull_request gate exists; manual/release workflows are not PR qualification.",
+      "A reviewed coverage selection policy and real qualifying jobs are needed before clearing these blockers; no blanket docs-only zero-check bypass is approved."
+    ],
+    "workflows": [
+      {
+        "path": ".github/workflows/gke-test.yml",
+        "jobs": [
+          "build the e2e test client",
+          "build test image / build (x86_64-unknown-linux-musl)",
+          "build test image / build (aarch64-unknown-linux-musl)",
+          "build test image / publish ghcr test image",
+          "resolve image identity",
+          "standalone container e2e",
+          "GKE e2e (overlay) / deploy + test on shared GKE",
+          "GKE e2e (operator) / deploy + test on shared GKE"
+        ]
+      }
+    ],
+    "lifecycle_mode": "failure-only"
+  },
+  "claude_final_review": {
+    "version": 1,
+    "producer": {
+      "path": ".github/workflows/claude-final-review.yml",
+      "id": 399790070,
+      "definition_sha": "33b5edb96f65ce47fa3451c46b2ed590a948566b",
+      "job": "review"
+    },
+    "gates": {
+      ".github/workflows/gke-test.yml": {
+        "id": 385337134,
+        "definition_sha": "b8e85e16c56c3fd432354deb76dabb87c9c13db0"
+      }
+    },
+    "protected_paths": [
+      "scripts/issue-ci/",
+      "scripts/pr-gates/",
+      "scripts/gke-test/",
+      "acceptance/gcp/",
+      "k8s/",
+      "Cargo.toml",
+      "Cargo.lock",
+      ".cargo/",
+      "rust-toolchain",
+      "rust-toolchain.toml",
+      "Dockerfile.test"
+    ],
+    "cli_sha256": "b73676430af12f97316a798b8371f81d640f90a58bdcb8f3ce56a835bb47df56",
+    "credential_profile": "personal-claude-max-oauth",
+    "merge_producer": null,
+    "merge_method": null
+  },
+  "native_auto_merge": {
+    "version": 1,
+    "enabled": true,
+    "status_context": "claude/verified-merge",
+    "status_app_id": 15368,
+    "merge_method": "SQUASH",
+    "ruleset_id": 26069021,
+    "producer": {
+      "path": ".github/workflows/issue-ci.yml",
+      "id": 394215197,
+      "definition_sha": "08d833696dd084d3de2d2325799fb8c6440f931d",
+      "job": "native-auto-merge"
+    }
+  }
 }
