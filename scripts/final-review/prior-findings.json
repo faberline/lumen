@@ -1,0 +1,16 @@
+{
+  "repo": "faberline/lumen",
+  "pr": 185,
+  "head": "b95bda7cf3e607ba593d96bd94614750543f8800",
+  "base": "b49ab68d9a2ce5b77ae5524115c7b04ef5dbec6b",
+  "findings": [
+    {
+      "title": "Qualification README contradicts itself on local product execution",
+      "severity": "low",
+      "path": "docs/ci-qualification/README.md",
+      "line": 31,
+      "detail": "The Unit and static coverage section says 'No product suites were run locally.' The 'Latest CI repair' section of the same file reports that the complete local release target passed all 978 tests and that strict all-target/all-feature Clippy passed locally; the PR description reports the same runs, which the human authorized. R7 requires accurate recorded validation evidence with no fabricated or contradictory claims, and this sentence is now false for the current head.",
+      "required_fix": "Reword the sentence to match what was actually run locally, or scope it explicitly to the 2026-10-28 preparation checkpoint, so it no longer contradicts the later local release and Clippy evidence."
+    }
+  ]
+}

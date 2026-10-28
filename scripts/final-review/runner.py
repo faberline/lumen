@@ -151,6 +151,12 @@ packet = dict(repo=REPO, pr=PR, head=HEAD, base=BASE, issue=issue,
     changed_files=paths, complete_diff=diff, current_head_ci=checks,
     available_head_paths=git('ls-tree', '-r', '--name-only', HEAD).splitlines(),
     qualification='Existing failure-only and functional/E2E/performance qualification holds remain.')
+previous=ROOT/'prior-findings.json'
+if previous.exists():
+    prior=json.loads(previous.read_text())
+    assert prior['repo']==REPO and prior['pr']==PR and re.fullmatch('[0-9a-f]{40}',prior['head'])
+    assert subprocess.run(['git','-C',str(ROOT/'source'),'merge-base','--is-ancestor',prior['head'],HEAD]).returncode==0
+    packet['previous_review_findings']=prior
 save('identity.json', dict(repo=REPO, pr=PR, head=HEAD, base=BASE, files=paths,
     diff_sha256=hashlib.sha256(diff.encode()).hexdigest(), checks=checks,
     control_commit=os.environ['GITHUB_SHA']))
