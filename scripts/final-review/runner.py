@@ -96,8 +96,14 @@ comments, code changes, merge, release, or lifecycle changes are available.
     if result.returncode:
         # Do not publish provider error strings or environment material.
         save('execution-error.json', {'phase': phase[:60], 'exit': result.returncode,
+            'input_bytes': len(raw.encode()),
             'stdout_sha256': hashlib.sha256(result.stdout.encode()).hexdigest(),
             'stderr_sha256': hashlib.sha256(result.stderr.encode()).hexdigest()})
+        assert TOKEN not in result.stdout and TOKEN not in result.stderr
+        if len(result.stdout.encode()) < 65536:
+            (OUT / 'execution-error-stdout.txt').write_text(result.stdout)
+        if len(result.stderr.encode()) < 65536:
+            (OUT / 'execution-error-stderr.txt').write_text(result.stderr)
         raise RuntimeError('claude_execution_failed')
     outer = json.loads(result.stdout)
     assert outer.get('type') == 'result' and outer.get('subtype') == 'success' and outer.get('is_error') is False, 'claude_incomplete'
@@ -181,8 +187,13 @@ for path in requested:
         assert mode in ('100644', '100755'), 'unsupported_source_type'
         content = git('show', ref + ':' + path)
         assert len(content.encode()) <= 350000, 'source_file_bound'
-        supporting.append(dict(path=path, commit=ref, content=content,
-            sha256=hashlib.sha256(content.encode()).hexdigest()))
+        digest=hashlib.sha256(content.encode()).hexdigest()
+        identical=next((s for s in supporting if s.get('sha256')==digest and 'content' in s),None)
+        if identical:
+            supporting.append(dict(path=path,commit=ref,sha256=digest,
+                same_content_as={'path':identical['path'],'commit':identical['commit']}))
+        else:
+            supporting.append(dict(path=path, commit=ref, content=content,sha256=digest))
 packet.update(requirement_plan=plan, supporting_sources=supporting)
 save('source-manifest.json', [{k:v for k,v in s.items() if k != 'content'} for s in supporting])
 result_schema = obj({'repo': {'const': REPO, 'type': 'string'}, 'pr': {'const': PR, 'type': 'integer'},
