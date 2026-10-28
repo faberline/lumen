@@ -24,7 +24,10 @@ pub trait TextStreamView {
     fn text_is_present(&self, id: u32) -> bool;
     fn text_doc_len(&self, id: u32) -> u32;
     fn terms<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Cow<'a, str>>> + 'a>>;
-    fn text_postings(&self, term: &str) -> Result<Option<std::sync::Arc<(Vec<u32>, Vec<u32>)>>>;
+    fn text_postings(
+        &self,
+        term: &str,
+    ) -> Result<Option<crate::infrastructure::segment::reader_cache::CachedTextPosting>>;
 }
 
 struct ComposedTerms<'a> {
@@ -58,7 +61,10 @@ impl TextStreamView for ComposedSegmentReader {
             cursor: self.string_terms(false)?,
         }))
     }
-    fn text_postings(&self, term: &str) -> Result<Option<std::sync::Arc<(Vec<u32>, Vec<u32>)>>> {
+    fn text_postings(
+        &self,
+        term: &str,
+    ) -> Result<Option<crate::infrastructure::segment::reader_cache::CachedTextPosting>> {
         Ok(self.text_postings_arc(term))
     }
 }
@@ -108,7 +114,7 @@ pub fn write_text_projection(path: &Path, seq: u64, view: &impl TextStreamView) 
                 word = 0;
             }
         }
-        if n_docs % 64 != 0 {
+        if !n_docs.is_multiple_of(64) {
             write_counted(&mut out, &mut at, &word.to_le_bytes())?;
             words += 1;
         }

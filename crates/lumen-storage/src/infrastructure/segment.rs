@@ -43,6 +43,9 @@ pub mod text_writer;
 pub mod var_column;
 pub mod vector_writer;
 
+/// An owned text term with its document IDs and matching term frequencies.
+pub type TextTokenPostings = (String, Vec<u32>, Vec<u32>);
+
 use std::path::PathBuf;
 use std::sync::Arc;
 

@@ -123,3 +123,16 @@ ordinary Rust unit tests, not a measured performance run. Existing product
 assertions and the nonzero evidence rule are unchanged. Clippy's diagnosed
 `VectorBackend` default-derivation finding is corrected without changing its
 default variant. The added Rust tests require online execution on the new head.
+
+The follow-up preserves all 31 rows and schedules each package's default row
+first. The pinned cache stores dependencies, not workspace source crates.
+All 58 isolated helper controls pass. Clippy retains Cargo JSON diagnostics;
+its `--all-targets -- -D warnings` contract remains intact.
+
+At head `defa0880`, the default/no-default/backup/delegated-auth rows each ran
+2 public-library tests, 19 CLI tests and 5 benchmark-helper tests successfully.
+Those rows still failed on storage Clippy findings. The next source repair
+names existing posting tuples, exposes standard fallible cursor iterators while
+preserving their existing methods, and applies equivalent formatting/arithmetic
+lint fixes. Existing cursor assertions are retained and extended to compare
+the iterator output. Product execution on the new head remains required.

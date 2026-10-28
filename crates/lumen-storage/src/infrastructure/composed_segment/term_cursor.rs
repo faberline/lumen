@@ -7,6 +7,10 @@ use anyhow::{anyhow, Result};
 use roaring::RoaringBitmap;
 use std::borrow::Cow;
 
+// Keep source/ordinal pairs named across the borrowed and owned cursor paths.
+type SourceOrdinals = Vec<(usize, u32)>;
+type TermOrdinals<T> = (T, SourceOrdinals);
+
 impl ComposedSegmentReader {
     pub fn string_terms(&self, descending: bool) -> Result<StringTermCursor<'_>> {
         StringTermCursor::new(self.readers(), descending)
@@ -93,7 +97,9 @@ impl ComposedSegmentReader {
         }
         Some(out)
     }
-    pub fn text_tokens_all(&self) -> Option<Vec<(String, Vec<u32>, Vec<u32>)>> {
+    pub fn text_tokens_all(
+        &self,
+    ) -> Option<Vec<crate::infrastructure::segment::TextTokenPostings>> {
         if self.dense_base_only() {
             let all = self.base.text_tokens_all()?;
             note_text_posting_clones(all.len() as u64);
@@ -163,7 +169,7 @@ impl<'a> StringTermCursor<'a> {
     }
     /// The selected dictionary ordinal is already known for each matching
     /// layer. Preserve it before advancing so callers need no point lookup.
-    fn next_with_ordinals(&mut self) -> Result<Option<(String, Vec<(usize, u32)>)>> {
+    fn next_with_ordinals(&mut self) -> Result<Option<TermOrdinals<String>>> {
         Ok(self
             .next_entry_cow(true)?
             .map(|(term, ordinals)| (term.into_owned(), ordinals)))
@@ -171,7 +177,7 @@ impl<'a> StringTermCursor<'a> {
     pub(super) fn next_entry_cow(
         &mut self,
         include_ordinals: bool,
-    ) -> Result<Option<(Cow<'a, str>, Vec<(usize, u32)>)>> {
+    ) -> Result<Option<TermOrdinals<Cow<'a, str>>>> {
         let mut selected: Option<usize> = None;
         for (index, source) in self.sources.iter().enumerate() {
             let Some(head) = source.head.as_ref() else {
@@ -317,5 +323,23 @@ impl<'a> NumberKeyCursor<'a> {
             }
         }
         Ok(Some(key))
+    }
+}
+
+// Keep the existing fallible cursor API for callers. Also expose the standard
+// iterator shape, with each decoding error retained as an item.
+impl Iterator for StringTermCursor<'_> {
+    type Item = Result<String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        StringTermCursor::next(self).transpose()
+    }
+}
+
+impl Iterator for NumberKeyCursor<'_> {
+    type Item = Result<u64>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        NumberKeyCursor::next(self).transpose()
     }
 }

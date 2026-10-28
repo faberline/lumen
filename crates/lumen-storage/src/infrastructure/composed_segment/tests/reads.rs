@@ -30,6 +30,12 @@ fn string_cursor_merges_once_in_both_orders() {
         }
         assert_eq!(result, expected);
         assert!(cursor.next().unwrap().is_none());
+        let iterated = view
+            .string_terms(descending)
+            .unwrap()
+            .collect::<anyhow::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(iterated, expected);
     }
 }
 
@@ -61,6 +67,12 @@ fn numeric_range_and_cursor_use_each_layers_rows_and_bounds() {
     assert_eq!(keys.next().unwrap(), Some(bits(4.0)));
     assert_eq!(keys.next().unwrap(), Some(bits(3.0)));
     assert_eq!(keys.next().unwrap(), None);
+    let iterated = view
+        .number_keys(Some((bits(3.0), true)), Some((bits(4.0), true)), true)
+        .unwrap()
+        .collect::<anyhow::Result<Vec<_>>>()
+        .unwrap();
+    assert_eq!(iterated, [bits(4.0), bits(3.0)]);
     assert_eq!(view.number_range_distinct_count(None, None), Some(2));
 }
 

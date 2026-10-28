@@ -62,6 +62,15 @@ def profiles(package):
     return ['default'] + (['no-default'] + ['feature:' + n for n in names] + ['all-features'] if package['features'] else [])
 
 
+def matrix(packages):
+    rows = [{'package': p['name'], 'profile': profile} for p in packages for profile in profiles(p)]
+    if len(rows) > 256:
+        raise ValueError('matrix exceeds GitHub limit; split explicitly without dropping rows')
+    # Get a result from every package early, then run every additional feature row.
+    rows.sort(key=lambda row: (row['profile'] != 'default', row['package'], row['profile']))
+    return {'include': rows}
+
+
 def feature_args(profile):
     if profile == 'default':
         return []
@@ -109,7 +118,7 @@ def command(package, profile, kind, target=None):
     if kind == 'unit':
         return ['cargo', 'test', '--locked', '-p', package['name'], *selectors, *feature_args(profile)]
     if kind == 'clippy':
-        return ['cargo', 'clippy', '--locked', '-p', package['name'], '--all-targets',
+        return ['cargo', 'clippy', '--locked', '-p', package['name'], '--all-targets', '--message-format=json',
                 *feature_args(profile), '--', '-D', 'warnings']
     raise ValueError('unknown command kind')
 
@@ -304,12 +313,9 @@ def main(argv=None):
                           'baseline_comparison': comparison, 'execution_selection': 'complete workspace',
                           'qualification': 'not evaluated'}, sort_keys=True, indent=2))
     elif args.action == 'matrix':
-        rows = [{'package': p['name'], 'profile': profile} for p in packages for profile in profiles(p)]
-        if len(rows) > 256:
-            raise ValueError('matrix exceeds GitHub limit; split explicitly without dropping rows')
         # stdout stays one matrix JSON value for GITHUB_OUTPUT; provenance is stderr.
         print(json.dumps({'provenance': provenance, 'baseline_comparison': comparison}), file=sys.stderr)
-        print(json.dumps({'include': rows}, separators=(',', ':')))
+        print(json.dumps(matrix(packages), separators=(',', ':')))
     else:
         package = next((p for p in packages if p['name'] == args.package), None)
         if package is None or args.kind is None:

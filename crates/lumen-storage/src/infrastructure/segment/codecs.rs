@@ -192,6 +192,6 @@ pub(super) fn append_u32_column(buf: &mut Vec<u8>, values: &[u32]) -> Result<(u6
     let bytes: &[u8] =
         bytemuck::try_cast_slice(values).map_err(|e| anyhow!("cast u32 column: {e:?}"))?;
     buf.extend_from_slice(bytes);
-    let len = (values.len() * std::mem::size_of::<u32>()) as u64;
+    let len = std::mem::size_of_val(values) as u64;
     Ok((off, len))
 }

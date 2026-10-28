@@ -218,10 +218,7 @@ impl ComposedSegmentReader {
     pub fn live_text_term_count(&self, dead: &RoaringBitmap) -> Option<u64> {
         let mut cursor = self.string_terms(false).ok()?;
         let mut count = 0u64;
-        loop {
-            let Some((_term, ordinals)) = cursor.next_entry_cow(true).ok()? else {
-                break;
-            };
+        while let Some((_term, ordinals)) = cursor.next_entry_cow(true).ok()? {
             note_text_term_probes(1);
             for &(source, dict_id) in ordinals.iter().rev() {
                 if self.source_posting_live(source, dict_id, dead)? {

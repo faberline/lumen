@@ -171,7 +171,7 @@ impl SegmentReader {
     /// walking the in-RAM `values` BTreeMap, WITHOUT the pre-2m
     /// gather-`number_at`-per-doc + sort. Streaming index-by-index keeps the cache
     /// the only resident structure (no whole-field BTreeMap materialized).
-
+    ///
     /// The `SortableF64` bit key at sorted-value index `i` (ascending value
     /// order), or `None` when out of range / column torn. Phase 2m.
     pub fn number_sorted_bits_at(&self, i: u32) -> Option<u64> {

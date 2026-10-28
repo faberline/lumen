@@ -16,6 +16,17 @@ def package(name='leaf', dependencies=(), features=None, targets=None):
 
 
 class MatrixTests(unittest.TestCase):
+    def test_default_rows_come_first_without_losing_feature_rows(self):
+        rows = plan.matrix([package('a', features={'default': ['x'], 'x': []}), package('b')])['include']
+        self.assertEqual([{'package': 'a', 'profile': 'default'}, {'package': 'b', 'profile': 'default'}], rows[:2])
+        self.assertEqual({('a', 'default'), ('a', 'no-default'), ('a', 'feature:x'), ('a', 'all-features'), ('b', 'default')},
+                         {(r['package'], r['profile']) for r in rows})
+        self.assertEqual(5, len(rows))
+
+    def test_matrix_limit_refuses_instead_of_dropping_packages(self):
+        with self.assertRaisesRegex(ValueError, 'without dropping rows'):
+            plan.matrix([package(str(n)) for n in range(257)])
+
     def test_featureless_package_has_real_default_lib_command(self):
         p = package()
         self.assertEqual(['default'], plan.profiles(p))

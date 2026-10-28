@@ -79,6 +79,12 @@ jobs:
         with:
           toolchain: stable
           components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: candidate -> target
+          shared-key: pr-unit-static
+          cache-on-failure: true
+          cache-workspace-crates: false
       - name: Run all enabled library and binary unit targets; require complete nonzero rosters
         env:
           PACKAGE: ${{ matrix.package }}
@@ -94,6 +100,7 @@ jobs:
           PROFILE: ${{ matrix.profile }}
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
           EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+          CARGO_INCREMENTAL: "0"
         run: python3 candidate/scripts/pr-gates/plan.py run --root candidate --baseline-root baseline --expected-head "$EXPECTED_HEAD" --expected-base "$EXPECTED_BASE" --package "$PACKAGE" --profile "$PROFILE" --kind clippy
   milestone-docs:
     name: milestone document contracts

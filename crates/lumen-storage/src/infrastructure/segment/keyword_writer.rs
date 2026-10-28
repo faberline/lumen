@@ -15,7 +15,7 @@ use crate::infrastructure::segment::{
 };
 
 /// Write a Keyword segment: a sorted prefix-compressed string DICT (var-width)
-/// + a FIXED `u32[n_docs]` dict-id forward column ([`DICT_ABSENT`] for a doc
+/// and a FIXED `u32[n_docs]` dict-id forward column ([`DICT_ABSENT`] for a doc
 /// with no keyword) + a parallel per-term INVERTED posting-block column
 /// ([`ROLE_KEYWORD_POSTINGS`]) + a present bitset. `values[i]` is doc `i`'s
 /// keyword (`None` = absent).
@@ -42,10 +42,8 @@ pub fn write_keyword_segment(
 
     // Build the sorted distinct dictionary; map each distinct string -> dict-id.
     let mut distinct: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
-    for v in values {
-        if let Some(s) = v {
-            distinct.insert(s);
-        }
+    for s in values.iter().flatten() {
+        distinct.insert(s);
     }
     let dict: Vec<Vec<u8>> = distinct.iter().map(|s| s.as_bytes().to_vec()).collect();
     let dict_id: std::collections::HashMap<&str, u32> = distinct
