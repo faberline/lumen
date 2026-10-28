@@ -45,7 +45,9 @@ pub struct AuthConfig {
     /// The namespace every `SubjectAccessReview` is scoped to — the serving
     /// instance's own. Empty is only valid when `required` is `false`.
     pub namespace: String,
-    pub(in crate) profile: AuthProfile,
+    /// The runtime name every whole-runtime `SubjectAccessReview` names.
+    pub runtime: String,
+    pub(crate) profile: AuthProfile,
 }
 
 impl Default for AuthConfig {
@@ -59,6 +61,7 @@ impl AuthConfig {
         Self {
             required: false,
             namespace: String::new(),
+            runtime: "lumen".to_string(),
             profile: AuthProfile::Off,
         }
     }
@@ -70,6 +73,7 @@ impl AuthConfig {
         Self {
             required: true,
             namespace: namespace.into(),
+            runtime: "lumen".to_string(),
             profile: AuthProfile::ManagedAudience,
         }
     }
@@ -79,8 +83,14 @@ impl AuthConfig {
         Self {
             required: true,
             namespace: namespace.into(),
+            runtime: "lumen".to_string(),
             profile: AuthProfile::KubernetesDefault,
         }
+    }
+
+    pub fn with_runtime(mut self, runtime: impl Into<String>) -> Self {
+        self.runtime = runtime.into();
+        self
     }
 
     pub fn profile(&self) -> AuthProfile {
@@ -119,15 +129,18 @@ impl AuthConfig {
             );
         }
 
+        let runtime = runtime_from_env();
+
         Ok(Self {
             required,
             namespace,
+            runtime,
             profile,
         })
     }
 
     #[cfg(feature = "delegated-auth")]
-    pub(in crate) fn delegated_config(&self) -> Result<DelegatedAuthConfig> {
+    pub(crate) fn delegated_config(&self) -> Result<DelegatedAuthConfig> {
         match self.profile {
             AuthProfile::ManagedAudience => DelegatedAuthConfig::new(vec![AUDIENCE.to_string()])
                 .map_err(|e| anyhow::anyhow!("lumen's delegated-auth audience is missing: {e}")),
@@ -151,6 +164,29 @@ fn namespace_from_env() -> String {
     std::fs::read_to_string(SERVICE_ACCOUNT_NAMESPACE_FILE)
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
+}
+
+/// The runtime name, from explicit override, downward-API POD_NAME, or default.
+fn runtime_from_env() -> String {
+    for key in ["LUMEN_RUNTIME", "LUMEN_NAME"] {
+        if let Ok(value) = std::env::var(key) {
+            let value = value.trim();
+            if !value.is_empty() {
+                return value.to_string();
+            }
+        }
+    }
+    if let Ok(pod) = std::env::var("POD_NAME") {
+        if let Some((prefix, suffix)) = pod.rsplit_once('-') {
+            if suffix.chars().all(|c| c.is_ascii_digit()) && !prefix.is_empty() {
+                return prefix.to_string();
+            }
+        }
+        if !pod.trim().is_empty() {
+            return pod.trim().to_string();
+        }
+    }
+    "lumen".to_string()
 }
 
 #[cfg(test)]

@@ -1,8 +1,6 @@
 use std::sync::Mutex;
 
-use crate::application::auth_config::{
-    AuthConfig, AuthProfile, SERVICE_ACCOUNT_NAMESPACE_FILE,
-};
+use crate::application::auth_config::{AuthConfig, AuthProfile, SERVICE_ACCOUNT_NAMESPACE_FILE};
 
 // Process-global env mutex shared across the env-mutating tests.
 static AUTH_ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -146,4 +144,27 @@ fn auth_config_from_env_rejects_unknown_auth_mode() {
     let err = AuthConfig::from_env().unwrap_err();
     assert!(err.to_string().contains("LUMEN_AUTH"));
     clear_auth_env();
+}
+
+#[test]
+fn auth_config_runtime_resolution() {
+    let _g = AUTH_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_auth_env();
+    unsafe {
+        std::env::set_var("LUMEN_AUTH", "required");
+        std::env::set_var("POD_NAMESPACE", "serving");
+        std::env::set_var("LUMEN_RUNTIME", "my-runtime");
+    }
+    let cfg = AuthConfig::from_env().unwrap();
+    assert_eq!(cfg.runtime, "my-runtime");
+    unsafe {
+        std::env::remove_var("LUMEN_RUNTIME");
+        std::env::set_var("POD_NAME", "cluster-0");
+    }
+    let cfg = AuthConfig::from_env().unwrap();
+    assert_eq!(cfg.runtime, "cluster");
+    clear_auth_env();
+    unsafe {
+        std::env::remove_var("POD_NAME");
+    }
 }

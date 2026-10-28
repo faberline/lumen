@@ -68,15 +68,18 @@ use service_auth::k8s::{
     DelegatedAuthError, DelegatedAuthenticator, ResourceAttributes, ServiceAccountPrincipal,
 };
 
-use crate::domain::identity::{ADMIN_RESOURCE, API_GROUP, COLLECTIONS_RESOURCE};
+use crate::domain::identity::{
+    ADMIN_RESOURCE, API_GROUP, COLLECTIONS_RESOURCE, RUNTIMES_RESOURCE, RUNTIME_VERB,
+};
 
 pub use service_auth::Role;
 
-/// What a handler is asking about — one collection, or the instance itself.
+/// What a handler is asking about — one collection, the instance itself, or the whole runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthTarget<'a> {
     Collection(&'a str),
     Admin,
+    Runtime(&'a str),
 }
 
 impl AuthTarget<'_> {
@@ -93,6 +96,13 @@ impl AuthTarget<'_> {
             AuthTarget::Admin => {
                 ResourceAttributes::new(API_GROUP, namespace, ADMIN_RESOURCE, None, verb(needed))
             }
+            AuthTarget::Runtime(name) => ResourceAttributes::new(
+                API_GROUP,
+                namespace,
+                RUNTIMES_RESOURCE,
+                Some((*name).to_string()),
+                RUNTIME_VERB,
+            ),
         }
     }
 
@@ -101,6 +111,7 @@ impl AuthTarget<'_> {
         match self {
             AuthTarget::Collection(id) => (*id).to_string(),
             AuthTarget::Admin => ADMIN_RESOURCE.to_string(),
+            AuthTarget::Runtime(name) => (*name).to_string(),
         }
     }
 }
@@ -133,6 +144,7 @@ pub enum AuthContext {
         subject: Arc<str>,
         authenticator: Arc<DelegatedAuthenticator>,
         namespace: Arc<str>,
+        runtime_authorized: bool,
     },
 }
 
@@ -141,19 +153,54 @@ impl std::fmt::Debug for AuthContext {
         match self {
             AuthContext::Open => f.write_str("AuthContext::Open"),
             AuthContext::Delegated {
-                subject, namespace, ..
+                subject,
+                namespace,
+                runtime_authorized,
+                ..
             } => f
                 .debug_struct("AuthContext::Delegated")
                 .field("subject", subject)
                 .field("namespace", namespace)
+                .field("runtime_authorized", runtime_authorized)
                 .finish(),
         }
     }
 }
 
 impl AuthContext {
+    pub fn into_runtime_authorized(self) -> Self {
+        match self {
+            Self::Delegated {
+                principal,
+                subject,
+                authenticator,
+                namespace,
+                ..
+            } => Self::Delegated {
+                principal,
+                subject,
+                authenticator,
+                namespace,
+                runtime_authorized: true,
+            },
+            Self::Open => Self::Open,
+        }
+    }
+
+    pub fn is_runtime_authorized(&self) -> bool {
+        match self {
+            Self::Open => true,
+            Self::Delegated {
+                runtime_authorized, ..
+            } => *runtime_authorized,
+        }
+    }
+
     /// Authorize `needed` on one collection.
     pub async fn ensure(&self, collection_id: &str, needed: Role) -> Result<(), AuthErr> {
+        if self.is_runtime_authorized() {
+            return Ok(());
+        }
         self.authorize(AuthTarget::Collection(collection_id), needed)
             .await
     }
@@ -161,7 +208,19 @@ impl AuthContext {
     /// Authorize `needed` on the instance-wide admin surface. A grant on every
     /// collection in the namespace still does not reach here.
     pub async fn ensure_admin(&self, needed: Role) -> Result<(), AuthErr> {
+        if self.is_runtime_authorized() {
+            return Ok(());
+        }
         self.authorize(AuthTarget::Admin, needed).await
+    }
+
+    /// Authorize `use` on the runtime itself.
+    pub async fn ensure_runtime(&self, runtime_name: &str) -> Result<(), AuthErr> {
+        if self.is_runtime_authorized() {
+            return Ok(());
+        }
+        self.authorize(AuthTarget::Runtime(runtime_name), Role::Read)
+            .await
     }
 
     async fn authorize(&self, target: AuthTarget<'_>, needed: Role) -> Result<(), AuthErr> {
@@ -170,6 +229,7 @@ impl AuthContext {
             subject,
             authenticator,
             namespace,
+            ..
         } = self
         else {
             return Ok(());
