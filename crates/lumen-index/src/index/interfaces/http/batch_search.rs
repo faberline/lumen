@@ -39,6 +39,9 @@ use crate::index::interfaces::http::query_method::collections_query_dispatch;
     post,
     path = "/collections:search",
     tag = "Query",
+    params(
+        ("X-Read-Consistency" = Option<String>, Header, description = "Read consistency level: `leader` (default), `any`, or `bounded(<ms>)` (e.g. `bounded(250)`).")
+    ),
     request_body = BatchSearchRequest,
     responses(
         (status = 200, description = "Per-item results, same order and length as `searches`", body = BatchSearchResponse),
