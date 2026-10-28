@@ -262,7 +262,7 @@ impl KeywordIndex {
                 Ok(cursor) => cursor,
                 Err(_) => return Ok(KeywordBucketWalk::Unavailable),
             };
-            let mut disk = match cursor.next() {
+            let mut disk = match cursor.try_next() {
                 Ok(term) => term,
                 Err(_) => return Ok(KeywordBucketWalk::Unavailable),
             };
@@ -294,7 +294,7 @@ impl KeywordIndex {
                         posting |= tail_posting;
                     }
                     if take_disk {
-                        disk = match cursor.next() {
+                        disk = match cursor.try_next() {
                             Ok(term) => term,
                             Err(_) => return Ok(KeywordBucketWalk::Unavailable),
                         };
@@ -331,7 +331,7 @@ impl KeywordIndex {
                         posting |= tail_posting;
                     }
                     if take_disk {
-                        disk = match cursor.next() {
+                        disk = match cursor.try_next() {
                             Ok(term) => term,
                             Err(_) => return Ok(KeywordBucketWalk::Unavailable),
                         };

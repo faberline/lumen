@@ -123,7 +123,7 @@ impl NumberIndex {
                 .map(|bits| (bits, true)),
             descending,
         )?;
-        let mut disk = cursor.next()?;
+        let mut disk = cursor.try_next()?;
         let tail_keys: Vec<SortableF64> = if descending {
             self.values
                 .keys()
@@ -172,7 +172,7 @@ impl NumberIndex {
                 tail_key = tail.next();
             }
             if take_disk {
-                disk = cursor.next()?;
+                disk = cursor.try_next()?;
             }
             let value = SortableF64::from_bits(bits).to_f64();
             for id in posting {
@@ -200,7 +200,7 @@ impl NumberIndex {
         let mut page = Vec::with_capacity(want.min(1024));
         let mut total = 0u64;
         let mut cursor = seg.number_keys(bound_to_bits(low), bound_to_bits(high), false)?;
-        let mut disk = cursor.next()?;
+        let mut disk = cursor.try_next()?;
         let mut tail = self.values.range((low, high)).peekable();
         loop {
             let (bits, take_disk, take_tail) = match (disk, tail.peek()) {
@@ -226,7 +226,7 @@ impl NumberIndex {
                 posting |= tail_posting;
             }
             if take_disk {
-                disk = cursor.next()?;
+                disk = cursor.try_next()?;
             }
             total += posting.len();
             for id in posting {

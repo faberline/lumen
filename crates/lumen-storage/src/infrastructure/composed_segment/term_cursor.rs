@@ -77,7 +77,7 @@ impl ComposedSegmentReader {
         }
         let mut cursor = self.string_terms(false).ok()?;
         let mut out = Vec::new();
-        while let Some(term) = cursor.next().ok()? {
+        while let Some(term) = cursor.try_next().ok()? {
             if let Some(posting) = self.set_postings(&term) {
                 out.push((term, posting));
             }
@@ -90,7 +90,7 @@ impl ComposedSegmentReader {
         }
         let mut cursor = self.number_keys(None, None, false).ok()?;
         let mut out = Vec::new();
-        while let Some(key) = cursor.next().ok()? {
+        while let Some(key) = cursor.try_next().ok()? {
             if let Some(posting) = self.number_value_postings(key) {
                 out.push((key, posting));
             }
@@ -107,7 +107,7 @@ impl ComposedSegmentReader {
         }
         let mut cursor = self.string_terms(false).ok()?;
         let mut out = Vec::new();
-        while let Some(term) = cursor.next().ok()? {
+        while let Some(term) = cursor.try_next().ok()? {
             if let Some(posting) = self.text_postings_arc(&term) {
                 note_text_posting_clones(1);
                 out.push((term, posting.0.clone(), posting.1.clone()));
@@ -160,7 +160,7 @@ impl<'a> StringTermCursor<'a> {
             descending,
         })
     }
-    pub fn next(&mut self) -> Result<Option<String>> {
+    pub fn try_next(&mut self) -> Result<Option<String>> {
         Ok(self.next_cow()?.map(Cow::into_owned))
     }
     /// Advance one dictionary term without copying raw mmap bytes.
@@ -292,7 +292,7 @@ impl<'a> NumberKeyCursor<'a> {
             descending,
         })
     }
-    pub fn next(&mut self) -> Result<Option<u64>> {
+    pub fn try_next(&mut self) -> Result<Option<u64>> {
         let heads = self.sources.iter().filter_map(|source| source.head);
         let selected = if self.descending {
             heads.max()
@@ -326,13 +326,13 @@ impl<'a> NumberKeyCursor<'a> {
     }
 }
 
-// Keep the existing fallible cursor API for callers. Also expose the standard
-// iterator shape, with each decoding error retained as an item.
+// The explicit fallible cursor method and the standard iterator both retain
+// each decoding error.
 impl Iterator for StringTermCursor<'_> {
     type Item = Result<String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        StringTermCursor::next(self).transpose()
+        StringTermCursor::try_next(self).transpose()
     }
 }
 
@@ -340,6 +340,6 @@ impl Iterator for NumberKeyCursor<'_> {
     type Item = Result<u64>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        NumberKeyCursor::next(self).transpose()
+        NumberKeyCursor::try_next(self).transpose()
     }
 }

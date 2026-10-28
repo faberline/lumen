@@ -47,7 +47,7 @@ impl Cluster {
         }
     }
 
-    fn as_user(mut self, username: &str) -> Self {
+    fn with_user(mut self, username: &str) -> Self {
         self.username = username.to_string();
         self
     }

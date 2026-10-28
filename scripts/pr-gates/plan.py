@@ -258,7 +258,7 @@ def execute(root, package, profile, kind, provenance):
     for target in targets:
         argv = command(package, profile, kind, target)
         if kind == 'unit':
-            argv += ['--', '--format', 'pretty', '--color', 'never']
+            argv += ['--', '--format', 'pretty', '--color', 'never', '--include-ignored']
         record = {'command': argv, 'package': package['name'], 'target': target,
                   'profile': profile, 'provenance': provenance, 'qualification': 'not evaluated'}
         print(json.dumps(record), flush=True)

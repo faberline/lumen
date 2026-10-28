@@ -25,11 +25,11 @@ fn string_cursor_merges_once_in_both_orders() {
     ] {
         let mut cursor = view.string_terms(descending).unwrap();
         let mut result = Vec::new();
-        while let Some(term) = cursor.next().unwrap() {
+        while let Some(term) = cursor.try_next().unwrap() {
             result.push(term);
         }
         assert_eq!(result, expected);
-        assert!(cursor.next().unwrap().is_none());
+        assert!(cursor.try_next().unwrap().is_none());
         let iterated = view
             .string_terms(descending)
             .unwrap()
@@ -64,9 +64,9 @@ fn numeric_range_and_cursor_use_each_layers_rows_and_bounds() {
     let mut keys = view
         .number_keys(Some((bits(3.0), true)), Some((bits(4.0), true)), true)
         .unwrap();
-    assert_eq!(keys.next().unwrap(), Some(bits(4.0)));
-    assert_eq!(keys.next().unwrap(), Some(bits(3.0)));
-    assert_eq!(keys.next().unwrap(), None);
+    assert_eq!(keys.try_next().unwrap(), Some(bits(4.0)));
+    assert_eq!(keys.try_next().unwrap(), Some(bits(3.0)));
+    assert_eq!(keys.try_next().unwrap(), None);
     let iterated = view
         .number_keys(Some((bits(3.0), true)), Some((bits(4.0), true)), true)
         .unwrap()

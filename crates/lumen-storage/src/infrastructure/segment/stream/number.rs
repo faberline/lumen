@@ -139,7 +139,7 @@ impl NumberStreamProjection for ComposedSegmentReader {
     }
     fn number_keys(&self, emit: &mut dyn FnMut(u64) -> Result<()>) -> Result<()> {
         let mut keys = self.number_keys(None, None, false)?;
-        while let Some(key) = keys.next()? {
+        while let Some(key) = keys.try_next()? {
             if self.number_value_postings(key).is_some() {
                 emit(key)?;
             }
@@ -180,7 +180,7 @@ pub fn write_number_stream(path: &Path, seq: u64, view: &ComposedSegmentReader) 
         let sorted_off = *at;
         let mut keys = view.number_keys(None, None, false)?;
         let mut sorted_count = 0u64;
-        while let Some(key) = keys.next()? {
+        while let Some(key) = keys.try_next()? {
             if view.number_value_postings(key).is_some() {
                 // Validate the frozen sortable encoding before persisting it.
                 if sortable_bits(inverse_sortable_bits(key)) != key {
@@ -197,7 +197,7 @@ pub fn write_number_stream(path: &Path, seq: u64, view: &ComposedSegmentReader) 
         let posting_start = *at;
         let mut postings = StreamingVarWriter::new();
         let mut keys = view.number_keys(None, None, false)?;
-        while let Some(key) = keys.next()? {
+        while let Some(key) = keys.try_next()? {
             let Some(posting) = view.number_value_postings(key) else {
                 continue;
             };

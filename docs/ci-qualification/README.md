@@ -67,7 +67,7 @@ contract check, not a claim to check every external URL or all documentation.
 
 Local controls passed on 2026-10-28:
 
-- 56 isolated Python fixtures passed; no Cargo product process was launched.
+- 58 isolated Python fixtures passed; no Cargo product process was launched.
 - Fresh offline Cargo metadata produced the seven-package/nine-target/31-row
   inventory without a build.
 - Current main's documents were correctly refused with 85 mapping errors.
@@ -132,7 +132,21 @@ its `--all-targets -- -D warnings` contract remains intact.
 At head `defa0880`, the default/no-default/backup/delegated-auth rows each ran
 2 public-library tests, 19 CLI tests and 5 benchmark-helper tests successfully.
 Those rows still failed on storage Clippy findings. The next source repair
-names existing posting tuples, exposes standard fallible cursor iterators while
-preserving their existing methods, and applies equivalent formatting/arithmetic
+names existing posting tuples, exposes standard fallible cursor iterators and names the explicit error
+path `try_next`, and applies equivalent formatting/arithmetic
 lint fixes. Existing cursor assertions are retained and extended to compare
 the iterator output. Product execution on the new head remains required.
+
+
+The subsequent strict pass found that retaining an inherent `next` with a
+non-Iterator return type still violated Clippy. Internal callers now use
+`try_next`; standard iteration keeps errors as `Result` items. Result ordering,
+error propagation and all prior assertions are unchanged. Reference-only merge
+oracle code is compiled only for its actual storage unit tests.
+
+Every unit invocation now uses libtest `--include-ignored`. The three previously
+ignored indexing measurement/deep-pagination tests run with the other units.
+The evidence parser still refuses any ignored/filtered/failed result. No ignore
+attribute or timing limit is removed. These PR-profile measurements do not
+replace separately required release-performance gates. The async-trait patch
+is also updated to 0.1.92, without adding lint exemptions.

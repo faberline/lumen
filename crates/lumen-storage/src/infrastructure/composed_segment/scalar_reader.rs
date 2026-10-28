@@ -250,7 +250,7 @@ impl ComposedSegmentReader {
         }
         let mut keys = self.number_keys(low, high, false).ok()?;
         let mut count = 0;
-        while let Some(key) = keys.next().ok()? {
+        while let Some(key) = keys.try_next().ok()? {
             if self
                 .number_value_postings(key)
                 .is_some_and(|p| !p.is_empty())

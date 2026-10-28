@@ -188,6 +188,7 @@ class LibtestTests(unittest.TestCase):
             plan.execute('/head', package(), 'all-features', 'unit', {'actual_head': HEAD, 'actual_base': BASE})
         self.assertEqual(2, run.call_count)
         self.assertIn('--lib', run.call_args_list[0].args[0])
+        self.assertIn('--include-ignored', run.call_args_list[0].args[0])
         self.assertNotIn('--bin', run.call_args_list[0].args[0])
         self.assertIn('--bin', run.call_args_list[1].args[0])
         self.assertNotIn('--lib', run.call_args_list[1].args[0])
