@@ -10,42 +10,42 @@
 - Non-goals: Broad PVC deletion or recovery of already-lost node-local data.
 - Neighbours: Runtime deployment mounts data; topology protects quorum.
 
-## Versioned deletes and tombstones (Milestone #11)
+## Versioned deletes and tombstones (Milestone #24)
 
 - Problem: A delayed write can resurrect deleted data.
 - Who: Versioned-write callers.
 - Promise: Versioned deletes retain tombstones that block old writes.
-- Outcome: `versioned-deletes-and-tombstones`. Tracking: [Milestone #11](https://github.com/faberline/lumen/milestone/11).
+- Outcome: `versioned-deletes-and-tombstones`. Tracking: [Milestone #24](https://github.com/faberline/lumen/milestone/24).
 - Non-goals: Unbounded tombstone retention.
 - Open: Define compaction and retention bounds.
 - Neighbours: Idempotent replay and rebuild generations.
 
-## Managed data retention (Milestone #34)
+## Managed data retention (Milestone #16)
 
 - Problem: PVC lifecycle needs a deliberate user choice.
 - Who: Managed Lumen operators.
 - Promise: Managed deletion retains or deletes only the declared instance PVCs.
-- Outcome: `managed-data-retention`. Tracking: [Milestone #34](https://github.com/faberline/lumen/milestone/34).
+- Outcome: `managed-data-retention`. Tracking: [Milestone #16](https://github.com/faberline/lumen/milestone/16).
 - Non-goals: Broad namespace PVC deletion.
 - Open: Define finalizer and retry evidence.
 - Neighbours: Managed embedded data durability.
 
-## Regional topology migration and backup (Milestone #35)
+## Regional topology migration and backup (Milestone #4)
 
 - Problem: A regional topology needs safe data migration and backup.
 - Who: Regional production operators.
 - Promise: Lumen can migrate topology and create recoverable regional backups.
-- Outcome: `regional-topology-migration-and-backup`. Tracking: [Milestone #35](https://github.com/faberline/lumen/milestone/35).
+- Outcome: `regional-topology-migration-and-backup`. Tracking: [Milestone #4](https://github.com/faberline/lumen/milestone/4).
 - Non-goals: Assuming a PVC snapshot alone proves regional recovery.
 - Open: Define backup consistency and migration cutover.
 - Neighbours: Regional production profile.
 
-## Regional upgrade rollback and recovery (Milestone #36)
+## Regional upgrade rollback and recovery (Milestone #15)
 
 - Problem: A regional upgrade needs a tested rollback path.
 - Who: Regional production operators.
 - Promise: Lumen can upgrade, roll back, and recover a regional runtime safely.
-- Outcome: `regional-upgrade-rollback-and-recovery`. Tracking: [Milestone #36](https://github.com/faberline/lumen/milestone/36).
+- Outcome: `regional-upgrade-rollback-and-recovery`. Tracking: [Milestone #15](https://github.com/faberline/lumen/milestone/15).
 - Non-goals: Unverified forward-only upgrades.
 - Open: Define rollback and recovery oracles.
 - Neighbours: Regional topology migration and backup.
