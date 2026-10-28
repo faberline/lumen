@@ -65,7 +65,7 @@ files, rejects checkout-escaping symlinks, and never executes document snippets.
 Fenced snippets cannot satisfy a tracking assertion. This is a milestone
 contract check, not a claim to check every external URL or all documentation.
 
-Local controls passed on 2026-10-28:
+Historical preparation controls on 2026-10-28:
 
 - 58 isolated Python fixtures passed; no Cargo product process was launched.
 - Fresh offline Cargo metadata produced the seven-package/nine-target/31-row
@@ -126,7 +126,7 @@ default variant. The added Rust tests require online execution on the new head.
 
 The follow-up preserves all 31 rows and schedules each package's default row
 first. The pinned cache stores dependencies, not workspace source crates.
-All 58 isolated helper controls pass. Clippy retains Cargo JSON diagnostics;
+At that preparation checkpoint, 58 isolated helper controls passed. Clippy retains Cargo JSON diagnostics;
 its `--all-targets -- -D warnings` contract remains intact.
 
 At head `defa0880`, the default/no-default/backup/delegated-auth rows each ran
@@ -144,9 +144,27 @@ non-Iterator return type still violated Clippy. Internal callers now use
 error propagation and all prior assertions are unchanged. Reference-only merge
 oracle code is compiled only for its actual storage unit tests.
 
-Every unit invocation now uses libtest `--include-ignored`. The three previously
-ignored indexing measurement/deep-pagination tests run with the other units.
-The evidence parser still refuses any ignored/filtered/failed result. No ignore
-attribute or timing limit is removed. These PR-profile measurements do not
-replace separately required release-performance gates. The async-trait patch
-is also updated to 0.1.92, without adding lint exemptions.
+A unit target first runs in the ordinary debug profile. If its complete roster
+contains ignored tests, the runner executes the whole same target again in
+release mode with `--include-ignored`. Both runs must succeed. Every ignored
+name must appear in the passing release roster, with zero ignored, failed,
+filtered or measured results. The 50 ms timing bound and 20x pagination depth
+bound remain unchanged. These units do not replace separate release gates.
+The async-trait patch is updated to 0.1.92, without lint exemptions.
+
+The depth fixture now uses the supported native offset instead of a legacy
+cursor rejected by sorted search. It also checks the result IDs against keyset
+pagination. SaveGate has one canonical module; its three test bodies compile
+once instead of appearing twice through path aliases. No assertion is removed.
+
+Clippy repairs preserve charge owners and their drop order. Ownership-only
+fields have explicit keeper names. Helpers used only by tests compile only for
+tests; Raft-only helpers retain the raft-wal feature path. Complex types have
+transparent aliases. A boxed scalar plan is included in the metadata bound.
+Checkpoint attempt state has one named options value while its permit remains
+owned by the attempt. The check keeps `--all-targets -- -D warnings`.
+
+The helper suite now has 64 passing controls, including failures for missing
+release rosters and ignored names that did not execute. Current compiler checks
+also run locally with Rust 1.99.1 on macOS. Full Linux cloud CI remains the final
+validation for every one of the 31 feature rows and the GKE scenarios.

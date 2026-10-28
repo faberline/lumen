@@ -188,7 +188,7 @@ class LibtestTests(unittest.TestCase):
             plan.execute('/head', package(), 'all-features', 'unit', {'actual_head': HEAD, 'actual_base': BASE})
         self.assertEqual(2, run.call_count)
         self.assertIn('--lib', run.call_args_list[0].args[0])
-        self.assertIn('--include-ignored', run.call_args_list[0].args[0])
+        self.assertNotIn('--include-ignored', run.call_args_list[0].args[0])
         self.assertNotIn('--bin', run.call_args_list[0].args[0])
         self.assertIn('--bin', run.call_args_list[1].args[0])
         self.assertNotIn('--lib', run.call_args_list[1].args[0])
@@ -226,6 +226,53 @@ class LibtestTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'exit 101'):
                 plan.execute('/head', package(), 'all-features', 'unit', {'actual_head': HEAD})
         self.assertEqual(2, run.call_count)
+
+
+    @patch.object(plan.subprocess, 'run')
+    def test_ignored_units_require_complete_release_execution(self, run):
+        pending = output(passed=1, ignored=1, roster=['alpha']).replace('test alpha ... ok\n', 'test alpha ... ok\ntest beta ... ignored, release measurement\n')
+        run.side_effect = [subprocess.CompletedProcess([], 0, pending, ''), subprocess.CompletedProcess([], 0, output(), '')]
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            plan.execute('/head', package(), 'default', 'unit', {'actual_head': HEAD})
+        self.assertEqual(2, run.call_count)
+        self.assertIn('--release', run.call_args_list[1].args[0])
+        self.assertIn('--include-ignored', run.call_args_list[1].args[0])
+        self.assertNotIn('--ignored', run.call_args_list[1].args[0])
+        self.assertIn('resolved_ignored_roster', stdout.getvalue())
+
+    @patch.object(plan.subprocess, 'run')
+    def test_release_cannot_omit_the_ignored_test_name(self, run):
+        pending = output(passed=1, ignored=1, roster=['alpha']).replace('test alpha ... ok\n', 'test alpha ... ok\ntest beta ... ignored\n')
+        run.side_effect = [subprocess.CompletedProcess([], 0, pending, ''), subprocess.CompletedProcess([], 0, output(roster=['alpha', 'different']), '')]
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, 'ignored unit names missing'):
+            plan.execute('/head', package(), 'default', 'unit', {})
+
+    @patch.object(plan.subprocess, 'run')
+    def test_release_failure_cannot_resolve_ignored_units(self, run):
+        pending = output(passed=1, ignored=1, roster=['alpha']).replace('test alpha ... ok\n', 'test alpha ... ok\ntest beta ... ignored\n')
+        run.side_effect = [subprocess.CompletedProcess([], 0, pending, ''), subprocess.CompletedProcess([], 101, 'release failure', '')]
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, 'release unit command failed'):
+            plan.execute('/head', package(), 'default', 'unit', {})
+
+    @patch.object(plan.subprocess, 'run')
+    def test_release_filtered_results_still_refuse(self, run):
+        pending = output(passed=1, ignored=1, roster=['alpha']).replace('test alpha ... ok\n', 'test alpha ... ok\ntest beta ... ignored\n')
+        run.side_effect = [subprocess.CompletedProcess([], 0, pending, ''), subprocess.CompletedProcess([], 0, output(filtered=1), '')]
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, 'nonqualifying libtest counts'):
+            plan.execute('/head', package(), 'default', 'unit', {})
+
+    def test_strict_evidence_still_refuses_complete_but_ignored_roster(self):
+        pending = output(passed=1, ignored=1, roster=['alpha']).replace('test alpha ... ok\n', 'test alpha ... ok\ntest beta ... ignored\n')
+        with self.assertRaisesRegex(ValueError, 'nonpassing test row'):
+            plan.libtest_evidence(pending, 1)
+
+    @patch.object(plan.subprocess, 'run')
+    def test_incomplete_ignored_roster_cannot_trigger_a_release_pass(self, run):
+        run.return_value = subprocess.CompletedProcess([], 0, output(passed=1, ignored=1, roster=['alpha']), '')
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, 'roster/count mismatch'):
+            plan.execute('/head', package(), 'default', 'unit', {})
+        self.assertEqual(1, run.call_count)
 
 
 if __name__ == '__main__':

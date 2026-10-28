@@ -209,8 +209,8 @@ SUMMARY = re.compile(r'^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; '
 TEST_ROW = re.compile(r'^test (.+) \.\.\. (.+)$')
 
 
-def libtest_evidence(stdout, expected_targets):
-    """Require complete nonempty pretty-format libtest rosters, per target."""
+def _libtest_blocks(stdout, expected_targets, pending_ignored=False):
+    """Parse complete rosters. Pending ignored names are never pass evidence."""
     if expected_targets <= 0:
         raise ValueError('zero expected targets requires reviewed applicability')
     blocks = []
@@ -222,31 +222,52 @@ def libtest_evidence(stdout, expected_targets):
         if running:
             if current is not None:
                 raise ValueError('partial libtest target: missing summary')
-            current = {'running': int(running[1]), 'roster': []}
+            current = {'running': int(running[1]), 'roster': [], 'ignored_roster': []}
         elif summary:
             if current is None:
                 raise ValueError('libtest summary without target start')
             counts = dict(zip(('passed', 'failed', 'ignored', 'measured', 'filtered'),
                               map(int, summary.groups()[1:])))
-            if summary[1] != 'ok' or any(counts[k] for k in ('failed', 'ignored', 'measured', 'filtered')):
+            if (summary[1] != 'ok' or any(counts[k] for k in ('failed', 'measured', 'filtered'))
+                    or (counts['ignored'] and not pending_ignored)):
                 raise ValueError(f'nonqualifying libtest counts: {counts}')
-            if not counts['passed']:
+            if not counts['passed'] + counts['ignored']:
                 raise ValueError('zero-test target requires reviewed applicability')
-            if current['running'] != counts['passed'] or len(current['roster']) != counts['passed']:
+            if (current['running'] != counts['passed'] + counts['ignored']
+                    or len(current['roster']) != counts['passed']
+                    or len(current['ignored_roster']) != counts['ignored']):
                 raise ValueError('partial libtest roster/count mismatch')
             blocks.append({**current, **counts})
             current = None
         elif row:
             if current is None:
                 raise ValueError('test row outside a libtest target')
-            if row[2] != 'ok':
-                raise ValueError(f'nonpassing test row: {line}')
-            if row[1] in current['roster']:
+            if row[1] in current['roster'] + current['ignored_roster']:
                 raise ValueError(f'duplicate test name in target: {row[1]}')
-            current['roster'].append(row[1])
+            if row[2] == 'ok':
+                current['roster'].append(row[1])
+            elif pending_ignored and (row[2] == 'ignored' or row[2].startswith('ignored, ')):
+                current['ignored_roster'].append(row[1])
+            else:
+                raise ValueError(f'nonpassing test row: {line}')
     if current is not None or len(blocks) != expected_targets:
         raise ValueError('missing or partial libtest target summaries')
     return blocks
+
+
+def libtest_evidence(stdout, expected_targets):
+    """Only nonempty, fully executed rosters qualify; ignored/filtered refuse."""
+    return _libtest_blocks(stdout, expected_targets)
+
+
+def _run_product(argv, root):
+    result = subprocess.run(argv, cwd=root, text=True, capture_output=True)
+    # Preserve raw evidence before checking exit or the complete named roster.
+    sys.stdout.write(result.stdout)
+    sys.stdout.flush()
+    sys.stderr.write(result.stderr)
+    sys.stderr.flush()
+    return result
 
 
 def execute(root, package, profile, kind, provenance):
@@ -258,21 +279,38 @@ def execute(root, package, profile, kind, provenance):
     for target in targets:
         argv = command(package, profile, kind, target)
         if kind == 'unit':
-            argv += ['--', '--format', 'pretty', '--color', 'never', '--include-ignored']
+            argv += ['--', '--format', 'pretty', '--color', 'never']
         record = {'command': argv, 'package': package['name'], 'target': target,
                   'profile': profile, 'provenance': provenance, 'qualification': 'not evaluated'}
         print(json.dumps(record), flush=True)
-        result = subprocess.run(argv, cwd=root, text=True, capture_output=True)
-        # Keep complete output even on nonzero exit or malformed/missing evidence.
-        sys.stdout.write(result.stdout)
-        sys.stdout.flush()
-        sys.stderr.write(result.stderr)
-        sys.stderr.flush()
+        result = _run_product(argv, root)
         if result.returncode:
             errors.append(f'{target}: {kind} command failed with exit {result.returncode}')
         elif kind == 'unit':
             try:
-                record['unit_evidence'] = libtest_evidence(result.stdout, 1)
+                debug = _libtest_blocks(result.stdout, 1, pending_ignored=True)
+                ignored = {name for block in debug for name in block['ignored_roster']}
+                if ignored:
+                    # Measurement units explicitly require release. Retain the
+                    # ordinary debug run, then execute the full release target,
+                    # including every ignored test. Neither phase can fail.
+                    record['debug_unit_evidence'] = debug
+                    release_argv = command(package, profile, 'unit', target)
+                    release_argv.insert(2, '--release')
+                    release_argv += ['--', '--format', 'pretty', '--color', 'never', '--include-ignored']
+                    print(json.dumps({**record, 'command': release_argv, 'phase': 'release-all-including-ignored'}), flush=True)
+                    release = _run_product(release_argv, root)
+                    if release.returncode:
+                        raise ValueError(f'release unit command failed with exit {release.returncode}')
+                    evidence = libtest_evidence(release.stdout, 1)
+                    executed = {name for block in evidence for name in block['roster']}
+                    if not ignored <= executed:
+                        raise ValueError('ignored unit names missing from complete release execution')
+                    record['release_command'] = release_argv
+                    record['resolved_ignored_roster'] = sorted(ignored)
+                    record['unit_evidence'] = evidence
+                else:
+                    record['unit_evidence'] = libtest_evidence(result.stdout, 1)
             except ValueError as error:
                 errors.append(f'{target}: {error}')
                 record['evidence_error'] = str(error)
