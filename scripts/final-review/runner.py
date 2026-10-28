@@ -152,18 +152,21 @@ print('exact_identity_and_all_CI_verified', len(paths), len(checks), flush=True)
 if REPO.endswith('/lumen'):
     packet['milestone_identity_readback'] = [{k:m[k] for k in ('number','title','html_url','description','state')}
         for m in pages('milestones?state=all')]
+contract = issue['title'] + '\n' + issue['body'] + '\n' + human
+PLAN['properties']['requirements']['items']['properties']['contract_quote'] = {
+    'type': 'string', 'enum': [line for line in contract.splitlines() if line.strip()]}
 plan = invoke(packet, PLAN, '''PLANNING phase. Extract all original issue acceptance and Never requirements,
 plus the explicit human scope extensions. Request only necessary same-repo source
 files in supporting_paths. Do not make a final verdict or report bugs yet.
 Use available_head_paths for exact source names. At most 64 distinct supporting
 files can be collected. Request necessary source, not speculative file names.
-Each contract_quote must be literal text from the issue title/body or the human
-scope extension. Missing initial source is a request, not a reason to block.
+Each contract_quote must select one exact whole line from the schema enum.
+Use the full issue and human scope to derive requirements, not just that line.
+Missing initial source is a request, not a reason to block.
 ''')
-contract = issue['title'] + '\n' + issue['body'] + '\n' + human
+save('plan.json', plan)
 assert plan['requirements'] and len({r['id'] for r in plan['requirements']}) == len(plan['requirements'])
 assert all(r['contract_quote'] in contract for r in plan['requirements']), 'invented_contract_quote'
-save('plan.json', plan)
 supporting = []
 requested = sorted({p for r in plan['requirements'] for p in r['supporting_paths']})
 assert len(requested) <= 64, 'source_request_bound'
