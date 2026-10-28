@@ -206,6 +206,26 @@ class LibtestTests(unittest.TestCase):
         self.assertIn('all stdout\n', stdout.getvalue())
         self.assertEqual('all stderr\n', stderr.getvalue())
 
+    @patch.object(plan.subprocess, 'run')
+    def test_zero_library_still_runs_binary_but_remains_a_failure(self, run):
+        run.side_effect = [subprocess.CompletedProcess([], 0, stdout=output(passed=0), stderr=''),
+                           subprocess.CompletedProcess([], 0, stdout=output(), stderr='')]
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout), self.assertRaisesRegex(ValueError, 'zero-test'):
+            plan.execute('/head', package(), 'all-features', 'unit', {'actual_head': HEAD})
+        self.assertEqual(2, run.call_count)
+        self.assertIn('unit_evidence', stdout.getvalue())
+        self.assertIn('evidence_error', stdout.getvalue())
+
+    @patch.object(plan.subprocess, 'run')
+    def test_failed_library_does_not_hide_remaining_binary_results(self, run):
+        run.side_effect = [subprocess.CompletedProcess([], 101, stdout='library failure\n', stderr='reason\n'),
+                           subprocess.CompletedProcess([], 0, stdout=output(), stderr='')]
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, 'exit 101'):
+                plan.execute('/head', package(), 'all-features', 'unit', {'actual_head': HEAD})
+        self.assertEqual(2, run.call_count)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -88,6 +88,7 @@ jobs:
           CARGO_INCREMENTAL: "0"
         run: python3 candidate/scripts/pr-gates/plan.py run --root candidate --baseline-root baseline --expected-head "$EXPECTED_HEAD" --expected-base "$EXPECTED_BASE" --package "$PACKAGE" --profile "$PROFILE" --kind unit
       - name: Clippy over all targets with warnings denied
+        if: ${{ !cancelled() }}
         env:
           PACKAGE: ${{ matrix.package }}
           PROFILE: ${{ matrix.profile }}

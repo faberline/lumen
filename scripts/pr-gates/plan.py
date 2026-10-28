@@ -245,6 +245,7 @@ def execute(root, package, profile, kind, provenance):
     if not active:
         raise ValueError('zero enabled unit targets requires reviewed applicability')
     targets = active if kind == 'unit' else [None]
+    errors = []
     for target in targets:
         argv = command(package, profile, kind, target)
         if kind == 'unit':
@@ -259,10 +260,16 @@ def execute(root, package, profile, kind, provenance):
         sys.stderr.write(result.stderr)
         sys.stderr.flush()
         if result.returncode:
-            raise ValueError(f'{kind} command failed with exit {result.returncode}')
-        if kind == 'unit':
-            record['unit_evidence'] = libtest_evidence(result.stdout, 1)
-            print(json.dumps(record), flush=True)
+            errors.append(f'{target}: {kind} command failed with exit {result.returncode}')
+        elif kind == 'unit':
+            try:
+                record['unit_evidence'] = libtest_evidence(result.stdout, 1)
+            except ValueError as error:
+                errors.append(f'{target}: {error}')
+                record['evidence_error'] = str(error)
+        print(json.dumps(record), flush=True)
+    if errors:
+        raise ValueError('\n'.join(errors))
 
 
 def main(argv=None):

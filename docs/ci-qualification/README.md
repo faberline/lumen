@@ -64,7 +64,7 @@ contract check, not a claim to check every external URL or all documentation.
 
 Local controls passed on 2026-10-28:
 
-- 54 isolated Python fixtures passed; no Cargo product process was launched.
+- 56 isolated Python fixtures passed; no Cargo product process was launched.
 - Fresh offline Cargo metadata produced the seven-package/nine-target/31-row
   inventory without a build.
 - Current main's documents were correctly refused with 85 mapping errors.
@@ -95,3 +95,18 @@ which initially suppressed the unit matrix. Formatting now runs independently;
 a red format result cannot skip the 31 unit rows. The original product files
 are not reformatted in this infrastructure change. The milestone job also
 correctly reported the outstanding #119 mapping errors online.
+
+## Latest CI repair
+
+PR #185 is stacked on the unchanged #119 branch, so the milestone correction
+is reviewed as its own dependency. All 87 document assertions now pass locally.
+The tracked Rust changes in the style commit were produced only by
+`cargo fmt --all`; the repeat format check passes.
+
+Online unit jobs exposed the `lumen` library facade as a zero-test target.
+Its own code is principally compatibility re-exports; binary and bounded-context
+tests live in separate targets. Zero is still refused, pending an explicit
+reviewed applicability decision. The driver now collects every enabled target
+before failing, so this library result cannot hide binary test failures or
+passes. Clippy also runs after a failed unit step. No result is converted into
+coverage or trusted qualification.
