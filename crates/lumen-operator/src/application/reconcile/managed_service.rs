@@ -78,14 +78,13 @@ impl ManagedService for Lumen {
             } else {
                 // Empty selectors, tolerations-only placement, and an explicit
                 // non-default machine type retain legacy catalog behavior.
-                let catalog =
-                    crate::application::capacity_catalog::fetch_capacity_catalog(
-                        &client,
-                        crate::domain::capacity::DEFAULT_CATALOG_NAMESPACE,
-                        crate::domain::capacity::DEFAULT_CATALOG_CONFIG_MAP_NAME,
-                    )
-                    .await
-                    .map_err(|rejection| anyhow::anyhow!(rejection.message))?;
+                let catalog = crate::application::capacity_catalog::fetch_capacity_catalog(
+                    &client,
+                    crate::domain::capacity::DEFAULT_CATALOG_NAMESPACE,
+                    crate::domain::capacity::DEFAULT_CATALOG_CONFIG_MAP_NAME,
+                )
+                .await
+                .map_err(|rejection| anyhow::anyhow!(rejection.message))?;
                 let profile = crate::domain::capacity::preflight::resolve_machine_type(
                     &lumen.spec.placement.initial_machine_type,
                     &catalog,

@@ -207,6 +207,7 @@ impl HnswBackend {
 }
 
 impl HnswCpuIndex {
+    #[cfg(test)]
     pub(in crate::index) fn restore_with_graph_cache(
         spec: VectorSpec,
         vectors: Vec<(String, Vec<f32>)>,
@@ -223,7 +224,7 @@ impl HnswCpuIndex {
         vectors: Vec<(String, Vec<f32>)>,
         codebook: Option<ScalarCodebook>,
         directory: Option<&std::path::Path>,
-    ) -> std::result::Result<(Self, HnswRestoreTiming), HnswRestoreFailure> {
+    ) -> std::result::Result<(Self, HnswRestoreTiming), Box<HnswRestoreFailure>> {
         let started = Instant::now();
         let mut timing = HnswRestoreTiming::default();
         if let Some(directory) = directory {
@@ -256,7 +257,7 @@ impl HnswCpuIndex {
         timing.total = started.elapsed();
         rebuilt
             .map(|index| (index, timing))
-            .map_err(|error| HnswRestoreFailure { error, timing })
+            .map_err(|error| Box::new(HnswRestoreFailure { error, timing }))
     }
 
     /// Construct a fresh, empty CPU HNSW index for the given spec.

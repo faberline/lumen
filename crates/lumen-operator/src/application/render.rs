@@ -28,9 +28,7 @@ use service_k8s::service::PruneTarget;
 use crate::application::render::backup::{backup_cron_job, backup_service_account};
 use crate::application::render::identity::attach_service_account_annotations;
 use crate::application::render::monitoring::{prometheus_rule, service_monitor};
-use crate::application::render::serving_config::{
-    serving_configmap, serving_network_policy,
-};
+use crate::application::render::serving_config::{serving_configmap, serving_network_policy};
 use crate::application::render::serving_statefulset::serving_statefulset;
 use crate::domain::lumen_spec::Lumen;
 

@@ -1,0 +1,393 @@
+{
+  "baseline_comparison": null,
+  "execution_selection": "complete workspace",
+  "packages": [
+    {
+      "dependencies": [
+        "anyhow",
+        "async-trait",
+        "axum",
+        "axum-test",
+        "base64",
+        "build-stamp",
+        "ciborium",
+        "clap",
+        "cli-std",
+        "crc32fast",
+        "criterion",
+        "futures",
+        "index-text",
+        "jsonwebtoken",
+        "kube",
+        "libc",
+        "lumen-access",
+        "lumen-index",
+        "lumen-operator",
+        "lumen-replication",
+        "lumen-shared-kernel",
+        "lz4_flex",
+        "memory-stats",
+        "openapi-codegen",
+        "opentelemetry",
+        "opentelemetry-otlp",
+        "opentelemetry_sdk",
+        "proptest",
+        "raft-core",
+        "raft-runtime",
+        "rand",
+        "rcgen",
+        "reqwest",
+        "rig",
+        "serde",
+        "serde_json",
+        "serde_path_to_error",
+        "serde_yaml",
+        "server-lifecycle",
+        "service-auth",
+        "service-backup",
+        "service-http",
+        "service-k8s",
+        "service-observability",
+        "sha2",
+        "storage-durable",
+        "tempfile",
+        "tokio",
+        "tokio-postgres",
+        "toml",
+        "tower",
+        "tracing",
+        "tracing-subscriber",
+        "transport-h2c",
+        "utoipa",
+        "wiremock"
+      ],
+      "directory": "crates/lumen",
+      "features": {
+        "backup": [
+          "dep:reqwest",
+          "service-backup/http-client",
+          "service-backup/s3",
+          "lumen-index/backup"
+        ],
+        "default": [],
+        "delegated-auth": [
+          "service-auth/k8s",
+          "dep:reqwest",
+          "lumen-access/delegated-auth"
+        ],
+        "issue": [
+          "cli-std/online"
+        ],
+        "jieba": [
+          "lumen-index/jieba"
+        ],
+        "operator": [
+          "dep:lumen-operator",
+          "dep:kube",
+          "service-k8s/full",
+          "backup",
+          "lumen-index/operator"
+        ],
+        "otel": [
+          "dep:opentelemetry",
+          "dep:opentelemetry-otlp",
+          "dep:opentelemetry_sdk",
+          "service-http/otlp"
+        ],
+        "raft-wal": [
+          "dep:raft-core",
+          "dep:reqwest",
+          "lumen-index/raft-wal"
+        ],
+        "release": [
+          "otel",
+          "operator",
+          "raft-wal",
+          "self-update",
+          "issue",
+          "delegated-auth"
+        ],
+        "report-issue": [
+          "issue"
+        ],
+        "self-update": [
+          "cli-std/online"
+        ]
+      },
+      "name": "lumen",
+      "targets": [
+        {
+          "harness": true,
+          "kind": [
+            "lib"
+          ],
+          "name": "lumen",
+          "required-features": [],
+          "test": true
+        },
+        {
+          "harness": true,
+          "kind": [
+            "bin"
+          ],
+          "name": "lumen",
+          "required-features": [],
+          "test": true
+        },
+        {
+          "harness": true,
+          "kind": [
+            "bin"
+          ],
+          "name": "lumen-bench",
+          "required-features": [],
+          "test": true
+        }
+      ]
+    },
+    {
+      "dependencies": [
+        "anyhow",
+        "async-trait",
+        "axum",
+        "lumen-shared-kernel",
+        "peer-tls",
+        "raft-runtime",
+        "rcgen",
+        "rustls",
+        "service-auth",
+        "tempfile",
+        "tokio",
+        "tracing"
+      ],
+      "directory": "crates/lumen-access",
+      "features": {
+        "default": [],
+        "delegated-auth": [
+          "service-auth/k8s"
+        ]
+      },
+      "name": "lumen-access",
+      "targets": [
+        {
+          "harness": true,
+          "kind": [
+            "lib"
+          ],
+          "name": "lumen_access",
+          "required-features": [],
+          "test": true
+        }
+      ]
+    },
+    {
+      "dependencies": [
+        "anyhow",
+        "async-trait",
+        "axum",
+        "base64",
+        "build-stamp",
+        "bytemuck",
+        "byteorder",
+        "chrono",
+        "ciborium",
+        "cli-std",
+        "crc32fast",
+        "futures",
+        "hnsw_rs",
+        "index-text",
+        "jieba-rs",
+        "libc",
+        "lumen-access",
+        "lumen-shared-kernel",
+        "lumen-storage",
+        "lz4_flex",
+        "memmap2",
+        "metrics-prometheus",
+        "moka",
+        "openapi-codegen",
+        "proptest",
+        "raft-runtime",
+        "rand",
+        "rayon",
+        "reqwest",
+        "roaring",
+        "rustc-hash",
+        "self_cell",
+        "serde",
+        "serde_json",
+        "serde_yaml",
+        "service-auth",
+        "service-backup",
+        "service-http",
+        "service-k8s",
+        "service-observability",
+        "sha2",
+        "smallvec",
+        "storage-durable",
+        "tempfile",
+        "thiserror",
+        "tokio",
+        "toml",
+        "tower",
+        "tracing",
+        "tracing-subscriber",
+        "transport-h2c",
+        "utoipa",
+        "wiremock"
+      ],
+      "directory": "crates/lumen-index",
+      "features": {
+        "backup": [
+          "dep:reqwest",
+          "service-backup/http-client",
+          "service-backup/s3"
+        ],
+        "default": [],
+        "jieba": [
+          "dep:jieba-rs",
+          "index-text/jieba"
+        ],
+        "operator": [
+          "dep:reqwest"
+        ],
+        "raft-wal": [
+          "dep:reqwest"
+        ]
+      },
+      "name": "lumen-index",
+      "targets": [
+        {
+          "harness": true,
+          "kind": [
+            "lib"
+          ],
+          "name": "lumen_index",
+          "required-features": [],
+          "test": true
+        }
+      ]
+    },
+    {
+      "dependencies": [
+        "anyhow",
+        "async-trait",
+        "k8s-openapi",
+        "kube",
+        "lumen-access",
+        "lumen-index",
+        "peer-tls",
+        "raft-runtime",
+        "reqwest",
+        "schemars",
+        "serde",
+        "serde_json",
+        "serde_path_to_error",
+        "serde_yaml",
+        "service-auth",
+        "service-backup",
+        "service-http",
+        "service-k8s",
+        "tokio",
+        "tracing",
+        "wiremock"
+      ],
+      "directory": "crates/lumen-operator",
+      "features": {},
+      "name": "lumen-operator",
+      "targets": [
+        {
+          "harness": true,
+          "kind": [
+            "lib"
+          ],
+          "name": "lumen_operator",
+          "required-features": [],
+          "test": true
+        }
+      ]
+    },
+    {
+      "dependencies": [
+        "anyhow",
+        "lumen-shared-kernel",
+        "raft-runtime",
+        "serde"
+      ],
+      "directory": "crates/lumen-replication",
+      "features": {},
+      "name": "lumen-replication",
+      "targets": [
+        {
+          "harness": true,
+          "kind": [
+            "lib"
+          ],
+          "name": "lumen_replication",
+          "required-features": [],
+          "test": true
+        }
+      ]
+    },
+    {
+      "dependencies": [
+        "anyhow",
+        "serde",
+        "serde_json",
+        "utoipa"
+      ],
+      "directory": "crates/lumen-shared-kernel",
+      "features": {},
+      "name": "lumen-shared-kernel",
+      "targets": [
+        {
+          "harness": true,
+          "kind": [
+            "lib"
+          ],
+          "name": "lumen_shared_kernel",
+          "required-features": [],
+          "test": true
+        }
+      ]
+    },
+    {
+      "dependencies": [
+        "anyhow",
+        "bytemuck",
+        "byteorder",
+        "ciborium",
+        "crc32fast",
+        "lz4_flex",
+        "memmap2",
+        "moka",
+        "rand",
+        "roaring",
+        "serde",
+        "sha2",
+        "tempfile",
+        "thiserror"
+      ],
+      "directory": "crates/lumen-storage",
+      "features": {
+        "test-support": []
+      },
+      "name": "lumen-storage",
+      "targets": [
+        {
+          "harness": true,
+          "kind": [
+            "lib"
+          ],
+          "name": "lumen_storage",
+          "required-features": [],
+          "test": true
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "inspection_only": true
+  },
+  "qualification": "not evaluated"
+}

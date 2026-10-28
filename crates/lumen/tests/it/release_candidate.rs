@@ -102,7 +102,7 @@ fn key(name: &str) -> Yaml {
     Yaml::String(name.into())
 }
 fn field<'a>(value: &'a Yaml, name: &str) -> Option<&'a Yaml> {
-    value.as_mapping()?.get(&key(name))
+    value.as_mapping()?.get(key(name))
 }
 fn job<'a>(workflow: &'a Yaml, name: &str) -> Option<&'a Yaml> {
     field(field(workflow, "jobs")?, name)
@@ -186,20 +186,20 @@ fn validate_uv_setup_in(workflow: &Yaml, job_name: &str, gate_name: &str) -> Res
         .ok_or(Finding("UV_SETUP"))?;
     require(setup.len() == 2, "UV_SETUP")?;
     require(
-        setup.get(&key("uses")).and_then(Yaml::as_str) == Some(UV_SETUP),
+        setup.get(key("uses")).and_then(Yaml::as_str) == Some(UV_SETUP),
         "UV_SETUP",
     )?;
     let with = setup
-        .get(&key("with"))
+        .get(key("with"))
         .and_then(Yaml::as_mapping)
         .ok_or(Finding("UV_SETUP"))?;
     require(with.len() == 2, "UV_SETUP")?;
     require(
-        with.get(&key("version")).and_then(Yaml::as_str) == Some("0.12.1"),
+        with.get(key("version")).and_then(Yaml::as_str) == Some("0.12.1"),
         "UV_SETUP",
     )?;
     require(
-        with.get(&key("enable-cache")).and_then(Yaml::as_bool) == Some(false),
+        with.get(key("enable-cache")).and_then(Yaml::as_bool) == Some(false),
         "UV_SETUP",
     )?;
     Ok(())
@@ -930,7 +930,7 @@ fn validate_candidate_image_outputs(workflow: &Yaml) -> Result<(), Finding> {
     require(outputs.len() == expected_outputs.len(), "IMAGE")?;
     for (name, expected) in expected_outputs {
         require(
-            outputs.get(&key(name)).and_then(Yaml::as_str) == Some(expected),
+            outputs.get(key(name)).and_then(Yaml::as_str) == Some(expected),
             "IMAGE",
         )?;
     }
@@ -975,9 +975,7 @@ fn validate_exact_run_step(
     let map = step.as_mapping().ok_or(Finding("GATE_COMMANDS"))?;
     require(
         map.len() == expected_keys.len()
-            && expected_keys
-                .iter()
-                .all(|name| map.contains_key(&key(name))),
+            && expected_keys.iter().all(|name| map.contains_key(key(name))),
         "GATE_COMMANDS",
     )?;
     require(
@@ -1011,7 +1009,7 @@ fn validate_candidate_and_gke_commands(workflow: &Yaml) -> Result<(), Finding> {
     .ok_or(Finding("GATE_COMMANDS"))?;
     require(
         supply_chain.len() == 1
-            && supply_chain.get(&key("GH_TOKEN")).and_then(Yaml::as_str)
+            && supply_chain.get(key("GH_TOKEN")).and_then(Yaml::as_str)
                 == Some("${{ github.token }}"),
         "GATE_COMMANDS",
     )?;
@@ -1025,7 +1023,7 @@ fn validate_candidate_and_gke_commands(workflow: &Yaml) -> Result<(), Finding> {
         gke_map.len() == 5
             && ["name", "needs", "permissions", "uses", "with"]
                 .iter()
-                .all(|name| gke_map.contains_key(&key(name))),
+                .all(|name| gke_map.contains_key(key(name))),
         "GATE_COMMANDS",
     )?;
     require(
@@ -1052,7 +1050,7 @@ fn validate_candidate_and_gke_commands(workflow: &Yaml) -> Result<(), Finding> {
         with.len() == inputs.len()
             && inputs
                 .iter()
-                .all(|(name, value)| with.get(&key(name)).and_then(Yaml::as_str) == Some(*value)),
+                .all(|(name, value)| with.get(key(name)).and_then(Yaml::as_str) == Some(*value)),
         "GATE_COMMANDS",
     )?;
     validate_exact_run_step(
@@ -1223,7 +1221,7 @@ fn validate_fail_closed_gate_conditions(workflow: &Yaml) -> Result<(), Finding> 
         let job = job(workflow, name).ok_or(Finding("CONDITIONS"))?;
         let job_map = job.as_mapping().ok_or(Finding("CONDITIONS"))?;
         for forbidden in ["if", "continue-on-error"] {
-            require(!job_map.contains_key(&key(forbidden)), "CONDITIONS")?;
+            require(!job_map.contains_key(key(forbidden)), "CONDITIONS")?;
         }
         // gke-e2e calls a workflow; its jobs are that workflow's.
         if name == "gke-e2e" {
@@ -1234,8 +1232,8 @@ fn validate_fail_closed_gate_conditions(workflow: &Yaml) -> Result<(), Finding> 
             .ok_or(Finding("CONDITIONS"))?;
         for step in steps {
             let step = step.as_mapping().ok_or(Finding("CONDITIONS"))?;
-            require(!step.contains_key(&key("continue-on-error")), "CONDITIONS")?;
-            require(!step.contains_key(&key("if")), "CONDITIONS")?;
+            require(!step.contains_key(key("continue-on-error")), "CONDITIONS")?;
+            require(!step.contains_key(key("if")), "CONDITIONS")?;
         }
     }
     Ok(())
@@ -1286,8 +1284,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
             .and_then(Yaml::as_mapping)
             .ok_or(Finding("GATES"))?;
         require(
-            env.len() == 1
-                && env.get(&key("CARGO_INCREMENTAL")).and_then(Yaml::as_str) == Some("0"),
+            env.len() == 1 && env.get(key("CARGO_INCREMENTAL")).and_then(Yaml::as_str) == Some("0"),
             "GATES",
         )?;
         let map = step.as_mapping().ok_or(Finding("GATES"))?;
@@ -1295,7 +1292,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
             map.len() == 4
                 && ["name", "env", "shell", "run"]
                     .iter()
-                    .all(|name| map.contains_key(&key(name))),
+                    .all(|name| map.contains_key(key(name))),
             "GATES",
         )?;
         require(
@@ -1317,7 +1314,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
             smoke_map.len() == 4
                 && ["name", "env", "shell", "run"]
                     .iter()
-                    .all(|name| smoke_map.contains_key(&key(name))),
+                    .all(|name| smoke_map.contains_key(key(name))),
             "GATES",
         )?;
         let smoke_env = field(smoke, "env")
@@ -1326,7 +1323,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
         require(
             smoke_env.len() == 1
                 && smoke_env
-                    .get(&key("CARGO_INCREMENTAL"))
+                    .get(key("CARGO_INCREMENTAL"))
                     .and_then(Yaml::as_str)
                     == Some("0"),
             "GATES",
@@ -2266,7 +2263,7 @@ const PERF_FINAL_RECEIPT: &str = "PERF_FINAL_RECEIPT";
 
 fn exact_mapping_keys(value: &Yaml, expected: &[&str]) -> bool {
     value.as_mapping().is_some_and(|map| {
-        map.len() == expected.len() && expected.iter().all(|name| map.contains_key(&key(name)))
+        map.len() == expected.len() && expected.iter().all(|name| map.contains_key(key(name)))
     })
 }
 
@@ -2319,7 +2316,7 @@ fn validate_durable_perf_workflow(source: &str) -> Result<(), Finding> {
     require(
         environment.len() == 1
             && environment
-                .get(&key("CARGO_INCREMENTAL"))
+                .get(key("CARGO_INCREMENTAL"))
                 .and_then(Yaml::as_str)
                 == Some("0"),
         PERF_WORKFLOW,
@@ -2385,7 +2382,7 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         .ok_or(Finding("TRIGGER"))?;
     require(events.len() == 1, "TRIGGER")?;
     let dispatch = events
-        .get(&key("workflow_dispatch"))
+        .get(key("workflow_dispatch"))
         .ok_or(Finding("TRIGGER"))?;
     let inputs = field(dispatch, "inputs").ok_or(Finding("INPUTS"))?;
     for name in ["version", "commit"] {
@@ -2782,7 +2779,8 @@ fn perf_gate_source() -> String {
     fs::read_to_string(root().join("crates/lumen/tests/it/perf_gate.rs")).unwrap()
 }
 fn perf_workload_ledger_source() -> String {
-    fs::read_to_string(root().join("crates/lumen/tests/it/support/perf_workload_ledger.rs")).unwrap()
+    fs::read_to_string(root().join("crates/lumen/tests/it/support/perf_workload_ledger.rs"))
+        .unwrap()
 }
 fn perf_gate_vs_db_source() -> String {
     fs::read_to_string(root().join("crates/lumen/tests/perf_gate_vs_db.rs")).unwrap()
@@ -3543,7 +3541,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     ] {
         expect_workflow(&source, from, to, code);
     }
-    for (occurrence, finding) in [(0, "UV_SETUP")] {
+    {
+        let (occurrence, finding) = (0, "UV_SETUP");
         let changed = replace_occurrence(&source, "version: 0.12.1", "version: 0.12.2", occurrence);
         assert_eq!(
             validate_workflow(&changed, &dockerfile()).unwrap_err(),
@@ -4171,12 +4170,7 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         "schema:\"cclab.lumen.candidate-manifest.v3\"",
         "MANIFEST",
     );
-    expect_workflow(
-        &source,
-        "  gke-e2e:\n",
-        "  gke-e2e-missing:\n",
-        "JOBS",
-    );
+    expect_workflow(&source, "  gke-e2e:\n", "  gke-e2e-missing:\n", "JOBS");
     expect_workflow(
         &source,
         "\n  gke-e2e:\n",

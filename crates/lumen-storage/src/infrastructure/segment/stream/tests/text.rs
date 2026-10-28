@@ -27,7 +27,7 @@ fn text_projection_lends_a_large_raw_term_through_composed_second_checkpoint() {
 
     let composed = ComposedSegmentReader::from_base(base);
     let mut terms = TextStreamView::terms(&composed).unwrap();
-    let term: Cow<'_, str> = terms.next().unwrap().unwrap().into();
+    let term: Cow<'_, str> = terms.next().unwrap().unwrap();
     assert!(matches!(term, Cow::Borrowed(term) if term.len() == large.len()));
     assert!(terms.next().is_none());
 

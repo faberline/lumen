@@ -136,6 +136,7 @@ impl SegmentRdbStore {
         Ok((history, truncated))
     }
 
+    #[cfg(any(test, feature = "raft-wal"))]
     pub(in crate::persistence) fn begin_next_generation(
         &self,
         sequence: u64,

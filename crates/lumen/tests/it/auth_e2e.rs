@@ -214,6 +214,7 @@ fn serve_startup(env: &[(&str, &str)]) -> (bool, bool, String) {
         let _ = child.kill();
         let _ = child.wait();
     }
+    child.wait().expect("reap auth startup child");
     let mut stderr = String::new();
     if let Some(err) = child.stderr.take() {
         for line in BufReader::new(err).lines().map_while(Result::ok) {

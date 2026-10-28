@@ -230,12 +230,24 @@ fn deep_pagination_depth_invariance() {
     assert_eq!(deep.hits.len(), 10);
     assert_eq!(deep.hits[0].external_id, "u050000");
 
-    // Legacy offset to the same depth for contrast.
+    // Native offset to the same depth for contrast. Legacy offset cursors
+    // intentionally refuse sorted queries; the explicit offset field is supported.
     let mut offset_req = base.clone();
-    offset_req.cursor = Some(make_cursor(50_000));
+    offset_req.offset = 50_000;
     let t2 = std::time::Instant::now();
     let via_offset = e.search("users", offset_req).unwrap();
     let offset_us = t2.elapsed().as_micros();
+    assert_eq!(
+        via_offset
+            .hits
+            .iter()
+            .map(|hit| &hit.external_id)
+            .collect::<Vec<_>>(),
+        deep.hits
+            .iter()
+            .map(|hit| &hit.external_id)
+            .collect::<Vec<_>>()
+    );
 
     eprintln!(
         "page#1 {first_us}us | keyset@50k {deep_us}us | offset@50k {offset_us}us (hits {})",

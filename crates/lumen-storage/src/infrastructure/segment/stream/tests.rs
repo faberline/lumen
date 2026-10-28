@@ -113,7 +113,10 @@ fn set_source(path: &Path, rows: &[Option<Vec<String>>]) -> Arc<SegmentReader> {
 
 struct Projection {
     rows: Vec<Option<u32>>,
-    terms: Vec<(String, Arc<(Vec<u32>, Vec<u32>)>)>,
+    terms: Vec<(
+        String,
+        crate::infrastructure::segment::reader_cache::CachedTextPosting,
+    )>,
 }
 
 impl TextStreamView for Projection {

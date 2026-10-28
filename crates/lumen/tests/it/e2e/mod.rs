@@ -43,7 +43,12 @@ fn gke_suite_filters_match_modules() {
     let suites = ["overlay", "operator"];
     let mut folders: Vec<String> = std::fs::read_dir(root.join("k8s/gke-test-job"))
         .expect("read k8s/gke-test-job")
-        .map(|e| e.expect("dir entry").file_name().to_string_lossy().into_owned())
+        .map(|e| {
+            e.expect("dir entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
         .filter(|name| name != "base")
         .collect();
     folders.sort();

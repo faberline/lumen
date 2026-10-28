@@ -152,7 +152,7 @@ pub(super) fn projection_posting(
         if blob
             .len()
             .checked_add(width)
-            .map_or(true, |next| next > required)
+            .is_none_or(|next| next > required)
         {
             bail!("scalar projection {kind} changed between rewindable posting passes");
         }
@@ -193,7 +193,7 @@ pub(super) fn write_present_projection(
             word = 0;
         }
     }
-    if n_docs % 64 != 0 {
+    if !n_docs.is_multiple_of(64) {
         write_counted(out, at, &word.to_le_bytes())?;
         words += 1;
     }

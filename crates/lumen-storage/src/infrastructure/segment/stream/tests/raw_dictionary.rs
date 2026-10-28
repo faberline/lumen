@@ -94,7 +94,7 @@ fn raw_scalar_dictionary_refuses_bad_offsets_utf8_and_unknown_codec() {
     let footer = Footer::from_bytes(&bytes[bytes.len() - FOOTER_LEN..]).unwrap();
     let start = footer.dir_offset as usize;
     let end = start + footer.dir_len as usize;
-    let mut dir: Vec<ColumnRef> = ciborium::from_reader(&bytes[start..end]).unwrap();
+    let dir: Vec<ColumnRef> = ciborium::from_reader(&bytes[start..end]).unwrap();
     let offsets = dir
         .iter()
         .find(|c| c.role == ROLE_DICT_OFFSETS)

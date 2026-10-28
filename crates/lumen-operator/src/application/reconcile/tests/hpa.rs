@@ -56,9 +56,7 @@ fn hpa_test_spec(
     shard_count: u32,
     replicas_per_shard: u32,
 ) -> crate::domain::lumen_spec::LumenSpec {
-    use crate::domain::lumen_spec::{
-        serving::ServingSpec, topology::ShardMapSpec, LumenSpec,
-    };
+    use crate::domain::lumen_spec::{serving::ServingSpec, topology::ShardMapSpec, LumenSpec};
     LumenSpec {
         image: "lumen:latest".into(),
         image_pull_policy: None,

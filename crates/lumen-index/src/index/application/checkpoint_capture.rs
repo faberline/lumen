@@ -83,7 +83,7 @@ pub(crate) struct CheckpointCapture {
     pub scalar_cuts: BTreeMap<String, BTreeMap<String, ScalarCheckpointCut>>,
     pub scalar_publications: BTreeMap<String, BTreeMap<String, PreparedScalarPublication>>,
     /// Stable runtime IDs and dirty-match bits computed outside the apply lease.
-    pub scalar_retire: BTreeMap<String, BTreeMap<String, Vec<(u32, String, u64)>>>,
+    pub scalar_retire: ScalarRetireRows,
     pub live_delta_inputs: BTreeMap<
         String,
         BTreeMap<
@@ -137,3 +137,5 @@ impl CheckpointCapture {
         }
     }
 }
+
+type ScalarRetireRows = BTreeMap<String, BTreeMap<String, Vec<(u32, String, u64)>>>;

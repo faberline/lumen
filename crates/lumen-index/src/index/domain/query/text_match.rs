@@ -163,7 +163,7 @@ pub(in crate::index) fn eval_match_topk(
     m: &MatchQuery,
     interner: &Interner,
     k: usize,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> TextPageResult {
     let fi = coll
         .fields
         .get(&m.field)
@@ -262,3 +262,5 @@ pub(in crate::index) fn eval_match_topk(
         idx, cache_key, entries, k, interner,
     )))
 }
+
+type TextPageResult = Result<Option<(Vec<(u32, f32)>, u64)>>;

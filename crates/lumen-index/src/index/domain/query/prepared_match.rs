@@ -161,15 +161,13 @@ impl<'a> PreparedMatch<'a> {
         let mut doc_len: Option<f32> = None;
         let mut score = 0.0f32;
         let mut matched = 0usize;
-        for entry in &self.per_token {
-            if let Some((postings, idf)) = entry {
-                if let Some(tf) = postings.tf(id) {
-                    let doc_len = *doc_len.get_or_insert_with(|| idx.doc_len(id) as f32);
-                    let tf = tf as f32;
-                    let denom = tf + Self::K1 * (1.0 - Self::B + Self::B * doc_len / self.avgdl);
-                    score += idf * tf * (Self::K1 + 1.0) / denom;
-                    matched += 1;
-                }
+        for (postings, idf) in self.per_token.iter().flatten() {
+            if let Some(tf) = postings.tf(id) {
+                let doc_len = *doc_len.get_or_insert_with(|| idx.doc_len(id) as f32);
+                let tf = tf as f32;
+                let denom = tf + Self::K1 * (1.0 - Self::B + Self::B * doc_len / self.avgdl);
+                score += idf * tf * (Self::K1 + 1.0) / denom;
+                matched += 1;
             }
         }
         match self.op {

@@ -116,7 +116,7 @@ impl FieldIndex {
             | FieldIndex::Number(_)
             | FieldIndex::Set(_)
             | FieldIndex::Hash(_) => FieldAudit::PerId,
-            FieldIndex::Vector { idx, .. } => FieldAudit::WholeIndex(idx.len() > 0),
+            FieldIndex::Vector { idx, .. } => FieldAudit::WholeIndex(!idx.is_empty()),
         }
     }
 

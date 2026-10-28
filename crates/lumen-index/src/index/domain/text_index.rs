@@ -83,11 +83,11 @@ pub(in crate::index) struct TextIndex {
     /// parallel per-token STORED posting block (text tf is NOT rebuildable, so
     /// the inverted postings live on disk) + a fixed `u32[n_docs]` DocLen column
     /// + the BM25 corpus scalars in the header. When present, the BM25 scan
-    /// (`eval_match` / `match_doc_score`) and `estimate_selectivity` read from
-    /// the composed sealed-base plus live-overlay state. The `distinct` map
-    /// retains explicit live overlays and is otherwise dropped with the sealed
-    /// base. DEFAULTS to `None`; while it is `None` (nothing sealed) every read
-    /// path is byte-for-byte the in-RAM path. Purely additive.
+    ///   (`eval_match` / `match_doc_score`) and `estimate_selectivity` read from
+    ///   the composed sealed-base plus live-overlay state. The `distinct` map
+    ///   retains explicit live overlays and is otherwise dropped with the sealed
+    ///   base. DEFAULTS to `None`; while it is `None` (nothing sealed) every read
+    ///   path is byte-for-byte the in-RAM path. Purely additive.
     pub(in crate::index) segment: Option<std::sync::Arc<ComposedSegmentReader>>,
     /// Hot BM25 rankings for unique-doc match shapes (single token, multi-token
     /// AND), cleared on any text mutation/seal so cached scores never cross
@@ -266,6 +266,7 @@ impl TextIndex {
     /// dropped so the new segment never carries a zero-df token. The live
     /// overlays' `tokens` already exclude deletes, so they are merged after the
     /// tombstoned base has been filtered.
+    #[cfg(test)]
     pub(in crate::index) fn tokens_for_seal(
         &self,
         live: &dyn Fn(u32) -> bool,
@@ -312,44 +313,9 @@ impl TextIndex {
         out
     }
 
-    /// The `(doc_count, total_doc_len)` BM25 corpus scalars to seal — the LIVE
-    /// counters, which the index path increments on EVERY doc regardless of a
-    /// sealed segment, so they are the FULL corpus (base + any post-seal tail).
-    /// (The segment header's scalars are base-only and would undercount a re-seal,
-    /// so they are deliberately NOT used here.) Phase 2f-2.
-    fn corpus_for_seal(&self) -> (u64, u64) {
-        (self.doc_count, self.total_doc_len)
-    }
-
-    /// The dense `u32[n_docs]` DocLen column to seal, covering EVERY current
-    /// docid. Phase 2h-4 makes this SEGMENT-AWARE because the seal seam no longer
-    /// keeps `lens` in RAM (it is dropped at seal — `doc_len()` reads the segment
-    /// DocLen column for a sealed id): for a base id `< seg.n_docs` read the prior
-    /// segment's DocLen column (`text_doc_len`); for a post-seal tail id read the
-    /// live `self.lens`. Splitting the source is mandatory — the segment column is
-    /// base-only (returns 0 for a tail id) and `self.lens` is now tail-only after a
-    /// seal-and-drop (returns 0 for a base id), so each id MUST read from the side
-    /// that holds it. On a FIRST seal (no segment) every id reads from `self.lens`,
-    /// byte-identical to the old `self.lens` read.
-    ///
-    /// A NON-LIVE base id (deleted since the prior seal — its posting was
-    /// tombstoned and its corpus length already decremented out of
-    /// `corpus_for_seal`) MUST seal as DocLen 0, mirroring the in-RAM `drop_eid`
-    /// (`set_doc_len(id, 0)`). The prior segment still carries the deleted doc's
-    /// ORIGINAL nonzero length, so without the `live(id)` gate it would resurrect:
-    /// (a) the new segment's DocLen column would re-introduce the deleted doc, and
-    /// (b) `record_field_coverage` (which reads the segment presence bitset)
-    /// would mark it as having written the field. Zeroing it keeps the new segment
-    /// consistent with `tokens_for_seal` (postings GC'd) and `corpus_for_seal`
-    /// (scalars decremented).
-    fn lens_for_seal(&self, n_docs: u32, live: &dyn Fn(u32) -> bool) -> Vec<u32> {
-        (0..n_docs)
-            .map(|id| if live(id) { self.doc_len(id) } else { 0 })
-            .collect()
-    }
-
     /// The explicit text-field presence bits to seal. Presence is separate from
     /// token length so an explicit empty value remains covered after reopen.
+    #[cfg(test)]
     pub(in crate::index) fn present_for_seal(
         &self,
         n_docs: u32,

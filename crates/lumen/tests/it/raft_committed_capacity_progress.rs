@@ -442,11 +442,9 @@ fn apply_before_caller_checkpoint(
                     resumed.is_ok(),
                     "cleanup checkpoint must leave the valid retained peer command able to apply: {resumed:?}",
                 );
-                assert!(
-                    false,
+                panic!(
                     "valid fitting generic committed Raft apply waited for a caller checkpoint instead of starting independent capacity maintenance; cleanup checkpoint released the retained source and apply result was {resumed:?}",
                 );
-                unreachable!("the behavior assertion above always panics");
             }
             Err(mpsc::TryRecvError::Disconnected) => {
                 worker

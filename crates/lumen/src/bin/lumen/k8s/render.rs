@@ -82,8 +82,12 @@ pub(super) fn render_operator_yaml(args: &K8sOperatorRenderArgs) -> Result<Strin
     // the alerts.
     if monitoring {
         for manifest in [
-            include_str!("../../../../../../k8s/components/operator-monitoring/servicemonitor.yaml"),
-            include_str!("../../../../../../k8s/components/operator-monitoring/prometheusrule.yaml"),
+            include_str!(
+                "../../../../../../k8s/components/operator-monitoring/servicemonitor.yaml"
+            ),
+            include_str!(
+                "../../../../../../k8s/components/operator-monitoring/prometheusrule.yaml"
+            ),
         ] {
             out.push_str("\n---\n");
             out.push_str(&rewrite_monitoring_namespace(

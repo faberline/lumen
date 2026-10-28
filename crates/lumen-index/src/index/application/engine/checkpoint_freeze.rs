@@ -100,9 +100,7 @@ impl Engine {
         })
     }
 
-    pub(crate) fn checkpoint_dirty_fields(
-        &self,
-    ) -> Result<BTreeMap<String, (u64, u32, BTreeSet<String>)>> {
+    pub(crate) fn checkpoint_dirty_fields(&self) -> CheckpointDirtyCollections {
         let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
         Ok(state
             .collections
@@ -161,7 +159,7 @@ impl Engine {
     pub(crate) fn checkpoint_reusable_dirty_fields(
         &self,
         root: &std::path::Path,
-    ) -> Result<BTreeMap<String, (u64, u32, BTreeSet<String>)>> {
+    ) -> CheckpointDirtyCollections {
         let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
         Ok(state
             .collections
@@ -313,3 +311,5 @@ impl Engine {
 
 #[cfg(test)]
 mod tests;
+
+type CheckpointDirtyCollections = Result<BTreeMap<String, (u64, u32, BTreeSet<String>)>>;

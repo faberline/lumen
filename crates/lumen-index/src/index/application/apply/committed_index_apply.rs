@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 
 use crate::index::application::admission::{
     record_reservation::RecordReservation, RecordAdmissionError,
@@ -132,7 +132,7 @@ struct Prepared {
     text_actions: BTreeMap<usize, String>,
     text_prepared: Option<text_preparation::PreparedTextRows>,
     /// Old staged file owners must outlive the state write and apply lease.
-    old_text_rows: Vec<Arc<staged_text_row::StagedTextRow>>,
+    _old_text_rows: Vec<Arc<staged_text_row::StagedTextRow>>,
     text_placeholder: FieldValue,
     retained: usize,
 }
@@ -221,20 +221,6 @@ fn require(reserved: &mut RecordReservation, bytes: usize) -> Result<()> {
 impl Engine {
     /// `false` is an internal routing result for an unsupported command. A real
     /// preparation failure returns an error and never invokes `complete`.
-    fn try_apply_committed_scalar(
-        &self,
-        scanner: &FastIndexScanner<'_>,
-        sequence: u64,
-        complete: impl FnOnce(&ApplyLease<'_>, Result<ApplyOutcome>),
-    ) -> Result<bool> {
-        self.try_apply_committed_scalar_with_capacity_owner(
-            scanner,
-            sequence,
-            &mut || bail!("committed layer capacity needs a caller-owned maintainer"),
-            complete,
-        )
-    }
-
     pub(super) fn try_apply_committed_scalar_with_capacity_owner(
         &self,
         scanner: &FastIndexScanner<'_>,

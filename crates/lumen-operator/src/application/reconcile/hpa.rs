@@ -16,7 +16,7 @@ use crate::domain::lumen_spec::Lumen;
 ///
 /// [`KubeHpaControl`]: crate::infrastructure::kube_hpa_control::KubeHpaControl
 #[async_trait::async_trait]
-pub(in crate) trait HpaControl: Send + Sync {
+pub(crate) trait HpaControl: Send + Sync {
     /// The live HPA's labels at `(namespace, name)`, or `None` if it does not
     /// exist. A missing object is the idempotent no-op case (R2), never an
     /// error.

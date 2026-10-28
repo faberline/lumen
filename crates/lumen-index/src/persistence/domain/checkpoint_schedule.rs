@@ -64,6 +64,7 @@ impl CheckpointSchedule {
         }
     }
 
+    #[cfg(test)]
     fn should_attempt(&mut self, now: Instant, pending: Snapshot, _work_revision: u64) -> bool {
         self.select_ordinary_attempt(now, pending).is_some()
     }

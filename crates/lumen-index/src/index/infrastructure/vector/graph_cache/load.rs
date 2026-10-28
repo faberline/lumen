@@ -27,6 +27,16 @@ use crate::index::infrastructure::vector::graph_cache::{
 };
 use crate::shared_kernel::types::schema::{VectorMetric, VectorSpec};
 
+fn measure_stage<T>(
+    elapsed: &mut std::time::Duration,
+    run: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    let started = Instant::now();
+    let result = run();
+    *elapsed = started.elapsed();
+    result
+}
+
 pub(in crate::index) fn load_timed(
     spec: VectorSpec,
     vectors: &[(String, Vec<f32>)],
@@ -36,12 +46,9 @@ pub(in crate::index) fn load_timed(
     let mut timing = LoadTiming::default();
 
     macro_rules! stage {
-        ($field:ident, $body:expr) => {{
-            let started = Instant::now();
-            let result = (|| -> Result<_> { $body })();
-            timing.$field = started.elapsed();
-            result
-        }};
+        ($field:ident, $body:expr) => {
+            measure_stage(&mut timing.$field, || -> Result<_> { $body })
+        };
     }
 
     let result = (|| -> Result<Option<HnswCpuIndex>> {

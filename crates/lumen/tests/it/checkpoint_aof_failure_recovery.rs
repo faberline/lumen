@@ -388,7 +388,7 @@ async fn start_held_checkpoint(
     let (release_tx, release_rx) = mpsc::sync_channel(1);
     fixture.faults.arm_sync_hold(entered_tx, release_rx);
     let mut release = SyncRelease(Some(release_tx));
-    let mut checkpoint = tokio::spawn({
+    let checkpoint = tokio::spawn({
         let checkpoint = fixture.checkpoint.clone();
         async move { CheckpointSink::checkpoint_now(checkpoint.as_ref()).await }
     });

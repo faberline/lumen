@@ -27,14 +27,14 @@ pub(super) fn field_presence_bitmap(coll: &Collection, field: &str) -> RoaringBi
 /// value in `field` whose posting size ≥ `min_count`.
 ///   - `min_count = 1` → `Exists` (doc has any value in the field).
 ///   - `min_count = N` → `Duplicated` (the value is shared by ≥ N docs).
-/// Segment ON: drive from the segment-aware `live_*` accessors (segment
-/// dict/column minus tombstones + live tail), identical to `duplicates`.
-/// Segment OFF: borrow the in-RAM map directly (the `live_*` accessors clone the
-/// whole map in that case), and for `min_count ≥ 2` visit only the `dup_values`
-/// side-index candidates instead of every distinct value — the high-cardinality
-/// (email/phone) duplicated path stays O(|colliding values|). text / vector /
-/// hash are not supported here (declare a keyword companion field for a text
-/// "is empty" filter; use knn / hamming for vector / hash).
+///     Segment ON: drive from the segment-aware `live_*` accessors (segment
+///     dict/column minus tombstones + live tail), identical to `duplicates`.
+///     Segment OFF: borrow the in-RAM map directly (the `live_*` accessors clone the
+///     whole map in that case), and for `min_count ≥ 2` visit only the `dup_values`
+///     side-index candidates instead of every distinct value — the high-cardinality
+///     (email/phone) duplicated path stays O(|colliding values|). text / vector /
+///     hash are not supported here (declare a keyword companion field for a text
+///     "is empty" filter; use knn / hamming for vector / hash).
 pub(super) fn eval_field_doc_union(
     coll: &Collection,
     field: &str,

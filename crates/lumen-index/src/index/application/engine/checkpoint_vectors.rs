@@ -156,7 +156,7 @@ impl Engine {
         let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
         Ok(state.collections.values().any(|collection| collection.fields.values().any(|field| {
             matches!(field, FieldIndex::Vector { spec, idx, .. }
-                if spec.backend == crate::shared_kernel::types::schema::VectorBackend::HnswCpu && idx.len() > 0)
+                if spec.backend == crate::shared_kernel::types::schema::VectorBackend::HnswCpu && !idx.is_empty())
         })))
     }
 
@@ -167,7 +167,7 @@ impl Engine {
         for (collection_name, collection) in &state.collections {
             for (field_name, field) in &collection.fields {
                 if matches!(field, FieldIndex::Vector { spec, idx, .. }
-                    if spec.backend == crate::shared_kernel::types::schema::VectorBackend::HnswCpu && idx.len() > 0)
+                    if spec.backend == crate::shared_kernel::types::schema::VectorBackend::HnswCpu && !idx.is_empty())
                 {
                     live_paths.insert(graph_cache_field_path(root, collection_name, field_name));
                 }
@@ -196,7 +196,7 @@ impl Engine {
             for (field_name, field) in &collection.fields {
                 if let FieldIndex::Vector { spec, idx, .. } = field {
                     if spec.backend != crate::shared_kernel::types::schema::VectorBackend::HnswCpu
-                        || idx.len() == 0
+                        || idx.is_empty()
                     {
                         continue;
                     }

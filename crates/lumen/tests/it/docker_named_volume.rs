@@ -9,8 +9,7 @@ use std::process::Command;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn repo_root() -> PathBuf {
-    let manifest = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
-    manifest
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 
 fn one(src: &str, from: &str, to: &str) -> String {
@@ -193,11 +192,7 @@ fn test_checked_in_and_rendered_dockerfiles_satisfy_contract() {
     discovered.sort();
     assert_eq!(
         discovered,
-        [
-            "Dockerfile",
-            "Dockerfile.release",
-            "Dockerfile.test",
-        ]
+        ["Dockerfile", "Dockerfile.release", "Dockerfile.test",]
     );
     let targets = [
         ("Dockerfile", "builder", CC_BASE),
@@ -895,31 +890,31 @@ fn set_compose_candidate_and_run_labels(file: &std::path::Path, image: &str, run
     let mut root: YamlValue = serde_yaml::from_slice(&fs::read(file).unwrap()).unwrap();
     let root = root.as_mapping_mut().unwrap();
     let services = root
-        .get_mut(&yaml_key("services"))
+        .get_mut(yaml_key("services"))
         .and_then(YamlValue::as_mapping_mut)
         .unwrap();
     let service = services
-        .get_mut(&yaml_key("lumen"))
+        .get_mut(yaml_key("lumen"))
         .and_then(YamlValue::as_mapping_mut)
         .unwrap();
     service.insert(yaml_key("image"), yaml_key(image));
     let labels = service
-        .get_mut(&yaml_key("labels"))
+        .get_mut(yaml_key("labels"))
         .and_then(YamlValue::as_mapping_mut)
         .unwrap();
     labels.insert(yaml_key("lumen.run_id"), yaml_key(run_id));
     let environment = service
-        .get_mut(&yaml_key("environment"))
+        .get_mut(yaml_key("environment"))
         .and_then(YamlValue::as_mapping_mut)
         .unwrap();
     environment.insert(yaml_key("LUMEN_GRACE_SECS"), yaml_key("1"));
 
     let volumes = root
-        .get_mut(&yaml_key("volumes"))
+        .get_mut(yaml_key("volumes"))
         .and_then(YamlValue::as_mapping_mut)
         .unwrap();
     let volume = volumes
-        .get_mut(&yaml_key("lumen-data"))
+        .get_mut(yaml_key("lumen-data"))
         .and_then(YamlValue::as_mapping_mut)
         .unwrap();
     let mut volume_labels = YamlMapping::new();

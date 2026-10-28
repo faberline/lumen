@@ -963,6 +963,7 @@ use crate::support::perf_cell_receipt;
 use crate::support::perf_workload_ledger;
 
 mod durable_workload {
+
     //! Approved #4246 durable workload in the existing `perf_gate` target.
     //!
     //! # Facets
@@ -979,6 +980,8 @@ mod durable_workload {
     //!   the approved 30-minute, 100 offered docops/s, 95% in-window completion,
     //!   10 QPS, latency, drain, RSS, checkpoint, and merge observations.
     //!   `perf_workload_ledger.rs:1068` records actual request/query drain.
+
+    type EvidenceMutation = (&'static str, fn(&mut serde_json::Value));
 
     use std::collections::{BTreeMap, BTreeSet, VecDeque};
     use std::env;
@@ -1299,7 +1302,7 @@ mod durable_workload {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         static MASK: OnceLock<u64> = OnceLock::new();
         let sequence = NEXT
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
                 next.checked_add(1)
             })
             .map_err(|_| {
@@ -2347,7 +2350,7 @@ mod durable_workload {
         let mut evidence = BoundedEvidence::new(limit, EvidenceRetention::Prefix);
         futures::pin_mut!(stream);
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|error| describe_error(error))?;
+            let chunk = chunk.map_err(&describe_error)?;
             evidence.push(chunk.as_ref());
         }
         Ok(evidence)
@@ -2507,8 +2510,13 @@ mod durable_workload {
                         evidence.write_text("volume.txt", volume)?;
                         if let HarnessError::DiagnosticSeedClientFailure(detail) = error {
                             let bytes = detail.json_bytes()?;
-                            fs::write(evidence.path.join("seed-client-attempt-failure.json"), bytes)
-                                .map_err(|_| "cannot write diagnostic seed client failure".to_owned())?;
+                            fs::write(
+                                evidence.path.join("seed-client-attempt-failure.json"),
+                                bytes,
+                            )
+                            .map_err(|_| {
+                                "cannot write diagnostic seed client failure".to_owned()
+                            })?;
                         }
                         return Ok(evidence);
                     }
@@ -2927,9 +2935,18 @@ mod durable_workload {
                 frozen: prometheus_counter(metrics, "lumen_pending_change_frozen_bytes")?,
                 total: prometheus_counter(metrics, "lumen_pending_change_total_bytes")?,
                 checkpoints: prometheus_counter(metrics, CHECKPOINT_COUNTER)?,
-                checkpoint_attempt_started: prometheus_counter(metrics, CHECKPOINT_ATTEMPT_STARTED_COUNTER)?,
-                checkpoint_attempt_in_flight: prometheus_counter(metrics, CHECKPOINT_ATTEMPT_IN_FLIGHT)?,
-                checkpoint_attempt_failed: prometheus_counter(metrics, CHECKPOINT_ATTEMPT_FAILED_COUNTER)?,
+                checkpoint_attempt_started: prometheus_counter(
+                    metrics,
+                    CHECKPOINT_ATTEMPT_STARTED_COUNTER,
+                )?,
+                checkpoint_attempt_in_flight: prometheus_counter(
+                    metrics,
+                    CHECKPOINT_ATTEMPT_IN_FLIGHT,
+                )?,
+                checkpoint_attempt_failed: prometheus_counter(
+                    metrics,
+                    CHECKPOINT_ATTEMPT_FAILED_COUNTER,
+                )?,
                 merges: prometheus_counter(metrics, MERGE_COUNTER)?,
                 state_write_lock: IntervalHistogram::parse(metrics, STATE_WRITE_LOCK_HISTOGRAM)?,
                 hnsw_add: IntervalHistogram::parse(metrics, HNSW_ADD_HISTOGRAM)?,
@@ -3143,7 +3160,7 @@ mod durable_workload {
         error: RequestFailure,
         outcome: Outcome,
         status: Option<u16>,
-        body: Option<String>,
+        body: Option<Box<str>>,
         /// Set only for a typed `pending_change_capacity` 429 with a numeric
         /// `Retry-After`. The server guarantees such a refusal changed
         /// nothing, so [`resend_on_capacity_refusal`] may send it again.
@@ -3167,7 +3184,7 @@ mod durable_workload {
             identifier: identifier.into(),
             error: failure.error,
             status: failure.status,
-            body: failure.body,
+            body: failure.body.map(String::from),
         });
         outcome
     }
@@ -3864,7 +3881,6 @@ mod durable_workload {
                     .and_then(|trace| trace.as_deref()),
             )
             .await;
-            drop(probe);
             self.cleanup_armed = false;
             Some(evidence.path)
         }
@@ -4089,8 +4105,7 @@ mod durable_workload {
                         outcome,
                     )
                 } else {
-                    let record = emit_restart_phase_diagnostics(diagnostics, phase, outcome);
-                    record
+                    emit_restart_phase_diagnostics(diagnostics, phase, outcome)
                 };
                 observe(&record, *diagnostics);
             };
@@ -4381,7 +4396,7 @@ mod durable_workload {
             })
             .await
             .map_err(|_| failure("published-port lookup exceeded request deadline".to_owned()))?
-            .map_err(&failure)?;
+            .map_err(failure)?;
             if !status.success() || stdout.truncated {
                 return Err(failure(format!(
                     "published-port lookup status={status}: {}",
@@ -5387,7 +5402,7 @@ mod durable_workload {
         })
         .await
         .map_err(|_| failure(format!("exceeded the {timeout:?} deadline")))?
-        .map_err(&failure)?;
+        .map_err(failure)?;
         if !status.success() || stdout.truncated {
             return Err(failure(format!(
                 "status={status}: {}",
@@ -5799,8 +5814,8 @@ mod durable_workload {
     /// `kustomize edit set image lumen=...` turn it into a pod.
     #[test]
     fn kube_gke_perf_overlay_passes_the_pod_contract() {
-        let path =
-            Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join("k8s/overlays/gke-perf/statefulset.yaml");
+        let path = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+            .join("k8s/overlays/gke-perf/statefulset.yaml");
         let statefulset: Value = serde_yaml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
         let mut spec = statefulset["spec"]["template"]["spec"].clone();
         assert_eq!(spec["containers"][0]["image"], "lumen");
@@ -5828,7 +5843,7 @@ mod durable_workload {
         let expected = expected_server_env(Some("1"), false);
         let other_digest =
             "ghcr.io/faberline/lumen@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let mutations: [(&str, fn(&mut Value)); 22] = [
+        let mutations: [EvidenceMutation; 22] = [
             ("image", |pod| {
                 pod["spec"]["containers"][0]["image"] = json!("ghcr.io/faberline/lumen:latest")
             }),
@@ -6025,7 +6040,7 @@ mod durable_workload {
 
     #[test]
     fn kube_hardware_rejects_each_unobserved_or_ambiguous_value() {
-        let node_mutations: [(&str, fn(&mut Value)); 6] = [
+        let node_mutations: [EvidenceMutation; 6] = [
             ("other node", |node| {
                 node["metadata"]["name"] = json!("other")
             }),
@@ -6066,7 +6081,7 @@ mod durable_workload {
             );
         }
 
-        let claim_mutations: [(&str, fn(&mut Value)); 5] = [
+        let claim_mutations: [EvidenceMutation; 5] = [
             ("other claim", |claim| {
                 claim["metadata"]["name"] = json!("other")
             }),
@@ -6093,7 +6108,7 @@ mod durable_workload {
             );
         }
 
-        let volume_mutations: [(&str, fn(&mut Value)); 10] = [
+        let volume_mutations: [EvidenceMutation; 10] = [
             ("other volume", |volume| {
                 volume["metadata"]["name"] = json!("other")
             }),
@@ -6222,8 +6237,7 @@ mod durable_workload {
             .unwrap();
             for resource in kustomization["resources"].as_array().unwrap() {
                 let source =
-                    fs::read_to_string(root.join(folder).join(resource.as_str().unwrap()))
-                        .unwrap();
+                    fs::read_to_string(root.join(folder).join(resource.as_str().unwrap())).unwrap();
                 for document in serde_yaml::Deserializer::from_str(&source) {
                     let document = <Value as serde::Deserialize>::deserialize(document).unwrap();
                     assert!(
@@ -6750,7 +6764,11 @@ mod durable_workload {
         let mut sorted = samples.to_vec();
         sorted.sort_unstable();
         let p95 = (sorted.len() * 95).div_ceil(100) - 1;
-        (sorted.len(), sorted[p95], *sorted.last().expect("non-empty samples"))
+        (
+            sorted.len(),
+            sorted[p95],
+            *sorted.last().expect("non-empty samples"),
+        )
     }
 
     impl PumpTrace {
@@ -6763,7 +6781,7 @@ mod durable_workload {
             let second = scheduled_at.as_secs();
             if !self.early_index_enabled
                 || second >= EARLY_INDEX_TRACE_SECONDS
-                || second % 3 != 0
+                || !second.is_multiple_of(3)
             {
                 return;
             }
@@ -6783,7 +6801,10 @@ mod durable_workload {
 
         fn record(&mut self, second: u64, endpoint: &'static str) -> &mut PumpSecond {
             self.seconds
-                .entry((second.min(INPUT_SECONDS + POST_INPUT_TIMEOUT.as_secs()), endpoint))
+                .entry((
+                    second.min(INPUT_SECONDS + POST_INPUT_TIMEOUT.as_secs()),
+                    endpoint,
+                ))
                 .or_default()
         }
 
@@ -6796,22 +6817,14 @@ mod durable_workload {
                     sample.blocked_pushes,
                     sample.blocked_push_us,
                     sample.blocked_push_max_us,
-                    if sample.task_start_lag_samples == 0 {
-                        0
-                    } else {
-                        sample.task_start_lag_us / sample.task_start_lag_samples
-                    },
+                    sample.task_start_lag_us.checked_div(sample.task_start_lag_samples).unwrap_or(0),
                     sample.task_start_lag_max_us,
-                    if sample.ledger_body_start_lag_samples == 0 { 0 } else { sample.ledger_body_start_lag_us / sample.ledger_body_start_lag_samples },
+                    sample.ledger_body_start_lag_us.checked_div(sample.ledger_body_start_lag_samples).unwrap_or(0),
                     sample.ledger_body_start_lag_max_us,
-                    if sample.send_call_lag_samples == 0 { 0 } else { sample.send_call_lag_us / sample.send_call_lag_samples },
+                    sample.send_call_lag_us.checked_div(sample.send_call_lag_samples).unwrap_or(0),
                     sample.send_call_lag_max_us,
                     sample.completed,
-                    if sample.completed == 0 {
-                        0
-                    } else {
-                        sample.latency_us / sample.completed
-                    },
+                    sample.latency_us.checked_div(sample.completed).unwrap_or(0),
                     sample.latency_max_us,
                 );
             }
@@ -6846,8 +6859,7 @@ mod durable_workload {
             let sample = self.record(elapsed.as_secs(), endpoint);
             sample.ledger_body_start_lag_us += lag_us;
             sample.ledger_body_start_lag_samples += 1;
-            sample.ledger_body_start_lag_max_us =
-                sample.ledger_body_start_lag_max_us.max(lag_us);
+            sample.ledger_body_start_lag_max_us = sample.ledger_body_start_lag_max_us.max(lag_us);
         }
 
         fn record_send_call(&mut self, elapsed: Duration, endpoint: &'static str, lag: Duration) {
@@ -7024,8 +7036,7 @@ mod durable_workload {
                 self.tasks.spawn(async move {
                     let task_started = clock.elapsed();
                     let task_start_lag = task_started.saturating_sub(scheduled_at);
-                    let task_start_lag_us =
-                        task_start_lag.as_micros().min(u64::MAX as u128) as u64;
+                    let task_start_lag_us = task_start_lag.as_micros().min(u64::MAX as u128) as u64;
                     {
                         let mut trace_guard =
                             trace.lock().expect("request pump trace mutex poisoned");
@@ -7186,7 +7197,7 @@ mod durable_workload {
             error: RequestFailure::synthetic(message, false),
             outcome: Outcome::Failed,
             status: None,
-            body: Some(truncate_evidence_body(&response.to_string())),
+            body: Some(truncate_evidence_body(&response.to_string()).into_boxed_str()),
             capacity_retry_after: None,
         }
     }
@@ -7207,7 +7218,7 @@ mod durable_workload {
             outcome: Outcome::Failed,
             status: Some(status.as_u16()),
             capacity_retry_after: capacity_retry_after(status, retry_after.as_deref(), &body),
-            body: Some(truncate_evidence_body(&body)),
+            body: Some(truncate_evidence_body(&body).into_boxed_str()),
         }
     }
 
@@ -7324,12 +7335,7 @@ mod durable_workload {
         .await;
         let response_completed_at = clock.elapsed();
         record_pump_send_call(&pump_trace, "index", scheduled_at, send_called_at);
-        record_pump_completion(
-            &pump_trace,
-            "index",
-            send_called_at,
-            response_completed_at,
-        );
+        record_pump_completion(&pump_trace, "index", send_called_at, response_completed_at);
         if let Some(trace) = &pump_trace {
             trace
                 .lock()
@@ -7571,12 +7577,7 @@ mod durable_workload {
         let response = post_json(request).await;
         let response_completed_at = clock.elapsed();
         record_pump_send_call(&pump_trace, "query", scheduled_at, send_called_at);
-        record_pump_completion(
-            &pump_trace,
-            "query",
-            send_called_at,
-            response_completed_at,
-        );
+        record_pump_completion(&pump_trace, "query", send_called_at, response_completed_at);
         let outcome = match response {
             Ok(response)
                 if response["hits"]
@@ -7772,7 +7773,9 @@ mod durable_workload {
 
     fn parse_hnsw_cache_seal_receipt(value: Value) -> Result<HnswCacheSealReceipt> {
         let object = value.as_object().ok_or_else(|| {
-            HarnessError::DataInvariant("restart cache seal receipt must be a JSON object".to_owned())
+            HarnessError::DataInvariant(
+                "restart cache seal receipt must be a JSON object".to_owned(),
+            )
         })?;
         let keys = ["sealed", "cache_fields", "durability", "mutation_stamp"];
         if object.len() != keys.len() || keys.iter().any(|key| !object.contains_key(*key)) {
@@ -7812,21 +7815,17 @@ mod durable_workload {
                 )
             })?;
         let stamp_keys = ["epoch", "apply_revision"];
-        if stamp.len() != stamp_keys.len()
-            || stamp_keys.iter().any(|key| !stamp.contains_key(*key))
+        if stamp.len() != stamp_keys.len() || stamp_keys.iter().any(|key| !stamp.contains_key(*key))
         {
             return Err(HarnessError::DataInvariant(
                 "restart cache seal receipt has an unexpected mutation_stamp shape".to_owned(),
             ));
         }
-        let mutation_epoch = stamp
-            .get("epoch")
-            .and_then(Value::as_u64)
-            .ok_or_else(|| {
-                HarnessError::DataInvariant(
-                    "restart cache seal receipt mutation_stamp.epoch must be an integer".to_owned(),
-                )
-            })?;
+        let mutation_epoch = stamp.get("epoch").and_then(Value::as_u64).ok_or_else(|| {
+            HarnessError::DataInvariant(
+                "restart cache seal receipt mutation_stamp.epoch must be an integer".to_owned(),
+            )
+        })?;
         let mutation_apply_revision = stamp
             .get("apply_revision")
             .and_then(Value::as_u64)
@@ -7858,10 +7857,7 @@ mod durable_workload {
         .to_string()
     }
 
-    async fn seal_hnsw_cache(
-        client: &reqwest::Client,
-        base: &str,
-    ) -> Result<HnswCacheSealReceipt> {
+    async fn seal_hnsw_cache(client: &reqwest::Client, base: &str) -> Result<HnswCacheSealReceipt> {
         let response = client
             .post(format!("{base}/admin/restart:seal-hnsw-cache"))
             .send()
@@ -7893,7 +7889,7 @@ mod durable_workload {
                 .json(&schema(backend))
                 .send()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))
+                .map_err(HarnessError::request_failure)
         })
         .await?;
         if response.status().is_success() {
@@ -8081,12 +8077,12 @@ mod durable_workload {
                 .get(format!("{}/collections/{collection}/stats", server.base))
                 .send()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             let status = response.status();
             let body = response
                 .json::<Value>()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             Ok::<_, HarnessError>((status, body))
         })
         .await?;
@@ -8110,12 +8106,12 @@ mod durable_workload {
                 .get(format!("{}/collections/{collection}/stats", server.base))
                 .send()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             let status = response.status();
             let body = response
                 .json::<Value>()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             Ok::<_, HarnessError>((status, body))
         })
         .await
@@ -8201,12 +8197,12 @@ mod durable_workload {
                 .get(format!("{}/collections/{collection}/stats", server.base))
                 .send()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             let status = response.status();
             let stats = response
                 .json::<Value>()
                 .await
-                .map_err(|error| HarnessError::request_failure(error))?;
+                .map_err(HarnessError::request_failure)?;
             if !status.is_success() {
                 return Err(HarnessError::DataInvariant(format!(
                     "post-restart backend attestation could not read stats for {collection}: {status} {stats}"
@@ -8237,12 +8233,12 @@ mod durable_workload {
             }))
             .send()
             .await
-            .map_err(|error| HarnessError::request_failure(error))?;
+            .map_err(HarnessError::request_failure)?;
         let status = response.status();
         let body = response
             .json::<Value>()
             .await
-            .map_err(|error| HarnessError::request_failure(error))?;
+            .map_err(HarnessError::request_failure)?;
         if status.is_success() && body["hits"].as_array().is_some_and(|hits| !hits.is_empty()) {
             Ok(())
         } else {
@@ -8441,11 +8437,9 @@ mod durable_workload {
             "embedding" => Err(HarnessError::DataInvariant(
                 "embedding readback requires the bounded two-document candidate pair".to_owned(),
             )),
-            unexpected => {
-                return Err(HarnessError::DataInvariant(format!(
-                    "semantic readback has no query for frozen field {unexpected}"
-                )));
-            }
+            unexpected => Err(HarnessError::DataInvariant(format!(
+                "semantic readback has no query for frozen field {unexpected}"
+            ))),
         }
     }
 
@@ -9651,7 +9645,11 @@ mod durable_workload {
         );
         fields.insert(
             "status".to_owned(),
-            json!(if number % 2 == 0 { "active" } else { "pending" }),
+            json!(if number.is_multiple_of(2) {
+                "active"
+            } else {
+                "pending"
+            }),
         );
         fields.insert("price".to_owned(), json!(number as f64 + 0.25));
         fields.insert("rank".to_owned(), json!((number % 10_000) as f64));
@@ -10066,16 +10064,18 @@ mod durable_workload {
                 )
             })?;
         eprintln!("PERF_STAGE_BEGIN seed");
-        match seed(&server, config.vector_backend, setup_deadline).await {
+        match seed(server, config.vector_backend, setup_deadline).await {
             Ok(()) => eprintln!("PERF_STAGE_END seed"),
             Err(error @ HarnessError::SetupTimeout { .. }) => {
                 eprintln!("PERF_STAGE_TIMEOUT seed");
                 return Err(error);
             }
-            Err(error @ HarnessError::DiagnosticSeedClientFailure(SeedClientFailure {
-                kind: SeedFailureKind::SetupDeadline,
-                ..
-            })) => {
+            Err(
+                error @ HarnessError::DiagnosticSeedClientFailure(SeedClientFailure {
+                    kind: SeedFailureKind::SetupDeadline,
+                    ..
+                }),
+            ) => {
                 eprintln!("PERF_STAGE_TIMEOUT seed");
                 return Err(error);
             }
@@ -10104,7 +10104,7 @@ mod durable_workload {
         // The clock and metric baseline are created only after seed work is
         // durable. This preparation checkpoint cannot satisfy interval gates.
         let (report, counter_delta, observed_input_duration, workload_failures) =
-            drive_workload(&server, config).await?;
+            drive_workload(server, config).await?;
         if !workload_failures.is_empty() {
             eprintln!("PERF_WORKLOAD_GATE_FAILURES {workload_failures:?}");
         }
@@ -10154,7 +10154,7 @@ mod durable_workload {
             post_input_deadline,
             POST_INPUT_TIMEOUT,
             "live_readback",
-            assert_mutation_readback(&server, "live after measured drain"),
+            assert_mutation_readback(server, "live after measured drain"),
         )
         .await?;
         eprintln!("PERF_STAGE_END live_readback");
@@ -10189,7 +10189,10 @@ mod durable_workload {
                 seal_hnsw_cache(&cache_seal_client, &server.base),
             )
             .await?;
-            eprintln!("PERF_CACHE_SEAL_RECEIPT {}", cache_seal_receipt_line(&receipt));
+            eprintln!(
+                "PERF_CACHE_SEAL_RECEIPT {}",
+                cache_seal_receipt_line(&receipt)
+            );
             eprintln!("PERF_STAGE_END hnsw_cache_seal");
         } else {
             eprintln!("PERF_STAGE_BEGIN flat_restart_checkpoint");
@@ -10218,7 +10221,7 @@ mod durable_workload {
             post_input_deadline,
             POST_INPUT_TIMEOUT,
             "vector_attestation",
-            assert_post_restart_vector_backends(&server, config.vector_backend),
+            assert_post_restart_vector_backends(server, config.vector_backend),
         )
         .await?;
         eprintln!("PERF_STAGE_END vector_attestation");
@@ -10228,20 +10231,18 @@ mod durable_workload {
             POST_INPUT_TIMEOUT,
             "count_query_readback",
             async {
-                assert_document_count(&server, HOT_COLLECTION, HOT_DOCUMENTS)
+                assert_document_count(server, HOT_COLLECTION, HOT_DOCUMENTS)
                     .await
                     .map_err(|error| {
                         HarnessError::DataInvariant(format!(
                             "restart must recover the durable hot collection: {error}"
                         ))
                     })?;
-                assert_recovered_text_query(&server)
-                    .await
-                    .map_err(|error| {
-                        HarnessError::DataInvariant(format!(
-                            "restart must recover Text/BM25 query data: {error}"
-                        ))
-                    })?;
+                assert_recovered_text_query(server).await.map_err(|error| {
+                    HarnessError::DataInvariant(format!(
+                        "restart must recover Text/BM25 query data: {error}"
+                    ))
+                })?;
                 Ok(())
             },
         )
@@ -10253,7 +10254,7 @@ mod durable_workload {
             post_input_deadline,
             POST_INPUT_TIMEOUT,
             "cold_readback",
-            assert_mutation_readback(&server, "cold after restart"),
+            assert_mutation_readback(server, "cold after restart"),
         )
         .await;
         server
@@ -10869,26 +10870,27 @@ mod durable_workload {
             "pre_input",
             &complete_interval_trace_metrics(10, 5, 1, "0.001", 1, "0.002"),
         );
-        trace.record(
-            INTERVAL_TRACE_CADENCE,
-            "input",
-            &second,
-        );
-        trace.record(
-            INTERVAL_TRACE_CADENCE * 2,
-            "input",
-            &third,
-        );
+        trace.record(INTERVAL_TRACE_CADENCE, "input", &second);
+        trace.record(INTERVAL_TRACE_CADENCE * 2, "input", &third);
         let rendered = trace.render(&RequestErrorJournal::default()).unwrap();
         let document: Value = serde_json::from_str(&rendered).unwrap();
         assert_eq!(document["schema_version"], 3);
         assert_eq!(document["cadence_ms"], 5_000);
         assert_eq!(document["samples"].as_array().unwrap().len(), 3);
         assert_eq!(document["samples"][1]["checkpoint"]["delta"], 2);
-        assert_eq!(document["samples"][1]["checkpoint_attempt"]["started_delta"], 2);
+        assert_eq!(
+            document["samples"][1]["checkpoint_attempt"]["started_delta"],
+            2
+        );
         assert_eq!(document["samples"][1]["checkpoint_attempt"]["in_flight"], 1);
-        assert_eq!(document["samples"][1]["checkpoint_attempt"]["failed_delta"], 1);
-        assert_eq!(document["samples"][2]["checkpoint_attempt"]["failed_total"], 2);
+        assert_eq!(
+            document["samples"][1]["checkpoint_attempt"]["failed_delta"],
+            1
+        );
+        assert_eq!(
+            document["samples"][2]["checkpoint_attempt"]["failed_total"],
+            2
+        );
         assert_eq!(
             document["samples"][1]["state_write_lock_delta"]["sum_us"],
             2_000
@@ -11003,13 +11005,10 @@ mod durable_workload {
         )
         .unwrap();
         assert!(sample_capped["samples"].as_array().unwrap().len() <= INTERVAL_TRACE_MAX_SAMPLES);
-        assert!(
-            sample_capped["omitted_request_failure_intervals"]
-                .as_array()
-                .unwrap()
-                .len()
-                > 0
-        );
+        assert!(!sample_capped["omitted_request_failure_intervals"]
+            .as_array()
+            .unwrap()
+            .is_empty());
         assert_eq!(
             interval_trace_failure_totals(&sample_capped),
             [
@@ -11071,13 +11070,10 @@ mod durable_workload {
         let byte_capped: Value = serde_json::from_str(&byte_capped_rendered).unwrap();
         assert!(byte_capped_rendered.len() <= 4 * 1024);
         assert!(byte_capped["samples"].as_array().unwrap().len() < 12);
-        assert!(
-            byte_capped["omitted_request_failure_intervals"]
-                .as_array()
-                .unwrap()
-                .len()
-                > 0
-        );
+        assert!(!byte_capped["omitted_request_failure_intervals"]
+            .as_array()
+            .unwrap()
+            .is_empty());
         // Detail samples can be omitted, but every interval keeps one and
         // only one aggregate request-failure total in the document.
         assert_eq!(
@@ -11429,8 +11425,8 @@ mod durable_workload {
     }
 
     #[cfg(test)]
-    async fn fake_never_responding_hnsw_cache_seal_server() ->
-        (String, tokio::task::JoinHandle<()>) {
+    async fn fake_never_responding_hnsw_cache_seal_server() -> (String, tokio::task::JoinHandle<()>)
+    {
         let app = axum::Router::new().route(
             "/admin/restart:seal-hnsw-cache",
             axum::routing::post(|| async {
@@ -11462,7 +11458,10 @@ mod durable_workload {
         assert_eq!(line["sealed"], true);
         assert_eq!(line["cache_fields"], 1);
         assert_eq!(line["durability"], "aof_synced");
-        assert_eq!(line["mutation_stamp"], json!({"epoch": 7, "apply_revision": 42}));
+        assert_eq!(
+            line["mutation_stamp"],
+            json!({"epoch": 7, "apply_revision": 42})
+        );
         for invalid in [
             json!({"sealed": false, "cache_fields": 1, "durability": "aof_synced", "mutation_stamp": {"epoch": 7, "apply_revision": 42}}),
             json!({"sealed": true, "cache_fields": 0, "durability": "aof_synced", "mutation_stamp": {"epoch": 7, "apply_revision": 42}}),
@@ -11756,7 +11755,10 @@ mod durable_workload {
             .build()
             .expect("build post-input deadline unit-test runtime");
         runtime.block_on(async {
-            let (base, task) = fake_delayed_hnsw_cache_seal_server(Duration::from_secs(5) + Duration::from_millis(250)).await;
+            let (base, task) = fake_delayed_hnsw_cache_seal_server(
+                Duration::from_secs(5) + Duration::from_millis(250),
+            )
+            .await;
             let timeout = Duration::from_secs(8);
             let started = Instant::now();
             let result = post_input_step(
@@ -11767,7 +11769,10 @@ mod durable_workload {
             )
             .await;
             task.abort();
-            assert!(result.is_ok(), "seal must succeed before the outer deadline: {result:?}");
+            assert!(
+                result.is_ok(),
+                "seal must succeed before the outer deadline: {result:?}"
+            );
             assert!(
                 started.elapsed() > Duration::from_secs(5),
                 "delayed response must prove acceptance beyond the five-second request bound: {:?}",
@@ -11934,7 +11939,11 @@ mod durable_workload {
                 "capacity wait must return the typed input-window timeout: {error:?}"
             );
             let trace = trace.lock().expect("request pump trace mutex poisoned");
-            let sample = trace.seconds.values().next().expect("attempts are recorded");
+            let sample = trace
+                .seconds
+                .values()
+                .next()
+                .expect("attempts are recorded");
             assert_eq!(sample.attempts, 2);
             assert_eq!(sample.in_flight_high_water, 1);
             assert_eq!(sample.blocked_pushes, 1);
@@ -11978,20 +11987,10 @@ mod durable_workload {
                     );
                     tokio::time::sleep(Duration::from_millis(2)).await;
                     let send_called_at = body_clock.elapsed();
-                    record_pump_send_call(
-                        &body_trace,
-                        "index",
-                        Duration::ZERO,
-                        send_called_at,
-                    );
+                    record_pump_send_call(&body_trace, "index", Duration::ZERO, send_called_at);
                     tokio::time::sleep(Duration::from_millis(2)).await;
                     let completed_at = body_clock.elapsed();
-                    record_pump_completion(
-                        &body_trace,
-                        "index",
-                        send_called_at,
-                        completed_at,
-                    );
+                    record_pump_completion(&body_trace, "index", send_called_at, completed_at);
                     body_trace
                         .as_ref()
                         .expect("trace enabled")
@@ -12010,10 +12009,16 @@ mod durable_workload {
             )
             .await
             .expect("the request fits within capacity");
-            pump.drain("telemetry test").await.expect("request completes");
+            pump.drain("telemetry test")
+                .await
+                .expect("request completes");
 
             let mut trace = trace.lock().expect("request pump trace mutex poisoned");
-            let sample = trace.seconds.values().next().expect("telemetry sample exists");
+            let sample = trace
+                .seconds
+                .values()
+                .next()
+                .expect("telemetry sample exists");
             assert_eq!(sample.attempts, 1);
             assert_eq!(sample.in_flight_high_water, 1);
             assert_eq!(sample.task_start_lag_samples, 1);
@@ -13933,8 +13938,10 @@ mod durable_workload {
             );
         }
         assert!(
-            MUTATION_DOCUMENTS_PER_CLASS * 2 < VECTOR_READBACK_REFERENCE_NUMBER
-                && VECTOR_READBACK_REFERENCE_NUMBER < HOT_DOCUMENTS,
+            std::hint::black_box(
+                MUTATION_DOCUMENTS_PER_CLASS * 2 < VECTOR_READBACK_REFERENCE_NUMBER
+                    && VECTOR_READBACK_REFERENCE_NUMBER < HOT_DOCUMENTS
+            ),
             "unindex and replace ranges must fit below the untouched vector reference"
         );
     }
@@ -13953,7 +13960,7 @@ mod durable_workload {
     fn restart_diagnostic_production_contains(region: &str, expected: &str) -> bool {
         region.lines().map(str::trim).any(|line| {
             !line.starts_with("//")
-                && !line.as_bytes().starts_with(&[b'/', b'*'])
+                && !line.as_bytes().starts_with(b"/*")
                 && line.contains(expected)
         })
     }

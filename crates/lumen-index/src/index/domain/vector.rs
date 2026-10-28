@@ -139,7 +139,7 @@ pub trait VectorIndex: Send + Sync {
     /// the scalar codebook when SQ is enabled. Default impl returns
     /// an empty dump — backends that intend to be snapshotted must
     /// override this.
-    fn dump_for_snapshot(&self) -> Result<(Vec<(String, Vec<f32>)>, Option<ScalarCodebook>)> {
+    fn dump_for_snapshot(&self) -> SnapshotRowsResult {
         Ok((Vec::new(), None))
     }
 
@@ -289,3 +289,5 @@ pub fn open_backend(spec: VectorSpec) -> Box<dyn VectorIndex> {
 
 #[cfg(test)]
 mod tests;
+
+type SnapshotRowsResult = Result<(Vec<(String, Vec<f32>)>, Option<ScalarCodebook>)>;

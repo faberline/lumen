@@ -238,7 +238,7 @@ impl Engine {
                     })? {
                         plan::PlanResult::Unsupported { .. } => return Ok(false),
                         plan::PlanResult::NeedsHash => continue,
-                        plan::PlanResult::Planned(plan) => plan,
+                        plan::PlanResult::Planned(plan) => *plan,
                     }
                 };
                 let blocked = plan.winners.keys().find_map(|cell| {
@@ -285,7 +285,7 @@ impl Engine {
                     .checked_add(view_bytes)
                     .and_then(|bytes| {
                         plan.has_text()
-                            .then(|| text_metadata)
+                            .then_some(text_metadata)
                             .map_or(Some(bytes), |text| bytes.checked_add(text))
                     })
                     .ok_or(RecordAdmissionError::Overflow)?;
@@ -443,7 +443,7 @@ impl Engine {
                     text_rows,
                     text_actions,
                     text_prepared: None,
-                    old_text_rows,
+                    _old_text_rows: old_text_rows,
                     text_placeholder: FieldValue::String(String::new()),
                     retained: required,
                 }

@@ -4,8 +4,8 @@
 //! snapshot/quiesce logic — `Engine::snapshot()` behind that endpoint is the
 //! same quiesce-free call the raft snapshotter itself uses; this is transport
 //! + scheduling only, meant to be driven by the operator's optional backup
-//! CronJob (`spec.serving.backup`, see `service_k8s::render::backup_cron_job`)
-//! or invoked ad hoc via the CLI.
+//!   CronJob (`spec.serving.backup`, see `service_k8s::render::backup_cron_job`)
+//!   or invoked ad hoc via the CLI.
 
 use anyhow::{bail, Context, Result};
 pub use service_backup::{

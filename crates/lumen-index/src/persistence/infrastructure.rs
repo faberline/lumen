@@ -12,3 +12,6 @@ pub mod merge_worker;
 pub mod rdb;
 pub mod segment_rdb_store;
 pub mod spill_directory;
+
+// One canonical definition shared by capacity and checkpoint publication.
+pub(crate) mod segment_save_gate;

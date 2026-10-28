@@ -38,7 +38,7 @@ async fn the_default_pod_token_audience_is_not_accepted() {
 #[tokio::test]
 async fn an_authenticated_google_user_is_rejected_before_authorization() {
     let (cluster, verifier) =
-        verifier(Cluster::with_ksa("clients", "reader").as_user("alice@example.com"));
+        verifier(Cluster::with_ksa("clients", "reader").with_user("alice@example.com"));
     assert!(matches!(
         verifier.authenticate_async(&bearer("t")).await.unwrap_err(),
         ServiceAuthError::Unauthenticated
@@ -54,7 +54,7 @@ async fn an_authenticated_google_user_is_rejected_before_authorization() {
 #[tokio::test]
 async fn an_authenticated_gsa_is_rejected_before_authorization() {
     let (cluster, verifier) = verifier(
-        Cluster::with_ksa("clients", "reader").as_user("svc@project.iam.gserviceaccount.com"),
+        Cluster::with_ksa("clients", "reader").with_user("svc@project.iam.gserviceaccount.com"),
     );
     assert!(verifier.authenticate_async(&bearer("t")).await.is_err());
     assert!(cluster.asked().is_empty());
@@ -66,7 +66,7 @@ async fn an_authenticated_gsa_is_rejected_before_authorization() {
 async fn a_malformed_service_account_username_is_rejected() {
     let (_, verifier) = verifier(
         Cluster::with_ksa("clients", "reader")
-            .as_user("system:serviceaccount:clients:reader:extra"),
+            .with_user("system:serviceaccount:clients:reader:extra"),
     );
     assert!(verifier.authenticate_async(&bearer("t")).await.is_err());
 }
@@ -144,7 +144,7 @@ async fn standalone_default_profile_preserves_401_and_503_failure_classes() {
     let (_, wrong_identity) = in_cluster_verifier(
         Cluster::with_ksa("apps", "api")
             .with_audiences(&[])
-            .as_user("alice@example.com"),
+            .with_user("alice@example.com"),
     );
     assert!(matches!(
         wrong_identity

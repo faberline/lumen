@@ -55,7 +55,7 @@ fn sig(i: u32) -> u64 {
 /// and carries one unique token, so a full-text `match … op=and` selects
 /// exactly one doc while every token's posting spans the corpus.
 fn body(i: u32) -> String {
-    let parity = if i % 2 == 0 { "even" } else { "odd" };
+    let parity = if i.is_multiple_of(2) { "even" } else { "odd" };
     format!("doc {i} shared token stream alpha beta gamma {parity}")
 }
 

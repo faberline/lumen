@@ -188,7 +188,7 @@ impl ComposedSegmentReader {
     }
 
     /// The original layered merge, kept as the oracle for the rewrite above.
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     pub(super) fn merge_text_postings_reference(&self, token: &str) -> Option<CachedTextPosting> {
         // Decode one token at a time. Each pass holds two sorted postings
         // and removes covered older rows before merging the newer values.

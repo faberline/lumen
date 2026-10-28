@@ -15,8 +15,7 @@ use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 
-#[path = "../infrastructure/segment_save_gate.rs"]
-mod publication_gate;
+pub(crate) use crate::persistence::infrastructure::segment_save_gate as publication_gate;
 
 #[derive(Default)]
 pub(crate) struct Registry {

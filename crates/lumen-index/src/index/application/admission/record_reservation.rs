@@ -22,7 +22,7 @@ impl Default for EngineChanges {
         let budget = ChangeBudget::process_shared();
         let owner = budget.owner();
         let id = NEXT_ENGINE
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .expect("Engine admission identity exhausted");
         Self {
             records: RecordChargeJournal::new(),

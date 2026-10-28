@@ -188,7 +188,7 @@ mod first_compaction_contract {
     }
 
     #[cfg(unix)]
-    fn first_compaction_base_ref<'a>(manifest: &'a Value) -> &'a Value {
+    fn first_compaction_base_ref(manifest: &Value) -> &Value {
         first_compaction_refs(manifest, "base")
             .into_iter()
             .find(|segment| segment["ordinal"] == json!(0))
@@ -759,7 +759,7 @@ mod full_compaction_contract {
         .await;
     }
 
-    fn full_compaction_collection<'a>(manifest: &'a Value) -> &'a Value {
+    fn full_compaction_collection(manifest: &Value) -> &Value {
         stage1_reuse_catalog_collection(manifest, FULL_COMPACTION_COLLECTION)
     }
 
@@ -3789,9 +3789,7 @@ mod full_compaction_contract {
             assert_eq!(sequence, SCHEDULER_SEQUENCE + 23);
             {
                 let (ready_lock, ready_cv) = &*scheduler_ready;
-                let mut ready = ready_lock
-                    .lock()
-                    .expect("merge scheduler ready mutex");
+                let mut ready = ready_lock.lock().expect("merge scheduler ready mutex");
                 *ready = true;
                 ready_cv.notify_one();
             }
@@ -3987,8 +3985,7 @@ mod full_compaction_contract {
             let cold_text =
                 full_compaction_text_search(&cold_server, &scheduler_body_value(7)).await;
             assert_eq!(
-                cold_text["total"],
-                live_text["total"],
+                cold_text["total"], live_text["total"],
                 "live and cold Text totals must agree after the tied deepest publication"
             );
             assert_eq!(
@@ -4995,7 +4992,7 @@ mod full_compaction_contract {
             .await;
         }
 
-        fn vector_base_collection<'a>(manifest: &'a Value) -> &'a Value {
+        fn vector_base_collection(manifest: &Value) -> &Value {
             stage1_reuse_catalog_collection(manifest, VECTOR_BASE_COLLECTION)
         }
 
@@ -5161,7 +5158,7 @@ mod full_compaction_contract {
             compacted_generation: &Path,
             compacted_manifest: &Value,
         ) {
-            let old_field = vector_base_ref(base_manifest, "field");
+            let _old_field = vector_base_ref(base_manifest, "field");
             let new_field = vector_base_ref(compacted_manifest, "field");
             let local = new_field["local_rows"]
                 .as_object()

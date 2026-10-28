@@ -104,7 +104,7 @@ impl WriteCoordinator {
                             // this exact seq) would otherwise hang forever — release
                             // it with a distinct, retryable error instead.
                             let local_reservation = loop_coord.take_local_reservation(seq).await;
-                            let (mut reservation, mut transient) = if let Some((
+                            let (mut reservation, transient) = if let Some((
                                 expected,
                                 reservation,
                             )) = replay_reservation.take()
@@ -407,7 +407,7 @@ impl WriteCoordinator {
                                 }
                                 // A prepared guard owns the apply lease and its retained charge
                                 // until after AOF persistence and watermark advancement below.
-                                let mut prepared = None;
+                                let mut prepared;
                                 // #4326: per-record apply cost, measured across the whole
                                 // prepare+apply span below (including any reprice/
                                 // wait_grow_to retry inside `prepare_local_record`) so a
@@ -565,7 +565,6 @@ impl WriteCoordinator {
                                 // so `applied_seq` is its only completion signal. Publishing it
                                 // first would let callers observe an applied record while its
                                 // reservation is still charged on the budget.
-                                drop(apply);
                                 drop(prepared.take());
                                 drop(transient.take());
                                 applying_coord.complete(seq, outcome);
@@ -599,9 +598,9 @@ impl WriteCoordinator {
                                     loop_coord.retain_failed_transient(transient);
                                     loop_coord.fail_unresolved(
                                         seq,
-                                        Err(anyhow::Error::new(RestartRequired(format!(
-                                            "apply task panicked; restart required"
-                                        )))),
+                                        Err(anyhow::Error::new(RestartRequired(
+                                            "apply task panicked; restart required".to_string(),
+                                        ))),
                                         None,
                                     );
                                     // Retain the subscription floor after a panic too. The source

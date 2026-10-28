@@ -243,9 +243,7 @@ impl TextStreamView for RowsProjection<'_> {
     fn terms<'a>(&'a self) -> Result<Terms<'a>> {
         // The cache keeps the row lifetime. Narrow only each yielded Cow to
         // this iterator borrow; RefCell itself is invariant in that lifetime.
-        Ok(Box::new(
-            RowsTerms::new(self)?.map(|term| term.map(|value| -> Cow<'a, str> { value })),
-        ))
+        Ok(Box::new(RowsTerms::new(self)?.map(shorten_term)))
     }
     fn text_postings(&self, term: &str) -> Result<Option<Arc<(Vec<u32>, Vec<u32>)>>> {
         if let Some(posting) = self
@@ -284,4 +282,8 @@ impl TextStreamView for RowsProjection<'_> {
         }
         Ok((!out.is_empty()).then(|| Arc::new(out.into_iter().unzip())))
     }
+}
+
+fn shorten_term<'short, 'long: 'short>(term: Result<Cow<'long, str>>) -> Result<Cow<'short, str>> {
+    term
 }

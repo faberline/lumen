@@ -37,6 +37,7 @@ impl Owner {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn request_checkpoint(&self) -> bool {
         self.request_checkpoint_revision().is_some()
     }
@@ -51,9 +52,7 @@ impl Owner {
             .state
             .lock()
             .expect("change budget lock poisoned");
-        let Some(owner) = state.owners.get(&self.id) else {
-            return None;
-        };
+        let owner = state.owners.get(&self.id)?;
         let resident_active = owner
             .resident
             .get(&owner.current_capture_epoch)
@@ -113,6 +112,7 @@ impl Owner {
         self.budget.reserve(&self.lifetime, bytes, true)
     }
 
+    #[cfg(test)]
     pub(crate) fn work_revision(&self) -> Result<u64, AdmissionError> {
         let state = self
             .budget

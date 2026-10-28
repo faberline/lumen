@@ -437,7 +437,7 @@ async fn pg_prepare_table(table: &str) -> Option<()> {
 }
 
 async fn pg_insert_pool(workers: usize) -> Option<Arc<Vec<tokio_postgres::Client>>> {
-    let n = workers.max(1).min(PG_MAX_POOL);
+    let n = workers.clamp(1, PG_MAX_POOL);
     let mut clients = Vec::with_capacity(n);
     for _ in 0..n {
         clients.push(pg_connect().await?);
@@ -942,9 +942,7 @@ async fn run_http_write_mode(mode: Mode) -> Option<BTreeMap<usize, Load>> {
 async fn run_pg_write_mode() -> Option<BTreeMap<usize, Load>> {
     let batch_docs = batch_docs();
     let timeout = req_timeout();
-    if pg_connect().await.is_none() {
-        return None;
-    }
+    pg_connect().await.as_ref()?;
     println!(
         "\n# pg write QPS (window={}s warmup={}s timeout={}ms)",
         window_s(),

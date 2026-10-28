@@ -7,9 +7,9 @@
 //! copies of a path string drifting apart. This test extracts every
 //! `.route("<path>", <methods>)` literal from `router.rs` (balanced-paren scan
 //! + method tokens + ident-prefix rejection, mirroring
-//! `apps/tape/e2e/spec_route_parity.rs`) and diffs the (method, path) set
-//! against `lumen::spec::openapi_json()`'s `paths` object in both
-//! directions.
+//!   `apps/tape/e2e/spec_route_parity.rs`) and diffs the (method, path) set
+//!   against `lumen::spec::openapi_json()`'s `paths` object in both
+//!   directions.
 //!
 //! Three documented asymmetries are excluded from the diff rather than
 //! producing false positives:

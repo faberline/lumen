@@ -154,7 +154,6 @@ pub(in crate::persistence) fn write_compacted_field(
                 |row| Ok(view.vector_at(row, dim).map(ToOwned::to_owned)),
             )?;
         }
-        _ => unreachable!("checked above"),
     }
     write_sparse_rows_atomic(&confined(root, &rows_rel)?, &ids)?;
 

@@ -66,7 +66,7 @@ fn keyword_mixes_staged_replacement_and_deletion() {
 fn set_keeps_empty_and_removes_duplicates_and_deleted_rows() {
     let dir = tempfile::tempdir().unwrap();
     let source = dir.path().join("source.lseg");
-    let values = vec![
+    let values = [
         vec!["a".into(), "b".into()],
         vec![],
         vec!["a".into(), "z".into()],

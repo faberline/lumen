@@ -26,10 +26,6 @@ impl Postings {
     pub(crate) fn docids(&self) -> &[u32] {
         &self.docids
     }
-    /// The term frequencies, parallel to [`Self::docids`]. Phase 2e-B.
-    pub(crate) fn tfs(&self) -> &[u32] {
-        &self.tfs
-    }
     /// Insert/overwrite `id`'s tf, keeping `docids` sorted. For the monotonic
     /// bulk-index path the insertion point is the tail (O(1) amortized); a reused
     /// id (interner reuses ids; an overwrite drops first) lands in sorted order.
@@ -113,6 +109,7 @@ impl crate::storage::infrastructure::segment::text_writer::TokenPostings for Pos
     fn docids(&self) -> &[u32] {
         &self.docids
     }
+
     fn tfs(&self) -> &[u32] {
         &self.tfs
     }
@@ -170,15 +167,6 @@ impl<'a> TokPostings<'a> {
         }
     }
     #[inline]
-    pub(in crate::index) fn tfs(&self) -> &[u32] {
-        match self {
-            TokPostings::Live(p) => &p.tfs,
-            TokPostings::Sparse(p) => &p.tfs,
-            TokPostings::Segment(p) => &p.1,
-            TokPostings::Combined { tfs, .. } => tfs,
-        }
-    }
-    #[inline]
     pub(super) fn df(&self) -> usize {
         match self {
             TokPostings::Sparse(p) => p.df,
@@ -196,6 +184,15 @@ impl<'a> TokPostings<'a> {
             TokPostings::Combined { docids, tfs } => {
                 docids.binary_search(&id).ok().map(|pos| tfs[pos])
             }
+        }
+    }
+
+    pub(in crate::index) fn tfs(&self) -> &[u32] {
+        match self {
+            TokPostings::Live(p) => &p.tfs,
+            TokPostings::Sparse(p) => &p.tfs,
+            TokPostings::Segment(p) => &p.1,
+            TokPostings::Combined { tfs, .. } => tfs,
         }
     }
 }

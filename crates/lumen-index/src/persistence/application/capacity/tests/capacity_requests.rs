@@ -267,8 +267,8 @@ fn merge_request_bootstraps_a_fresh_fallback_root_from_live_state() {
 // SegmentRdbStore, Duration, and sink imports.
 #[test]
 fn fallback_rebinds_relay_after_configured_owner_replacement() {
-    use crate::persistence::application::capacity::Endpoint;
     use crate::ingest::domain::change_budget::HARD_LIMIT;
+    use crate::persistence::application::capacity::Endpoint;
     use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
     use std::thread::{JoinHandle, ThreadId};
     use std::time::Instant;
@@ -341,7 +341,9 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
                         let id = worker.thread().id();
                         match worker.join() {
                             Ok(()) => result.relay_joins.push(id),
-                            Err(_) => result.errors.push(format!("retained relay {id:?} panicked")),
+                            Err(_) => result
+                                .errors
+                                .push(format!("retained relay {id:?} panicked")),
                         }
                     }
                 }
@@ -365,19 +367,19 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
 
     #[derive(Debug)]
     struct Observation {
-        registry_address: usize,
-        old_endpoint_address: usize,
-        configured_endpoint_address: usize,
-        old_token: u64,
-        configured_token: u64,
-        old_relay_id: ThreadId,
+        _registry_address: usize,
+        _old_endpoint_address: usize,
+        _configured_endpoint_address: usize,
+        _old_token: u64,
+        _configured_token: u64,
+        _old_relay_id: ThreadId,
         old_owner_joined_before_request: bool,
         old_relay_joined_before_request: bool,
         old_stopped: bool,
         configured_is_current: bool,
         configured_registration: bool,
         stopped: bool,
-        work_revision: u64,
+        _work_revision: u64,
         request_revision: u64,
         pending_at_creation: Option<u64>,
         pending_before_cleanup: Option<u64>,
@@ -401,9 +403,8 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
     let budget = ChangeBudget::with_hard_limit(HARD_LIMIT);
     let engine = Arc::new(Engine::with_change_budget(budget.clone()));
     let old_store = Arc::new(SegmentRdbStore::new(old_root.path()).expect("old fixture store"));
-    let configured_store = Arc::new(
-        SegmentRdbStore::new(configured_root.path()).expect("configured fixture store"),
-    );
+    let configured_store =
+        Arc::new(SegmentRdbStore::new(configured_root.path()).expect("configured fixture store"));
     let mut workers = Workers::default();
 
     // Returned setup errors and panics reach the final assertions only
@@ -431,13 +432,18 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
         anyhow::ensure!(
             work.checkpoint_request_revision.is_none()
                 && budget.snapshot().checkpoint_request_revision.is_none()
-                && budget.snapshot().total < crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER
+                && budget.snapshot().total
+                    < crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER
                 && !engine.has_capacity_waiters(),
             "fixture must have no request, waiter, or trigger-sized work"
         );
         anyhow::ensure!(
             engine.metrics().segment_checkpoint_completed_total.get() == 0
-                && engine.metrics().segment_capacity_relief_checkpoint_merge_seconds_count.get() == 0
+                && engine
+                    .metrics()
+                    .segment_capacity_relief_checkpoint_merge_seconds_count
+                    .get()
+                    == 0
                 && engine.layer_maintenance.owner().is_none(),
             "fixture must have no earlier maintenance"
         );
@@ -469,22 +475,34 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
         let old_relay_id = old_relay_worker.thread().id();
         workers.old_relay_worker = Some(old_relay_worker);
         let old_token = {
-            let registration = engine.layer_maintenance.registration.lock()
+            let registration = engine
+                .layer_maintenance
+                .registration
+                .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             anyhow::ensure!(
                 !registration.configured
-                    && registration.endpoint.upgrade().is_some_and(|current| Arc::ptr_eq(&current, &old_endpoint)),
+                    && registration
+                        .endpoint
+                        .upgrade()
+                        .is_some_and(|current| Arc::ptr_eq(&current, &old_endpoint)),
                 "registry A must be the unconfigured live owner"
             );
             registration.token
         };
         {
-            let state = old_endpoint.requests.lock()
+            let state = old_endpoint
+                .requests
+                .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             anyhow::ensure!(
-                !state.stopped && state.requested == 0 && state.completed == 0
-                    && state.operations.is_empty() && state.error.is_none()
-                    && !state.checkpoint && !state.merge,
+                !state.stopped
+                    && state.requested == 0
+                    && state.completed == 0
+                    && state.operations.is_empty()
+                    && state.error.is_none()
+                    && !state.checkpoint
+                    && !state.merge,
                 "owner A must be idle before replacement"
             );
         }
@@ -497,11 +515,17 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
             .ok_or_else(|| anyhow::anyhow!("fixture failed to create configured owner B"))?
             .endpoint();
         let configured_token = {
-            let registration = engine.layer_maintenance.registration.lock()
+            let registration = engine
+                .layer_maintenance
+                .registration
+                .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             anyhow::ensure!(
                 registration.configured
-                    && registration.endpoint.upgrade().is_some_and(|current| Arc::ptr_eq(&current, &configured_endpoint)),
+                    && registration
+                        .endpoint
+                        .upgrade()
+                        .is_some_and(|current| Arc::ptr_eq(&current, &configured_endpoint)),
                 "registry must hold configured owner B"
             );
             registration.token
@@ -514,15 +538,21 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
             "configured owner B must replace and stop owner A"
         );
 
-        workers.old_owner.as_mut()
+        workers
+            .old_owner
+            .as_mut()
             .ok_or_else(|| anyhow::anyhow!("owner A handle was lost"))?
             .join()?;
-        workers.old_relay_worker.take()
+        workers
+            .old_relay_worker
+            .take()
             .ok_or_else(|| anyhow::anyhow!("relay A handle was lost"))?
             .join()
             .map_err(|_| anyhow::anyhow!("relay A panicked before the request"))?;
         anyhow::ensure!(
-            engine.capacity_owner_state().is_some_and(|state| state.checkpoint_request_revision.is_none())
+            engine
+                .capacity_owner_state()
+                .is_some_and(|state| state.checkpoint_request_revision.is_none())
                 && !engine.has_capacity_waiters(),
             "old joins must precede the only controlled request"
         );
@@ -531,26 +561,40 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
         // has been joined. Neither join changed the registry's live B.
         Fallback::ensure(&mut workers.fallback, &engine, None)?;
         anyhow::ensure!(
-            engine.layer_maintenance.owner().is_some_and(|current| Arc::ptr_eq(&current, &configured_endpoint))
+            engine
+                .layer_maintenance
+                .owner()
+                .is_some_and(|current| Arc::ptr_eq(&current, &configured_endpoint))
                 && !configured_endpoint.is_stopped()
-                && workers.fallback.as_ref().is_some_and(|fallback| fallback.owner.is_none() && fallback.relay.is_some()),
+                && workers
+                    .fallback
+                    .as_ref()
+                    .is_some_and(|fallback| fallback.owner.is_none() && fallback.relay.is_some()),
             "ensure must preserve configured B and retain a fallback relay"
         );
 
         let deadline = Instant::now() + Duration::from_secs(5);
-        let mut state = configured_endpoint.requests.lock()
+        let mut state = configured_endpoint
+            .requests
+            .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         anyhow::ensure!(
-            !state.stopped && state.requested == 0 && state.completed == 0
-                && state.operations.is_empty() && state.error.is_none()
-                && !state.checkpoint && !state.merge,
+            !state.stopped
+                && state.requested == 0
+                && state.completed == 0
+                && state.operations.is_empty()
+                && state.error.is_none()
+                && !state.checkpoint
+                && !state.merge,
             "owner B must be idle before the controlled request"
         );
         // Holding B.requests prevents the relay's first wait_for call.
         // The returned budget revision is not a WAL sequence.
-        let request_revision = engine.request_pending_checkpoint_revision()
+        let request_revision = engine
+            .request_pending_checkpoint_revision()
             .ok_or_else(|| anyhow::anyhow!("local work did not create request r"))?;
-        let pending_at_creation = engine.capacity_owner_state()
+        let pending_at_creation = engine
+            .capacity_owner_state()
             .ok_or_else(|| anyhow::anyhow!("owner state was lost when creating r"))?
             .checkpoint_request_revision;
         anyhow::ensure!(
@@ -562,7 +606,8 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
             if now >= deadline {
                 break;
             }
-            state = configured_endpoint.changed
+            state = configured_endpoint
+                .changed
                 .wait_timeout(state, deadline.saturating_duration_since(now))
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .0;
@@ -576,49 +621,63 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
         let wake = engine.checkpoint_wake();
         let (pending_before_cleanup, progress_seen_before_deadline) = loop {
             let observed = wake.epoch();
-            let pending = engine.capacity_owner_state()
+            let pending = engine
+                .capacity_owner_state()
                 .ok_or_else(|| anyhow::anyhow!("owner state was lost during observation"))?
                 .checkpoint_request_revision;
             let now = Instant::now();
             if pending.is_none() || now >= deadline {
-                break (pending, endpoint_cycle_completed && pending.is_none() && now < deadline);
+                break (
+                    pending,
+                    endpoint_cycle_completed && pending.is_none() && now < deadline,
+                );
             }
-            let _ = wake.wait_for_change_timeout(
-                observed,
-                deadline.saturating_duration_since(now),
-            );
+            let _ = wake.wait_for_change_timeout(observed, deadline.saturating_duration_since(now));
         };
         let (requested, completed, checkpoint_flag, merge_flag, stopped, operations, error) = {
-            let state = configured_endpoint.requests.lock()
+            let state = configured_endpoint
+                .requests
+                .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             (
-                state.requested, state.completed, state.checkpoint, state.merge,
-                state.stopped, state.operations.clone(), state.error.clone(),
+                state.requested,
+                state.completed,
+                state.checkpoint,
+                state.merge,
+                state.stopped,
+                state.operations.clone(),
+                state.error.clone(),
             )
         };
         let (configured_is_current, configured_registration) = {
-            let registration = engine.layer_maintenance.registration.lock()
+            let registration = engine
+                .layer_maintenance
+                .registration
+                .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             (
                 registration.token == configured_token
-                    && registration.endpoint.upgrade().is_some_and(|current| Arc::ptr_eq(&current, &configured_endpoint)),
+                    && registration
+                        .endpoint
+                        .upgrade()
+                        .is_some_and(|current| Arc::ptr_eq(&current, &configured_endpoint)),
                 registration.configured,
             )
         };
         Ok(Observation {
-            registry_address: Arc::as_ptr(&engine.layer_maintenance) as usize,
-            old_endpoint_address: Arc::as_ptr(&old_endpoint) as usize,
-            configured_endpoint_address: Arc::as_ptr(&configured_endpoint) as usize,
-            old_token,
-            configured_token,
-            old_relay_id,
+            _registry_address: Arc::as_ptr(&engine.layer_maintenance) as usize,
+            _old_endpoint_address: Arc::as_ptr(&old_endpoint) as usize,
+            _configured_endpoint_address: Arc::as_ptr(&configured_endpoint) as usize,
+            _old_token: old_token,
+            _configured_token: configured_token,
+            _old_relay_id: old_relay_id,
             old_owner_joined_before_request: true,
             old_relay_joined_before_request: true,
             old_stopped: old_endpoint.is_stopped(),
             configured_is_current,
             configured_registration,
             stopped,
-            work_revision: work.work_revision,
+            _work_revision: work.work_revision,
             request_revision,
             pending_at_creation,
             pending_before_cleanup,
@@ -629,7 +688,10 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
             operations,
             error,
             checkpoint_completions: engine.metrics().segment_checkpoint_completed_total.get(),
-            successful_cycles: engine.metrics().segment_capacity_relief_checkpoint_merge_seconds_count.get(),
+            successful_cycles: engine
+                .metrics()
+                .segment_capacity_relief_checkpoint_merge_seconds_count
+                .get(),
             has_capacity_waiters: engine.has_capacity_waiters(),
             progress_seen_before_deadline,
         })
@@ -653,11 +715,17 @@ fn fallback_rebinds_relay_after_configured_owner_replacement() {
     eprintln!(
         "capacity relay replacement observation={observed:?}; cleanup={cleanup:?}; complete={cleanup_complete}"
     );
-    assert!(cleanup_complete && cleanup.errors.is_empty(), "cleanup failed: {cleanup:?}");
     assert!(
-        observed.old_owner_joined_before_request && observed.old_relay_joined_before_request
-            && observed.old_stopped && observed.configured_is_current
-            && observed.configured_registration && !observed.stopped
+        cleanup_complete && cleanup.errors.is_empty(),
+        "cleanup failed: {cleanup:?}"
+    );
+    assert!(
+        observed.old_owner_joined_before_request
+            && observed.old_relay_joined_before_request
+            && observed.old_stopped
+            && observed.configured_is_current
+            && observed.configured_registration
+            && !observed.stopped
             && !observed.has_capacity_waiters
             && observed.pending_at_creation == Some(observed.request_revision),
         "replacement control failed before cleanup: {observed:?}"

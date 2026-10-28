@@ -176,7 +176,7 @@ impl<'a, W: Write + Seek> Output<'a, W> {
     fn patch_final_sigma(&mut self, offset: u64) -> Result<()> {
         self.flush()?;
         let end = self.flushed;
-        if offset.checked_add(2).map_or(true, |finish| finish > end) {
+        if offset.checked_add(2).is_none_or(|finish| finish > end) {
             bail!("pending sigma patch is outside streamed output");
         }
         self.writer.seek(SeekFrom::Start(offset))?;

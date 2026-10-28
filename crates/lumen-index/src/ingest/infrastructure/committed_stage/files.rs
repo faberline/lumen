@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::ingest::infrastructure::committed_stage::{invalid, COPY_BUFFER_BYTES};
 
+#[cfg(test)]
 pub(super) fn copy_reader_fixed<R: Read>(reader: &mut R, output: &mut dyn Write) -> io::Result<()> {
     let mut buffer = [0u8; COPY_BUFFER_BYTES];
     loop {

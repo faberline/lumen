@@ -89,7 +89,7 @@ impl DiagnosticCapture {
         static NEXT_TOKEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let token = DiagnosticCaptureToken(
             NEXT_TOKEN
-                .fetch_update(
+                .try_update(
                     std::sync::atomic::Ordering::Relaxed,
                     std::sync::atomic::Ordering::Relaxed,
                     |next| next.checked_add(1),

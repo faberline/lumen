@@ -30,22 +30,37 @@ use anyhow::{anyhow, bail, Context, Result};
 use std::sync::Arc;
 use std::time::Instant;
 
+pub(super) struct SaveAttemptOptions<'a> {
+    pub(super) required: bool,
+    pub(super) intent: SaveIntent,
+    pub(super) archive_pin: Option<&'a mut Option<SegmentArchivePin>>,
+    pub(super) idle_revision: Option<u64>,
+    pub(super) capacity_deadline: Option<Instant>,
+    pub(super) selection: StagingSelection,
+    pub(super) trace_context: Option<CheckpointDiagnosticContext>,
+    pub(super) gate_trace: Option<SaveGateTrace>,
+    pub(super) checkpoint_pass: u8,
+}
+
 impl SegmentRdbStore {
     pub(super) fn save_inner_permitted_attempt(
         &self,
         engine: &Arc<Engine>,
         up_to_seq: u64,
-        required: bool,
         _guard: SavePermit,
-        intent: SaveIntent,
-        archive_pin: Option<&mut Option<SegmentArchivePin>>,
-        idle_revision: Option<u64>,
-        capacity_deadline: Option<Instant>,
-        selection: StagingSelection,
-        trace_context: Option<CheckpointDiagnosticContext>,
-        gate_trace: Option<SaveGateTrace>,
-        checkpoint_pass: u8,
+        options: SaveAttemptOptions<'_>,
     ) -> Result<SaveAttempt> {
+        let SaveAttemptOptions {
+            required,
+            intent,
+            archive_pin,
+            idle_revision,
+            capacity_deadline,
+            selection,
+            trace_context,
+            gate_trace,
+            checkpoint_pass,
+        } = options;
         let requested_sequence = up_to_seq;
         let started = std::time::Instant::now();
         let capture_hold_ns = std::sync::atomic::AtomicU64::new(0);

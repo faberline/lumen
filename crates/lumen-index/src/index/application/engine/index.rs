@@ -132,13 +132,14 @@ impl Engine {
             let (id, new_doc_in_request) = coll.interner.intern_owned_with_status(external_id);
             let mut new_doc_fields = FieldCoverage::default();
 
-            for pos in cursor..group_end {
-                let field_name = std::mem::take(&mut items[pos].field);
+            for (offset, item) in items[cursor..group_end].iter_mut().enumerate() {
+                let pos = cursor + offset;
+                let field_name = std::mem::take(&mut item.field);
                 let field = field_name.as_str();
                 // #184: external-version LWW — drop a strictly-older versioned
                 // write for this (external_id, field) cell. Absent version means
                 // arrival order (no check, today's behavior).
-                let item_version = items[pos].version;
+                let item_version = item.version;
                 if let Some(v) = item_version {
                     let stale = coll
                         .cell_versions
@@ -210,7 +211,7 @@ impl Engine {
                         fi,
                         id,
                         eid,
-                        &items[pos].value,
+                        &item.value,
                         field,
                         prepared_text.and_then(|rows| rows.get(pos, field)),
                         Some(&mut *telemetry),

@@ -21,8 +21,8 @@ fn cluster_role_binding_api_resource() -> ApiResource {
 }
 
 /// Production [`AuthDelegatorControl`]: real `kube::Client` calls.
-pub(in crate) struct KubeAuthDelegatorControl {
-    pub(in crate) client: Client,
+pub(crate) struct KubeAuthDelegatorControl {
+    pub(crate) client: Client,
 }
 
 #[async_trait::async_trait]

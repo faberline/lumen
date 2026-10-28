@@ -88,7 +88,7 @@ fn mapped_base_replacement_preserves_newer_layers_and_rejects_stale_inputs() {
     let replaced = view
         .replace_base_inputs(
             &base,
-            &[delta.clone()],
+            std::slice::from_ref(&delta),
             merged.clone(),
             vec![1_000_000, 1, 0],
         )

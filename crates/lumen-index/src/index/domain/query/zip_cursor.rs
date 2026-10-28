@@ -187,6 +187,45 @@ fn should_use_zipper(posts: &[TokProbe<'_>], drive: usize, drive_len: usize) -> 
     sum_other <= drive_len.saturating_mul(sum_log_other)
 }
 
+/// Equal live posting IDs already prove the intersection. Scan one token's
+/// contiguous frequencies at a time, instead of branching through every cursor
+/// for every document. Each score still accumulates in original token order.
+fn rank_identical_live_postings(
+    input: &AndRankInput<'_>,
+    segment_doc_lens: Option<&[u32]>,
+) -> Option<Vec<(u32, f32)>> {
+    if input.posts.len() < 2 {
+        return None;
+    }
+    let driving = input.posts[input.drive].live?;
+    if input.posts.iter().any(|post| {
+        post.seg.is_some()
+            || !post.staged.is_empty()
+            || post.live.is_none_or(|live| live.docids != driving.docids)
+    }) {
+        return None;
+    }
+    let doc_lens: Vec<f32> = driving
+        .docids
+        .iter()
+        .map(|&id| text_doc_len_at(input.idx, segment_doc_lens, id) as f32)
+        .collect();
+    let mut ranked: Vec<(u32, f32)> = driving.docids.iter().map(|&id| (id, 0.0)).collect();
+    for (k, post) in input.posts.iter().enumerate() {
+        let live = post.live.expect("validated identical live posting");
+        assert_eq!(
+            live.tfs.len(),
+            ranked.len(),
+            "posting frequencies match IDs"
+        );
+        let idf = input.idfs[k];
+        for (((_, score), &tf), &doc_len) in ranked.iter_mut().zip(&live.tfs).zip(&doc_lens) {
+            *score += bm25_contrib(idf, tf as f32, doc_len, input.avgdl);
+        }
+    }
+    Some(ranked)
+}
+
 /// Streams the driving (rarest) token's active postings (`TokProbe::iter_active`,
 /// no per-token merged-`Vec` materialization — the 500k-hot-doc AND perf fix)
 /// and probes every other token either with a streaming zipper cursor
@@ -198,12 +237,15 @@ fn should_use_zipper(posts: &[TokProbe<'_>], drive: usize, drive_len: usize) -> 
 /// strategies and to the old per-token merged-postings walk. Returns the
 /// UNSORTED scores — see `build_single_token_ranked`'s doc comment on why.
 pub(super) fn build_and_ranked(input: AndRankInput<'_>) -> Vec<(u32, f32)> {
-    let mut ranked = Vec::with_capacity(input.drive_len);
     let segment_doc_lens = input
         .idx
         .segment
         .as_ref()
         .and_then(|seg| seg.text_doc_lens());
+    if let Some(ranked) = rank_identical_live_postings(&input, segment_doc_lens) {
+        return ranked;
+    }
+    let mut ranked = Vec::with_capacity(input.drive_len);
     if should_use_zipper(input.posts, input.drive, input.drive_len) {
         let mut cursors: Vec<Option<ZipCursor<'_>>> = input
             .posts

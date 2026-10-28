@@ -28,7 +28,7 @@ pub(super) fn eval_number_sort_keyword_term_page(
     descending: bool,
     want: usize,
     track_total: bool,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> SortedPageResult {
     let QueryNode::Term(t) = query else {
         return Ok(None);
     };
@@ -168,7 +168,7 @@ pub(super) fn try_generic_sort_plan(
     req: &SearchRequest,
     sort: &[SortSpec],
     sort_after: Option<&SortAfter>,
-) -> Result<Option<(Vec<(u32, f32)>, u64, PlanKind)>> {
+) -> SortedPlanResult {
     let want = req.limit as usize;
     let mut page: Vec<(u32, f32)> = Vec::with_capacity(want.min(1024));
     let mut total: u64 = 0;
@@ -178,7 +178,7 @@ pub(super) fn try_generic_sort_plan(
             let values = n.sorted_values();
             match first.order {
                 SortOrder::Asc => {
-                    for (_v, docs) in values.iter() {
+                    for docs in values.values() {
                         if !visit_sorted_bucket(
                             coll, req, sort, docs, sort_after, &mut page, &mut total,
                         )? {
@@ -201,7 +201,7 @@ pub(super) fn try_generic_sort_plan(
             let terms = k.live_terms();
             match first.order {
                 SortOrder::Asc => {
-                    for (_term, docs) in terms.iter() {
+                    for docs in terms.values() {
                         if !visit_sorted_bucket(
                             coll, req, sort, docs, sort_after, &mut page, &mut total,
                         )? {
@@ -240,3 +240,7 @@ pub(super) fn try_generic_sort_plan(
     }
     Ok(Some((page, total, PlanKind::SortedField)))
 }
+
+type SortedPageResult = Result<Option<(Vec<(u32, f32)>, u64)>>;
+
+type SortedPlanResult = Result<Option<(Vec<(u32, f32)>, u64, PlanKind)>>;

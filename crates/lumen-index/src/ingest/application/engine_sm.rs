@@ -181,6 +181,7 @@ impl EngineSm {
             match self
                 .engine
                 .begin_admitted_record(record.entry, record.reservation)
+                .map_err(|reprice| *reprice)
             {
                 Ok(mut guard) => {
                     let outcome = self.engine.apply_prepared_raft_entry(&mut guard);

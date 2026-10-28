@@ -89,7 +89,7 @@ fn write_present_stream(
             word = 0;
         }
     }
-    if n_docs % 64 != 0 {
+    if !n_docs.is_multiple_of(64) {
         write_counted(out, at, &word.to_le_bytes())?;
         words += 1;
     }

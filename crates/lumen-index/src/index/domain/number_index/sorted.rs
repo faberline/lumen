@@ -92,12 +92,12 @@ impl NumberIndex {
     ///     value, identical to the in-RAM `values` `Ord`; reversed for desc), and
     ///   * within-value docid order = ascending (base ids `< seg.n_docs` precede
     ///     tail ids, exactly the OR'd-bitmap iteration order the in-RAM walk used),
-    /// so the emitted (value, docid) sequence is BYTE-IDENTICAL to the in-RAM
-    /// `sorted_values().iter()[.rev()]` walk. `visit` returns `Ok(true)` to
-    /// continue or `Ok(false)` to stop early (page full + `!track_total`); the walk
-    /// short-circuits on `Ok(false)` so `pure_sort`/`filter_sort` only touch (and
-    /// cache) the first few values' postings. Returns `Ok(())` once every value is
-    /// visited or the callback stops.
+    ///     so the emitted (value, docid) sequence is BYTE-IDENTICAL to the in-RAM
+    ///     `sorted_values().iter()[.rev()]` walk. `visit` returns `Ok(true)` to
+    ///     continue or `Ok(false)` to stop early (page full + `!track_total`); the walk
+    ///     short-circuits on `Ok(false)` so `pure_sort`/`filter_sort` only touch (and
+    ///     cache) the first few values' postings. Returns `Ok(())` once every value is
+    ///     visited or the callback stops.
     ///
     /// Both sources are ascending; a value present in BOTH the segment column and
     /// the live tail is visited ONCE with the unioned posting (the merge advances
@@ -123,7 +123,7 @@ impl NumberIndex {
                 .map(|bits| (bits, true)),
             descending,
         )?;
-        let mut disk = cursor.next()?;
+        let mut disk = cursor.try_next()?;
         let tail_keys: Vec<SortableF64> = if descending {
             self.values
                 .keys()
@@ -172,7 +172,7 @@ impl NumberIndex {
                 tail_key = tail.next();
             }
             if take_disk {
-                disk = cursor.next()?;
+                disk = cursor.try_next()?;
             }
             let value = SortableF64::from_bits(bits).to_f64();
             for id in posting {
@@ -181,7 +181,7 @@ impl NumberIndex {
                 }
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     /// SEGMENT-ON standalone range page. Unlike `sorted_values()`, this streams only
@@ -200,7 +200,7 @@ impl NumberIndex {
         let mut page = Vec::with_capacity(want.min(1024));
         let mut total = 0u64;
         let mut cursor = seg.number_keys(bound_to_bits(low), bound_to_bits(high), false)?;
-        let mut disk = cursor.next()?;
+        let mut disk = cursor.try_next()?;
         let mut tail = self.values.range((low, high)).peekable();
         loop {
             let (bits, take_disk, take_tail) = match (disk, tail.peek()) {
@@ -226,7 +226,7 @@ impl NumberIndex {
                 posting |= tail_posting;
             }
             if take_disk {
-                disk = cursor.next()?;
+                disk = cursor.try_next()?;
             }
             total += posting.len();
             for id in posting {
@@ -241,6 +241,6 @@ impl NumberIndex {
         if !track_total {
             total = total.max(page.len() as u64);
         }
-        return Ok((page, total));
+        Ok((page, total))
     }
 }

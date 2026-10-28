@@ -110,8 +110,9 @@ const MERGE_CASE: &str = "merge";
 const INCREMENTAL_TEST: &str = "incremental_checkpoint_skips_only_durable_inherited_payloads";
 const MERGE_TEST: &str = "one_field_background_merge_skips_only_durable_inherited_payloads";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 enum SyncMode {
+    #[default]
     Off,
     Inherited(PathBuf),
     FreshManifest,
@@ -121,12 +122,6 @@ enum SyncMode {
         collection: String,
         field: String,
     },
-}
-
-impl Default for SyncMode {
-    fn default() -> Self {
-        Self::Off
-    }
 }
 
 /// The existing durable-library injector sees the exact relative file that
