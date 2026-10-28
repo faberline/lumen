@@ -24,10 +24,40 @@ impl LumenSpec {
             ));
         }
         if let Some(limit) = self.body_limit_bytes {
-            if limit < MIN_BODY_LIMIT_BYTES || limit > MAX_BODY_LIMIT_BYTES {
+            if !(MIN_BODY_LIMIT_BYTES..=MAX_BODY_LIMIT_BYTES).contains(&limit) {
                 return Err(format!(
                     "bodyLimitBytes ({limit}) must be between {MIN_BODY_LIMIT_BYTES} (1 MiB) and {MAX_BODY_LIMIT_BYTES} (64 MiB) inclusive"
                 ));
+            }
+        }
+        if !self.placement.zones.is_empty() {
+            let mut seen = std::collections::BTreeSet::new();
+            for zone in &self.placement.zones {
+                if zone.trim().is_empty() {
+                    return Err(format!(
+                        "placement.zones entry cannot be empty or blank: {zone:?}"
+                    ));
+                }
+                if crate::domain::capacity::is_valid_direct_gce_machine_type(zone) {
+                    return Err(format!(
+                        "placement.zones entry `{zone}` is a machine type; machine types are not allowed in placement.zones"
+                    ));
+                }
+                if !seen.insert(zone) {
+                    return Err(format!(
+                        "placement.zones contains duplicate zone: `{zone}`"
+                    ));
+                }
+            }
+            if self.replicas_per_shard > 1 {
+                let required = std::cmp::min(self.replicas_per_shard as usize, 3);
+                if seen.len() < required {
+                    return Err(format!(
+                        "placement.zones specifies {} distinct zone(s), but replicasPerShard ({}) requires at least {required}",
+                        seen.len(),
+                        self.replicas_per_shard
+                    ));
+                }
             }
         }
         Ok(())
