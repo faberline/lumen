@@ -62,7 +62,7 @@ PLAN = obj({'requirements': {'type': 'array', 'minItems': 1, 'items': obj({
 
 def invoke(packet, schema, phase):
     raw = json.dumps(packet, ensure_ascii=False, separators=(',', ':'))
-    assert len(raw.encode()) <= 2 * 1024 * 1024, 'packet_bound_exceeded'
+    assert len(raw.encode()) <= 4 * 1024 * 1024, 'packet_bound_exceeded'
     oauth = os.environ['CLAUDE_CODE_OAUTH_TOKEN']
     supply = json.loads((ROOT / 'supply.json').read_text())
     cli = '/usr/local/bin/claude'
@@ -113,26 +113,50 @@ issue = {k: issue[k] for k in ('number', 'title', 'body')}
 assert git('rev-parse', 'HEAD').strip() == HEAD
 paths = git('diff', '--name-only', '--no-renames', BASE, HEAD).splitlines()
 diff = git('diff', '--no-ext-diff', '--no-renames', '--unified=5', BASE, HEAD)
-human = '''The human explicitly requested complete common test coverage rules,
-repair of Lumen #185 and Core #74, strict Clippy fixes, HTTP/2 performance fixes,
-and remaining cloud test failures; commit and push fixes and verify all CI.
-The human now requests the latest commit's final Claude Code Review, fixes to
-any valid findings, another review, and all CI passing. Never weaken thresholds.
-Earlier explicit authorization covers N4-compatible test storage. The human
-approved 16 GB boot disks after 10 GB was rejected. No merge, issue closure,
-release, qualification-policy activation, or weakening tests is authorized.
+human = '''The human explicitly requested complete common manifest-derived test
+coverage rules and repair of this PR's strict Clippy and remaining cloud test
+failures. Commit and push valid fixes and verify all current-head CI.
+The agreed ordinary unit matrix covers default, no-default, each named manifest
+feature, and all-features. This is not feature power-set testing. Specific feature
+combinations required by original product issues remain separate qualification
+obligations and may not be waived by this infrastructure PR.
+The human now requests this PR's latest commit's final Claude Code Review,
+fixes to valid findings, another review, and all CI passing. Never weaken
+thresholds. The human authorized the online and local diagnostic tests used to
+repair the actual cloud failures, beyond the original planning-only authority.
+No merge, issue closure, release, qualification-policy activation, or weakening
+tests is authorized. Other repositories' work is not a requirement for this diff.
+'''
+if REPO.endswith('/lumen'):
+    human += '''Lumen-specific authorization includes N4-compatible GKE test
+storage, necessary strict Clippy repairs and repair of the newly exposed AND
+ranking failure while retaining the original 50 ms and 20x bounds. No HTTP/2
+change or boot-disk configuration belongs in this PR; those are separate Core
+and AW work. The original product PR #119 must retain its head.
+'''
+else:
+    human += '''Core-specific authorization includes strict Clippy repairs,
+HTTP/2 performance repair under the unchanged 128-request/5-second bound, and
+repair of the cloud Raft handoff failure under the unchanged transfer deadlines.
+Lumen storage, ranking and milestone work are not requirements for Core.
 '''
 packet = dict(repo=REPO, pr=PR, head=HEAD, base=BASE, issue=issue,
     human_scope_extensions=human, pr_title=pull['title'], pr_body=pull['body'],
     changed_files=paths, complete_diff=diff, current_head_ci=checks,
+    available_head_paths=git('ls-tree', '-r', '--name-only', HEAD).splitlines(),
     qualification='Existing failure-only and functional/E2E/performance qualification holds remain.')
 save('identity.json', dict(repo=REPO, pr=PR, head=HEAD, base=BASE, files=paths,
     diff_sha256=hashlib.sha256(diff.encode()).hexdigest(), checks=checks,
     control_commit=os.environ['GITHUB_SHA']))
 print('exact_identity_and_all_CI_verified', len(paths), len(checks), flush=True)
+if REPO.endswith('/lumen'):
+    packet['milestone_identity_readback'] = [{k:m[k] for k in ('number','title','html_url','description','state')}
+        for m in pages('milestones?state=all')]
 plan = invoke(packet, PLAN, '''PLANNING phase. Extract all original issue acceptance and Never requirements,
 plus the explicit human scope extensions. Request only necessary same-repo source
 files in supporting_paths. Do not make a final verdict or report bugs yet.
+Use available_head_paths for exact source names. At most 64 distinct supporting
+files can be collected. Request necessary source, not speculative file names.
 Each contract_quote must be literal text from the issue title/body or the human
 scope extension. Missing initial source is a request, not a reason to block.
 ''')
@@ -142,7 +166,7 @@ assert all(r['contract_quote'] in contract for r in plan['requirements']), 'inve
 save('plan.json', plan)
 supporting = []
 requested = sorted({p for r in plan['requirements'] for p in r['supporting_paths']})
-assert len(requested) <= 40, 'source_request_bound'
+assert len(requested) <= 64, 'source_request_bound'
 for path in requested:
     assert path and not path.startswith('/') and all(p not in ('.', '..', '') for p in path.split('/')) and '\\' not in path
     for ref in (BASE, HEAD):
