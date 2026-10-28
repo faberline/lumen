@@ -6,10 +6,12 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
+use crate::domain::lumen_fleet::plan::{
+    apply_object, plan, plan_prune, seed_object, PruneDecision,
+};
 use crate::domain::lumen_fleet::{
-    FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, PrunePolicy, FLEET_LABEL,
-    FLEET_MANAGER, FLEET_SEED_MANAGER,
+    FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL, FLEET_MANAGER,
+    FLEET_SEED_MANAGER,
 };
 use crate::domain::lumen_spec::Lumen;
 
@@ -190,26 +192,27 @@ async fn prune(
     let lumens: kube::Api<Lumen> = kube::Api::all(client.clone());
     let params = kube::api::ListParams::default().labels(&format!("{FLEET_LABEL}={fleet_name}"));
     let mut out = Vec::new();
-    for live in lumens.list(&params).await?.items {
-        let namespace = live.namespace().unwrap_or_default();
-        let name = live.name_any();
-        if declared.contains(&(namespace.clone(), name.clone())) {
-            continue;
-        }
+    let live_lumens = lumens.list(&params).await?.items;
+    let live_pairs: Vec<(String, String)> = live_lumens
+        .iter()
+        .map(|live| (live.namespace().unwrap_or_default(), live.name_any()))
+        .collect();
+
+    let decisions = plan_prune(fleet.spec.prune_policy, declared, &live_pairs);
+    for ((namespace, name), decision) in live_pairs.iter().zip(decisions) {
         let orphan = PlannedInstance {
             namespace: namespace.clone(),
             name: name.clone(),
             outcome: PlanOutcome::Rejected(String::new()),
         };
-        match fleet.spec.prune_policy {
-            PrunePolicy::Retain => out.push(entry(
-                &orphan,
-                "Orphaned",
-                "no longer declared by this fleet; retained (set prunePolicy: Delete to remove)",
-            )),
-            PrunePolicy::Delete => {
-                let scoped: kube::Api<Lumen> = kube::Api::namespaced(client.clone(), &namespace);
-                match scoped.delete(&name, &Default::default()).await {
+        match decision {
+            PruneDecision::Keep => {}
+            PruneDecision::Orphaned { message } => {
+                out.push(entry(&orphan, "Orphaned", &message));
+            }
+            PruneDecision::Delete => {
+                let scoped: kube::Api<Lumen> = kube::Api::namespaced(client.clone(), namespace);
+                match scoped.delete(name, &Default::default()).await {
                     Ok(_) => out.push(entry(&orphan, "Pruned", "")),
                     Err(err) => out.push(entry(&orphan, "ApplyFailed", &err.to_string())),
                 }
@@ -224,11 +227,7 @@ async fn namespace_exists(client: &kube::Client, namespace: &str) -> anyhow::Res
     Ok(api.get_opt(namespace).await?.is_some())
 }
 
-pub(in crate) fn entry(
-    instance: &PlannedInstance,
-    state: &str,
-    message: &str,
-) -> FleetEntryStatus {
+pub(crate) fn entry(instance: &PlannedInstance, state: &str, message: &str) -> FleetEntryStatus {
     FleetEntryStatus {
         namespace: instance.namespace.clone(),
         name: instance.name.clone(),
