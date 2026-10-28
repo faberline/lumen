@@ -89,3 +89,9 @@ It failed before deployment because `lumen-data` selected default
 reported the same refusal. This branch fixes those overlay inputs; it does not
 rewrite either original product head or turn those failed attempts into passes.
 Fresh cloud execution and independent review are still required.
+
+The first online PR attempt exposed existing workspace formatting differences,
+which initially suppressed the unit matrix. Formatting now runs independently;
+a red format result cannot skip the 31 unit rows. The original product files
+are not reformatted in this infrastructure change. The milestone job also
+correctly reported the outstanding #119 mapping errors online.
