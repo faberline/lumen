@@ -1,0 +1,49 @@
+name: Final Claude exact-head review
+on:
+  push:
+    branches: [codex/final-claude-review-lumen185-20261028]
+    paths: [".github/workflows/final-claude-review.yml", "scripts/final-review/**"]
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  issues: read
+jobs:
+  final-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Provision pinned official Claude without credentials
+        id: provision
+        run: python3 -I scripts/issue-ci/provision-claude.py
+      - name: Install verified CLI
+        env:
+          VERIFIED_BINARY: ${{ steps.provision.outputs.binary }}
+        run: sudo install -m 0755 -- "$VERIFIED_BINARY" /usr/local/bin/claude
+      - name: Checkout exact candidate source for reading only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: b95bda7cf3e607ba593d96bd94614750543f8800
+          path: scripts/final-review/source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Review complete diff and exact issue contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          REVIEW_REPO: faberline/lumen
+          REVIEW_PR: "185"
+          REVIEW_ISSUE: "184"
+          REVIEW_HEAD: b95bda7cf3e607ba593d96bd94614750543f8800
+          REVIEW_BASE: b49ab68d9a2ce5b77ae5524115c7b04ef5dbec6b
+        run: python3 -I scripts/final-review/runner.py
+      - name: Preserve review evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: final-claude-lumen-b95bda7cf3e6
+          path: scripts/final-review/evidence/
+          if-no-files-found: warn
