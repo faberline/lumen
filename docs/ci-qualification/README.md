@@ -168,3 +168,17 @@ The helper suite now has 64 passing controls, including failures for missing
 release rosters and ignored names that did not execute. Current compiler checks
 also run locally with Rust 1.99.1 on macOS. Full Linux cloud CI remains the final
 validation for every one of the 31 feature rows and the GKE scenarios.
+
+The newly executed release measurement exposed a real AND-ranking bottleneck:
+65.36305 ms in cloud CI and 69.26375 ms in an isolated local run, against the
+unchanged 50 ms bound. When every query token has identical live posting IDs,
+the intersection is already known. Ranking now scans contiguous frequencies
+by token, retaining the original BM25 expression and each document's token
+accumulation order. Other posting shapes keep their existing merge/probe path.
+One temporary f32 document-length value per hit supports the column scan.
+The unchanged timing fixture measured 19.877458 ms locally. A separate test
+compares exact score bits for identical/partial sets, every driving token and
+live IDs that override tombstones. No fixture size or performance bound changes.
+The complete local release target then passed all 978 tests with zero failed,
+ignored, filtered or measured cases. Strict all-target/all-feature Clippy also
+passed. These local results do not replace fresh exact-head Linux CI.

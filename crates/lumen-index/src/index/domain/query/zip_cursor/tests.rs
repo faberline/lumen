@@ -127,6 +127,59 @@ fn build_and_ranked_agrees_with_reference_dense_and_sparse() {
     }
 }
 
+/// Equal and unequal live sets retain exact score bits for every driver.
+#[test]
+fn identical_and_partial_live_postings_keep_score_bits_for_every_driver() {
+    let idx = TextIndex {
+        doc_count: 10,
+        total_doc_len: 50,
+        lens: vec![2, 3, 7, 1, 8, 4, 9, 5, 6, 5],
+        ..Default::default()
+    };
+    let idfs = [0.13, 0.71, 0.29];
+    let avgdl = 5.0;
+    let mut tombstones = RoaringBitmap::new();
+    tombstones.insert(4); // A live row still overrides a segment tombstone.
+    for partial in [false, true] {
+        let mut pairs = vec![
+            vec![(1, 1), (4, 3), (7, 2)],
+            vec![(1, 7), (4, 1), (7, 4)],
+            vec![(1, 2), (4, 5), (7, 1)],
+        ];
+        if partial {
+            pairs[2].pop();
+        }
+        let postings: Vec<Postings> = pairs.iter().map(|pairs| postings_from(pairs)).collect();
+        let posts: Vec<TokProbe<'_>> = postings
+            .iter()
+            .map(|live| TokProbe {
+                seg: None,
+                live: Some(live),
+                staged: Vec::new(),
+                tombstones: &tombstones,
+            })
+            .collect();
+        let expected: Vec<_> = reference_and_scores(&idx, &pairs, &idfs, avgdl)
+            .into_iter()
+            .map(|(id, score)| (id, score.to_bits()))
+            .collect();
+        for (drive, driving_pairs) in pairs.iter().enumerate() {
+            let actual: Vec<_> = build_and_ranked(AndRankInput {
+                idx: &idx,
+                posts: &posts,
+                idfs: &idfs,
+                drive,
+                drive_len: driving_pairs.len(),
+                avgdl,
+            })
+            .into_iter()
+            .map(|(id, score)| (id, score.to_bits()))
+            .collect();
+            assert_eq!(actual, expected, "partial={partial}, driver={drive}");
+        }
+    }
+}
+
 /// The dense/sparse switch itself: a sparse driver against one huge dense
 /// other posting must stay on the binary-search probe (a streaming pass
 /// over the dense posting would be strictly more work), while two
