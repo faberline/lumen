@@ -15,7 +15,7 @@ def fixture(raw, expected_sha256):
     if hashlib.sha256(raw).hexdigest() != expected_sha256:
         raise ValueError('validator policy changed: fixture SHA-256 mismatch')
     policy = json.loads(raw)
-    if policy.get('version') != 1 or policy.get('repository') != 'faberline/lumen':
+    if type(policy.get('version')) is not int or policy['version'] != 1 or policy.get('repository') != 'faberline/lumen':
         raise ValueError('unknown milestone contract')
     milestones = policy.get('milestones', [])
     links = policy.get('links', [])
@@ -24,6 +24,11 @@ def fixture(raw, expected_sha256):
     native = {m['number']: m for m in milestones}
     if len(native) != len(milestones):
         raise ValueError('duplicate milestone identity')
+    if any(type(m['number']) is not int or m['number'] <= 0
+           or not isinstance(m.get('title'), str) or not m['title'].strip()
+           or m.get('html_url') != f"https://github.com/faberline/lumen/milestone/{m['number']}"
+           for m in milestones):
+        raise ValueError('invalid native milestone identity')
     result = {}
     for item in links:
         path = Path(item['file'])
@@ -52,7 +57,7 @@ def verify(root, expected):
         if not path.resolve().is_relative_to(root):
             raise ValueError('document symlink leaves checkout')
         name = str(path.relative_to(root))
-        section, heading_number, fence = '', None, None
+        section, heading_number, fence, outcome = '', None, None, False
         for line_number, line in enumerate(path.read_text().splitlines(), 1):
             marker = re.match(r'^\s*(`{3,}|~{3,})', line)
             if marker:
@@ -69,12 +74,17 @@ def verify(root, expected):
                 suffix = SUFFIX.search(heading[1])
                 heading_number = int(suffix[1]) if suffix else None
                 section = SUFFIX.sub('', heading[1]).strip()
+                outcome = False
+            if re.match(r'^\s*- (?:Outcome|Status rows):\s+\S', line):
+                outcome = True
             matches = list(LINK.finditer(line))
             if ('/milestone/' in line or '[Milestone #' in line) and not matches and not heading:
                 errors.append(f'{name}:{line_number}: malformed milestone link')
             for match in matches:
                 key = (name, section)
                 number = int(match[1])
+                if not outcome:
+                    errors.append(f'{name}:{line_number}: missing outcome/status linkage')
                 url = f'https://github.com/faberline/lumen/milestone/{number}'
                 if match[2] != url:
                     errors.append(f'{name}:{line_number}: link text and URL disagree')

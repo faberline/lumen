@@ -48,6 +48,13 @@ class DocumentControls(unittest.TestCase):
                 self.path.write_text(text)
                 docs.verify(self.root, self.expected)
 
+    def test_tracking_link_requires_nonempty_outcome_field(self):
+        for text in (self.good.replace('- Outcome: acknowledged writes survive restart.\n', ''),
+                     self.good.replace('acknowledged writes survive restart.', '')):
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, 'outcome/status linkage'):
+                self.path.write_text(text)
+                docs.verify(self.root, self.expected)
+
     def test_heading_number_must_match_tracking(self):
         self.path.write_text(self.good.replace('Durable writes\n', 'Durable writes (Milestone #9)\n'))
         with self.assertRaisesRegex(ValueError, 'heading'):
@@ -76,6 +83,11 @@ class DocumentControls(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'changed'):
             docs.fixture(raw, '0' * 64)
         with self.assertRaisesRegex(ValueError, 'empty'):
+            docs.fixture(raw, hashlib.sha256(raw).hexdigest())
+
+    def test_boolean_contract_version_refuses(self):
+        raw = json.dumps({'version': True, 'repository': 'faberline/lumen'}).encode()
+        with self.assertRaisesRegex(ValueError, 'unknown'):
             docs.fixture(raw, hashlib.sha256(raw).hexdigest())
 
 

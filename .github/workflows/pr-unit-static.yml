@@ -105,7 +105,7 @@ jobs:
           persist-credentials: false
       - name: Verify frozen proposed policy bytes
         run: |
-          echo "0cb8821bda294d82cf067a2661234334e125bcd27c6f5b01a6cb90ac2d698dbd  scripts/pr-gates/docs.py" | sha256sum --check
+          echo "3631fa4b106144de40ec4d55ff8bc06df09f08d731bd31d2ca15d5c8f2d8c69d  scripts/pr-gates/docs.py" | sha256sum --check
           echo "58ed020068f1c70b8043c23fd4eee1b157c9a70a3e11516eb7811872fca920fb  docs/ci-qualification/milestones.json" | sha256sum --check
       - name: Validate native milestone identities, tracking labels and outcome sections
         run: python3 scripts/pr-gates/docs.py --fixture docs/ci-qualification/milestones.json --fixture-sha256 58ed020068f1c70b8043c23fd4eee1b157c9a70a3e11516eb7811872fca920fb

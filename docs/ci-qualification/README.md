@@ -56,7 +56,7 @@ bytes require independent review; this hash check cannot approve a concurrent
 workflow edit. The external qualification policy remains the trust boundary.
 
 The offline validator checks nonempty inventory, native title/URL identities,
-link-label/URL agreement, heading/tracking agreement, complete outcome sections,
+link-label/URL agreement, heading/tracking agreement, complete outcome sections with nonempty outcome/status fields,
 and unknown or duplicated applicability. It scans the maintained root and docs
 files, rejects checkout-escaping symlinks, and never executes document snippets.
 Fenced snippets cannot satisfy a tracking assertion. This is a milestone
@@ -64,7 +64,7 @@ contract check, not a claim to check every external URL or all documentation.
 
 Local controls passed on 2026-10-28:
 
-- 52 isolated Python fixtures passed; no Cargo product process was launched.
+- 54 isolated Python fixtures passed; no Cargo product process was launched.
 - Fresh offline Cargo metadata produced the seven-package/nine-target/31-row
   inventory without a build.
 - Current main's documents were correctly refused with 85 mapping errors.
