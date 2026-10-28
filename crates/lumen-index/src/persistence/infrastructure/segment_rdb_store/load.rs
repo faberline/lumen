@@ -5,7 +5,7 @@ use crate::index::application::{engine::Engine, recovery_profile::RecoveryPhase}
 use crate::persistence::infrastructure::segment_rdb_store::startup::{
     SegmentStartupDecision, SegmentStartupOutcome, StartupBootstrap,
 };
-use crate::persistence::infrastructure::segment_rdb_store::telemetry::generation_disk_bytes;
+use crate::persistence::infrastructure::segment_rdb_store::telemetry;
 use crate::persistence::infrastructure::segment_rdb_store::{
     LoadedSegmentGeneration, SegmentRdbStore, HNSW_GRAPH_CACHE_DIR,
 };
@@ -17,7 +17,17 @@ use storage_durable::{CurrentReadErrorKind, CurrentTarget};
 impl SegmentRdbStore {
     /// Allocated generation bytes, counted once per file identity across hard links.
     pub fn disk_bytes(&self) -> Result<u64> {
-        generation_disk_bytes(&self.root)
+        let mut guard = self
+            .inventory
+            .lock()
+            .map_err(|_| anyhow::anyhow!("segment inventory lock poisoned"))?;
+        if let Some(inventory) = guard.as_ref() {
+            return Ok(inventory.total_bytes());
+        }
+        let inv = telemetry::RetainedInventory::full_walk(&self.root)?;
+        let total = inv.total_bytes();
+        *guard = Some(inv);
+        Ok(total)
     }
 
     /// Optional acceleration only. The caller holds the mutation fence; the
