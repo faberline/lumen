@@ -321,6 +321,14 @@ def execute(root, package, profile, kind, provenance):
             argv += ['--', '--format', 'pretty', '--color', 'never']
         record = {'command': argv, 'package': package['name'], 'target': target,
                   'profile': profile, 'provenance': provenance, 'qualification': 'not evaluated'}
+        if kind == 'unit':
+            try:
+                before = _list_unit_tests(root, package, profile, target)
+            except ValueError as error:
+                errors.append(f'{target}: {error}')
+                record['evidence_error'] = str(error)
+                print(json.dumps(record), flush=True)
+                continue
         print(json.dumps(record), flush=True)
         result = _run_product(argv, root)
         if result.returncode:
@@ -330,7 +338,7 @@ def execute(root, package, profile, kind, provenance):
                 debug = _libtest_blocks(result.stdout, 1, pending_ignored=True)
                 debug_names = {name for block in debug for name in block['roster'] + block['ignored_roster']}
                 listed = _list_unit_tests(root, package, profile, target)
-                if listed != debug_names:
+                if before != listed or listed != debug_names:
                     raise ValueError('debug execution differs from discovered unit roster')
                 record['discovered_unit_roster'] = sorted(listed)
                 ignored = {name for block in debug for name in block['ignored_roster']}
@@ -342,6 +350,7 @@ def execute(root, package, profile, kind, provenance):
                     release_argv = command(package, profile, 'unit', target)
                     release_argv.insert(2, '--release')
                     release_argv += ['--', '--format', 'pretty', '--color', 'never', '--include-ignored']
+                    release_before = _list_unit_tests(root, package, profile, target, release=True)
                     print(json.dumps({**record, 'command': release_argv, 'phase': 'release-all-including-ignored'}), flush=True)
                     release = _run_product(release_argv, root)
                     if release.returncode:
@@ -351,7 +360,7 @@ def execute(root, package, profile, kind, provenance):
                     if not ignored <= executed:
                         raise ValueError('ignored unit names missing from complete release execution')
                     release_listed = _list_unit_tests(root, package, profile, target, release=True)
-                    if not debug_names <= release_listed or release_listed != executed:
+                    if release_before != release_listed or not debug_names <= release_listed or release_listed != executed:
                         raise ValueError('release execution differs from discovered unit roster')
                     record['release_command'] = release_argv
                     record['resolved_ignored_roster'] = sorted(ignored)

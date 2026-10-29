@@ -299,18 +299,20 @@ class RosterDiscoveryTests(unittest.TestCase):
 
     @patch.object(plan.subprocess, 'run')
     def test_debug_execution_must_match_discovery_names(self, run):
-        run.side_effect=[subprocess.CompletedProcess([],0,output(),''),
-                         subprocess.CompletedProcess([],0,'alpha: test\ndifferent: test\n\n2 tests, 0 benchmarks\n','')]
+        listed='alpha: test\ndifferent: test\n\n2 tests, 0 benchmarks\n'
+        run.side_effect=[subprocess.CompletedProcess([],0,listed,''),subprocess.CompletedProcess([],0,output(),''),
+                         subprocess.CompletedProcess([],0,listed,'')]
         with contextlib.redirect_stdout(io.StringIO()),self.assertRaisesRegex(ValueError,'debug execution differs'):
             plan.execute('/head',package(),'default','unit',{})
-        self.assertIn('--list',run.call_args_list[1].args[0])
-        self.assertNotIn('--release',run.call_args_list[1].args[0])
+        self.assertIn('--list',run.call_args_list[0].args[0])
+        self.assertNotIn('--release',run.call_args_list[0].args[0])
 
     @patch.object(plan.subprocess, 'run')
     def test_release_must_discover_and_execute_all_debug_names(self, run):
         pending=output(passed=1,ignored=1,roster=['alpha']).replace('test alpha ... ok\n','test alpha ... ok\ntest beta ... ignored\n')
         listed='alpha: test\nbeta: test\n\n2 tests, 0 benchmarks\n'
-        run.side_effect=[subprocess.CompletedProcess([],0,pending,''),subprocess.CompletedProcess([],0,listed,''),
+        run.side_effect=[subprocess.CompletedProcess([],0,listed,''),subprocess.CompletedProcess([],0,pending,''),
+                         subprocess.CompletedProcess([],0,listed,''),subprocess.CompletedProcess([],0,listed,''),
                          subprocess.CompletedProcess([],0,output(),''),
                          subprocess.CompletedProcess([],0,'beta: test\ndifferent: test\n\n2 tests, 0 benchmarks\n','')]
         with contextlib.redirect_stdout(io.StringIO()),self.assertRaisesRegex(ValueError,'release execution differs'):
@@ -320,10 +322,19 @@ class RosterDiscoveryTests(unittest.TestCase):
 
     @patch.object(plan.subprocess, 'run')
     def test_failed_discovery_is_not_execution_evidence(self, run):
-        run.side_effect=[subprocess.CompletedProcess([],0,output(),''),subprocess.CompletedProcess([],101,'','failed list')]
+        run.side_effect=[subprocess.CompletedProcess([],101,'','failed list')]
         with contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaisesRegex(ValueError,'discovery failed with exit 101'):
                 plan.execute('/head',package(),'default','unit',{})
+
+    @patch.object(plan.subprocess, 'run')
+    def test_changing_discovery_roster_after_execution_refuses(self, run):
+        listed='alpha: test\nbeta: test\n\n2 tests, 0 benchmarks\n'
+        changed='alpha: test\ndifferent: test\n\n2 tests, 0 benchmarks\n'
+        run.side_effect=[subprocess.CompletedProcess([],0,listed,''),subprocess.CompletedProcess([],0,output(),''),
+                         subprocess.CompletedProcess([],0,changed,'')]
+        with contextlib.redirect_stdout(io.StringIO()),self.assertRaisesRegex(ValueError,'debug execution differs'):
+            plan.execute('/head',package(),'default','unit',{})
 
 
 if __name__ == '__main__':

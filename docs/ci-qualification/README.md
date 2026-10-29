@@ -6,8 +6,9 @@ not approve product acceptance or change the existing failure-only lifecycle.
 The unit/static planner inventories the full Cargo workspace at the exact pull
 request head and base. It runs each enabled library and binary unit target for
 every declared feature profile. It compares the nonempty execution roster with
-the test harness's full discovery list for each target. If ignored tests require
-a release run, that run must include every debug test and match its own list.
+the test harness's full discovery list before and after each target runs. If
+ignored tests require a release run, that run must include every debug test and
+match its own lists.
 It also runs Clippy with warnings denied and workspace formatting.
 Existing GKE, functional, integration and performance gates remain unchanged.
 
