@@ -9,6 +9,9 @@ every declared feature profile. It compares the nonempty execution roster with
 the test harness's full discovery list before and after each target runs. If
 ignored tests require a release run, that run must include every debug test and
 match its own lists.
+It checks both checkouts for tracked and non-ignored untracked changes before
+and after metadata generation and product commands. A detected change fails the
+job. This is not proof that files could not change and be restored during a run.
 It also runs Clippy with warnings denied and workspace formatting.
 Existing GKE, functional, integration and performance gates remain unchanged.
 
