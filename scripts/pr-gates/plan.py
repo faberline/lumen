@@ -46,6 +46,8 @@ def inventory(root, metadata):
                          'required-features': t.get('required-features', []),
                          'harness': True, 'test': True} for t in targets],
             'dependencies': sorted({d['name'] for d in package['dependencies']}),
+            'optional_dependencies': sorted({d.get('rename') or d['name']
+                                             for d in package['dependencies'] if d.get('optional') is True}),
         })
         row = result[-1]
         coverage = [target_coverage(row, profile) for profile in profiles(row)]
@@ -91,8 +93,17 @@ def enabled_features(package, profile):
     while roots - result:
         feature = sorted(roots - result)[0]
         result.add(feature)
-        roots.update(value for value in package['features'].get(feature, [])
-                     if value in package['features'])
+        for value in package['features'].get(feature, []):
+            if value in package['features']:
+                roots.add(value)
+            elif '/' in value:
+                dependency, _ = value.split('/', 1)
+                # Cargo enables an optional dependency for dep/feature, but
+                # dep?/feature leaves it disabled. A matching crate feature
+                # can then satisfy a target's required-features.
+                if (not dependency.endswith('?') and dependency in package.get('optional_dependencies', [])
+                        and dependency in package['features']):
+                    roots.add(dependency)
     return result
 
 
