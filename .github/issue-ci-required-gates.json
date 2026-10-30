@@ -58,7 +58,7 @@
     "gates": {
       ".github/workflows/gke-test.yml": {
         "id": 385337134,
-        "definition_sha": "94550e358bd840bd59c64f0d70bfb29a71659715"
+        "definition_sha": "8a5532f34f7cff35d4e17944e4cebbc35b6b5a9d"
       }
     },
     "protected_paths": [
