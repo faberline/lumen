@@ -178,6 +178,22 @@ class InventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'declared member missing'):
             plan.inventory(self.root,self.metadata)
 
+    def test_recursive_member_glob_includes_deep_package(self):
+        self.add_package('deep','implicit/one/two/unit')
+        (self.root/'Cargo.toml').write_text('[workspace]\nmembers=["crates/*","implicit/**/unit"]\n')
+        self.assertEqual(['deep','leaf'],[p['name'] for p in plan.inventory(self.root,self.metadata)])
+
+    def test_glob_includes_hidden_workspace_package(self):
+        self.add_package('hidden','crates/.hidden')
+        self.assertEqual(['hidden','leaf'],[p['name'] for p in plan.inventory(self.root,self.metadata)])
+
+    def test_exclude_glob_is_a_literal_and_does_not_hide_dependency(self):
+        self.add_package('skip','implicit/one/two/skip')
+        excluded=self.root/'implicit/one/two/skip'
+        (self.root/'Cargo.toml').write_text('[workspace]\nmembers=["crates/*"]\nexclude=["implicit/**/skip"]\n')
+        self.metadata['packages'][0]['dependencies'].append({'name':'skip','path':str(excluded)})
+        self.assertEqual(['leaf','skip'],[p['name'] for p in plan.inventory(self.root,self.metadata)])
+
     def test_root_package_is_a_workspace_member(self):
         manifest=self.root/'Cargo.toml'
         manifest.write_text('[package]\nname="root"\nversion="0.1.0"\n[workspace]\nmembers=["crates/*"]\n')

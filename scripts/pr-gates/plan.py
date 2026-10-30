@@ -17,13 +17,13 @@ def inventory(root, metadata):
     root = Path(root).resolve()
     manifest = tomllib.loads((root / 'Cargo.toml').read_text())
     workspace = manifest['workspace']
-    excludes = {Path(p).resolve() for pattern in workspace.get('exclude', [])
-                for p in glob.glob(str(root / pattern))}
+    # Cargo treats exclude entries as paths, not member-style glob patterns.
+    excludes = {(root / pattern).resolve() for pattern in workspace.get('exclude', [])}
     def excluded(directory):
         return any(directory == path or directory.is_relative_to(path) for path in excludes)
     expected = set()
     for pattern in workspace.get('members', []):
-        candidates = glob.glob(str(root / pattern))
+        candidates = glob.glob(str(root / pattern), recursive=True, include_hidden=True)
         if not glob.has_magic(pattern) and not candidates:
             raise ValueError('partial workspace inventory: declared member missing')
         for candidate in candidates:
