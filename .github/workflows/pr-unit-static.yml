@@ -16,11 +16,13 @@ jobs:
     timeout-minutes: 30
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      impact: ${{ steps.impact.outputs.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           path: candidate
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -42,9 +44,20 @@ jobs:
         run: |
           set -euo pipefail
           python3 candidate/scripts/pr-gates/plan.py inventory --root candidate --baseline-root baseline --expected-head "$EXPECTED_HEAD" --expected-base "$EXPECTED_BASE"
-          echo "matrix=$(python3 candidate/scripts/pr-gates/plan.py matrix --root candidate --baseline-root baseline --expected-head "$EXPECTED_HEAD" --expected-base "$EXPECTED_BASE")" >> "$GITHUB_OUTPUT"
+          matrix=$(python3 candidate/scripts/pr-gates/batches.py matrix --root candidate --baseline-root baseline --expected-head "$EXPECTED_HEAD" --expected-base "$EXPECTED_BASE")
+          printf 'matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+      - name: Record full changed paths and reverse dependency impact
+        id: impact
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          impact=$(python3 candidate/scripts/pr-gates/plan.py impact --root candidate --baseline-root baseline --expected-head "$EXPECTED_HEAD" --expected-base "$EXPECTED_BASE")
+          printf 'result=%s\n' "$impact" >> "$GITHUB_OUTPUT"
   workspace-format:
     name: workspace formatting
+    needs: inventory
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -59,10 +72,12 @@ jobs:
       - name: Check complete workspace formatting
         run: cargo fmt --all -- --check
   workspace-unit-static:
-    name: unit-static (${{ matrix.package }}, ${{ matrix.profile }})
+    name: unit-static batch (${{ matrix.batch }})
     needs: inventory
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Each original package/profile row retains its shared 30-minute limit.
+    # This job contains several complete rows instead of one matrix row.
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -85,28 +100,19 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: candidate -> target
-          shared-key: pr-unit-static-${{ matrix.package }}
+          shared-key: pr-unit-batch-${{ matrix.batch }}
           cache-on-failure: true
           cache-workspace-crates: false
-      - name: Run all enabled library and binary unit targets; require complete nonzero rosters
+      - name: Run every complete row with unit and Clippy; preserve per-case evidence
         env:
-          PACKAGE: ${{ matrix.package }}
-          PROFILE: ${{ matrix.profile }}
+          BATCH: ${{ matrix.batch }}
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
           EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
           CARGO_INCREMENTAL: "0"
-        run: python3 candidate/scripts/pr-gates/plan.py run --root candidate --baseline-root baseline --expected-head "$EXPECTED_HEAD" --expected-base "$EXPECTED_BASE" --package "$PACKAGE" --profile "$PROFILE" --kind unit
-      - name: Clippy over all targets with warnings denied
-        if: ${{ !cancelled() }}
-        env:
-          PACKAGE: ${{ matrix.package }}
-          PROFILE: ${{ matrix.profile }}
-          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
-          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
-          CARGO_INCREMENTAL: "0"
-        run: python3 candidate/scripts/pr-gates/plan.py run --root candidate --baseline-root baseline --expected-head "$EXPECTED_HEAD" --expected-base "$EXPECTED_BASE" --package "$PACKAGE" --profile "$PROFILE" --kind clippy
+        run: python3 candidate/scripts/pr-gates/batches.py run --root candidate --baseline-root baseline --expected-head "$EXPECTED_HEAD" --expected-base "$EXPECTED_BASE" --batch "$BATCH"
   milestone-docs:
     name: milestone document contracts
+    needs: inventory
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

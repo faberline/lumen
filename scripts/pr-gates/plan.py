@@ -110,12 +110,17 @@ def profiles(package):
     return ['default'] + (['no-default'] + ['feature:' + n for n in names] + ['all-features'] if package['features'] else [])
 
 
-def matrix(packages):
+def matrix_rows(packages):
     rows = [{'package': p['name'], 'profile': profile} for p in packages for profile in profiles(p)]
-    if len(rows) > 256:
-        raise ValueError('matrix exceeds GitHub limit; split explicitly without dropping rows')
     # Get a result from every package early, then run every additional feature row.
     rows.sort(key=lambda row: (row['profile'] != 'default', row['package'], row['profile']))
+    return rows
+
+
+def matrix(packages):
+    rows = matrix_rows(packages)
+    if len(rows) > 256:
+        raise ValueError('matrix exceeds GitHub limit; split explicitly without dropping rows')
     return {'include': rows}
 
 
@@ -196,6 +201,38 @@ def affected(packages, paths):
         if expanded == changed:
             return sorted(changed)
         changed = expanded
+
+
+def diff_paths(raw):
+    """Parse the complete NUL-separated name-status diff, including both rename paths."""
+    if not raw:
+        return []
+    fields = raw.split('\0')
+    if fields.pop() != '':
+        raise ValueError('incomplete NUL-separated changed-path inventory')
+    paths = set()
+    while fields:
+        status = fields.pop(0)
+        paired = re.fullmatch(r'[RC][0-9]{1,3}', status)
+        if status not in {'A', 'D', 'M', 'T'} and not (paired and int(status[1:]) <= 100):
+            raise ValueError('unknown changed-path status')
+        count = 2 if paired else 1
+        if len(fields) < count:
+            raise ValueError('partial renamed or changed path')
+        for _ in range(count):
+            path = fields.pop(0)
+            if not path or path.startswith('/') or any(p in ('', '.', '..', '.git') for p in path.split('/')):
+                raise ValueError('unsafe changed path')
+            paths.add(path)
+    return sorted(paths)
+
+
+def impact(root, packages, provenance, read=subprocess.check_output):
+    paths = diff_paths(read(['git', '-C', str(root), 'diff', '--find-renames', '--name-status', '-z',
+                            provenance['actual_base'], provenance['actual_head'], '--'], text=True))
+    return dict(schema='LUMEN_IMPACT_V1', provenance=provenance, changed_paths=paths,
+                affected_packages=affected(packages, paths), execution_selection='complete workspace',
+                selected_unit_rows=len(matrix_rows(packages)), qualification='not evaluated')
 
 
 def load(root, metadata_json=None):
@@ -446,7 +483,7 @@ def execute(root, package, profile, kind, provenance):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['matrix', 'inventory', 'run'])
+    parser.add_argument('action', choices=['matrix', 'inventory', 'impact', 'run'])
     parser.add_argument('--root', type=Path, default=Path.cwd())
     parser.add_argument('--metadata-json', type=Path, help='Offline inspection only; never execution evidence')
     parser.add_argument('--expected-head')
@@ -461,6 +498,8 @@ def main(argv=None):
         parser.error('identity triple must be complete: --expected-head --expected-base --baseline-root')
     if args.action == 'run' and (args.metadata_json is not None or not all(provided)):
         parser.error('run requires fresh metadata and --expected-head --expected-base --baseline-root')
+    if args.action == 'impact' and (args.metadata_json is not None or not all(provided)):
+        parser.error('impact requires fresh metadata and exact checkout identities')
     if not any(provided) and args.metadata_json is None:
         parser.error('inventory/matrix without identities require offline --metadata-json inspection')
     if args.metadata_json is not None and any(provided):
@@ -473,7 +512,11 @@ def main(argv=None):
         comparison = compare_inventory(load(args.baseline_root), packages)
         # Metadata generation must not silently change the evidence inputs.
         provenance = verify_identity(args.root, *provided)
-    if args.action == 'inventory':
+    if args.action == 'impact':
+        result = impact(args.root, packages, provenance)
+        verify_identity(args.root, *provided)
+        print(json.dumps(result, sort_keys=True))
+    elif args.action == 'inventory':
         print(json.dumps({'packages': packages, 'provenance': provenance,
                           'baseline_comparison': comparison, 'execution_selection': 'complete workspace',
                           'qualification': 'not evaluated'}, sort_keys=True, indent=2))
