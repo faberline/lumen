@@ -1,5 +1,5 @@
 {
-  "controller_source": "faberline/aw@28637704225692e5a1766b9c6b9778ef2b52e155:plugins/faberline/skills/issue-ci/scripts/native_merge.py",
+  "controller_source": "faberline/aw@8e2e93e5ba8feb30b6668de39139980ea3bb085c:plugins/faberline/skills/issue-ci/scripts/native_merge.py",
   "qualification_blockers": [
     "No general pull_request unit workflow exists on the default branch.",
     "Existing gke-test is path-filtered and does not establish affected functional and E2E coverage for every product change.",
@@ -52,13 +52,13 @@
     "producer": {
       "path": ".github/workflows/claude-final-review.yml",
       "id": 399790070,
-      "definition_sha": "33b5edb96f65ce47fa3451c46b2ed590a948566b",
+      "definition_sha": "3413f6cec8d62789ed2a5d8cab86d0e0ee4ddad4",
       "job": "review"
     },
     "gates": {
       ".github/workflows/gke-test.yml": {
         "id": 385337134,
-        "definition_sha": "94550e358bd840bd59c64f0d70bfb29a71659715"
+        "definition_sha": "8a5532f34f7cff35d4e17944e4cebbc35b6b5a9d"
       }
     },
     "protected_paths": [
@@ -89,7 +89,7 @@
     "producer": {
       "path": ".github/workflows/issue-ci.yml",
       "id": 394215197,
-      "definition_sha": "08d833696dd084d3de2d2325799fb8c6440f931d",
+      "definition_sha": "e7bef63eb67b55947aaad91e42bd5d461f7c7906",
       "job": "native-auto-merge"
     }
   }

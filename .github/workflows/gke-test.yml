@@ -98,9 +98,17 @@ permissions:
   contents: read
 
 jobs:
+  unit-static:
+    name: required unit and static checks
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/pr-unit-static.yml
+
   image:
     name: build test image
-    if: inputs.image == ''
+    needs: unit-static
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.unit-static.result == 'success') && inputs.image == '' }}
     permissions:
       contents: read
       packages: write
@@ -108,8 +116,8 @@ jobs:
 
   resolve:
     name: resolve image identity
-    needs: image
-    if: ${{ !cancelled() && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
+    needs: [unit-static, image]
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.unit-static.result == 'success') && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -196,6 +204,8 @@ jobs:
 
   test-client:
     name: build the e2e test client
+    needs: unit-static
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.unit-static.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
