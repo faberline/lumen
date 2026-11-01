@@ -51,7 +51,11 @@ Twenty-seven names have actual external execution owners.
 The native functional job runs CLI, Kustomize, generated-client and Docker
 volume contracts. The native resource/performance job runs the original Rig
 endurance, overload and fault scenarios plus isolated disk and competitive
-gates. The scenario files, numeric limits and workload sizes remain intact.
+gates. Numeric limits, scenario steps and workload sizes remain intact.
+Ten old seed steps sent 2,000 items per HTTP request despite the existing
+1,000-item API cap. They now send two legal batches. The sustained five-round
+seed still sends every original item. Pure fixture controls compare exact item
+order and contents with the original scripts and verify failed-batch rejection.
 Native subprocesses own their ports and cleanup. Tools are pinned by digest.
 Execution binds full and selected harness rosters to current head/base and
 run-attempt evidence. A selected test must execute once and pass.

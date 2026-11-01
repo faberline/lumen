@@ -115,7 +115,7 @@ pub fn test_binary(variable: &str, exact_name: &str) {
             "--include-ignored",
             "--test-threads",
             "1",
-            "--nocapture",
+            "--show-output",
             "--format",
             "pretty",
             "--color",
