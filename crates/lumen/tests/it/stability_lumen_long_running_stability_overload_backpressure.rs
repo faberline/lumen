@@ -9,10 +9,17 @@
 // @command cargo test --release --locked -p lumen --test it -- stability_lumen_long_running_stability_overload_backpressure::lumen_long_running_stability_overload_backpressure --exact --ignored
 // AW-EC-END
 
-// Contract: backpressure_overload drives the live service at 600 offered QPS with 16 workers for 30s after warmup (3x the 200-QPS steady baseline), measures error_rate/p99_ms/achieved_qps, enforces error_rate <= 0.05 and p99_ms <= 250ms, and uses Rig's >=95% load-honesty gate so a crash, OOM, or collapsed request schedule cannot pass.
+// Contract: retain the whole old rig-load directory. Keep steady search at 200 QPS,
+// overload at 600 QPS, their original workers/windows/pins and >=95% honesty gate,
+// plus the complete HTTP cursor browse oracle and depth bound. Ratchets use the
+// pinned Rig same-host baseline and explicit NoBaseline/RIG_STRICT semantics.
 #[test]
 #[ignore = "native hosted contract owner; exact roster is required by development CI"]
 fn lumen_long_running_stability_overload_backpressure() {
-    crate::support::native_contracts::scenarios(&["load/backpressure_overload"]);
+    crate::support::native_contracts::scenarios(&[
+        "load/backpressure_overload",
+        "load/data_table_browse",
+        "load/search_qps",
+    ]);
 }
 // CODEGEN-END

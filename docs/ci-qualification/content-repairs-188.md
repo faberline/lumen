@@ -71,6 +71,30 @@ traversal and a real fallback. The original cache rejection, metadata mutations
 and strict recovery assertions remain unchanged. This failed historical run
 grants no final-head acceptance.
 
+## Complete original Rig workloads (review R1 / #197)
+
+Independent Codex review rejected head `16350a3` after its 32 outer jobs passed.
+The old rig-load directory also required search_qps and data_table_browse.
+Those two cases had no actual receipt. The repaired owner executes all three
+load cases. A separate original-contract inventory and native driver require
+all eight original required Rig scenarios, complete steps/captures and measured
+load profiles. A green outer test cannot replace this nested execution proof.
+
+Keep search at 200 QPS, eight workers, 30 seconds with five seconds warmup,
+p99 <=25 ms, error_rate <=0.01 and ratchet0.8. Delegate floors and ratchets to
+the pinned Rig gate. Read existing repository-root .rig baselines by scenario,
+metric and OS/architecture. Never create a baseline for a pass. An absent
+baseline remains explicit NoBaseline/Info; original RIG_STRICT=1 makes it High.
+NoBaseline is not recorded as an evaluated or successful ratchet.
+
+Keep browse's 1000 documents, both original fields, page size50, full HTTP
+cursor equality and deep <=max(shallow*20,50ms). All2000 original field items
+retain their IDs, values and order in legal batches. Use the scenario's owned
+service. The one-shot oracle must also contain every original document.
+Pure mocked-transport controls retain the original corpus/query/page work and
+refuse cursor corruption, seed failure and either breached latency term.
+The new final head still needs all current CI and independent review.
+
 ## Acceptance
 
 Keep all 31 unit/static cases, four unit batches, their original shared

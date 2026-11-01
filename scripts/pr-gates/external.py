@@ -21,6 +21,7 @@ def module(name):
 contracts = module('contracts')
 measure = module('measure')
 unit = measure.unit
+rig_coverage = module('rig_coverage')
 JOBS = {'functional': 'native functional contracts', 'performance': 'native resource and performance contracts'}
 
 
@@ -101,6 +102,7 @@ def run(root, suite, provenance):
     overrides = [key for key in os.environ if key.startswith(('RIG_VAR_', 'CARGO_PROFILE_', 'LUMEN_GATE_', 'LUMEN_SCALE_'))]
     if overrides:
         raise ValueError('ambient workload overrides are forbidden: '+str(sorted(overrides)))
+    if suite=='performance':rig_coverage.inventory(root)
     names = selected(root, suite)
     binaries = built_binaries(root, suite)
     environment = os.environ.copy()
@@ -112,6 +114,7 @@ def run(root, suite, provenance):
         if row['target'] in full and row['name'] not in full[row['target']]:
             raise ValueError('recorded ignored test disappeared from full harness: '+row['name'])
     errors = []
+    measurements = []
     for target, name in sorted(names):
         record = dict(schema='LUMEN_HOSTED_CONTRACT_V1', provenance=provenance, suite=suite, target=target, name=name,
                       binary_sha256=hashlib.sha256(Path(binaries[target]).read_bytes()).hexdigest())
@@ -142,6 +145,7 @@ def run(root, suite, provenance):
             if discover(binaries[target]) != full[target] or discover(binaries[target], name) != selection:
                 raise ValueError('hosted contract roster changed during execution')
             record.update(result='pass')
+            measurements.extend(record['measurements'])
         except (ValueError, OSError, subprocess.TimeoutExpired) as error:
             errors.append(name + ': ' + str(error))
             record.update(result='fail', error=str(error))
@@ -154,6 +158,12 @@ def run(root, suite, provenance):
                 # never let unknown leftover services affect a later case.
                 raise ValueError('timed-out contract; remaining work is not executed or passed') from error
         print('LUMEN_HOSTED_CONTRACT_V1 ' + json.dumps(record, sort_keys=True), flush=True)
+    if suite=='performance':
+        try:
+            coverage=rig_coverage.validate(root,measurements)
+            print('LUMEN_RIG_CASE_COVERAGE_V1 '+json.dumps(dict(schema='LUMEN_RIG_CASE_COVERAGE_V1',provenance=provenance,result='pass',**coverage),sort_keys=True),flush=True)
+        except ValueError as error:
+            errors.append('required Rig workload coverage: '+str(error))
     if errors:
         raise ValueError('\n'.join(errors))
 

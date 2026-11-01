@@ -234,7 +234,7 @@
       "owner": "native resource and performance contracts",
       "basis": "Execute the exact existing function under a current hosted owner; ignored counts never count as pass.",
       "source": "crates/lumen/tests/it/stability_lumen_long_running_stability_overload_backpressure.rs",
-      "source_sha256": "137f548f8e8bd2e75abf0d1ec7d1cb3c665444b7b3e6a37552efa0011bc5ffdc"
+      "source_sha256": "614637c79e54ca261df9254640ea4e0e1b3b0837cbea82cf57c8d9b56cb56632"
     },
     {
       "target": "it",

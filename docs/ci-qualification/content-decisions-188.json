@@ -12,7 +12,8 @@
     198,
     199,
     200,
-    201
+    201,
+    202
   ],
   "user_content_authorization_comment": 6554991259,
   "recorded_head": "bbd97a2c226ff702f9dd44f00ef6dad6d6ee236c",
@@ -25,7 +26,9 @@
   "source_changes_after_recorded_input": [
     "Restore the required module registration order.",
     "Buffer snapshot serialization with explicit flush, retain file/directory fsync and drop setup buffers before RSS samples.",
-    "Replace implemented source-gap descriptions with proposed source decisions."
+    "Replace implemented source-gap descriptions with proposed source decisions.",
+    "Retain the full graph inventory before accepting k HNSW hits; original exact recovery assertions remain.",
+    "Repair independent review R1 without dropping a required Rig case or changing any original pin/workload."
   ],
   "resolved_source_gaps": [
     {
@@ -49,7 +52,7 @@
       "description": "Ignored integration tests without a mapped qualifying runtime remain failures; legacy EC wrappers and release/benchmark-only cases need bounded owner decisions.",
       "resolution": "Give every ignored name an exact source-bound runtime owner or bounded normal-PR applicability decision. Port EC wrappers to supported runners with the original workloads. Actual runtime gates remain required.",
       "inventory": "docs/ci-qualification/normal-pr-ignored-tests.json",
-      "inventory_sha256": "a917927a3d27ad41e5ca832af3c91efdec37afcbbf0c2423fb8f5717d5534ce3",
+      "inventory_sha256": "1bb6c8cd1d37a4d453e1a758a5bca788f03f2d133ae117f7daea647938a6fd3b",
       "ignored_names": 35,
       "external_runtime_required": 27,
       "outside_normal_pr_not_executed_not_passed": 8,
@@ -58,6 +61,11 @@
           "name": "scale_proof_reopen_rss_is_bounded",
           "before": "9ad882b59db89567dca7f800920ac017138c6e99faa68b8ec49cc2938afe3254",
           "after": "11f257b5d9c023becb0818b69084486d71db323b3c70b860cb47a4e62cf6b6fd"
+        },
+        {
+          "name": "stability_lumen_long_running_stability_overload_backpressure::lumen_long_running_stability_overload_backpressure",
+          "before": "137f548f8e8bd2e75abf0d1ec7d1cb3c665444b7b3e6a37552efa0011bc5ffdc",
+          "after": "614637c79e54ca261df9254640ea4e0e1b3b0837cbea82cf57c8d9b56cb56632"
         }
       ],
       "runtime_outcomes": {
@@ -85,7 +93,11 @@
           "job_id": 124866474693,
           "result": "success"
         }
-      }
+      },
+      "required_rig_scenarios": 8,
+      "rig_original_contracts": "docs/ci-qualification/rig-original-contracts.json",
+      "rig_original_contracts_sha256": "7218c354bfb9cd299788428abf0210b67b873e010d4210c088c8f9497296eb99",
+      "current_rig_runtime_proof": "All eight original required scenarios, original pins and actual measurements remain mandatory at the final head; no qualification granted by this source proposal."
     },
     {
       "description": "Milestone document mapping retains the approved #119 proposal and must match actual product documentation before acceptance.",
@@ -113,5 +125,25 @@
   "current_head_runtime_checks_remain_required": true,
   "source_proposal_grants_qualification": false,
   "release_or_milestone_acceptance": false,
-  "recorded_runtime_outcomes_are_partial": true
+  "recorded_runtime_outcomes_are_partial": true,
+  "independent_review_R1": {
+    "head": "16350a36175eaeec8c4408aab9fcf12c294a1d98",
+    "base": "211360180d11684d5825c2594c573801fdf5d90a",
+    "run": 41321340145,
+    "attempt": 1,
+    "all_32_outer_jobs_successful": true,
+    "decision": "REQUEST_CHANGES",
+    "overall_acceptance": false,
+    "missing_required_scenarios": [
+      "load/search_qps",
+      "load/data_table_browse"
+    ],
+    "implemented_source_repairs": [
+      "Restore the whole original rig-load workload in isolated native execution.",
+      "Retain the pinned Rig floor, same-host ratchet and explicit NoBaseline/RIG_STRICT semantics without writing a baseline.",
+      "Keep all1000 browse documents/two fields/page50/cursor equality/deep bound; bind the owned endpoint and batch all2000 items legally.",
+      "Freeze original required records/steps/load profiles/pins and require actual complete eight-case receipts."
+    ],
+    "complete_new_head_CI_and_independent_review_required": true
+  }
 }

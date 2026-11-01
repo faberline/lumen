@@ -19,7 +19,7 @@ The sole normal PR entry is `.github/workflows/pr-unit-static.yml`:
    standalone/overlay/operator suites and measured performance. Keep the
    original images, fixtures, assertions, runtime and numeric limits.
 
-Lumen owns its 30 expanded jobs and 59 check definitions. AW defines the
+Lumen owns its 32 expanded jobs and 61 check definitions. AW defines the
 stage order and evidence contract. Every old required cloud job remains.
 The legacy `gke-test.yml` retains manual and release calls. It no longer
 starts a second PR unit run. Release workflows and actual tags are unchanged.
@@ -35,9 +35,15 @@ Unit and integration runners compare independent discovered names with
 actual complete execution. Zero tests and unknown ignored cases fail.
 Known ignored E2E/coarse tests name their required external job. They never
 count as locally executed tests. The cloud/performance jobs must also pass.
-Unmapped EC wrappers, benchmarks and release-only cases remain explicit
-product-owner applicability gaps. Do not launch a long release workload on
-a general PR runner or invent an exemption to get a green result.
+Each of the 35 ignored names has a source-bound owner or applicability decision.
+The 27 external tests must execute in their declared jobs. The eight bounded
+report, peer-calibration or full-release interfaces are not executed and never
+count as passes. The native owners must also prove all eight original required
+Rig scenarios, including every case in the old rig-load directory. Keep search's
+200-QPS/p99/error pins and same-host ratchet semantics, and browse's complete
+HTTP cursor oracle and deep-page bound. Missing execution blocks qualification.
+Do not launch a long release workload on a general PR runner or invent an
+exemption to get a green result.
 
 The measured job retains the five coarse release gates, the 500k AND-query
 50 ms exclusive limit and the deep-pagination 20x exclusive limit.

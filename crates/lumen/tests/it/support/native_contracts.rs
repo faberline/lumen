@@ -196,6 +196,11 @@ impl Drop for Proxy {
 
 pub fn scenarios(cases: &[&str]) {
     assert!(!cases.is_empty(), "empty scenario owner");
+    // The retired vat runner resolved this store from the repository root.
+    // Read existing same-platform values; never fabricate or update a baseline.
+    let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let baselines = rig::pins::BaselineStore::load(&repository);
+    let strict = std::env::var("RIG_STRICT").as_deref() == Ok("1");
     for case in cases {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let path = root.join("tests/rig/cases").join(format!("{case}.toml"));
@@ -291,25 +296,24 @@ pub fn scenarios(cases: &[&str]) {
             let pins = rig::pins::load_pins(&root.join("tests/rig/config/pins"))
                 .expect("original load pins");
             let mut checked = 0;
+            let mut pin_results = Vec::new();
+            let mut permitted = true;
             for pin in pins.iter().filter(|p| p.matches(&run.scenario_id)) {
                 let value = stats.get(&pin.metric).expect("pin metric must be measured");
                 assert!(value.is_finite(), "non-finite load metric");
-                // This owner is the original overload contract. A future
-                // ratcheted workload must supply actual baseline evidence.
-                assert!(
-                    pin.ratchet.is_none(),
-                    "ratchet requires measured base evidence"
-                );
-                let floor = pin.floor.expect("missing original load floor");
-                assert!(value <= floor, "{}={value} exceeds {floor}", pin.metric);
+                let result =
+                    super::rig_pins::evaluate(pin, &run.scenario_id, value, &baselines, strict);
+                permitted &= result.permitted;
+                pin_results.push(result.measurement);
                 checked += 1;
             }
             assert!(checked > 0, "no matching load pins");
             evidence(
                 "load",
                 case,
-                serde_json::json!({"p99_ms":stats.p99_ms,"error_rate":stats.error_rate,"achieved_qps":stats.achieved_qps,"total":stats.total,"failed":stats.failed,"pins_checked":checked,"profile":profile}),
+                serde_json::json!({"p99_ms":stats.p99_ms,"error_rate":stats.error_rate,"achieved_qps":stats.achieved_qps,"total":stats.total,"failed":stats.failed,"pins_checked":checked,"profile":profile,"pins":pin_results}),
             );
+            assert!(permitted, "original {case} pins failed: {pin_results:?}");
         }
         server.get_text("/readyz");
     }
