@@ -1298,15 +1298,25 @@ mod durable_workload {
 
         static NEXT: AtomicU64 = AtomicU64::new(1);
         static MASK: OnceLock<u64> = OnceLock::new();
-        let sequence = NEXT
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
-                next.checked_add(1)
-            })
-            .map_err(|_| {
-                HarnessError::DataInvariant(
-                    "diagnostic seed identity exhausted before send".to_owned(),
-                )
-            })?;
+        let sequence = {
+            let mut previous = NEXT.load(Ordering::Relaxed);
+            loop {
+                let next = previous.checked_add(1).ok_or_else(|| {
+                    HarnessError::DataInvariant(
+                        "diagnostic seed identity exhausted before send".to_owned(),
+                    )
+                })?;
+                match NEXT.compare_exchange_weak(
+                    previous,
+                    next,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(replaced) => break replaced,
+                    Err(observed) => previous = observed,
+                }
+            }
+        };
         let mask = *MASK.get_or_init(rand::random::<u64>);
         let high = rand::random::<u64>() | 1;
         let trace_id = (u128::from(high) << 64) | u128::from(sequence ^ mask);
@@ -3154,7 +3164,7 @@ mod durable_workload {
     /// alongside them is new.
     #[derive(Debug, Clone)]
     struct PostJsonFailure {
-        error: RequestFailure,
+        error: Box<RequestFailure>,
         outcome: Outcome,
         status: Option<u16>,
         body: Option<String>,
@@ -3179,7 +3189,7 @@ mod durable_workload {
             elapsed_since_clock_start,
             endpoint: endpoint.into(),
             identifier: identifier.into(),
-            error: failure.error,
+            error: *failure.error,
             status: failure.status,
             body: failure.body,
         });
@@ -4393,7 +4403,7 @@ mod durable_workload {
             })
             .await
             .map_err(|_| failure("published-port lookup exceeded request deadline".to_owned()))?
-            .map_err(&failure)?;
+            .map_err(failure)?;
             if !status.success() || stdout.truncated {
                 return Err(failure(format!(
                     "published-port lookup status={status}: {}",
@@ -5399,7 +5409,7 @@ mod durable_workload {
         })
         .await
         .map_err(|_| failure(format!("exceeded the {timeout:?} deadline")))?
-        .map_err(&failure)?;
+        .map_err(failure)?;
         if !status.success() || stdout.truncated {
             return Err(failure(format!(
                 "status={status}: {}",
@@ -7128,7 +7138,7 @@ mod durable_workload {
                 .json::<Value>()
                 .await
                 .map_err(|error| PostJsonFailure {
-                    error: RequestFailure::from_reqwest(error),
+                    error: Box::new(RequestFailure::from_reqwest(error)),
                     outcome: Outcome::Failed,
                     status: Some(status.as_u16()),
                     body: None,
@@ -7165,7 +7175,7 @@ mod durable_workload {
 
     fn transport_failure(error: reqwest::Error) -> PostJsonFailure {
         PostJsonFailure {
-            error: RequestFailure::from_reqwest(error),
+            error: Box::new(RequestFailure::from_reqwest(error)),
             outcome: Outcome::Failed,
             status: None,
             body: None,
@@ -7175,13 +7185,13 @@ mod durable_workload {
 
     fn request_deadline_failure() -> PostJsonFailure {
         PostJsonFailure {
-            error: RequestFailure::synthetic(
+            error: Box::new(RequestFailure::synthetic(
                 format!(
                     "workload request exceeded the {}-second deadline",
                     REQUEST_TIMEOUT.as_secs()
                 ),
                 true,
-            ),
+            )),
             outcome: Outcome::TimedOut,
             status: None,
             body: None,
@@ -7193,7 +7203,7 @@ mod durable_workload {
     /// already counts it failed; journaling it keeps the response as evidence.
     fn semantic_failure(message: String, response: &Value) -> PostJsonFailure {
         PostJsonFailure {
-            error: RequestFailure::synthetic(message, false),
+            error: Box::new(RequestFailure::synthetic(message, false)),
             outcome: Outcome::Failed,
             status: None,
             body: Some(truncate_evidence_body(&response.to_string())),
@@ -7210,10 +7220,10 @@ mod durable_workload {
             .map(str::to_owned);
         let body = response.text().await.unwrap_or_default();
         PostJsonFailure {
-            error: RequestFailure::synthetic(
+            error: Box::new(RequestFailure::synthetic(
                 format!("workload request returned non-success status {status}"),
                 false,
-            ),
+            )),
             outcome: Outcome::Failed,
             status: Some(status.as_u16()),
             capacity_retry_after: capacity_retry_after(status, retry_after.as_deref(), &body),

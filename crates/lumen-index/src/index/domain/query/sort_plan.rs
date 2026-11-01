@@ -178,7 +178,7 @@ pub(super) fn try_generic_sort_plan(
             let values = n.sorted_values();
             match first.order {
                 SortOrder::Asc => {
-                    for (_v, docs) in values.iter() {
+                    for docs in values.values() {
                         if !visit_sorted_bucket(
                             coll, req, sort, docs, sort_after, &mut page, &mut total,
                         )? {
@@ -201,7 +201,7 @@ pub(super) fn try_generic_sort_plan(
             let terms = k.live_terms();
             match first.order {
                 SortOrder::Asc => {
-                    for (_term, docs) in terms.iter() {
+                    for docs in terms.values() {
                         if !visit_sorted_bucket(
                             coll, req, sort, docs, sort_after, &mut page, &mut total,
                         )? {

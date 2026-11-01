@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import tempfile
 
@@ -21,6 +22,34 @@ contracts = module('contracts')
 measure = module('measure')
 unit = measure.unit
 JOBS = {'functional': 'native functional contracts', 'performance': 'native resource and performance contracts'}
+
+
+def invoke(command, cwd=None, env=None, timeout=1800):
+    child = subprocess.Popen(command, cwd=cwd, env=env, text=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             start_new_session=True)
+    try:
+        stdout, stderr = child.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        stdout, stderr = child.communicate()
+        raise subprocess.TimeoutExpired(command, timeout, output=stdout, stderr=stderr)
+    return subprocess.CompletedProcess(command, child.returncode, stdout, stderr)
+
+
+def test_command(binary, target, name):
+    command = [binary, name, '--exact', '--include-ignored', '--test-threads', '1', '--format', 'pretty', '--color', 'never']
+    if target != 'it':
+        command.append('--show-output')
+    return command
+
+
+def validate_direct_output(target, stdout, stderr):
+    if target == 'disk_scale_proof' and 'SKIPPING' in stdout + stderr:
+        raise ValueError('disk RSS workload skipped its actual measurement')
 
 
 def built_binaries(root, suite):
@@ -54,7 +83,7 @@ def discover(binary, selected=None):
     command = [binary, '--list', '--format', 'pretty', '--color', 'never']
     if selected is not None:
         command[1:1] = [selected, '--exact']
-    result = subprocess.run(command, text=True, capture_output=True)
+    result = invoke(command, timeout=60)
     if result.returncode:
         raise ValueError('compiled test discovery failed')
     return unit.listed_unit_tests(result.stdout)
@@ -93,11 +122,11 @@ def run(root, suite, provenance):
             selection = discover(binaries[target], name)
             if selection != {name} or not selection <= full[target]:
                 raise ValueError('exact selected contract is missing or ambiguous')
-            command = [binaries[target], name, '--exact', '--include-ignored', '--test-threads', '1', '--format', 'pretty', '--color', 'never']
+            command = test_command(binaries[target], target, name)
             with tempfile.TemporaryDirectory(prefix='lumen-native-receipt-') as directory:
                 receipt = Path(directory)/'measurements.jsonl'
                 invocation_env = dict(environment, LUMEN_NATIVE_CONTRACT_RECEIPT=str(receipt))
-                result = subprocess.run(command, cwd=root, env=invocation_env, text=True, capture_output=True, timeout=1800)
+                result = invoke(command, cwd=root, env=invocation_env, timeout=1800)
                 record['measurements'] = [json.loads(line) for line in receipt.read_text().splitlines()] if receipt.exists() else []
             print(result.stdout, flush=True)
             print(result.stderr, flush=True)
@@ -106,6 +135,7 @@ def run(root, suite, provenance):
                           stderr_sha256=hashlib.sha256(result.stderr.encode()).hexdigest())
             if result.returncode:
                 raise ValueError('hosted contract failed: ' + str(result.returncode))
+            validate_direct_output(target, result.stdout, result.stderr)
             if name.startswith(('behavior_', 'stability_', 'efficiency_', 'benchmark_')) and not record['measurements']:
                 raise ValueError('native contract has no actual measurement receipt')
             record['tests'] = measure.selected_evidence(result.stdout, full[target], selection)
@@ -115,6 +145,14 @@ def run(root, suite, provenance):
         except (ValueError, OSError, subprocess.TimeoutExpired) as error:
             errors.append(name + ': ' + str(error))
             record.update(result='fail', error=str(error))
+            if isinstance(error, subprocess.TimeoutExpired):
+                print(error.output or '', flush=True)
+                print(error.stderr or '', flush=True)
+                print('LUMEN_HOSTED_CONTRACT_V1 ' + json.dumps(record, sort_keys=True), flush=True)
+                # A timed-out Docker harness cannot execute its Rust cleanup.
+                # Fail this isolated hosted job now so its runner is retired;
+                # never let unknown leftover services affect a later case.
+                raise ValueError('timed-out contract; remaining work is not executed or passed') from error
         print('LUMEN_HOSTED_CONTRACT_V1 ' + json.dumps(record, sort_keys=True), flush=True)
     if errors:
         raise ValueError('\n'.join(errors))

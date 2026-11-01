@@ -81,12 +81,13 @@ impl ChangeBudget {
     }
 
     pub(super) fn mark_capacity_waiter(&self) -> CapacityWaiter {
-        self.0
-            .capacity_waiters
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                count.checked_add(1)
-            })
-            .expect("capacity waiter count overflow");
+        crate::atomic_update::update_usize(
+            &self.0.capacity_waiters,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+            |count| count.checked_add(1),
+        )
+        .expect("capacity waiter count overflow");
         self.0.wake.signal();
         CapacityWaiter(self.clone())
     }

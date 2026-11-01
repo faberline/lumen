@@ -150,9 +150,13 @@ impl WalSourceStager {
     }
 
     fn with_directory(directory: StageDirectory) -> io::Result<Self> {
-        let source_id = NEXT_MEM_WAL_SOURCE
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-            .map_err(|_| io::Error::other("MemWal stage source identity exhausted"))?;
+        let source_id = crate::atomic_update::update_u64(
+            &NEXT_MEM_WAL_SOURCE,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |id| id.checked_add(1),
+        )
+        .map_err(|_| io::Error::other("MemWal stage source identity exhausted"))?;
         let source = SourceIdentity::new(SourceKind::Local, format!("mem-wal:{source_id}"))?;
         Ok(Self {
             root: Arc::new(SourceStageRoot {
