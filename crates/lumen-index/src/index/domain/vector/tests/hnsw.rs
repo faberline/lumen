@@ -157,6 +157,52 @@ fn hnsw_selective_search_bounds_graph_pool_before_exact_fallback() {
 }
 
 #[test]
+fn hnsw_incomplete_full_graph_uses_exact_live_rows() {
+    const N: usize = 32;
+    const K: usize = 10;
+    let query = [0.173, 0.2];
+    let index = HnswCpuIndex::new(spec(2, VectorMetric::L2, None));
+    for i in 0..N {
+        if i != 13 {
+            index
+                .add(&format!("id-{i}"), &[(i as f32 + 1.0) / 64.0, 0.2])
+                .unwrap();
+        }
+    }
+    // Reproduce an incomplete traversal without depending on random graph
+    // topology. The authoritative row and its ID exist, but the graph omits it.
+    {
+        let mut inner = index.inner.write().unwrap();
+        let id = inner.next_id;
+        inner.next_id += 1;
+        inner.store.put("id-13", &[14.0 / 64.0, 0.2]).unwrap();
+        inner.eid_to_id.insert("id-13".into(), id);
+        inner.id_to_eid.insert(id, "id-13".into());
+    }
+    assert_eq!(index.len(), N);
+    HNSW_SEARCH_POOLS.with(|pools| pools.borrow_mut().clear());
+    let before = index.exact_scan_fallbacks();
+    let hits = index.search_knn(&query, K).unwrap();
+    let expected: Vec<_> = [10, 11, 9, 12, 8, 13, 7, 14, 6, 15]
+        .into_iter()
+        .map(|i| {
+            let vector = [(i as f32 + 1.0) / 64.0, 0.2];
+            (format!("id-{i}"), -l2_squared(&query, &vector).sqrt())
+        })
+        .collect();
+    assert_eq!(hits, expected);
+    for ((id, actual), (_, expected)) in hits.iter().zip(&expected) {
+        assert_eq!(actual.to_bits(), expected.to_bits(), "score bits for {id}");
+    }
+    assert_eq!(index.exact_scan_fallbacks(), before + 1);
+    assert_eq!(
+        HNSW_SEARCH_POOLS.with(|pools| pools.borrow().clone()),
+        vec![N],
+        "an incomplete full-graph request must use one bounded traversal"
+    );
+}
+
+#[test]
 fn hnsw_clean_permissive_search_keeps_the_graph_answer() {
     let index = HnswCpuIndex::new(spec(3, VectorMetric::L2, None));
     index.set_ef_search(64);

@@ -54,6 +54,23 @@ The original 50,000/200,000 documents, 96/192 dimensions, query assertions,
 65% bounds, page-fault checks and measurement formulas remain required.
 The full measurements run only in hosted CI.
 
+## Incomplete full-graph answer (#202)
+
+Run 41317557070 at `e5544c6f2c9d987dc3ed10d0c1ddb57a14a03833`
+failed the existing cache-rejection unit in the no-default profile. A rebuilt
+graph omitted `id-13` from the original 32-row/query/top-ten result. The search
+requested every allocated graph ID, but accepted ten other hits before checking
+that the full graph inventory was present.
+
+An incomplete full-graph request now uses the existing authoritative live-store
+fallback. Normal bounded and complete graph answers keep their existing path.
+A deterministic in-memory regression omits that same graph node while retaining
+all 32 live rows. It fails with the original exact ID/score difference before
+the fix, then requires the complete top ten, exact score bits, one bounded
+traversal and a real fallback. The original cache rejection, metadata mutations
+and strict recovery assertions remain unchanged. This failed historical run
+grants no final-head acceptance.
+
 ## Acceptance
 
 Keep all 31 unit/static cases, four unit batches, their original shared
