@@ -1,6 +1,6 @@
 # Lumen development pipeline content repairs
 
-PR #189 keeps #188 as its sole closing issue. Issues #192–#201 record the
+PR #189 keeps #188 as its sole closing issue. Issues #192–#203 record the
 bounded content repairs. A successful subset does not qualify the PR.
 
 ## Source contracts (#198)
@@ -94,6 +94,31 @@ service. The one-shot oracle must also contain every original document.
 Pure mocked-transport controls retain the original corpus/query/page work and
 refuse cursor corruption, seed failure and either breached latency term.
 The new final head still needs all current CI and independent review.
+
+## Shared capacity publication (#203)
+
+Run 41339468620 at `92d5e72d8ed2ad09bfde877f9694064da05f481d`
+failed the original default-profile HTTP capacity contract. Both writes and
+WAL/apply counts succeeded, but completed checkpoints were four instead of
+the required two. The original HTTP test, deadlines, 256 MiB limit, exact
+counters, IDs and cold-reopen assertions remain unchanged.
+
+The periodic driver and native owner now share completed request progress
+within one publication owner. A pending request can reuse a successful
+publication instead of saving it twice. Coalescing happens before save,
+attempt counters and diagnostic phases. It does not fabricate a checkpoint.
+The relay still owns merge and request consumption. Failed publication cannot
+mark relief complete. Fresh demand gets a successor revision. Owner replacement
+gets separate progress and retains its publication fence.
+
+The admission lookup uses a separate weak progress reference. It does not
+lock endpoint requests or owner registration. Existing replacement-owner and
+fallback tests retain their assertions. New regressions cover real held file
+IO, duplicate publication, new work, stale consumption, failure/retry, owner
+replacement and honest counters/diagnostics. The real duplicate-publication
+regression failed before the fix. All 230 affected unit executions pass across
+default and no-default profiles with zero ignored tests. Fresh complete hosted
+CI and independent Codex review remain required for the final head.
 
 ## Acceptance
 

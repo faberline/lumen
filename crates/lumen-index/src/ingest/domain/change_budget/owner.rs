@@ -46,6 +46,12 @@ impl Owner {
     /// the accounting lock is held. This is the only revision that a local
     /// admission refusal may report.
     pub(crate) fn request_checkpoint_revision(&self) -> Option<u64> {
+        self.request_checkpoint_revision_after(None)
+    }
+
+    /// A real refusal after an already completed publication is new demand.
+    /// Do not let that demand reuse the revision the owner already served.
+    pub(crate) fn request_checkpoint_revision_after(&self, relieved: Option<u64>) -> Option<u64> {
         let mut state = self
             .budget
             .0
@@ -69,6 +75,11 @@ impl Owner {
         }
         let work_revision = owner.work_revision;
         let previous = owner.checkpoint_request_revision;
+        if relieved.is_some() && state.checkpoint_request_revision == relieved {
+            // Other owners retain their own outstanding revision. Their old
+            // completion cannot consume the new global request below.
+            state.checkpoint_request_revision = None;
+        }
         let revision = request_revision(&mut state, work_revision);
         state
             .owners
@@ -79,6 +90,10 @@ impl Owner {
             self.budget.0.wake.signal();
         }
         Some(revision)
+    }
+
+    pub(crate) fn notify_checkpoint_progress(&self) {
+        self.budget.0.wake.signal();
     }
 
     pub(crate) fn consume_checkpoint_request(&self, revision: Option<u64>) {

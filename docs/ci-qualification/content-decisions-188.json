@@ -13,7 +13,8 @@
     199,
     200,
     201,
-    202
+    202,
+    203
   ],
   "user_content_authorization_comment": 6554991259,
   "recorded_head": "bbd97a2c226ff702f9dd44f00ef6dad6d6ee236c",
@@ -28,7 +29,8 @@
     "Buffer snapshot serialization with explicit flush, retain file/directory fsync and drop setup buffers before RSS samples.",
     "Replace implemented source-gap descriptions with proposed source decisions.",
     "Retain the full graph inventory before accepting k HNSW hits; original exact recovery assertions remain.",
-    "Repair independent review R1 without dropping a required Rig case or changing any original pin/workload."
+    "Repair independent review R1 without dropping a required Rig case or changing any original pin/workload.",
+    "Coalesce an already completed capacity request within its publication owner while retaining merge, successor requests, failure retry and replacement fences."
   ],
   "resolved_source_gaps": [
     {
@@ -144,6 +146,35 @@
       "Keep all1000 browse documents/two fields/page50/cursor equality/deep bound; bind the owned endpoint and batch all2000 items legally.",
       "Freeze original required records/steps/load profiles/pins and require actual complete eight-case receipts."
     ],
+    "complete_new_head_CI_and_independent_review_required": true,
+    "repaired_historical_runtime_evidence": {
+      "head": "92d5e72d8ed2ad09bfde877f9694064da05f481d",
+      "run": 41339468620,
+      "attempt": 1,
+      "actual_required_scenarios": 8,
+      "actual_load_schedules": 2,
+      "actual_pins": 4,
+      "ratchet_evaluated": false,
+      "missing_baseline": "NoBaseline/Info under original non-strict semantics; not a ratchet pass",
+      "overall_acceptance": false,
+      "other_required_job_failed": 124962684117
+    }
+  },
+  "capacity_publication_repair_203": {
+    "head": "92d5e72d8ed2ad09bfde877f9694064da05f481d",
+    "base": "211360180d11684d5825c2594c573801fdf5d90a",
+    "run": 41339468620,
+    "attempt": 1,
+    "job": 124962684117,
+    "job_name": "integration contracts (lumen, default)",
+    "test": "capacity_http_contract::two_local_full_requests_wait_for_one_checkpoint_then_commit_once",
+    "observed_completed_checkpoints": 4,
+    "required_completed_checkpoints": 2,
+    "original_HTTP_test_unchanged": true,
+    "overall_acceptance": false,
+    "implemented_source_repair": "Share per-publication-owner relief; skip a served request before save/telemetry; retain actual publication, merge, failed retry and new-demand semantics.",
+    "local_affected_unit_executions": 230,
+    "ignored": 0,
     "complete_new_head_CI_and_independent_review_required": true
   }
 }

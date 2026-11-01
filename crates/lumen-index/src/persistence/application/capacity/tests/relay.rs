@@ -89,6 +89,7 @@ fn relay_cycle_error_keeps_request_pending() {
         fence: PublicationFence {
             registry: Weak::new(),
             token: 0,
+            checkpoints: Arc::default(),
         },
     };
     assert!(relay_cycle(&engine, &endpoint, Some(revision)).is_err());
@@ -201,6 +202,7 @@ fn diagnostic_relay_error_preserves_request_and_emits_terminal_record() {
         fence: PublicationFence {
             registry: Weak::new(),
             token: 0,
+            checkpoints: Arc::default(),
         },
     };
     let records = relay_diagnostic_records(true, || {

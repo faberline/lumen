@@ -55,6 +55,14 @@ impl SegmentRdbStore {
         self.publication_fence.is_some()
     }
 
+    pub(crate) fn checkpoint_progress(
+        &self,
+    ) -> Option<Arc<crate::persistence::application::capacity::CheckpointProgress>> {
+        self.publication_fence
+            .as_ref()
+            .map(|fence| fence.checkpoint_progress())
+    }
+
     pub(crate) fn request_capacity_merge(&self, engine: &Arc<Engine>) -> Result<u64> {
         self.request_merge_for_capacity_retry(engine, None, None)
     }

@@ -69,7 +69,18 @@ impl Engine {
     /// Request relief for this Engine and return the revision atomically with
     /// the request. `None` means it had no active or frozen local work.
     pub(crate) fn request_pending_checkpoint_revision(&self) -> Option<u64> {
-        self.changes.owner.request_checkpoint_revision()
+        match self.layer_maintenance.checkpoint_progress() {
+            Some(progress) => progress.request_revision(|relieved| {
+                self.changes
+                    .owner
+                    .request_checkpoint_revision_after(relieved)
+            }),
+            None => self.changes.owner.request_checkpoint_revision(),
+        }
+    }
+
+    pub(crate) fn notify_checkpoint_progress(&self) {
+        self.changes.owner.notify_checkpoint_progress();
     }
 
     #[cfg(test)]

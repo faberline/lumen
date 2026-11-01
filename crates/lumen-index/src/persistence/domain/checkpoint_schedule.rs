@@ -190,6 +190,17 @@ impl CheckpointSchedule {
             self.early_attempted = false;
         }
     }
+
+    pub(in crate::persistence) fn observe_relieved_request(&mut self, revision: Option<u64>) {
+        if let Some(revision) = revision {
+            // Only actual owner completion can suppress a repeat. A later
+            // pending request sampled after publication is still new demand.
+            self.last_request_revision = Some(
+                self.last_request_revision
+                    .map_or(revision, |last| last.max(revision)),
+            );
+        }
+    }
 }
 
 #[cfg(test)]

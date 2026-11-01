@@ -12,7 +12,7 @@ use crate::persistence::application::segment_checkpoint_sink::{
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use anyhow::{anyhow, Result};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 
 use crate::persistence::infrastructure::segment_save_gate as publication_gate;
@@ -21,6 +21,7 @@ use crate::persistence::infrastructure::segment_save_gate as publication_gate;
 pub(crate) struct Registry {
     publication: Arc<crate::persistence::application::capacity::publication_gate::SaveGate>,
     registration: Mutex<Registration>,
+    checkpoint_progress: Mutex<Weak<CheckpointProgress>>,
     frozen_windows: AtomicUsize,
 }
 
@@ -46,6 +47,62 @@ impl Drop for FrozenWindow {
 pub(crate) struct PublicationFence {
     registry: Weak<Registry>,
     token: u64,
+    checkpoints: Arc<CheckpointProgress>,
+}
+
+/// Periodic and native relief share progress only within one publication
+/// owner. A replacement owner gets fresh progress, even for the same Engine.
+pub(crate) struct CheckpointProgress {
+    execution: Mutex<()>,
+    relieved: Mutex<Option<u64>>,
+    active: AtomicBool,
+}
+
+impl Default for CheckpointProgress {
+    fn default() -> Self {
+        Self {
+            execution: Mutex::new(()),
+            relieved: Mutex::new(None),
+            active: AtomicBool::new(true),
+        }
+    }
+}
+
+impl CheckpointProgress {
+    pub(crate) fn lock_execution(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.execution.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub(crate) fn request_revision(
+        &self,
+        request: impl FnOnce(Option<u64>) -> Option<u64>,
+    ) -> Option<u64> {
+        let relieved = self.relieved.lock().unwrap_or_else(|p| p.into_inner());
+        request(*relieved)
+    }
+
+    pub(crate) fn has_relieved(&self, revision: u64) -> bool {
+        self.relieved
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .is_some_and(|completed| completed >= revision)
+    }
+
+    pub(crate) fn relieved_revision(&self) -> Option<u64> {
+        *self.relieved.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub(crate) fn completed(&self, pending: impl FnOnce() -> Option<u64>) -> bool {
+        let mut relieved = self.relieved.lock().unwrap_or_else(|p| p.into_inner());
+        let Some(revision) = pending() else {
+            return false;
+        };
+        if relieved.is_some_and(|completed| completed >= revision) {
+            return false;
+        }
+        *relieved = Some(revision);
+        true
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -57,6 +114,10 @@ pub(crate) struct PublicationPermit {
 }
 
 impl PublicationFence {
+    pub(crate) fn checkpoint_progress(&self) -> Arc<CheckpointProgress> {
+        self.checkpoints.clone()
+    }
+
     pub(crate) fn acquire(&self) -> Result<PublicationPermit> {
         let registry = self.registry.upgrade().ok_or(Superseded)?;
         let permit = registry.publication.lock_owned();
@@ -102,6 +163,10 @@ impl Endpoint {
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .stopped = true;
+        self.fence
+            .checkpoints
+            .active
+            .store(false, Ordering::Release);
         self.changed.notify_all();
     }
 
@@ -142,6 +207,17 @@ impl Endpoint {
 }
 
 impl Registry {
+    pub(crate) fn checkpoint_progress(&self) -> Option<Arc<CheckpointProgress>> {
+        // Admission can publish a request while a caller holds endpoint.requests.
+        // Do not acquire either that mutex or registration from this path.
+        let progress = self
+            .checkpoint_progress
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .upgrade()?;
+        progress.active.load(Ordering::Acquire).then_some(progress)
+    }
+
     pub(crate) fn owner(&self) -> Option<Arc<Endpoint>> {
         let owner = self
             .registration
