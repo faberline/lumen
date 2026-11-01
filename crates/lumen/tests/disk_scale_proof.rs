@@ -300,8 +300,11 @@ fn index_range(e: &Engine, coll: &str, lo: u64, hi: u64, dim: usize, with_vector
             let path = setup.path().join("setup.json");
             let mut file = std::fs::File::create(&path).expect("create setup snapshot");
             {
+                use std::io::Write;
                 let snapshot = e.snapshot().expect("capture complete setup snapshot");
-                serde_json::to_writer(&mut file, &snapshot).expect("persist setup snapshot");
+                let mut writer = std::io::BufWriter::new(&mut file);
+                serde_json::to_writer(&mut writer, &snapshot).expect("persist setup snapshot");
+                writer.flush().expect("flush complete setup snapshot");
             }
             file.sync_all().expect("sync setup snapshot");
             std::fs::File::open(setup.path())

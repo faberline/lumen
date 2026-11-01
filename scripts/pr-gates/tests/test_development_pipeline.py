@@ -78,8 +78,41 @@ class DevelopmentTests(unittest.TestCase):
         case=config['qualification']['contracts']['188']
         self.assertEqual(set(case['applicability']),{'unit','functional_e2e','performance'})
         self.assertTrue(all(v['status']=='required'and v['checks']for v in case['applicability'].values()))
-        self.assertGreaterEqual(len(case['unresolved']),3)
         self.assertFalse(any(rule['exempt']for rule in config['qualification']['rules']))
+        q=module('lumen_content_contract',ROOT/'scripts/issue-ci/qualification.py')
+        policy=copy.deepcopy(config['qualification']);bound=policy['contracts']['188']
+        issue=dict(number=188,title='Fixture goal',body='Fixture acceptance',state='open',labels=[dict(name='todo')],
+                   url='https://api.github.com/repos/faberline/lumen/issues/188',repository_url='https://api.github.com/repos/faberline/lumen')
+        for key in ('title','body'):bound[key+'_sha256']=hashlib.sha256(issue[key].encode()).hexdigest()
+        pr=dict(title='Fixture change',body='Closes #188',head=dict(repo=dict(full_name='faberline/lumen')),base=dict(repo=dict(full_name='faberline/lumen')))
+        expected={name for v in bound['applicability'].values()for name in v['checks']}
+        context,issues,selected=q.issue_contract(policy,pr,issue)
+        self.assertEqual(issues,[]);self.assertEqual(selected,expected);self.assertEqual(context['unresolved_count'],0)
+        # Exercise actual admission with each unknown, preserving the rejection
+        # and the complete required check set after today's source repairs.
+        for reason in ('missing real unit coverage','unknown external owner','unknown milestone mapping'):
+            bound['unresolved']=[reason]
+            context,issues,selected=q.issue_contract(policy,pr,issue)
+            self.assertIn('linked issue has unresolved required gates',issues)
+            self.assertEqual(context['unresolved_count'],1);self.assertEqual(selected,expected)
+
+    def test_source_decisions_preserve_all_current_runtime_and_review_gates(self):
+        proof=json.loads((ROOT/'docs/ci-qualification/content-decisions-188.json').read_text())
+        self.assertEqual(proof['schema'],'LUMEN188_SOURCE_DECISIONS_V1')
+        self.assertEqual(len(proof['resolved_source_gaps']),3)
+        self.assertFalse(proof['recorded_run_overall_acceptance'])
+        self.assertFalse(proof['source_proposal_grants_qualification'])
+        self.assertFalse(proof['release_or_milestone_acceptance'])
+        self.assertTrue(proof['current_head_runtime_checks_remain_required'])
+        self.assertEqual((proof['required_jobs'],proof['required_checks'],proof['unit_cases'],proof['unit_batches'],proof['shared_case_budget_seconds'],proof['integration_profiles']),(32,61,31,4,1800,13))
+        expected=hashlib.sha256(json.dumps(config['qualification']['checks'],sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        self.assertEqual(proof['checks_sha256'],expected)
+        self.assertEqual(config['qualification']['contracts']['188']['unresolved'],[])
+        self.assertEqual(config['ci_handoff_policy']['qualification'],config['qualification'])
+        inventory=ROOT/proof['resolved_source_gaps'][1]['inventory']
+        self.assertEqual(hashlib.sha256(inventory.read_bytes()).hexdigest(),proof['resolved_source_gaps'][1]['inventory_sha256'])
+        self.assertIn('complete_current_head_and_base_CI',proof['required_final_acceptance'])
+        self.assertIn('independent_Codex_review',proof['required_final_acceptance'])
 
     def test_frozen_workflow_identity_is_real_git_blob(self):
         raw=(ROOT/workflow).read_bytes();expected=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()

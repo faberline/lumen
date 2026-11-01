@@ -60,7 +60,9 @@ Keep all 31 unit/static cases, four unit batches, their original shared
 30-minute per-case budgets, 13 integration profiles, eight prior cloud jobs
 and both native contract jobs. The full 32-job run must pass at the current
 head and base. Partial results and source-fixture controls do not replace
-actual product execution. The three unresolved qualification conditions stay
-blocking until their content and complete hosted evidence are verified.
+actual product execution. The three original source gaps have proposed
+decisions and source-bound evidence in `content-decisions-188.json`. That
+record preserves the failed historical run and every required final runtime
+check. It grants no acceptance.
 Independent Codex review, protected cutover and actual merge/issue closure
 remain separate required steps. No Claude review or cloud merge job is added.

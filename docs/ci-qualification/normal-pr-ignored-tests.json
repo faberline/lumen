@@ -9,7 +9,7 @@
       "owner": "native resource and performance contracts",
       "basis": "Execute the exact existing function under a current hosted owner; ignored counts never count as pass.",
       "source": "crates/lumen/tests/disk_scale_proof.rs",
-      "source_sha256": "9ad882b59db89567dca7f800920ac017138c6e99faa68b8ec49cc2938afe3254"
+      "source_sha256": "11f257b5d9c023becb0818b69084486d71db323b3c70b860cb47a4e62cf6b6fd"
     },
     {
       "target": "it",

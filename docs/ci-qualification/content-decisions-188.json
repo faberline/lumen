@@ -1,0 +1,117 @@
+{
+  "schema": "LUMEN188_SOURCE_DECISIONS_V1",
+  "status": "PROPOSED_SOURCE_DECISIONS_REQUIRE_CURRENT_CI_AND_INDEPENDENT_REVIEW",
+  "canonical_issue": 188,
+  "repair_issues": [
+    192,
+    193,
+    194,
+    195,
+    196,
+    197,
+    198,
+    199,
+    200,
+    201
+  ],
+  "user_content_authorization_comment": 6554991259,
+  "recorded_head": "bbd97a2c226ff702f9dd44f00ef6dad6d6ee236c",
+  "recorded_base": "211360180d11684d5825c2594c573801fdf5d90a",
+  "recorded_run": 41308428614,
+  "recorded_attempt": 1,
+  "recorded_run_url": "https://github.com/faberline/lumen/actions/runs/41308428614",
+  "recorded_run_overall_acceptance": false,
+  "known_recorded_failure": "Integration module order: source_contract preceded support. Restoring support first and alphabetical case registration passes all seven original pure layout/negative controls.",
+  "source_changes_after_recorded_input": [
+    "Restore the required module registration order.",
+    "Buffer snapshot serialization with explicit flush, retain file/directory fsync and drop setup buffers before RSS samples.",
+    "Replace implemented source-gap descriptions with proposed source decisions."
+  ],
+  "resolved_source_gaps": [
+    {
+      "description": "Existing zero-test unit targets need product-owner tests or explicitly reviewed non-applicability; no waiver is supplied here.",
+      "resolution": "Implement real facade and bench units. Fresh complete hosted discovery/execution verifies every original unit profile and target.",
+      "evidence": {
+        "status": "PASS_UNIT_STATIC_ONLY",
+        "head": "bbd97a2c226ff702f9dd44f00ef6dad6d6ee236c",
+        "base": "211360180d11684d5825c2594c573801fdf5d90a",
+        "run": 41308428614,
+        "attempt": 1,
+        "unit_cases": 31,
+        "unit_targets": 57,
+        "unit_tests": 8055,
+        "all_discovered_and_executed_rosters_match": true,
+        "functional_e2e_and_measured_performance": "Still required; not qualified by these units"
+      },
+      "verification_sha256": "83aca5463592d046b21a83526bffcb25f8eb5280ee88dc79d34e522cdfa91824"
+    },
+    {
+      "description": "Ignored integration tests without a mapped qualifying runtime remain failures; legacy EC wrappers and release/benchmark-only cases need bounded owner decisions.",
+      "resolution": "Give every ignored name an exact source-bound runtime owner or bounded normal-PR applicability decision. Port EC wrappers to supported runners with the original workloads. Actual runtime gates remain required.",
+      "inventory": "docs/ci-qualification/normal-pr-ignored-tests.json",
+      "inventory_sha256": "a917927a3d27ad41e5ca832af3c91efdec37afcbbf0c2423fb8f5717d5534ce3",
+      "ignored_names": 35,
+      "external_runtime_required": 27,
+      "outside_normal_pr_not_executed_not_passed": 8,
+      "source_rebindings": [
+        {
+          "name": "scale_proof_reopen_rss_is_bounded",
+          "before": "9ad882b59db89567dca7f800920ac017138c6e99faa68b8ec49cc2938afe3254",
+          "after": "11f257b5d9c023becb0818b69084486d71db323b3c70b860cb47a4e62cf6b6fd"
+        }
+      ],
+      "runtime_outcomes": {
+        "native functional contracts": {
+          "job_id": 124869486974,
+          "result": "success"
+        },
+        "native resource and performance contracts": {
+          "job_id": 124869486968,
+          "result": "in_progress"
+        },
+        "standalone container e2e": {
+          "job_id": 124869487070,
+          "result": "success"
+        },
+        "GKE e2e (overlay) / deploy + test on shared GKE": {
+          "job_id": 124869587638,
+          "result": "success"
+        },
+        "GKE e2e (operator) / deploy + test on shared GKE": {
+          "job_id": 124871159807,
+          "result": "success"
+        },
+        "measured performance": {
+          "job_id": 124866474693,
+          "result": "success"
+        }
+      }
+    },
+    {
+      "description": "Milestone document mapping retains the approved #119 proposal and must match actual product documentation before acceptance.",
+      "resolution": "Apply the existing approved #119 document mapping. Keep its frozen fixture and product milestone scope.",
+      "fixture": "docs/ci-qualification/milestones.json",
+      "fixture_sha256": "58ed020068f1c70b8043c23fd4eee1b157c9a70a3e11516eb7811872fca920fb",
+      "hosted_assertions": 87,
+      "job_id": 124853929164
+    }
+  ],
+  "required_jobs": 32,
+  "required_checks": 61,
+  "unit_cases": 31,
+  "unit_batches": 4,
+  "shared_case_budget_seconds": 1800,
+  "integration_profiles": 13,
+  "checks_sha256": "9e205af84c09d0969754e070e99c6244a0ae0a0da5c4b593c9b206c5db49bd07",
+  "required_final_acceptance": [
+    "complete_current_head_and_base_CI",
+    "independent_Codex_review",
+    "reviewed_protected_source_adoption",
+    "live_CI_owned_handoff",
+    "exact_merge_and_issue_closure"
+  ],
+  "current_head_runtime_checks_remain_required": true,
+  "source_proposal_grants_qualification": false,
+  "release_or_milestone_acceptance": false,
+  "recorded_runtime_outcomes_are_partial": true
+}

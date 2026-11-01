@@ -598,11 +598,7 @@
           }
         },
         "additional": [],
-        "unresolved": [
-          "Existing zero-test unit targets need product-owner tests or explicitly reviewed non-applicability; no waiver is supplied here.",
-          "Ignored integration tests without a mapped qualifying runtime remain failures; legacy EC wrappers and release/benchmark-only cases need bounded owner decisions.",
-          "Milestone document mapping retains the approved #119 proposal and must match actual product documentation before acceptance."
-        ]
+        "unresolved": []
       }
     }
   },
@@ -1281,11 +1277,7 @@
             }
           },
           "additional": [],
-          "unresolved": [
-            "Existing zero-test unit targets need product-owner tests or explicitly reviewed non-applicability; no waiver is supplied here.",
-            "Ignored integration tests without a mapped qualifying runtime remain failures; legacy EC wrappers and release/benchmark-only cases need bounded owner decisions.",
-            "Milestone document mapping retains the approved #119 proposal and must match actual product documentation before acceptance."
-          ]
+          "unresolved": []
         }
       }
     },

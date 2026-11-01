@@ -29,7 +29,14 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(len(value['test_plan']['selected']),61)
         self.assertEqual(set(value['test_plan']['selected']),set(config['qualification']['checks']))
         self.assertEqual(value['qualification'],'not_evaluated');self.assertTrue(value['bootstrap_execution_only'])
-        self.assertTrue(value['pending_protected_review']);self.assertIn('linked issue has unresolved required gates',value['pending_applicability'])
+        self.assertTrue(value['pending_protected_review'])
+        self.assertIn('gate infrastructure change requires reviewed policy update: scripts/pr-gates/selection.py',value['pending_applicability'])
+        unresolved=copy.deepcopy(config)
+        unresolved['qualification']['contracts']['188']['unresolved']=['unreviewed new content requirement']
+        pending=self.invoke(new=unresolved)
+        self.assertIn('linked issue has unresolved required gates',pending['pending_applicability'])
+        self.assertEqual(pending['test_plan']['selected'],value['test_plan']['selected'])
+        self.assertTrue(pending['bootstrap_execution_only']);self.assertEqual(pending['qualification'],'not_evaluated')
 
     def test_bootstrap_preserves_prior_cloud_gate_and_refuses_new_unknown_old_gate(self):
         old=copy.deepcopy(prior);old['workflows'][0]['jobs'].append('unaccounted required old workload')
