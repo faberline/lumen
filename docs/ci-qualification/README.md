@@ -1,7 +1,9 @@
 # Lumen PR qualification framework
 
-This change adds ordinary read-only pull request checks for issue #184. It does
-not approve product acceptance or change the existing failure-only lifecycle.
+This directory records Lumen's normal development checks and protected
+qualification proposal for #188 / PR #189. See
+[the current adoption contract](development-pipeline-preparation.md).
+Candidate CI alone does not approve its own source or change deployed policy.
 
 The unit/static planner inventories the full Cargo workspace at the exact pull
 request head and base. It runs each enabled library and binary unit target for
@@ -17,9 +19,9 @@ Existing GKE, functional, integration and performance gates remain unchanged.
 
 The milestone validator checks frozen, proposed native milestone identities and
 outcome links. Its fixture came from the existing #119 migration work; it is not
-a new product contract. The current main documents do not match that proposal.
-The milestone job must fail until the responsible product work resolves the
-mapping. The issue planner owns missing product acceptance tickets. A failed or
+a new product contract. The candidate applies the existing document proposal
+without changing the frozen fixture. The validator must still check every
+assertion. The issue planner owns newly found acceptance gaps. A failed or
 unknown product requirement must not become a pass.
 
 The shared GKE test overlay uses `dynamic-rwo` for its direct and operator
@@ -29,4 +31,6 @@ not change the existing cloud test assertions.
 A passing unit/static workflow does not establish full product qualification.
 Functional, end-to-end and performance applicability still require their own
 issue contracts and evidence, including the existing #114 work. The default
-qualification policy remains failure-only with its existing blockers.
+deployed qualification policy remains unchanged until reviewed protected-source
+adoption. The candidate preserves exact nonzero execution and applicability
+requirements. Its local completion owner requires independent Codex review.

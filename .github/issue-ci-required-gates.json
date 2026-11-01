@@ -33,7 +33,9 @@
         "standalone container e2e",
         "GKE e2e (overlay) / deploy + test on shared GKE",
         "GKE e2e (operator) / deploy + test on shared GKE",
-        "measured performance"
+        "measured performance",
+        "native functional contracts",
+        "native resource and performance contracts"
       ]
     }
   ],
@@ -405,12 +407,22 @@
         "job": "measured performance",
         "case_id": "pagination",
         "case_label": "deep pagination original 20x bound"
+      },
+      "native-functional": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "native functional contracts"
+      },
+      "native-resource-performance": {
+        "kind": "performance",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "native resource and performance contracts"
       }
     },
     "trusted_workflows": {
       ".github/workflows/pr-unit-static.yml": {
         "id": 399074736,
-        "definition_sha": "c50ef7b6127398a9781f0971d2e6f737cb115ce4"
+        "definition_sha": "962882719276c9183a57d1132e9521c2511aeffb"
       }
     },
     "always": [
@@ -440,7 +452,12 @@
       "crates/lumen/tests/it/e2e/**",
       "crates/lumen/tests/it/perf_gate.rs",
       "crates/lumen-index/src/index/domain/query/zip_cursor/tests.rs",
-      "crates/lumen-index/src/index/application/engine/search/tests/pagination/cursors.rs"
+      "crates/lumen-index/src/index/application/engine/search/tests/pagination/cursors.rs",
+      "docs/ci-qualification/normal-pr-ignored-tests.json",
+      "crates/lumen/tests/rig/**",
+      "crates/lumen/tests/it/support/native_contracts.rs",
+      "crates/lumen/tests/disk_scale_proof.rs",
+      "crates/lumen/tests/perf_gate_vs_db.rs"
     ],
     "rules": [
       {
@@ -497,7 +514,9 @@
           "cloud-7",
           "coarse",
           "index-latency",
-          "pagination"
+          "pagination",
+          "native-functional",
+          "native-resource-performance"
         ],
         "exempt": {}
       }
@@ -562,7 +581,8 @@
               "functional-12",
               "cloud-5",
               "cloud-6",
-              "cloud-7"
+              "cloud-7",
+              "native-functional"
             ],
             "reason": "Retain complete normal-development functional_e2e evidence; unknown product content remains blocking."
           },
@@ -571,7 +591,8 @@
             "checks": [
               "coarse",
               "index-latency",
-              "pagination"
+              "pagination",
+              "native-resource-performance"
             ],
             "reason": "Retain complete normal-development performance evidence; unknown product content remains blocking."
           }
@@ -606,7 +627,8 @@
         "test-client",
         "standalone-container",
         "gke-test",
-        "workspace-contracts"
+        "workspace-contracts",
+        "native-contracts"
       ],
       "performance": [
         "measured-performance"
@@ -694,7 +716,9 @@
           "standalone container e2e",
           "GKE e2e (overlay) / deploy + test on shared GKE",
           "GKE e2e (operator) / deploy + test on shared GKE",
-          "measured performance"
+          "measured performance",
+          "native functional contracts",
+          "native resource and performance contracts"
         ]
       }
     ],
@@ -1066,12 +1090,22 @@
           "job": "measured performance",
           "case_id": "pagination",
           "case_label": "deep pagination original 20x bound"
+        },
+        "native-functional": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "native functional contracts"
+        },
+        "native-resource-performance": {
+          "kind": "performance",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "native resource and performance contracts"
         }
       },
       "trusted_workflows": {
         ".github/workflows/pr-unit-static.yml": {
           "id": 399074736,
-          "definition_sha": "c50ef7b6127398a9781f0971d2e6f737cb115ce4"
+          "definition_sha": "962882719276c9183a57d1132e9521c2511aeffb"
         }
       },
       "always": [
@@ -1101,7 +1135,12 @@
         "crates/lumen/tests/it/e2e/**",
         "crates/lumen/tests/it/perf_gate.rs",
         "crates/lumen-index/src/index/domain/query/zip_cursor/tests.rs",
-        "crates/lumen-index/src/index/application/engine/search/tests/pagination/cursors.rs"
+        "crates/lumen-index/src/index/application/engine/search/tests/pagination/cursors.rs",
+        "docs/ci-qualification/normal-pr-ignored-tests.json",
+        "crates/lumen/tests/rig/**",
+        "crates/lumen/tests/it/support/native_contracts.rs",
+        "crates/lumen/tests/disk_scale_proof.rs",
+        "crates/lumen/tests/perf_gate_vs_db.rs"
       ],
       "rules": [
         {
@@ -1158,7 +1197,9 @@
             "cloud-7",
             "coarse",
             "index-latency",
-            "pagination"
+            "pagination",
+            "native-functional",
+            "native-resource-performance"
           ],
           "exempt": {}
         }
@@ -1223,7 +1264,8 @@
                 "functional-12",
                 "cloud-5",
                 "cloud-6",
-                "cloud-7"
+                "cloud-7",
+                "native-functional"
               ],
               "reason": "Retain complete normal-development functional_e2e evidence; unknown product content remains blocking."
             },
@@ -1232,7 +1274,8 @@
               "checks": [
                 "coarse",
                 "index-latency",
-                "pagination"
+                "pagination",
+                "native-resource-performance"
               ],
               "reason": "Retain complete normal-development performance evidence; unknown product content remains blocking."
             }
@@ -1267,7 +1310,8 @@
           "test-client",
           "standalone-container",
           "gke-test",
-          "workspace-contracts"
+          "workspace-contracts",
+          "native-contracts"
         ],
         "performance": [
           "measured-performance"

@@ -45,10 +45,12 @@ class MeasureTests(unittest.TestCase):
             with self.subTest(value=bad),self.assertRaises(ValueError):m.measurement(case,bad)
 
     def test_original_pagination_exclusive_20x_limit(self):
-        case=m.CASES[2];value=m.measurement(case,'page#1 2us | keyset@50k 39us | offset@50k 100us')
+        case=m.CASES[2];value=m.measurement(case,'page#1 2us | keyset@50k 39us | rejected-offset@50k 100us')
         self.assertEqual(value['ratio_exclusive_limit'],20)
+        self.assertEqual(value['legacy_offset'],'rejected_by_existing_contract')
         for deep in (40,41):
-            with self.subTest(deep=deep),self.assertRaises(ValueError):m.measurement(case,f'page#1 2us | keyset@50k {deep}us | offset@50k 100us')
+            with self.subTest(deep=deep),self.assertRaises(ValueError):m.measurement(case,f'page#1 2us | keyset@50k {deep}us | rejected-offset@50k 100us')
+        with self.assertRaises(ValueError):m.measurement(case,'page#1 2us | keyset@50k 39us | offset@50k 100us')
 
     def test_existing_coarse_filter_and_release_mode_are_retained(self):
         argv=m.command(m.CASES[0]);self.assertEqual(argv[:8],['cargo','test','--release','--locked','-p','lumen','--test','it'])

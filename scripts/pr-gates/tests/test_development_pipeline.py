@@ -23,20 +23,20 @@ class DevelopmentTests(unittest.TestCase):
     def test_each_later_entry_refuses_missing_unit_dependency(self):
         import yaml
         original=d.yaml_document((ROOT/workflow).read_text())
-        for name in ('image','test-client','workspace-contracts','measured-performance'):
+        for name in ('image','test-client','workspace-contracts','measured-performance','native-contracts'):
             value=copy.deepcopy(original);value['jobs'][name]['needs']=['inventory']
             with self.subTest(job=name),self.assertRaisesRegex(RuntimeError,'earlier stage'):
                 d.workflow_contract(yaml.safe_dump(value),config)
 
     def test_every_expanded_job_is_required_and_every_case_retained(self):
-        policy=config['qualification'];self.assertEqual(len(policy['checks']),59)
-        self.assertEqual(len(config['workflows'][0]['jobs']),30)
+        policy=config['qualification'];self.assertEqual(len(policy['checks']),61)
+        self.assertEqual(len(config['workflows'][0]['jobs']),32)
         legacy=json.loads((ROOT/'scripts/issue-ci/tests/fixtures/pre-local-policy.json').read_text())
         self.assertTrue(d.retains_workflows(legacy,config))
         for name in legacy['workflows'][0]['jobs']:self.assertIn(name,config['workflows'][0]['jobs'])
         self.assertEqual(sum(c['kind']=='unit'for c in policy['checks'].values()),31)
-        self.assertEqual(sum(c['kind']=='functional_e2e'for c in policy['checks'].values()),16)
-        self.assertEqual(sum(c['kind']=='performance'for c in policy['checks'].values()),3)
+        self.assertEqual(sum(c['kind']=='functional_e2e'for c in policy['checks'].values()),17)
+        self.assertEqual(sum(c['kind']=='performance'for c in policy['checks'].values()),4)
         for name in config['workflows'][0]['jobs']:
             with self.subTest(job=name):self.assertTrue(any(c['job']==name for c in policy['checks'].values()))
 
@@ -51,9 +51,9 @@ class DevelopmentTests(unittest.TestCase):
             self.assertIn('No failed-step detail',data['body']);self.assertIn(head,data['body']);self.assertIn(base,data['body'])
             result=dict(id=len(comments)+1,body=data['body'],user=dict(login='github-actions[bot]'));comments.append(result);writes.append(result);return result
         d.report_failures(repo,188,records,comments,write,lambda:None)
-        self.assertEqual(len(writes),30)
+        self.assertEqual(len(writes),32)
         d.report_failures(repo,188,records,comments,write,lambda:None)
-        self.assertEqual(len(writes),30)
+        self.assertEqual(len(writes),32)
 
     def test_setup_timeout_and_missing_runner_receipt_keep_metadata_reasons(self):
         repo='faberline/lumen';run=dict(id=7,run_attempt=1,html_url=f'https://github.com/{repo}/actions/runs/7')

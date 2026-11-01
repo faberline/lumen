@@ -93,16 +93,49 @@ def external_coverage(target,name):
     return owned.get(name)
 
 
-def validate_execution(stdout,expected,target):
+def ignored_contracts(root):
+    path = Path(root)/'docs/ci-qualification/normal-pr-ignored-tests.json'
+    data = json.loads(path.read_text())
+    if data.get('version') != 1 or not isinstance(data.get('tests'), list):
+        raise ValueError('invalid ignored contract inventory')
+    seen = set()
+    for row in data['tests']:
+        key = (row['target'], row['name'])
+        if key in seen or row['normal_pr'] not in ('external', 'outside_normal_pr') or not row.get('basis') or not row.get('owner'):
+            raise ValueError('duplicate or invalid ignored contract identity')
+        seen.add(key)
+        source = Path(row['source'])
+        if source.is_absolute() or '..' in source.parts or not str(source).startswith('crates/lumen/tests/'):
+            raise ValueError('unsafe ignored contract source')
+        if hashlib.sha256((Path(root)/source).read_bytes()).hexdigest() != row['source_sha256']:
+            raise ValueError('ignored contract source changed; requires independent applicability review: '+row['name'])
+    return data['tests']
+
+
+def ignored_contract(root,target,name):
+    return next((row for row in ignored_contracts(root) if row['target']==target and row['name']==name),None)
+
+
+def validate_execution(stdout,expected,target,root=None):
     blocks=unit._libtest_blocks(stdout,1,pending_ignored=True)
     executed={name for b in blocks for name in b['roster']}
     ignored={name for b in blocks for name in b['ignored_roster']}
     if not executed:raise ValueError('zero executed integration tests')
     if executed & ignored or executed|ignored!=set(expected):raise ValueError('integration execution differs from complete discovered roster')
-    deferred={name:external_coverage(target,name)for name in sorted(ignored)}
-    missing=[name for name,owner in deferred.items()if owner is None]
+    root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
+    deferred={}
+    outside={}
+    missing=[]
+    for name in sorted(ignored):
+        row=ignored_contract(root,target,name)
+        if row is None:
+            missing.append(name)
+        elif row['normal_pr']=='external':
+            deferred[name]=row['owner']
+        else:
+            outside[name]=dict(owner=row['owner'],basis=row['basis'],source=row['source'],source_sha256=row['source_sha256'],result='not_applicable_to_normal_pr_not_executed_not_passed')
     if missing:raise ValueError('ignored tests require reviewed runtime/applicability and actual evidence; not passed: '+json.dumps(missing))
-    return dict(tests=blocks,discovered_roster=sorted(expected),local_executed=sorted(executed),external_required=deferred,external_tests_counted_as_local_pass=False)
+    return dict(tests=blocks,discovered_roster=sorted(expected),local_executed=sorted(executed),external_required=deferred,outside_normal_pr=outside,external_tests_counted_as_local_pass=False,non_applicable_tests_counted_as_pass=False)
 
 
 def run(root,package,profile,provenance):
@@ -116,7 +149,7 @@ def run(root,package,profile,provenance):
             started=time.monotonic();result=unit._run_product(argv,root)
             record.update(command=argv,elapsed_seconds=time.monotonic()-started,exit_code=result.returncode,stdout_sha256=hashlib.sha256(result.stdout.encode()).hexdigest(),stderr_sha256=hashlib.sha256(result.stderr.encode()).hexdigest())
             if result.returncode:raise ValueError('integration command failed with exit '+str(result.returncode))
-            proof=validate_execution(result.stdout,before,target['name'])
+            proof=validate_execution(result.stdout,before,target['name'],root)
             after=discover(root,package,profile,target)
             if before!=after:raise ValueError('integration discovery changed during execution')
             record.update(proof,result='pass_local_only_external_jobs_still_required'if proof['external_required']else'pass')

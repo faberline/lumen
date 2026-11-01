@@ -59,11 +59,11 @@ def measurement(case,text):
         value,scale=matches[0];milliseconds=float(value)*{'ns':1e-6,'µs':1e-3,'μs':1e-3,'us':1e-3,'ms':1,'s':1000}[scale]
         if not 0<milliseconds<50:raise ValueError('500k latency does not meet original exclusive 50ms bound')
         return dict(documents=500000,milliseconds=milliseconds,milliseconds_exclusive_limit=50)
-    matches=re.findall(r'page#1 (\d+)us \| keyset@50k (\d+)us \| offset@50k (\d+)us',text)
+    matches=re.findall(r'page#1 (\d+)us \| keyset@50k (\d+)us \| rejected-offset@50k (\d+)us',text)
     if len(matches)!=1:raise ValueError('missing or ambiguous pagination measurement')
     first,deep,offset=map(int,matches[0])
     if deep>=max(first,1)*20:raise ValueError('deep pagination does not meet original exclusive 20x bound')
-    return dict(first_us=first,deep_us=deep,offset_us=offset,ratio_exclusive_limit=20)
+    return dict(first_us=first,deep_us=deep,legacy_offset_rejected_after_us=offset,legacy_offset='rejected_by_existing_contract',ratio_exclusive_limit=20)
 
 
 def run(root,provenance):

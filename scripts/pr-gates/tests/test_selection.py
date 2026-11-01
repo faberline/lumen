@@ -26,7 +26,7 @@ class SelectionTests(unittest.TestCase):
 
     def test_bootstrap_plans_all_cases_but_does_not_qualify(self):
         value=self.invoke()
-        self.assertEqual(len(value['test_plan']['selected']),59)
+        self.assertEqual(len(value['test_plan']['selected']),61)
         self.assertEqual(set(value['test_plan']['selected']),set(config['qualification']['checks']))
         self.assertEqual(value['qualification'],'not_evaluated');self.assertTrue(value['bootstrap_execution_only'])
         self.assertTrue(value['pending_protected_review']);self.assertIn('linked issue has unresolved required gates',value['pending_applicability'])

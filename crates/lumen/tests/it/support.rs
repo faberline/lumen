@@ -4,6 +4,7 @@
 
 pub mod indexing_durable_catalog_fixture;
 pub mod indexing_durable_fixture;
+pub mod native_contracts;
 pub mod perf_cell_receipt;
 pub mod perf_workload_ledger;
 pub mod serve_budget_support;

@@ -2,6 +2,9 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import json
+import tempfile
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[3]
 spec=importlib.util.spec_from_file_location('lumen_contract_controls',ROOT/'scripts/pr-gates/contracts.py')
@@ -28,9 +31,39 @@ class ContractsTests(unittest.TestCase):
         self.assertEqual(value['local_executed'],['local']);self.assertFalse(value['external_tests_counted_as_local_pass'])
 
     def test_unknown_ignored_content_and_release_workload_remain_failures(self):
+        # An explicit source-bound owner/applicability record is necessary.
+        # Missing records cannot silently waive old release or EC work.
         for name in ('new_unknown','perf_gate::durable_workload::approved_30_minute_durable_workload','stability_lumen_long_running_stability_resource_leak::lumen_long_running_stability_resource_leak'):
-            with self.subTest(name=name),self.assertRaisesRegex(ValueError,'not passed'):
+            with self.subTest(name=name),patch.object(c,'ignored_contract',return_value=None),self.assertRaisesRegex(ValueError,'not passed'):
                 c.validate_execution(output(['local'],[name]),{'local',name},'it')
+
+    def test_preserved_full_workload_is_outside_normal_pr_and_never_passed(self):
+        name='perf_gate::durable_workload::approved_30_minute_durable_workload'
+        value=c.validate_execution(output(['local'],[name]),{'local',name},'it')
+        self.assertFalse(value['external_required'])
+        self.assertFalse(value['non_applicable_tests_counted_as_pass'])
+        self.assertIn('not_executed_not_passed',value['outside_normal_pr'][name]['result'])
+        self.assertIn('sixteen',value['outside_normal_pr'][name]['basis'])
+
+    def test_retired_ec_contract_requires_actual_current_hosted_owner(self):
+        name='stability_lumen_long_running_stability_resource_leak::lumen_long_running_stability_resource_leak'
+        value=c.validate_execution(output(['local'],[name]),{'local',name},'it')
+        self.assertEqual(value['external_required'][name],'native resource and performance contracts')
+        self.assertEqual(value['local_executed'],['local'])
+        self.assertFalse(value['external_tests_counted_as_local_pass'])
+
+    def test_source_changed_duplicate_or_unsafe_applicability_refuses(self):
+        source=json.loads((ROOT/'docs/ci-qualification/normal-pr-ignored-tests.json').read_text())
+        for mutation in ('hash','duplicate','path'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                row=dict(source['tests'][0]);path=root/row['source'];path.parent.mkdir(parents=True);path.write_bytes((ROOT/row['source']).read_bytes())
+                rows=[row]
+                if mutation=='hash':row['source_sha256']='0'*64
+                elif mutation=='duplicate':rows.append(dict(row))
+                else:row['source']='../outside.rs'
+                config=root/'docs/ci-qualification/normal-pr-ignored-tests.json';config.parent.mkdir(parents=True);config.write_text(json.dumps(dict(version=1,tests=rows)))
+                with self.assertRaises(ValueError):c.ignored_contracts(root)
 
     def test_external_names_cannot_be_forged_on_an_unrelated_target(self):
         name='e2e::overlay::journey'

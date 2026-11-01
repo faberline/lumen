@@ -1,60 +1,84 @@
-# Lumen development pipeline preparation
+# Lumen normal development pipeline adoption
 
-Issue: [#188](https://github.com/faberline/lumen/issues/188).
-Stage contract: [AW DEV-PIPELINE-1](https://github.com/faberline/aw/blob/fb002d9198967313a4641f129a9c9648890a7555/docs/standards/development-pipeline.md).
+Canonical issue: [#188](https://github.com/faberline/lumen/issues/188).
+Integration PR: [#189](https://github.com/faberline/lumen/pull/189).
+The stage and local completion rules follow the verified Core #85 flow.
+This document describes the candidate. It is not deployment or acceptance proof.
 
-This branch prepares part of the Lumen adapter. Full adoption remains pending.
-Core #84 must complete before Lumen adopts the normal-development pipeline.
+## Stages and app-owned jobs
 
-## Lumen-owned unit layout
+The PR workflow has one path:
 
-`.github/development-test-batches.json` selects four physical unit batches.
-The app owns this value. AW sets no batch count.
+1. Preflight checks the current main, conflicts and one canonical open issue.
+2. Inventory records the complete head/base diff and reverse dependencies.
+3. Formatting, milestone contracts and unit/static batches run.
+4. Functional/E2E and measured performance jobs run after stage 3.
 
-The planner derives every library/binary and feature profile from fresh Cargo
-metadata. A batch retains each row once. The current 31-row inventory comes
-from the expanded jobs at the frozen framework commit. Its fixture records
-that the source CI failed. It is definition evidence, not test-pass evidence.
+AW defines stage order. Lumen defines its jobs and matrix.
+Four physical unit batches retain all 31 manifest-derived cases.
+Each case runs the original unit and Clippy commands within one 30-minute
+budget. Every enabled library and binary needs a complete nonzero roster.
+Every batch records all case IDs, its plan digest, exact head/base, run and
+attempt. A failed case fails the batch. A timeout terminates its process group.
 
-Each row runs both original unit and Clippy commands. The existing unit driver
-still checks complete nonzero rosters, ignored tests and baseline coverage.
-Both commands share the original 30-minute row budget. A timed-out command's
-isolated process group is terminated before another row starts.
+The complete integration matrix retains 13 feature profiles.
+The original eight cloud checks remain required.
+Two hosted contract jobs execute the old EC contracts through current tools.
+There are 32 expanded jobs and 61 explicit qualification checks.
+This count does not count filtered, ignored or non-applicable tests as passes.
 
-Each row records its result even if an earlier row failed. The batch records
-the full expected and observed case IDs, plan digest, head, base, run and
-attempt. Any failed row fails the batch. Source identity is checked before
-and after every row, including failures.
+## Content repairs
 
-## Impact evidence
+The user explicitly authorized the bounded repairs in #192 through #197.
+They fix static errors, add real facade/bench unit tests, update the pagination
+fixture to the existing keyset contract, optimize cold AND scoring and apply
+the existing #119 milestone-document proposal.
+The frozen milestone fixture remains unchanged.
 
-The inventory job records the exact head/base diff with NUL-separated paths.
-It retains deleted paths and both sides of a rename. It reports reverse
-dependency users. Unknown paths use the full workspace fallback. Execution
-continues to use the complete workspace matrix.
+The original cold workload still uses 500,000 documents and 20 tokens.
+Its total must remain strictly below 50 ms.
+The pagination workload keeps its corpus, depth, page size, identities and
+strict 20x bound. Unsupported offset-plus-sort requests must be rejected.
 
-Format, milestone contracts and all unit batches wait for this inventory.
-The existing unit-before-cloud boundary remains required.
+## Ignored integration contracts
 
-## Remaining adoption work
+`normal-pr-ignored-tests.json` records the exact 35 original ignored names.
+Each row binds its source digest, owner and applicability reason.
+Unknown names, changed source, duplicate rows and missing owners fail closed.
+The protected proposal needs independent review before production adoption.
 
-- Create one normal PR orchestration path. Remove the duplicate direct and
-  GKE unit invocation while preserving manual and release entry points.
-- Complete the reviewed qualification policy, affected functional/E2E and
-  performance plan, and exact immutable workflow identities.
-- Wire independent current-input Claude review and the single result writer.
-  Verify every failed nonfinal job's reason comment and safe todo recovery.
-- Verify guarded merge, actual merge observation, explicit canonical issue
-  closure and close-only retry after the Core rollout dependency passes.
-- Run full required hosted product CI and independent Claude review before
-  protected adoption. Keep all existing tests, numeric thresholds and
-  coverage blockers. Missing test content remains planner work.
+Twenty-seven names have actual external execution owners.
+The native functional job runs CLI, Kustomize, generated-client and Docker
+volume contracts. The native resource/performance job runs the original Rig
+endurance, overload and fault scenarios plus isolated disk and competitive
+gates. The scenario files, numeric limits and workload sizes remain intact.
+Native subprocesses own their ports and cleanup. Tools are pinned by digest.
+Execution binds full and selected harness rosters to current head/base and
+run-attempt evidence. A selected test must execute once and pass.
 
-The local control suite uses isolated metadata fixtures:
+Eight names are outside normal PR execution under their existing contracts.
+They are explicit report-only probes, explicit peer disk calibration and the
+full sixteen-cell 30-minute acceptance workload. Their bodies and interfaces
+remain present. These rows are reported as not executed and not passed.
+They do not supply release or full performance acceptance evidence.
 
-```sh
-python3 -m unittest discover -s scripts/pr-gates/tests -v
-```
+## Failure and completion ownership
 
-Those fixtures do not execute Cargo, product binaries, E2E or performance
-workloads. Their success does not qualify the product or activate the adapter.
+Each failed nonfinal job gets its own issue comment and diagnostic reason.
+The single issue writer returns a current failed coding attempt to `todo`.
+It preserves newer claims and refuses stale-head results.
+
+After protected-source adoption, complete current CI may set literal `done`.
+The issue stays open. CI has no Claude/Codex review, PR merge or issue-close
+job. The local controller requires independent Codex review of the exact
+current inputs. Only after that review and all necessary CI pass may it merge
+the exact head and close #188. Failed review returns the issue to `todo`.
+
+Initial candidate CI does not authorize itself. The source rollout, branch
+protection and live OPEN/done acceptance remain separate required evidence.
+
+## Local controls
+
+`python -m unittest discover -s scripts/pr-gates/tests` runs isolated controls.
+The writer controls in `scripts/issue-ci/tests` are also required.
+These controls do not execute product E2E or performance workloads.
