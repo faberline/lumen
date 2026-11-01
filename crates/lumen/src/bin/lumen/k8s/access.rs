@@ -111,7 +111,7 @@ pub(super) fn render_access_yaml(args: &K8sAccessRenderArgs) -> Result<String> {
         });
     }
 
-    let documents = vec![
+    let documents = [
         serde_json::json!({
             "apiVersion": "v1",
             "kind": "ServiceAccount",

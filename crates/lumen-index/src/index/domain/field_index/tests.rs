@@ -22,10 +22,12 @@ fn sealed_number_reads_replacement_overlay_and_then_delete() {
         &[Some(1.0)],
     )
     .unwrap();
-    let mut number = NumberIndex::default();
-    number.segment = Some(Arc::new(ComposedSegmentReader::from_base(Arc::new(
-        crate::storage::infrastructure::segment::SegmentReader::open(&path).unwrap(),
-    ))));
+    let mut number = NumberIndex {
+        segment: Some(Arc::new(ComposedSegmentReader::from_base(Arc::new(
+            crate::storage::infrastructure::segment::SegmentReader::open(&path).unwrap(),
+        )))),
+        ..Default::default()
+    };
     number.tombstones.insert(0);
     number.forward.insert(0, SortableF64::new(2.0).unwrap());
     assert_eq!(number.live_number_at(0).map(|v| v.to_f64()), Some(2.0));
@@ -61,8 +63,10 @@ fn sparse_high_delta_does_not_hide_middle_live_scalar_overlays() {
         vec![100],
     )
     .unwrap();
-    let mut keyword = KeywordIndex::default();
-    keyword.segment = Some(Arc::new(keyword_view));
+    let mut keyword = KeywordIndex {
+        segment: Some(Arc::new(keyword_view)),
+        ..Default::default()
+    };
     keyword.forward.insert(2, "middle".into());
     assert_eq!(keyword.keyword_at(2).as_deref(), Some("middle"));
 
@@ -90,8 +94,10 @@ fn sparse_high_delta_does_not_hide_middle_live_scalar_overlays() {
         vec![100],
     )
     .unwrap();
-    let mut set = SetIndex::default();
-    set.segment = Some(Arc::new(set_view));
+    let mut set = SetIndex {
+        segment: Some(Arc::new(set_view)),
+        ..Default::default()
+    };
     set.forward
         .insert(2, ["middle".to_string()].into_iter().collect());
     assert!(set.set_contains(2, "middle"));
@@ -112,8 +118,10 @@ fn sparse_high_delta_does_not_hide_middle_live_scalar_overlays() {
         vec![100],
     )
     .unwrap();
-    let mut hash = HashIndex::default();
-    hash.segment = Some(Arc::new(hash_view));
+    let mut hash = HashIndex {
+        segment: Some(Arc::new(hash_view)),
+        ..Default::default()
+    };
     hash.forward.insert(2, 2);
     assert_eq!(hash.hash_at(2), Some(2));
 }

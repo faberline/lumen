@@ -69,6 +69,7 @@ impl Metrics {
 /// value in exact `kB` units; any missing row, wrong unit, malformed value,
 /// duplicate fields, or multiplication overflow is unavailable rather than a
 /// fabricated byte count.
+#[cfg(any(target_os = "linux", test))]
 fn parse_linux_vmhwm_bytes(status: &str) -> Option<u64> {
     let mut saw_vmhwm = false;
     let mut bytes = None;

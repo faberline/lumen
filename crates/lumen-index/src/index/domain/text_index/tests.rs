@@ -169,7 +169,7 @@ pub(in crate::index::domain) fn sparse_candidates(universe: u32, seed: u64) -> V
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            x % 3 == 0
+            x.is_multiple_of(3)
         })
         .collect()
 }

@@ -45,7 +45,7 @@ pub struct AuthConfig {
     /// The namespace every `SubjectAccessReview` is scoped to — the serving
     /// instance's own. Empty is only valid when `required` is `false`.
     pub namespace: String,
-    pub(in crate) profile: AuthProfile,
+    pub(crate) profile: AuthProfile,
 }
 
 impl Default for AuthConfig {
@@ -127,7 +127,7 @@ impl AuthConfig {
     }
 
     #[cfg(feature = "delegated-auth")]
-    pub(in crate) fn delegated_config(&self) -> Result<DelegatedAuthConfig> {
+    pub(crate) fn delegated_config(&self) -> Result<DelegatedAuthConfig> {
         match self.profile {
             AuthProfile::ManagedAudience => DelegatedAuthConfig::new(vec![AUDIENCE.to_string()])
                 .map_err(|e| anyhow::anyhow!("lumen's delegated-auth audience is missing: {e}")),

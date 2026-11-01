@@ -167,7 +167,7 @@ proptest! {
         e.create_collection("c", schema()).unwrap();
         for (i, (tags, tok)) in docs.iter().enumerate() {
             let slice: Option<Vec<&str>> =
-                tags.as_ref().map(|v| v.iter().map(|s| *s).collect());
+                tags.as_ref().map(|v| v.to_vec());
             index_doc(&e, &format!("d{i}"), slice.as_deref(), *tok);
         }
 

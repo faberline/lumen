@@ -28,7 +28,7 @@ pub(super) fn eval_number_sort_keyword_term_page(
     descending: bool,
     want: usize,
     track_total: bool,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> Result<Option<super::RankedPage>> {
     let QueryNode::Term(t) = query else {
         return Ok(None);
     };
@@ -168,7 +168,7 @@ pub(super) fn try_generic_sort_plan(
     req: &SearchRequest,
     sort: &[SortSpec],
     sort_after: Option<&SortAfter>,
-) -> Result<Option<(Vec<(u32, f32)>, u64, PlanKind)>> {
+) -> Result<Option<super::PlannedPage>> {
     let want = req.limit as usize;
     let mut page: Vec<(u32, f32)> = Vec::with_capacity(want.min(1024));
     let mut total: u64 = 0;

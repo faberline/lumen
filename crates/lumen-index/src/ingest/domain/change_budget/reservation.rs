@@ -4,9 +4,12 @@
 use std::sync::{Arc, Mutex};
 
 use crate::ingest::domain::change_budget::{
-    snapshot, update_high_water, ActiveCharge, AdmissionError, RamCharge, Reservation,
-    RetainedCharge, RetainedChargeInner, SourceRetention, SourceRetentionHeld,
+    snapshot, update_high_water, ActiveCharge, AdmissionError, Reservation, RetainedCharge,
+    RetainedChargeInner, SourceRetention, SourceRetentionHeld,
 };
+
+#[cfg(test)]
+use crate::ingest::domain::change_budget::RamCharge;
 
 impl Reservation {
     /// Divide one already-admitted reservation without changing process
@@ -40,7 +43,9 @@ impl Reservation {
         let retained = self
             .source_retention
             .get_or_insert_with(|| Arc::new(Mutex::new(None)));
-        SourceRetention(retained.clone())
+        SourceRetention {
+            _held: retained.clone(),
+        }
     }
 
     pub(crate) fn bytes(&self) -> usize {
@@ -242,22 +247,27 @@ impl Reservation {
             .work_revision = revision;
         self.budget.0.wake.signal();
         self.committed = true;
-        let charge = RetainedCharge(Arc::new(RetainedChargeInner {
-            budget: self.budget.clone(),
-            owner: self.owner,
-            _lifetime: self.lifetime.clone(),
-            capture_epoch,
-            bytes: self.bytes,
-        }));
+        let charge = RetainedCharge {
+            _inner: Arc::new(RetainedChargeInner {
+                budget: self.budget.clone(),
+                owner: self.owner,
+                _lifetime: self.lifetime.clone(),
+                capture_epoch,
+                bytes: self.bytes,
+            }),
+        };
         if let Some(retention) = self.source_retention.take() {
             *retention.lock().expect("source retention poisoned") =
-                Some(SourceRetentionHeld::Retained(charge.clone()));
+                Some(SourceRetentionHeld::Retained {
+                    _charge: charge.clone(),
+                });
         }
         Ok(charge)
     }
 
     /// Commit pre-apply RAM that is eligible only for a verified durable-stage
     /// transition. Applied journal work must use [`Self::commit`] instead.
+    #[cfg(test)]
     pub(crate) fn commit_ram(
         mut self,
         sequence: u64,
@@ -314,7 +324,7 @@ impl Drop for Reservation {
                 source_retention: None,
             };
             *retention.lock().expect("source retention poisoned") =
-                Some(SourceRetentionHeld::Reservation(held));
+                Some(SourceRetentionHeld::Reservation { _reservation: held });
             self.committed = true;
             return;
         }

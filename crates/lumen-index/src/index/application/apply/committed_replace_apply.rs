@@ -54,7 +54,6 @@ impl ReplacementLedger {
                         code: code.to_owned(),
                         message,
                     },
-                    _ => unreachable!("rendered item error"),
                 },
             })
             .collect();

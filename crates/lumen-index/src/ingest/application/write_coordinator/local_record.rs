@@ -60,38 +60,40 @@ pub(super) fn prepare_local_record<'a>(
     loop {
         match engine.begin_admitted_record(entry, reservation) {
             Ok(guard) => return Ok(PreparedLocalRecord::Prepared(guard)),
-            Err(RepriceRecord {
-                entry: repriced_entry,
-                reservation: mut repriced_reservation,
-                required: Some(required),
-                error: _,
-            }) => match repriced_reservation.try_grow_to(required) {
-                Ok(()) => {
-                    entry = repriced_entry;
-                    reservation = repriced_reservation;
-                }
-                Err(AdmissionError::Full { .. }) => {
-                    return Ok(PreparedLocalRecord::CapacityBlocked {
-                        entry: repriced_entry,
-                        reservation: repriced_reservation,
-                        required,
-                    });
-                }
-                Err(grow_error) => {
+            Err(reprice) => match *reprice {
+                RepriceRecord {
+                    entry: repriced_entry,
+                    reservation: mut repriced_reservation,
+                    required: Some(required),
+                    error: _,
+                } => match repriced_reservation.try_grow_to(required) {
+                    Ok(()) => {
+                        entry = repriced_entry;
+                        reservation = repriced_reservation;
+                    }
+                    Err(AdmissionError::Full { .. }) => {
+                        return Ok(PreparedLocalRecord::CapacityBlocked {
+                            entry: repriced_entry,
+                            reservation: repriced_reservation,
+                            required,
+                        });
+                    }
+                    Err(grow_error) => {
+                        return Ok(PreparedLocalRecord::Unresolved {
+                            reservation: repriced_reservation,
+                            error: anyhow::Error::new(RecordAdmissionError::Capacity(grow_error)),
+                        });
+                    }
+                },
+                RepriceRecord {
+                    reservation, error, ..
+                } => {
                     return Ok(PreparedLocalRecord::Unresolved {
-                        reservation: repriced_reservation,
-                        error: anyhow::Error::new(RecordAdmissionError::Capacity(grow_error)),
+                        reservation,
+                        error: anyhow::Error::new(error),
                     });
                 }
             },
-            Err(RepriceRecord {
-                reservation, error, ..
-            }) => {
-                return Ok(PreparedLocalRecord::Unresolved {
-                    reservation,
-                    error: anyhow::Error::new(error),
-                });
-            }
         }
     }
 }

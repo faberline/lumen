@@ -169,7 +169,7 @@ fn sealed_text_replacement_twice_keeps_latest_overlay_and_snapshot_state() {
     let FieldIndex::Text { idx, .. } = coll.fields.get("body").unwrap() else {
         panic!("body must be text");
     };
-    assert!(idx.distinct.get(0).is_some_and(|tokens| {
+    assert!(idx.distinct.first().is_some_and(|tokens| {
         tokens
             .as_ref()
             .is_some_and(|tokens| tokens.iter().next().is_some())

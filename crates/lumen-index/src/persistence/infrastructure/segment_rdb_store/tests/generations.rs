@@ -258,7 +258,7 @@ fn injected_store_commit_is_deterministic() {
         .save_required(&Arc::new(Engine::new()), 1)
         .unwrap_err();
     assert!(error.to_string().contains("activate segment generation"));
-    assert!(matches!(store.load_current_generation().unwrap(), None));
+    assert!(store.load_current_generation().unwrap().is_none());
     assert!(injector
         .0
         .lock()

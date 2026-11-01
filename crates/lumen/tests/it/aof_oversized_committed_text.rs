@@ -79,7 +79,7 @@ const CHUNKS_PER_DOCUMENT: usize = VALUE_BYTES / BODY_CHUNK.len();
 const ORIGINAL_DOC_LEN: u32 = (CHUNKS_PER_DOCUMENT * 3 + 1) as u32;
 const UPDATED_TEXT: &str = "updated alpha alpha";
 const UPDATED_DOC_LEN: u32 = 3;
-const ALPHA_TF: u32 = (CHUNKS_PER_DOCUMENT * 1) as u32;
+const ALPHA_TF: u32 = CHUNKS_PER_DOCUMENT as u32;
 const BETA_TF: u32 = (CHUNKS_PER_DOCUMENT * 2) as u32;
 const CREATE_SEQUENCE: u64 = 1;
 const INDEX_SEQUENCE: u64 = 2;
@@ -155,10 +155,12 @@ fn create_entry() -> RaftLogEntry {
 }
 
 fn oversized_text_record() -> WalRecord {
-    assert!(
-        ITEM_COUNT * VALUE_BYTES > PENDING_HARD_LIMIT_BYTES,
-        "fixture source must exceed the documented 256 MiB pending budget",
-    );
+    const {
+        assert!(
+            ITEM_COUNT * VALUE_BYTES > PENDING_HARD_LIMIT_BYTES,
+            "fixture source must exceed the documented 256 MiB pending budget",
+        )
+    };
     let mut items = Vec::with_capacity(ITEM_COUNT);
     for ordinal in 0..ITEM_COUNT {
         items.push(IndexItem {
