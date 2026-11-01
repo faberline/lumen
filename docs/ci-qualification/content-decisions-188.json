@@ -14,7 +14,8 @@
     200,
     201,
     202,
-    203
+    203,
+    204
   ],
   "user_content_authorization_comment": 6554991259,
   "recorded_head": "bbd97a2c226ff702f9dd44f00ef6dad6d6ee236c",
@@ -30,7 +31,8 @@
     "Replace implemented source-gap descriptions with proposed source decisions.",
     "Retain the full graph inventory before accepting k HNSW hits; original exact recovery assertions remain.",
     "Repair independent review R1 without dropping a required Rig case or changing any original pin/workload.",
-    "Coalesce an already completed capacity request within its publication owner while retaining merge, successor requests, failure retry and replacement fences."
+    "Coalesce an already completed capacity request within its publication owner while retaining merge, successor requests, failure retry and replacement fences.",
+    "Manual checkpoints cover a fixed coordinator committed-WAL boundary after initial capacity relief; retain original cold-reopen assertions."
   ],
   "resolved_source_gaps": [
     {
@@ -176,5 +178,27 @@
     "local_affected_unit_executions": 230,
     "ignored": 0,
     "complete_new_head_CI_and_independent_review_required": true
+  },
+  "manual_committed_boundary_repair_204": {
+    "head": "7492a10ef7086eaddc166ce26d46d62caf83c314",
+    "base": "211360180d11684d5825c2594c573801fdf5d90a",
+    "origin": "LOCAL_ORIGINAL_NO_DEFAULT_HTTP_TARGET_NOT_HOSTED_CI",
+    "test": "capacity_http_contract::http_checkpoint_releases_pending_capacity_relay",
+    "line": 1606,
+    "observed_cold_ids": [],
+    "required_cold_ids": [
+      "capacity-large-010"
+    ],
+    "original_HTTP_file_unchanged": true,
+    "local_target_passed": 5,
+    "local_target_failed": 1,
+    "ignored": 0,
+    "overall_acceptance": false,
+    "regression_before_fix": "Manual checkpoint returned true while its already committed delivery was deliberately held",
+    "source_repair": "Capture one fixed committed boundary, save to relieve capacity, wait without publication/apply/restore permits, make at most one follow-up save and require actual CURRENT coverage",
+    "later_traffic_cannot_move_target": true,
+    "complete_new_head_CI_and_independent_review_required": true,
+    "local_affected_unit_executions": 320,
+    "local_ignored": 0
   }
 }

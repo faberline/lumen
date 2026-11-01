@@ -1,6 +1,6 @@
 # Lumen development pipeline content repairs
 
-PR #189 keeps #188 as its sole closing issue. Issues #192–#203 record the
+PR #189 keeps #188 as its sole closing issue. Issues #192–#204 record the
 bounded content repairs. A successful subset does not qualify the PR.
 
 ## Source contracts (#198)
@@ -119,6 +119,33 @@ replacement and honest counters/diagnostics. The real duplicate-publication
 regression failed before the fix. All 230 affected unit executions pass across
 default and no-default profiles with zero ignored tests. Fresh complete hosted
 CI and independent Codex review remain required for the final head.
+
+## Committed boundary in manual checkpoints (#204)
+
+A separate local no-default run at `7492a10` failed the unchanged
+`http_checkpoint_releases_pending_capacity_relay` cold-reopen assertion. The
+HTTP checkpoint returned OK and the committed record became visible live, but
+CURRENT omitted `capacity-large-010`. This local failure is retained separately
+from hosted CI. A default-profile subset did not qualify the source.
+
+On-demand checkpoints now capture one fixed committed WAL boundary from the
+existing coordinator. The initial save still runs before waiting for apply,
+because blocked apply may need that save to release capacity. When CURRENT
+does not yet cover the fixed boundary, the request waits for apply and performs
+at most one follow-up save. It verifies the actual CURRENT sequence before
+success. New traffic does not move the target. Waits hold no save, apply or
+restore permit. The wait reuses the existing submit timeout and propagates
+failure. Other write sinks retain their explicit applied-state default.
+
+A real WAL delivery is held across the first actual publication in a new small
+regression. The old path returns premature success. The repaired path waits,
+then reopens the durable generation and finds the exact committed data. A later
+committed delivery stays blocked to prove the fixed target cannot drift. Other
+new controls refuse an unavailable boundary and a failed apply. The original
+six-case HTTP target, cold-reopen IDs, capacity and deadlines are unchanged.
+All 320 focused unit executions pass across default and no-default settings,
+including the original checkpoint, capacity, budget, schedule and coordinator
+tests. The final source still requires complete hosted CI and independent review.
 
 ## Acceptance
 

@@ -145,6 +145,8 @@ async fn wait_for_checkpoint_count(engine: &Engine, expected: u64) {
 
 mod checkpoint_coalescing;
 
+mod committed_boundary;
+
 mod driver;
 
 mod driver_lifecycle;

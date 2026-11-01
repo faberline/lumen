@@ -92,6 +92,17 @@ impl Drop for CheckpointAttempt<'_> {
 }
 
 impl SegmentCheckpointSink {
+    async fn manual_boundary_is_durable(&self, target: u64) -> Result<bool> {
+        let store = self.store.clone();
+        tokio::task::spawn_blocking(move || {
+            Ok(store
+                .current_record()?
+                .is_some_and(|record| record.sequence >= target))
+        })
+        .await
+        .context("checkpoint boundary lookup task panicked")?
+    }
+
     async fn checkpoint_with_fence(
         &self,
         fence: Option<crate::persistence::application::capacity::PublicationFence>,
@@ -319,8 +330,43 @@ impl SegmentCheckpointSink {
 #[async_trait::async_trait]
 impl CheckpointSink for SegmentCheckpointSink {
     async fn checkpoint_now(&self) -> Result<bool> {
-        self.checkpoint_with_fence(None, CheckpointTraceOrigin::Manual, None)
-            .await
+        let target = self.writer.checkpoint_target_seq().await?;
+        let persisted = self
+            .checkpoint_with_fence(None, CheckpointTraceOrigin::Manual, None)
+            .await?;
+        if self.manual_boundary_is_durable(target).await? {
+            return Ok(persisted);
+        }
+        // The first publication must run before this wait: blocked committed
+        // apply may need its capacity. No save/apply/restore permit crosses an
+        // await here. Only the boundary captured at entry is required, so later
+        // traffic cannot keep moving the goal or starve this request.
+        tokio::time::timeout(
+            crate::ingest::application::write_coordinator::SUBMIT_TIMEOUT,
+            async {
+                while self.writer.applied_seq() < target {
+                    if self.writer.restart_required() {
+                        return Err(anyhow::Error::new(
+                            crate::ingest::application::write_coordinator::errors::RestartRequired(
+                                "checkpoint boundary refused: restart required".into(),
+                            ),
+                        ));
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                }
+                Ok::<_, anyhow::Error>(())
+            },
+        )
+        .await
+        .context("checkpoint committed boundary did not apply within the submit deadline")??;
+        let published = self
+            .checkpoint_with_fence(None, CheckpointTraceOrigin::Manual, None)
+            .await?;
+        anyhow::ensure!(
+            self.manual_boundary_is_durable(target).await?,
+            "checkpoint publication did not cover its committed boundary {target}"
+        );
+        Ok(persisted || published)
     }
 
     async fn seal_hnsw_graph_cache(&self) -> Result<HnswCacheSealReceipt> {
