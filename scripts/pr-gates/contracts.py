@@ -155,6 +155,8 @@ def client_receipts(directory):
         data=path.read_bytes();row=json.loads(data)
         language=name.removesuffix('.json');manifest=row.get('manifest',{})
         if (row.get('schema')!='LUMEN_GENERATED_CLIENT_CRUD_V1' or row.get('language')!=language
+                or row.get('generation_mode')!='legacy_untargeted'
+                or row.get('requirements_source')!='separate_existing_explicit_target_reference'
                 or row.get('result')!='pass' or type(row.get('exit_code'))is not int or row['exit_code']!=0
                 or row.get('checks')!=CLIENT_CHECKS or manifest.get('language')!=language
                 or not all(isinstance(manifest.get(key),str)and manifest[key]for key in ('target','compiler','minimum_version','language_standard'))

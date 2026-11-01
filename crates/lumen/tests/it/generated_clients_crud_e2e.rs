@@ -28,7 +28,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use openapi_codegen::{generate, GenOptions, HttpClient, Lang};
+use openapi_codegen::{generate, generate_for_target, GenOptions, HttpClient, Lang, TargetProfile};
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -114,14 +114,77 @@ fn unique_temp_dir(label: &str) -> PathBuf {
     ))
 }
 
-fn write_output(dir: &Path, output: openapi_codegen::GeneratedOutput) {
-    fs::create_dir_all(dir).expect("create generated output dir");
-    for file in output.files {
-        let path = dir.join(file.rel_path);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("create generated parent dir");
+fn write_output(dir: &Path, lang: Lang) {
+    write_output_for_spec(dir, lang, &lumen::spec::openapi_json());
+}
+
+fn write_output_for_spec(dir: &Path, lang: Lang, spec: &str) {
+    let options = opts(lang);
+    let legacy = generate(spec, &options).expect("original generated client");
+    let target = TargetProfile::from_id(match lang {
+        Lang::Py => "python-3.11",
+        Lang::Ts => "typescript-5.0",
+        Lang::Rust => "rust-2021",
+    })
+    .expect("existing legacy generation target");
+    let output = generate_for_target(spec, &options, target)
+        .expect("same client with an explicit requirements manifest");
+    // Continue testing the original untargeted clients. The explicit target
+    // supplies a separately emitted toolchain contract, not replacement code.
+    assert_eq!(
+        legacy
+            .files
+            .iter()
+            .map(|file| &file.rel_path)
+            .collect::<Vec<_>>(),
+        output
+            .files
+            .iter()
+            .map(|file| &file.rel_path)
+            .collect::<Vec<_>>(),
+        "toolchain reference must describe the same generated language files"
+    );
+    legacy
+        .write_to_dir(dir)
+        .expect("write original client bytes");
+    output
+        .write_to_dir(&dir.join(".toolchain"))
+        .expect("write separate explicit target toolchain reference");
+    for file in &legacy.files {
+        assert_eq!(
+            fs::read(dir.join(&file.rel_path)).unwrap(),
+            file.contents.as_bytes(),
+            "toolchain materialization must not overwrite the original client"
+        );
+    }
+}
+
+#[test]
+fn explicit_toolchain_reference_preserves_untargeted_fixture_bytes() {
+    let spec = r#"{"openapi":"3.0.3","info":{"title":"isolated fixture","version":"1.0.0"},"paths":{},"components":{"schemas":{"Entry":{"type":"object","properties":{"name":{"type":"string"}}}}}}"#;
+    for (lang, target) in [
+        (Lang::Py, "python-3.11"),
+        (Lang::Ts, "typescript-5.0"),
+        (Lang::Rust, "rust-2021"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        write_output_for_spec(dir.path(), lang, spec);
+        assert!(
+            !dir.path().join(".openapi-codegen.json").exists(),
+            "legacy output must remain untargeted"
+        );
+        let manifest: serde_json::Value = serde_json::from_slice(
+            &fs::read(dir.path().join(".toolchain/.openapi-codegen.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(manifest["target"], target);
+        let original = generate(spec, &opts(lang)).unwrap();
+        for file in original.files {
+            assert_eq!(
+                fs::read(dir.path().join(file.rel_path)).unwrap(),
+                file.contents.as_bytes()
+            );
         }
-        fs::write(path, file.contents).expect("write generated file");
     }
 }
 
@@ -143,12 +206,15 @@ fn client_receipt(language: &str, dir: &Path, output: &std::process::Output) {
         return;
     };
     let manifest: serde_json::Value = serde_json::from_slice(
-        &fs::read(dir.join(".openapi-codegen.json")).expect("generated client manifest"),
+        &fs::read(dir.join(".toolchain/.openapi-codegen.json"))
+            .expect("generated toolchain reference manifest"),
     )
     .expect("valid generated client manifest");
     let receipt = serde_json::json!({
         "schema": "LUMEN_GENERATED_CLIENT_CRUD_V1", "language": language,
         "manifest": manifest, "exit_code": output.status.code(),
+        "generation_mode": "legacy_untargeted",
+        "requirements_source": "separate_existing_explicit_target_reference",
         "stdout_sha256": format!("{:x}", Sha256::digest(&output.stdout)),
         "stderr_sha256": format!("{:x}", Sha256::digest(&output.stderr)),
         "checks": ["list_empty", "create", "index_three", "search_two_ordered",
@@ -176,10 +242,7 @@ async fn generated_python_typescript_and_rust_clients_run_crud_happypath() {
 fn generated_python_client_runs_crud_happypath(base_url: &str) {
     let dir = unique_temp_dir("py");
     let pkg = dir.join("generated_api");
-    write_output(
-        &pkg,
-        generate(&lumen::spec::openapi_json(), &opts(Lang::Py)).unwrap(),
-    );
+    write_output(&pkg, Lang::Py);
     let script = format!(
         r#"
 import sys
@@ -227,8 +290,13 @@ with Client({base_url:?}) as client:
         dir = dir.display().to_string(),
         base_url = base_url,
     );
-    let output = super::spec_gen_e2e::run_generated_python(&pkg, &["-c", &script], None, &[])
-        .expect("run generated Python client CRUD e2e");
+    let output = super::spec_gen_e2e::run_generated_python(
+        &pkg.join(".toolchain"),
+        &["-c", &script],
+        None,
+        &[],
+    )
+    .expect("run generated Python client CRUD e2e");
     assert!(
         output.status.success(),
         "generated Python client CRUD e2e failed\nstdout:\n{}\nstderr:\n{}",
@@ -244,10 +312,7 @@ fn generated_typescript_client_runs_crud_happypath(base_url: &str) {
     require_command("tsc");
 
     let dir = unique_temp_dir("ts");
-    write_output(
-        &dir,
-        generate(&lumen::spec::openapi_json(), &opts(Lang::Ts)).unwrap(),
-    );
+    write_output(&dir, Lang::Ts);
     fs::write(
         dir.join("smoke.ts"),
         format!(
@@ -371,10 +436,7 @@ fn generated_rust_client_runs_crud_happypath(base_url: &str) {
 
     let dir = unique_temp_dir("rs");
     let src = dir.join("src");
-    write_output(
-        &src,
-        generate(&lumen::spec::openapi_json(), &opts(Lang::Rust)).unwrap(),
-    );
+    write_output(&src, Lang::Rust);
     fs::write(
         dir.join("Cargo.toml"),
         r#"[package]

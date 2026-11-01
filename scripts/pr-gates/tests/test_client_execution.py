@@ -19,6 +19,7 @@ tools=load('client_installer_controls','install-client-tools.py')
 
 def receipt(language):
     return dict(schema='LUMEN_GENERATED_CLIENT_CRUD_V1',language=language,result='pass',exit_code=0,
+        generation_mode='legacy_untargeted',requirements_source='separate_existing_explicit_target_reference',
         manifest=dict(language=language,target='fixed',compiler='fixed',minimum_version='1',language_standard='1'),
         checks=c.CLIENT_CHECKS,stdout_sha256='1'*64,stderr_sha256='2'*64)
 

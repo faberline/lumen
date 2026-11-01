@@ -21,7 +21,12 @@ byte pin remains enforced. The GKE workflow and product Kustomize did not change
 The existing Python, TypeScript and Rust CRUD assertions must all run.
 Missing tools or failed commands fail the test. Python uses the generated
 manifest's interpreter and Pydantic dependency through the existing `uv`
-runner. CI installs TypeScript 5.9.3 from the official npm artifact and checks
+runner. The original untargeted client bytes remain the code under test.
+The existing explicit Python 3.11, TypeScript 5.0 and Rust 2021 targets emit
+separate `.toolchain` references through the public manifest writer. These
+references provide tool requirements and do not replace any original client
+file. Receipts identify this legacy execution mode and the reference source.
+CI installs TypeScript 5.9.3 from the official npm artifact and checks
 its fixed SHA-512 integrity. Installation is local to the hosted runner.
 
 Each completed language writes one fresh receipt after all CRUD assertions.
