@@ -9,7 +9,7 @@
       "owner": "native resource and performance contracts",
       "basis": "Execute the exact existing function under a current hosted owner; ignored counts never count as pass.",
       "source": "crates/lumen/tests/disk_scale_proof.rs",
-      "source_sha256": "99dc94c10d3f869a4e54ff59d1f8e769b6ca1772a170c715f726117368db22d1"
+      "source_sha256": "9ad882b59db89567dca7f800920ac017138c6e99faa68b8ec49cc2938afe3254"
     },
     {
       "target": "it",
@@ -162,7 +162,7 @@
       "owner": "existing full sixteen-cell 30-minute performance acceptance interface",
       "basis": "Existing ignored workload defaults to all sixteen cells at 1800 seconds each. Existing scripts/gke-perf/cell.sh and scripts/durable-perf-local.sh retain qualifying and diagnostic interfaces. Normal development CI is not this full performance acceptance lifecycle. This is not execution, success, or a release qualification; the workload and its original thresholds stay intact.",
       "source": "crates/lumen/tests/it/perf_gate.rs",
-      "source_sha256": "64589fce61d700227560e30dab9bde817f2f5bd9aa86537769ecf3eb06e6137e"
+      "source_sha256": "9e9c3b4d54ed19a21e2c1e2b149f7551634ac93565afc2a8d31c8c4f0b3d0dc6"
     },
     {
       "target": "it",
@@ -171,7 +171,7 @@
       "owner": "measured performance",
       "basis": "Execute the exact existing function under a current hosted owner; ignored counts never count as pass.",
       "source": "crates/lumen/tests/it/perf_gate.rs",
-      "source_sha256": "64589fce61d700227560e30dab9bde817f2f5bd9aa86537769ecf3eb06e6137e"
+      "source_sha256": "9e9c3b4d54ed19a21e2c1e2b149f7551634ac93565afc2a8d31c8c4f0b3d0dc6"
     },
     {
       "target": "it",
@@ -180,7 +180,7 @@
       "owner": "measured performance",
       "basis": "Execute the exact existing function under a current hosted owner; ignored counts never count as pass.",
       "source": "crates/lumen/tests/it/perf_gate.rs",
-      "source_sha256": "64589fce61d700227560e30dab9bde817f2f5bd9aa86537769ecf3eb06e6137e"
+      "source_sha256": "9e9c3b4d54ed19a21e2c1e2b149f7551634ac93565afc2a8d31c8c4f0b3d0dc6"
     },
     {
       "target": "it",
@@ -189,7 +189,7 @@
       "owner": "measured performance",
       "basis": "Execute the exact existing function under a current hosted owner; ignored counts never count as pass.",
       "source": "crates/lumen/tests/it/perf_gate.rs",
-      "source_sha256": "64589fce61d700227560e30dab9bde817f2f5bd9aa86537769ecf3eb06e6137e"
+      "source_sha256": "9e9c3b4d54ed19a21e2c1e2b149f7551634ac93565afc2a8d31c8c4f0b3d0dc6"
     },
     {
       "target": "it",
@@ -198,7 +198,7 @@
       "owner": "measured performance",
       "basis": "Execute the exact existing function under a current hosted owner; ignored counts never count as pass.",
       "source": "crates/lumen/tests/it/perf_gate.rs",
-      "source_sha256": "64589fce61d700227560e30dab9bde817f2f5bd9aa86537769ecf3eb06e6137e"
+      "source_sha256": "9e9c3b4d54ed19a21e2c1e2b149f7551634ac93565afc2a8d31c8c4f0b3d0dc6"
     },
     {
       "target": "it",
@@ -207,7 +207,7 @@
       "owner": "measured performance",
       "basis": "Execute the exact existing function under a current hosted owner; ignored counts never count as pass.",
       "source": "crates/lumen/tests/it/perf_gate.rs",
-      "source_sha256": "64589fce61d700227560e30dab9bde817f2f5bd9aa86537769ecf3eb06e6137e"
+      "source_sha256": "9e9c3b4d54ed19a21e2c1e2b149f7551634ac93565afc2a8d31c8c4f0b3d0dc6"
     },
     {
       "target": "it",
@@ -216,7 +216,7 @@
       "owner": "native functional contracts",
       "basis": "Execute the exact existing function under a current hosted owner; ignored counts never count as pass.",
       "source": "crates/lumen/tests/it/spec_gen_e2e.rs",
-      "source_sha256": "46c577cbd9b71c6b4b81433107f9c8dbbc6dfe4214ca27f3c2269f3fb15dbe42"
+      "source_sha256": "6d275414526ec3fd325795b36abe415a87a49acc57f3eb3d5c991f5ea5b0d6e4"
     },
     {
       "target": "it",

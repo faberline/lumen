@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 
@@ -138,6 +139,42 @@ def validate_execution(stdout,expected,target,root=None):
     return dict(tests=blocks,discovered_roster=sorted(expected),local_executed=sorted(executed),external_required=deferred,outside_normal_pr=outside,external_tests_counted_as_local_pass=False,non_applicable_tests_counted_as_pass=False)
 
 
+CLIENT_TEST='generated_clients_crud_e2e::generated_python_typescript_and_rust_clients_run_crud_happypath'
+CLIENT_CHECKS=['list_empty','create','index_three','search_two_ordered','stats_three','delete_one','search_one','drop','list_empty_final']
+
+
+def client_receipts(directory):
+    directory=Path(directory)
+    expected={'python.json','typescript.json','rust.json'}
+    if {p.name for p in directory.iterdir()}!=expected:
+        raise ValueError('missing or extra generated language execution receipt')
+    receipts=[]
+    for name in sorted(expected):
+        path=directory/name
+        if path.is_symlink() or not path.is_file():raise ValueError('unsafe generated language receipt')
+        data=path.read_bytes();row=json.loads(data)
+        language=name.removesuffix('.json');manifest=row.get('manifest',{})
+        if (row.get('schema')!='LUMEN_GENERATED_CLIENT_CRUD_V1' or row.get('language')!=language
+                or row.get('result')!='pass' or type(row.get('exit_code'))is not int or row['exit_code']!=0
+                or row.get('checks')!=CLIENT_CHECKS or manifest.get('language')!=language
+                or not all(isinstance(manifest.get(key),str)and manifest[key]for key in ('target','compiler','minimum_version','language_standard'))
+                or not all(isinstance(row.get(key),str)and len(row[key])==64 and all(c in '0123456789abcdef'for c in row[key])for key in ('stdout_sha256','stderr_sha256'))):
+            raise ValueError('failed or invalid generated language execution receipt: '+name)
+        receipts.append(dict(**row,receipt_sha256=hashlib.sha256(data).hexdigest()))
+    return receipts
+
+
+def execute_contract(argv,root,expected):
+    # A fresh, target-local directory cannot reuse a previous profile's proof.
+    with tempfile.TemporaryDirectory(prefix='lumen-client-proof-')as directory:
+        env=dict(os.environ,LUMEN_GENERATED_CLIENT_RECEIPTS=directory)
+        result=subprocess.run(argv,cwd=root,env=env,text=True,capture_output=True)
+        sys.stdout.write(result.stdout);sys.stdout.flush()
+        sys.stderr.write(result.stderr);sys.stderr.flush()
+        receipts=client_receipts(directory)if result.returncode==0 and CLIENT_TEST in expected else []
+    return result,receipts
+
+
 def run(root,package,profile,provenance):
     targets=active_targets(package,profile)
     if not targets:raise ValueError('empty integration row')
@@ -146,7 +183,8 @@ def run(root,package,profile,provenance):
         record=dict(schema='LUMEN_CONTRACT_EVIDENCE_V1',provenance=provenance,package=package['name'],profile=profile,target=target['name'])
         try:
             before=discover(root,package,profile,target);argv=command(package,profile,target)
-            started=time.monotonic();result=unit._run_product(argv,root)
+            started=time.monotonic();result,receipts=execute_contract(argv,root,before)
+            record['generated_client_executions']=receipts
             record.update(command=argv,elapsed_seconds=time.monotonic()-started,exit_code=result.returncode,stdout_sha256=hashlib.sha256(result.stdout.encode()).hexdigest(),stderr_sha256=hashlib.sha256(result.stderr.encode()).hexdigest())
             if result.returncode:raise ValueError('integration command failed with exit '+str(result.returncode))
             proof=validate_execution(result.stdout,before,target['name'],root)

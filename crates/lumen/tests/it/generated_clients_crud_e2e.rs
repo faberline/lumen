@@ -125,12 +125,43 @@ fn write_output(dir: &Path, output: openapi_codegen::GeneratedOutput) {
     }
 }
 
-fn command_exists(binary: &str) -> bool {
-    Command::new(binary)
+fn require_command(binary: &str) {
+    let output = Command::new(binary)
         .arg("--version")
         .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false)
+        .unwrap_or_else(|error| panic!("required generated-client tool {binary}: {error}"));
+    assert!(
+        output.status.success(),
+        "required generated-client tool {binary} failed"
+    );
+}
+
+fn client_receipt(language: &str, dir: &Path, output: &std::process::Output) {
+    use sha2::{Digest, Sha256};
+    assert!(output.status.success());
+    let Some(destination) = std::env::var_os("LUMEN_GENERATED_CLIENT_RECEIPTS") else {
+        return;
+    };
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &fs::read(dir.join(".openapi-codegen.json")).expect("generated client manifest"),
+    )
+    .expect("valid generated client manifest");
+    let receipt = serde_json::json!({
+        "schema": "LUMEN_GENERATED_CLIENT_CRUD_V1", "language": language,
+        "manifest": manifest, "exit_code": output.status.code(),
+        "stdout_sha256": format!("{:x}", Sha256::digest(&output.stdout)),
+        "stderr_sha256": format!("{:x}", Sha256::digest(&output.stderr)),
+        "checks": ["list_empty", "create", "index_three", "search_two_ordered",
+            "stats_three", "delete_one", "search_one", "drop", "list_empty_final"],
+        "result": "pass"
+    });
+    let path = PathBuf::from(destination).join(format!("{language}.json"));
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .expect("one fresh receipt per generated language");
+    serde_json::to_writer(file, &receipt).expect("persist generated client execution receipt");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -143,20 +174,6 @@ async fn generated_python_typescript_and_rust_clients_run_crud_happypath() {
 }
 
 fn generated_python_client_runs_crud_happypath(base_url: &str) {
-    if !command_exists("python3") {
-        eprintln!("skip python generated-client CRUD e2e: python3 not found");
-        return;
-    }
-    let pydantic = Command::new("python3")
-        .arg("-c")
-        .arg("import pydantic")
-        .status()
-        .expect("run python3");
-    if !pydantic.success() {
-        eprintln!("skip python generated-client CRUD e2e: pydantic not installed");
-        return;
-    }
-
     let dir = unique_temp_dir("py");
     let pkg = dir.join("generated_api");
     write_output(
@@ -210,10 +227,7 @@ with Client({base_url:?}) as client:
         dir = dir.display().to_string(),
         base_url = base_url,
     );
-    let output = Command::new("python3")
-        .arg("-c")
-        .arg(script)
-        .output()
+    let output = super::spec_gen_e2e::run_generated_python(&pkg, &["-c", &script], None, &[])
         .expect("run generated Python client CRUD e2e");
     assert!(
         output.status.success(),
@@ -221,14 +235,13 @@ with Client({base_url:?}) as client:
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    client_receipt("python", &pkg, &output);
     let _ = fs::remove_dir_all(&dir);
 }
 
 fn generated_typescript_client_runs_crud_happypath(base_url: &str) {
-    if !command_exists("node") || !command_exists("tsc") {
-        eprintln!("skip TypeScript generated-client CRUD e2e: node or tsc not found");
-        return;
-    }
+    require_command("node");
+    require_command("tsc");
 
     let dir = unique_temp_dir("ts");
     write_output(
@@ -349,14 +362,12 @@ main().catch((err) => {{
         String::from_utf8_lossy(&node.stdout),
         String::from_utf8_lossy(&node.stderr)
     );
+    client_receipt("typescript", &dir, &node);
     let _ = fs::remove_dir_all(&dir);
 }
 
 fn generated_rust_client_runs_crud_happypath(base_url: &str) {
-    if !command_exists("cargo") {
-        eprintln!("skip Rust generated-client CRUD e2e: cargo not found");
-        return;
-    }
+    require_command("cargo");
 
     let dir = unique_temp_dir("rs");
     let src = dir.join("src");
@@ -487,6 +498,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    client_receipt("rust", &src, &output);
     let _ = fs::remove_dir_all(&dir);
 }
 // CODEGEN-END

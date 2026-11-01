@@ -73,6 +73,24 @@ use lumen::types::{
 // (platform without a backend), `rss_bytes()` returns `None` and the proof
 // skips gracefully rather than failing.
 mod procmem {
+    /// Discard unused allocator pages from setup. This reduces both the full
+    /// RAM reference and the post-drop baseline; neither may hide extra RSS.
+    pub fn release_unused() {
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        // SAFETY: malloc_trim only releases unused pages owned by the allocator.
+        unsafe {
+            libc::malloc_trim(0);
+        }
+        #[cfg(target_os = "macos")]
+        unsafe {
+            unsafe extern "C" {
+                fn malloc_zone_pressure_relief(zone: *mut libc::c_void, goal: usize) -> usize;
+            }
+            // SAFETY: a null zone requests all zones; no live allocation is freed.
+            malloc_zone_pressure_relief(std::ptr::null_mut(), 0);
+        }
+    }
+
     /// Current physical resident set size in BYTES, or `None` if unavailable.
     pub fn rss_bytes() -> Option<u64> {
         memory_stats::memory_stats().map(|m| m.physical_mem as u64)
@@ -234,6 +252,12 @@ fn eid_of(i: u64) -> String {
 /// path). Deterministic content from `i`. `with_vector` adds the `emb` field
 /// (omit it for the lexical-only collection).
 fn index_range(e: &Engine, coll: &str, lo: u64, hi: u64, dim: usize, with_vector: bool) {
+    // The live engine now charges pending changes against its unchanged
+    // 256MiB budget. Persist and restore a real snapshot during setup, before
+    // that limit is reached. Restore rebuilds the FULL in-memory indexes; it
+    // does not pre-seal the RAM reference onto the segment mmap under test.
+    // Keep every original per-document write and every original field/value.
+    let setup = tempfile::tempdir().expect("owned setup checkpoint directory");
     for i in lo..hi {
         let eid = eid_of(i);
         let mut items = vec![
@@ -272,7 +296,85 @@ fn index_range(e: &Engine, coll: &str, lo: u64, hi: u64, dim: usize, with_vector
             },
         )
         .unwrap();
+        if (i - lo + 1).is_multiple_of(4096) || i + 1 == hi {
+            let path = setup.path().join("setup.json");
+            let mut file = std::fs::File::create(&path).expect("create setup snapshot");
+            {
+                let snapshot = e.snapshot().expect("capture complete setup snapshot");
+                serde_json::to_writer(&mut file, &snapshot).expect("persist setup snapshot");
+            }
+            file.sync_all().expect("sync setup snapshot");
+            std::fs::File::open(setup.path())
+                .and_then(|directory| directory.sync_all())
+                .expect("sync setup snapshot directory");
+            drop(file);
+            let snapshot = serde_json::from_reader(std::io::BufReader::new(
+                std::fs::File::open(&path).expect("read persisted setup snapshot"),
+            ))
+            .expect("decode persisted setup snapshot");
+            e.restore(snapshot)
+                .expect("restore complete RAM setup state");
+            assert_eq!(
+                e.stats(coll).unwrap().documents_indexed,
+                i + 1,
+                "setup publication must retain every indexed document"
+            );
+        }
     }
+    // All snapshot DTOs, buffers and files are gone before either RSS sample.
+    drop(setup);
+}
+
+#[test]
+fn setup_snapshot_roundtrip_keeps_every_original_field_and_document() {
+    let actual = Engine::new();
+    let expected = Engine::new();
+    for engine in [&actual, &expected] {
+        engine.create_collection("setup", schema(96)).unwrap();
+    }
+    // The reference has the original per-document write shape and no restore.
+    for i in 0..17 {
+        expected
+            .index(
+                "setup",
+                IndexRequest {
+                    items: vec![
+                        IndexItem {
+                            external_id: eid_of(i),
+                            field: "num".into(),
+                            value: FieldValue::Number(num_of(i)),
+                            version: None,
+                        },
+                        IndexItem {
+                            external_id: eid_of(i),
+                            field: "kw".into(),
+                            value: FieldValue::String(kw_of(i)),
+                            version: None,
+                        },
+                        IndexItem {
+                            external_id: eid_of(i),
+                            field: "body".into(),
+                            value: FieldValue::String(body_of(i)),
+                            version: None,
+                        },
+                        IndexItem {
+                            external_id: eid_of(i),
+                            field: "emb".into(),
+                            value: FieldValue::Vector(vec_of(i, 96)),
+                            version: None,
+                        },
+                    ],
+                    request_id: None,
+                },
+            )
+            .unwrap();
+    }
+    index_range(&actual, "setup", 0, 17, 96, true);
+    assert_eq!(
+        serde_json::to_value(actual.snapshot().unwrap()).unwrap(),
+        serde_json::to_value(expected.snapshot().unwrap()).unwrap(),
+        "persisted setup must preserve the full RAM reference, not only counts"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -530,6 +632,7 @@ fn measure(label: &str, coll: &str, n: u64, dim: usize, with_vector: bool) -> Op
         };
         live.create_collection(coll, sch).unwrap();
         index_range(&live, coll, 0, n, dim, with_vector);
+        procmem::release_unused();
         rss_full = procmem::rss_bytes().unwrap();
 
         // Seal every collection to the tempdir, then sum on-disk segment bytes.
@@ -542,6 +645,7 @@ fn measure(label: &str, coll: &str, n: u64, dim: usize, with_vector: bool) -> Op
     // --- Phase B: baseline AFTER drop. The allocator may retain the freed pages
     //     (RSS does not immediately shrink), and THAT retained memory is in the
     //     baseline so the DELTA isolates the reopened engine's footprint. -------
+    procmem::release_unused();
     let baseline = procmem::rss_bytes().unwrap();
     let (maj0, min0) = procmem::page_faults();
 

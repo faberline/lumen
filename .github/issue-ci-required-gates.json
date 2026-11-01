@@ -422,7 +422,7 @@
     "trusted_workflows": {
       ".github/workflows/pr-unit-static.yml": {
         "id": 399074736,
-        "definition_sha": "962882719276c9183a57d1132e9521c2511aeffb"
+        "definition_sha": "4bf55ec5343dec7af8c4ce50306e78bd9a5335c2"
       }
     },
     "always": [
@@ -1105,7 +1105,7 @@
       "trusted_workflows": {
         ".github/workflows/pr-unit-static.yml": {
           "id": 399074736,
-          "definition_sha": "962882719276c9183a57d1132e9521c2511aeffb"
+          "definition_sha": "4bf55ec5343dec7af8c4ce50306e78bd9a5335c2"
         }
       },
       "always": [

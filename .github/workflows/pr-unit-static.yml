@@ -504,6 +504,12 @@ jobs:
           shared-key: lumen-functional-${{ matrix.profile }}
           cache-on-failure: true
           cache-workspace-crates: false
+      - name: Install digest-verified generated client compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 candidate/scripts/pr-gates/install-client-tools.py --dest "$RUNNER_TEMP/lumen-client-tools"
+          echo "$RUNNER_TEMP/lumen-client-tools" >> "$GITHUB_PATH"
       - name: Verify complete integration rosters and retain uncovered ignored tests as failures
         env:
           PROFILE: ${{ matrix.profile }}

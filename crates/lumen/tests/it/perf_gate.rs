@@ -13971,11 +13971,15 @@ mod durable_workload {
     }
 
     fn restart_diagnostic_production_contains(region: &str, expected: &str) -> bool {
-        region.lines().map(str::trim).any(|line| {
-            !line.starts_with("//")
-                && !line.as_bytes().starts_with(b"/*")
-                && line.contains(expected)
-        })
+        match expected {
+            "restart-failure-trace.json"
+            | "readyz_failure="
+            | "readyz_status="
+            | "readyz_body="
+            | "readyz_transport_error="
+            | "docker_process_state=" => crate::source_contract::literal_fragment(region, expected),
+            _ => crate::source_contract::contains(region, expected),
+        }
     }
 
     /// The proposed private record keeps an absent phase or first successful
@@ -14032,7 +14036,7 @@ mod durable_workload {
         let region = restart_diagnostic_production_region(include_str!("perf_gate.rs"));
         for expected in [
             "fn emit_restart_phase_diagnostics(",
-            "let record = emit_restart_phase_diagnostics(diagnostics, phase, outcome);",
+            crate::source_contract::RESTART_RECORD_ASSIGNMENT,
             "observe(&record, *diagnostics);",
             "\"complete\", \"success\"",
             "\"docker-restart\", \"error\"",

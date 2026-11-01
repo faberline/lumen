@@ -2,6 +2,7 @@
 //! inventory; feature-gated cases carry their own `#![cfg(...)]`. Cases that
 //! need their own process live beside this directory as `tests/<name>.rs`.
 
+mod source_contract;
 mod support;
 
 mod access_log_subject;
