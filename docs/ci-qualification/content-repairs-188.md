@@ -120,6 +120,15 @@ regression failed before the fix. All 230 affected unit executions pass across
 default and no-default profiles with zero ignored tests. Fresh complete hosted
 CI and independent Codex review remain required for the final head.
 
+The first combined repair run 41353187079 failed the new failed-publication
+regression under parallel no-default unit execution. The old new-test fixture
+used process-shared accounting. Another owner legitimately advanced its global
+request revision from 115175 to 115177. Only the new coalescing fixture now owns
+an independent real ChangeBudget at the same default 256 MiB limit. All four
+regression bodies and exact assertions are byte-identical. Production accounting,
+original shared-budget tests and normal CI parallelism remain unchanged. Debug
+ignored cases still require the original complete release execution in CI.
+
 ## Committed boundary in manual checkpoints (#204)
 
 A separate local no-default run at `7492a10` failed the unchanged

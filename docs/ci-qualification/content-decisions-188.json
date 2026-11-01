@@ -177,7 +177,24 @@
     "implemented_source_repair": "Share per-publication-owner relief; skip a served request before save/telemetry; retain actual publication, merge, failed retry and new-demand semantics.",
     "local_affected_unit_executions": 230,
     "ignored": 0,
-    "complete_new_head_CI_and_independent_review_required": true
+    "complete_new_head_CI_and_independent_review_required": true,
+    "parallel_fixture_correction": {
+      "head": "f1f97aed8382022beda68fa34d73d70dd1680dd9",
+      "run": 41353187079,
+      "attempt": 1,
+      "failed_job": 124987925276,
+      "profile": "lumen-index/no-default",
+      "test": "failed_publication_cannot_mark_a_request_as_relieved",
+      "expected_revision": 115175,
+      "actual_revision": 115177,
+      "reason": "New fixture used process-shared budget; unrelated parallel owners can legitimately advance its global revision",
+      "source_change": "Only four new fixture Engines use independent real ChangeBudget with the identical default limit",
+      "all_four_regression_bodies_byte_identical": true,
+      "production_and_existing_shared_budget_tests_unchanged": true,
+      "CI_parallelism_and_complete_release_include_ignored_unchanged": true,
+      "overall_acceptance": false,
+      "complete_new_head_CI_and_independent_review_required": true
+    }
   },
   "manual_committed_boundary_repair_204": {
     "head": "7492a10ef7086eaddc166ce26d46d62caf83c314",

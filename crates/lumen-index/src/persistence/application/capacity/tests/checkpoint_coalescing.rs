@@ -2,9 +2,37 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::persistence::application::capacity::tests::{engine, sink, FailSync, HoldSync, Release};
+use crate::persistence::application::capacity::tests::{sink, FailSync, HoldSync, Release};
 use crate::persistence::application::capacity::worker::{relay_cycle, Owner};
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
+
+// These tests pin one owner's request revision. A process-shared budget
+// lets unrelated parallel tests legitimately replace its global revision.
+// Give only these new fixtures independent real accounting at the same limit.
+fn engine() -> Arc<crate::index::application::engine::Engine> {
+    use crate::index::application::engine::Engine;
+    use crate::ingest::domain::change_budget::ChangeBudget;
+    let engine = Arc::new(Engine::with_change_budget(ChangeBudget::new()));
+    engine
+        .create_collection(
+            "docs",
+            serde_json::from_value(serde_json::json!({
+                "fields": {"kw":{"type":"keyword"}}
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    engine
+        .index(
+            "docs",
+            serde_json::from_value(serde_json::json!({
+                "items":[{"external_id":"one","field":"kw","value":"retained"}]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    engine
+}
 
 #[test]
 fn capacity_request_during_publication_reuses_the_owner_checkpoint() {
