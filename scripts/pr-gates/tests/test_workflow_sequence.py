@@ -27,22 +27,22 @@ class WorkflowSequence(unittest.TestCase):
     def test_unit_workflow_is_available_for_pr_and_as_dependency(self):
         triggers = self.unit.split('permissions:', 1)[0]
         self.assertRegex(triggers, r'(?m)^  pull_request:$')
-        self.assertRegex(triggers, r'(?m)^  workflow_call:$')
-        self.assertIn('pr-unit-static-${{ github.workflow }}-${{ github.ref }}', self.unit)
-        unit = job(self.cloud, 'unit-static')
-        self.assertIn("if: github.event_name == 'pull_request'", unit)
-        self.assertIn('uses: ./.github/workflows/pr-unit-static.yml', unit)
+        self.assertIn('types: [opened, reopened, synchronize, ready_for_review, edited]', triggers)
+        self.assertIn('lumen-development-${{ github.ref }}', self.unit)
+        self.assertNotRegex(self.cloud.split('\npermissions:',1)[0], r'(?m)^  pull_request:$')
+        self.assertRegex(self.cloud, r'(?m)^  workflow_call:$')
+        self.assertNotIn('uses: ./.github/workflows/pr-unit-static.yml', self.cloud)
 
     def test_no_cloud_entry_starts_before_pr_unit_success(self):
-        condition = "(github.event_name != 'pull_request' || needs.unit-static.result == 'success')"
-        for name in ('image', 'resolve', 'test-client'):
+        barrier = 'needs: [inventory, workspace-format, workspace-unit-static, milestone-docs]'
+        for name in ('image', 'test-client','workspace-contracts','measured-performance'):
             with self.subTest(job=name):
-                block = job(self.cloud, name)
-                self.assertRegex(block, r'(?m)^    needs: (?:unit-static|\[unit-static, image\])$')
-                self.assertIn(condition, block)
-                self.assertIn('!cancelled()', block)
-        self.assertIn('needs: resolve', job(self.cloud, 'standalone-container'))
-        self.assertIn('needs: [resolve, test-client]', job(self.cloud, 'gke-test'))
+                block = job(self.unit, name)
+                self.assertIn(barrier,block)
+                self.assertNotRegex(block,r'(?m)^    if:')
+        self.assertIn('needs: [inventory, image]',job(self.unit,'resolve'))
+        self.assertIn('needs: resolve', job(self.unit, 'standalone-container'))
+        self.assertIn('needs: [resolve, test-client]', job(self.unit, 'gke-test'))
 
     def test_every_static_consumer_waits_for_complete_inventory_and_impact(self):
         for name in ('workspace-format','workspace-unit-static','milestone-docs'):
@@ -71,7 +71,7 @@ class WorkflowSequence(unittest.TestCase):
 
     def test_dispatch_and_release_workflow_inputs_remain_available(self):
         triggers = self.cloud.split('\npermissions:', 1)[0]
-        self.assertRegex(triggers, r'(?m)^  pull_request:$')
+        self.assertNotRegex(triggers, r'(?m)^  pull_request:$')
         self.assertRegex(triggers, r'(?m)^  workflow_dispatch:$')
         self.assertRegex(triggers, r'(?m)^  workflow_call:$')
         self.assertIn("inputs.image == ''", job(self.cloud, 'image'))

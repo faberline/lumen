@@ -38,15 +38,6 @@
 name: gke-test
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/gke-test.yml"
-      - ".github/workflows/lumen-test-image.yml"
-      - "Dockerfile.test"
-      - "k8s/**"
-      - "crates/lumen/tests/it/e2e/**"
-      - "crates/lumen/src/compat/operator/**"
-      - "crates/lumen-operator/**"
   workflow_dispatch:
     inputs:
       image:
@@ -98,17 +89,9 @@ permissions:
   contents: read
 
 jobs:
-  unit-static:
-    name: required unit and static checks
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/pr-unit-static.yml
-
   image:
     name: build test image
-    needs: unit-static
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.unit-static.result == 'success') && inputs.image == '' }}
+    if: ${{ !cancelled() && inputs.image == '' }}
     permissions:
       contents: read
       packages: write
@@ -116,8 +99,8 @@ jobs:
 
   resolve:
     name: resolve image identity
-    needs: [unit-static, image]
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.unit-static.result == 'success') && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
+    needs: image
+    if: ${{ !cancelled() && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -204,8 +187,7 @@ jobs:
 
   test-client:
     name: build the e2e test client
-    needs: unit-static
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.unit-static.result == 'success') }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
