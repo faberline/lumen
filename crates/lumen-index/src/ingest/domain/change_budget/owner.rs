@@ -155,6 +155,41 @@ impl Owner {
     /// Read only this owner's publishable work. `ChangeBudget::snapshot` is
     /// process-global and therefore cannot safely select an Engine to save.
     pub(crate) fn capacity_state(&self) -> Result<OwnerCapacityState, AdmissionError> {
+        self.capacity_state_with_scope(false)
+    }
+
+    pub(crate) fn capacity_schedule_state(&self) -> Result<OwnerCapacityState, AdmissionError> {
+        self.capacity_state_with_scope(true)
+    }
+
+    pub(crate) fn record_capacity_relief(&self, revision: Option<u64>) {
+        let Some(revision) = revision else {
+            return;
+        };
+        let mut state = self
+            .budget
+            .0
+            .state
+            .lock()
+            .expect("change budget lock poisoned");
+        let Some(owner) = state.owners.get_mut(&self.id) else {
+            return;
+        };
+        let served = owner
+            .relieved_capacity_revision
+            .map_or(revision, |old| old.max(revision));
+        owner.relieved_capacity_revision = Some(served);
+        owner
+            .capacity_cohort_work
+            .retain(|episode, _| *episode > served);
+        drop(state);
+        self.budget.0.wake.signal();
+    }
+
+    fn capacity_state_with_scope(
+        &self,
+        schedule: bool,
+    ) -> Result<OwnerCapacityState, AdmissionError> {
         let state = self
             .budget
             .0
@@ -188,7 +223,17 @@ impl Owner {
                 .checked_add(resident_active)
                 .expect("active overflow"),
             frozen,
-            work_revision: owner.work_revision,
+            work_revision: if schedule {
+                owner
+                    .capacity_cohort_work
+                    .values()
+                    .copied()
+                    .max()
+                    .unwrap_or_default()
+                    .max(owner.independent_work_revision)
+            } else {
+                owner.work_revision
+            },
             checkpoint_request_revision: owner.checkpoint_request_revision,
         })
     }

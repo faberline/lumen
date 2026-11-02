@@ -221,7 +221,7 @@ impl SegmentCheckpointSink {
                 // if it predates creation of the waiter.
                 let now = Instant::now();
                 let pending = budget.snapshot();
-                let owner_before = self.engine.capacity_owner_state();
+                let owner_before = self.engine.capacity_schedule_state();
                 schedule.observe_relieved_capacity(
                     periodic_fence
                         .as_ref()
@@ -273,7 +273,10 @@ impl SegmentCheckpointSink {
                     {
                         Ok(_) => {
                             let after = budget.snapshot();
-                            let owner_after = self.engine.capacity_owner_state();
+                            let owner_after = match periodic_fence.as_ref() {
+                                Some(fence) => fence.checkpoint_progress().completed_owner_state(),
+                                None => self.engine.capacity_schedule_state(),
+                            };
                             schedule.observe_relieved_capacity(
                                 periodic_fence.as_ref().and_then(|fence| {
                                     fence.checkpoint_progress().relieved_capacity()

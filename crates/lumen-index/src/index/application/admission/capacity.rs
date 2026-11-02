@@ -100,6 +100,18 @@ impl Engine {
         self.changes.owner.capacity_state().ok()
     }
 
+    pub(crate) fn capacity_schedule_state(&self) -> Option<OwnerCapacityState> {
+        self.changes.owner.capacity_schedule_state().ok()
+    }
+
+    pub(crate) fn capacity_publication_state(&self) -> Option<OwnerCapacityState> {
+        let request = self
+            .capacity_owner_state()
+            .and_then(|owner| owner.checkpoint_request_revision);
+        self.changes.owner.record_capacity_relief(request);
+        self.capacity_schedule_state()
+    }
+
     pub(crate) fn checkpoint_wake(&self) -> std::sync::Arc<BudgetWake> {
         self.changes.budget.checkpoint_wake()
     }

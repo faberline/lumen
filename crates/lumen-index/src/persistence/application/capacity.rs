@@ -63,6 +63,9 @@ struct CheckpointProgressState {
     relieved: Option<u64>,
     relieved_work: Option<u64>,
     requested: Option<(u64, u64)>,
+    published_owner: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
+    published_request_work: Option<u64>,
+    completed_owner: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
 }
 
 impl Default for CheckpointProgress {
@@ -109,9 +112,45 @@ impl CheckpointProgress {
             .map(|revision| (revision, state.relieved_work))
     }
 
-    pub(crate) fn completed(&self, pending: impl FnOnce() -> Option<u64>) -> bool {
+    pub(crate) fn completed_owner_state(
+        &self,
+    ) -> Option<crate::ingest::domain::change_budget::OwnerCapacityState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .completed_owner
+    }
+
+    pub(crate) fn record_publication(
+        &self,
+        acknowledge: impl FnOnce() -> Result<
+            Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
+        >,
+    ) -> Result<()> {
+        // The caller still owns the capture barrier. Holding this state lock
+        // across acknowledgement keeps a newly woken refusal out of the
+        // publication it has not received. No apply/IO waits enter here.
         let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
-        let Some(revision) = pending() else {
+        let owner = acknowledge()?;
+        state.published_owner = owner;
+        state.published_request_work = owner
+            .and_then(|owner| owner.checkpoint_request_revision)
+            .and_then(|revision| {
+                state
+                    .requested
+                    .filter(|(pending, _)| *pending == revision)
+                    .map(|(_, work)| work)
+            });
+        Ok(())
+    }
+
+    pub(crate) fn completed(&self) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        // Capture before diagnostic callbacks and before the async driver can
+        // resume. Later applied writes do not belong to this completed IO.
+        let owner = state.published_owner;
+        state.completed_owner = owner;
+        let Some(revision) = owner.and_then(|owner| owner.checkpoint_request_revision) else {
             return false;
         };
         if state
@@ -121,10 +160,7 @@ impl CheckpointProgress {
             return false;
         }
         state.relieved = Some(revision);
-        state.relieved_work = state
-            .requested
-            .filter(|(pending, _)| *pending == revision)
-            .map(|(_, work)| work);
+        state.relieved_work = state.published_request_work;
         true
     }
 }

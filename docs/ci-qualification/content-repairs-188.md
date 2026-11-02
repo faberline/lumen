@@ -150,8 +150,40 @@ Fresh work after the request, a newer real refusal without new work, ordinary
 deadline saves, a drained owner's next crossing, unknown boundaries, failed
 publication, native fallback and replacement fences keep their progress rules.
 New positive and negative controls cover those cases. All original test
-bodies, including the six-case HTTP file, remain unchanged. The new source
+bodies remain unchanged. The new source
 still requires complete current-head CI and independent review.
+
+Controlled local schedules at parent `2dca1b8` found two further cases, without
+claiming a hosted failure. A periodic task resumed after both waiting writes
+had committed and mistook them for work during its completed IO. A controlled
+six-seed capture also left a smaller active prefix; the same resumed writes
+crossed the trigger and wrongly earned the drained owner's next successor.
+Both copies retained the original exact HTTP counter and failed three versus
+two. Their raw negative evidence is kept outside the committed suite.
+
+Publication now records its owner snapshot during acknowledgement while the
+capture barrier still excludes later apply. Request progress remains locked
+across that accounting acknowledgement, so newly woken refusals cannot be
+credited to an earlier release. Cleanup and async resumption use this recorded
+snapshot. A failed publication supplies no completed owner snapshot.
+
+Local admissions carry their original capacity episode through the existing
+reservation. All bytes, charges and the ordinary work clock remain unchanged.
+Only pressure scheduling excludes work resumed by an already-served episode.
+Independent work stays eligible even when interleaved with that cohort. New
+unserved episodes stay eligible. Served episode metadata is pruned, and late
+members do not accumulate entries. Repricing, transport splitting and source
+retention preserve the apply origin. No reservation or budget is bypassed.
+
+Five small accounting controls and two real snapshot controls supplement the
+earlier regressions. Two permanent HTTP interleaving cases call the original
+two-writer body with all its assertions. The original HTTP file gains only one
+module declaration; every original byte remains after removing that addition.
+The integration target now has eight required cases, including the original
+six. Both schedules delay observation after the writes, never relax admission
+deadlines, and require their control hooks to run. Their added cases must run
+under every original integration profile. All complete new-head CI and the
+independent review still remain required.
 
 ## Committed boundary in manual checkpoints (#204)
 

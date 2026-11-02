@@ -161,6 +161,7 @@ impl ChangeBudget {
                     lifetime: lifetime.clone(),
                     bytes,
                     committed: false,
+                    capacity_episode: None,
                     source_retention: None,
                 });
             }

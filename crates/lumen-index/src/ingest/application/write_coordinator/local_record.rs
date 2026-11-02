@@ -198,17 +198,26 @@ impl WriteCoordinator {
         admission_deadline: tokio::time::Instant,
     ) -> Result<Option<LocalRecordReservation>> {
         let wake = self.engine.checkpoint_wake();
+        let mut capacity_episode = None;
         loop {
             // Observe before admission so a release during this attempt
             // retries even when its checkpoint revision remains pending.
             let observed = wake.epoch();
             let (result, revision) = off_reactor(|| self.try_admit_local_record_once(entry));
             match result {
-                Ok(reservation) => return Ok(reservation),
+                Ok(mut reservation) => {
+                    if let (Some(revision), Some(reservation)) =
+                        (capacity_episode, reservation.as_mut())
+                    {
+                        reservation.apply.set_capacity_episode(revision);
+                    }
+                    return Ok(reservation);
+                }
                 Err(error) => {
                     let Some(revision) = revision else {
                         return Err(self.finalize_prepublication_error(error));
                     };
+                    capacity_episode = Some(revision);
                     if tokio::time::Instant::now() >= admission_deadline {
                         return Err(self.finalize_prepublication_error(error));
                     }

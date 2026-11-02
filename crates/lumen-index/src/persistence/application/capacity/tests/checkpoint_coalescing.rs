@@ -315,3 +315,64 @@ fn failed_publication_does_not_certify_a_work_boundary() {
     );
     owner.join().unwrap();
 }
+
+#[test]
+fn published_owner_snapshot_does_not_move_with_later_applied_work() {
+    let engine = engine();
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
+    let sink = sink(engine.clone(), store.clone());
+    let mut owner = Owner::start(sink.clone(), true).unwrap().unwrap();
+    let expected_work = engine.capacity_owner_state().unwrap().work_revision;
+    let revision = engine.request_pending_checkpoint_revision().unwrap();
+    let fence = owner.fence();
+    sink.checkpoint_sync(&store.as_ref().clone().with_publication_fence(fence.clone()))
+        .unwrap();
+    let published = fence.checkpoint_progress().completed_owner_state().unwrap();
+    assert_eq!(published.checkpoint_request_revision, Some(revision));
+    assert_eq!(published.work_revision, expected_work);
+    engine
+        .index(
+            "docs",
+            serde_json::from_value(serde_json::json!({
+                "items":[{"external_id":"after","field":"kw","value":"after publication"}]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let live = engine.capacity_owner_state().unwrap();
+    assert!(live.work_revision > published.work_revision);
+    assert_ne!(live, published);
+    assert_eq!(
+        fence.checkpoint_progress().completed_owner_state(),
+        Some(published),
+        "async bookkeeping must see the actual publication boundary, not a later live snapshot"
+    );
+    owner.join().unwrap();
+}
+
+#[test]
+fn failed_publication_has_no_completed_owner_snapshot() {
+    let engine = engine();
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        SegmentRdbStore::new_with_failure_injector(
+            root.path(),
+            Arc::new(FailSync(AtomicBool::new(true))),
+        )
+        .unwrap(),
+    );
+    let sink = sink(engine.clone(), store.clone());
+    let mut owner = Owner::start(sink.clone(), true).unwrap().unwrap();
+    engine.request_pending_checkpoint_revision().unwrap();
+    let fence = owner.fence();
+    let fenced = store.as_ref().clone().with_publication_fence(fence.clone());
+    assert!(sink.checkpoint_sync(&fenced).is_err());
+    assert_eq!(fence.checkpoint_progress().completed_owner_state(), None);
+    sink.checkpoint_sync(&fenced).unwrap();
+    assert!(fence
+        .checkpoint_progress()
+        .completed_owner_state()
+        .is_some());
+    owner.join().unwrap();
+}

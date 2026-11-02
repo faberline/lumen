@@ -391,7 +391,14 @@ impl SegmentRdbStore {
                     self.root.join(staged_record.name.as_str()).display()
                 )
             })?;
-        engine.acknowledge_record_charges(&capture)?;
+        if let Some(progress) = self.checkpoint_progress() {
+            progress.record_publication(|| {
+                engine.acknowledge_record_charges(&capture)?;
+                Ok(engine.capacity_publication_state())
+            })?;
+        } else {
+            engine.acknowledge_record_charges(&capture)?;
+        }
         drop(binding);
         let acknowledge_ns = acknowledge_started.map(|started| duration_ns(started.elapsed()));
         engine.metrics().observe_segment_checkpoint(

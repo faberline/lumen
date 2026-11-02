@@ -219,6 +219,29 @@
       "source_repair": "Record the first owner work boundary for a capacity demand and coalesce its already-served high-work successor without comparing request and work clocks.",
       "original_HTTP_file_and_all_existing_test_bodies_unchanged": true,
       "new_current_complete_CI_and_independent_review_required": true
+    },
+    "post_publication_and_cohort_repair": {
+      "parent": "2dca1b8b161b72f3452fee8e44f572c1fdd97ff3",
+      "origin": "LOCAL_CONTROLLED_SCHEDULES_NOT_HOSTED_CI",
+      "observed_checkpoint_count": 3,
+      "required_checkpoint_count": 2,
+      "overall_acceptance": false,
+      "cases": [
+        "post-publication async resumption after both HTTP commits",
+        "six-seed capture followed by the same relieved cohort crossing the trigger"
+      ],
+      "source_repairs": [
+        "Record publication owner state inside acknowledged capture, retaining the request-progress lock across release",
+        "Carry local capacity episode through charged apply reservation; exclude only already-served cohort work from ordinary successor selection",
+        "Preserve raw work revisions, byte totals, new episodes and independent interleaved work; prune completed cohort metadata"
+      ],
+      "original_six_HTTP_bodies_byte_identical": true,
+      "HTTP_file_change": "one module declaration adding two controlled cases",
+      "required_HTTP_cases": 8,
+      "new_accounting_unit_cases": 5,
+      "new_real_snapshot_unit_cases": 2,
+      "new_controlled_HTTP_cases": 2,
+      "new_current_full_CI_and_independent_review_required": true
     }
   },
   "manual_committed_boundary_repair_204": {

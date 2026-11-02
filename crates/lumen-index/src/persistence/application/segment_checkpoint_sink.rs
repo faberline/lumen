@@ -232,15 +232,7 @@ impl SegmentCheckpointSink {
         }
         Self::trace_checkpoint_started(diagnostic_context, selection);
         let result = self.checkpoint_sync_with_origin(store, origin, diagnostic_context);
-        if result.is_ok()
-            && progress.as_ref().is_some_and(|state| {
-                state.completed(|| {
-                    self.engine
-                        .capacity_owner_state()
-                        .and_then(|owner| owner.checkpoint_request_revision)
-                })
-            })
-        {
+        if result.is_ok() && progress.as_ref().is_some_and(|state| state.completed()) {
             self.engine.notify_checkpoint_progress();
         }
         if let Some(context) = diagnostic_context {

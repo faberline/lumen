@@ -79,6 +79,9 @@ struct OwnerState {
     resident: BTreeMap<u64, usize>,
     current_capture_epoch: u64,
     work_revision: u64,
+    independent_work_revision: u64,
+    capacity_cohort_work: BTreeMap<u64, u64>,
+    relieved_capacity_revision: Option<u64>,
     checkpoint_request_revision: Option<u64>,
     retired: bool,
 }
@@ -212,6 +215,7 @@ pub struct Reservation {
     lifetime: Arc<OwnerLifetime>,
     bytes: usize,
     committed: bool,
+    capacity_episode: Option<u64>,
     source_retention: Option<Arc<Mutex<Option<SourceRetentionHeld>>>>,
 }
 

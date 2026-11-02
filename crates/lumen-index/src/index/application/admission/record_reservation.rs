@@ -76,6 +76,10 @@ impl RecordTransientReservation {
 }
 
 impl RecordReservation {
+    pub(crate) fn set_capacity_episode(&mut self, revision: u64) {
+        self.reservation.set_capacity_episode(revision);
+    }
+
     /// Split transport-owned copies out of an already-admitted record. The
     /// apply half keeps source retention; the returned transient half has no
     /// source bridge and is released only after AOF persistence and completion.

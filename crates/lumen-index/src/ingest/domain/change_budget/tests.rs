@@ -242,3 +242,5 @@ mod reservation_size;
 mod retained;
 
 mod wake;
+
+mod capacity_episode;
