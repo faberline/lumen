@@ -52,6 +52,16 @@ impl Owner {
     /// A real refusal after an already completed publication is new demand.
     /// Do not let that demand reuse the revision the owner already served.
     pub(crate) fn request_checkpoint_revision_after(&self, relieved: Option<u64>) -> Option<u64> {
+        self.request_checkpoint_demand_after(relieved)
+            .map(|(revision, _)| revision)
+    }
+
+    /// Return both clocks under the same accounting lock. A request revision
+    /// can exceed this owner's work revision because other owners share it.
+    pub(crate) fn request_checkpoint_demand_after(
+        &self,
+        relieved: Option<u64>,
+    ) -> Option<(u64, u64)> {
         let mut state = self
             .budget
             .0
@@ -89,7 +99,7 @@ impl Owner {
         if previous != Some(revision) {
             self.budget.0.wake.signal();
         }
-        Some(revision)
+        Some((revision, work_revision))
     }
 
     pub(crate) fn notify_checkpoint_progress(&self) {

@@ -54,15 +54,22 @@ pub(crate) struct PublicationFence {
 /// owner. A replacement owner gets fresh progress, even for the same Engine.
 pub(crate) struct CheckpointProgress {
     execution: Mutex<()>,
-    relieved: Mutex<Option<u64>>,
+    state: Mutex<CheckpointProgressState>,
     active: AtomicBool,
+}
+
+#[derive(Default)]
+struct CheckpointProgressState {
+    relieved: Option<u64>,
+    relieved_work: Option<u64>,
+    requested: Option<(u64, u64)>,
 }
 
 impl Default for CheckpointProgress {
     fn default() -> Self {
         Self {
             execution: Mutex::new(()),
-            relieved: Mutex::new(None),
+            state: Mutex::default(),
             active: AtomicBool::new(true),
         }
     }
@@ -75,32 +82,49 @@ impl CheckpointProgress {
 
     pub(crate) fn request_revision(
         &self,
-        request: impl FnOnce(Option<u64>) -> Option<u64>,
+        request: impl FnOnce(Option<u64>) -> Option<(u64, u64)>,
     ) -> Option<u64> {
-        let relieved = self.relieved.lock().unwrap_or_else(|p| p.into_inner());
-        request(*relieved)
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        let (revision, work) = request(state.relieved)?;
+        // Keep the first demand boundary for this episode. Work arriving
+        // after that refusal still earns the normal publication successor.
+        if state.requested.map(|(pending, _)| pending) != Some(revision) {
+            state.requested = Some((revision, work));
+        }
+        Some(revision)
     }
 
     pub(crate) fn has_relieved(&self, revision: u64) -> bool {
-        self.relieved
+        self.state
             .lock()
             .unwrap_or_else(|p| p.into_inner())
+            .relieved
             .is_some_and(|completed| completed >= revision)
     }
 
-    pub(crate) fn relieved_revision(&self) -> Option<u64> {
-        *self.relieved.lock().unwrap_or_else(|p| p.into_inner())
+    pub(crate) fn relieved_capacity(&self) -> Option<(u64, Option<u64>)> {
+        let state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        state
+            .relieved
+            .map(|revision| (revision, state.relieved_work))
     }
 
     pub(crate) fn completed(&self, pending: impl FnOnce() -> Option<u64>) -> bool {
-        let mut relieved = self.relieved.lock().unwrap_or_else(|p| p.into_inner());
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
         let Some(revision) = pending() else {
             return false;
         };
-        if relieved.is_some_and(|completed| completed >= revision) {
+        if state
+            .relieved
+            .is_some_and(|completed| completed >= revision)
+        {
             return false;
         }
-        *relieved = Some(revision);
+        state.relieved = Some(revision);
+        state.relieved_work = state
+            .requested
+            .filter(|(pending, _)| *pending == revision)
+            .map(|(_, work)| work);
         true
     }
 }

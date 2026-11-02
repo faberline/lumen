@@ -71,9 +71,7 @@ impl Engine {
     pub(crate) fn request_pending_checkpoint_revision(&self) -> Option<u64> {
         match self.layer_maintenance.checkpoint_progress() {
             Some(progress) => progress.request_revision(|relieved| {
-                self.changes
-                    .owner
-                    .request_checkpoint_revision_after(relieved)
+                self.changes.owner.request_checkpoint_demand_after(relieved)
             }),
             None => self.changes.owner.request_checkpoint_revision(),
         }

@@ -231,3 +231,87 @@ fn replacement_owner_cannot_reuse_an_old_roots_relief() {
         1
     );
 }
+
+#[test]
+fn relief_keeps_the_first_owner_work_boundary_for_the_request() {
+    let engine = engine();
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
+    let sink = sink(engine.clone(), store.clone());
+    let mut owner = Owner::start(sink.clone(), true).unwrap().unwrap();
+    let work = engine.capacity_owner_state().unwrap().work_revision;
+    let revision = engine.request_pending_checkpoint_revision().unwrap();
+    engine
+        .index(
+            "docs",
+            serde_json::from_value(serde_json::json!({
+                "items":[{"external_id":"later","field":"kw","value":"new work"}]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let later = engine.capacity_owner_state().unwrap().work_revision;
+    assert!(later > work);
+    assert_eq!(engine.request_pending_checkpoint_revision(), Some(revision));
+    let fence = owner.fence();
+    sink.checkpoint_sync(&store.as_ref().clone().with_publication_fence(fence.clone()))
+        .unwrap();
+    assert_eq!(
+        fence.checkpoint_progress().relieved_capacity(),
+        Some((revision, Some(work))),
+        "later work in the same pending request must retain its successor eligibility"
+    );
+    owner.join().unwrap();
+}
+
+#[test]
+fn relief_records_the_owner_clock_when_request_revisions_run_ahead() {
+    let engine = engine();
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(SegmentRdbStore::new(root.path()).unwrap());
+    let sink = sink(engine.clone(), store.clone());
+    let mut owner = Owner::start(sink.clone(), true).unwrap().unwrap();
+    let work = engine.capacity_owner_state().unwrap().work_revision;
+    let mut revision = engine.request_pending_checkpoint_revision().unwrap();
+    for _ in 0..4 {
+        engine.consume_checkpoint_request(revision);
+        revision = engine.request_pending_checkpoint_revision().unwrap();
+    }
+    assert!(revision > work, "fixture must separate the two clocks");
+    assert_eq!(engine.capacity_owner_state().unwrap().work_revision, work);
+    let fence = owner.fence();
+    sink.checkpoint_sync(&store.as_ref().clone().with_publication_fence(fence.clone()))
+        .unwrap();
+    assert_eq!(
+        fence.checkpoint_progress().relieved_capacity(),
+        Some((revision, Some(work)))
+    );
+    owner.join().unwrap();
+}
+
+#[test]
+fn failed_publication_does_not_certify_a_work_boundary() {
+    let engine = engine();
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        SegmentRdbStore::new_with_failure_injector(
+            root.path(),
+            Arc::new(FailSync(AtomicBool::new(true))),
+        )
+        .unwrap(),
+    );
+    let sink = sink(engine.clone(), store.clone());
+    let mut owner = Owner::start(sink.clone(), true).unwrap().unwrap();
+    let work = engine.capacity_owner_state().unwrap().work_revision;
+    let revision = engine.request_pending_checkpoint_revision().unwrap();
+    let fence = owner.fence();
+    let fenced = store.as_ref().clone().with_publication_fence(fence.clone());
+    assert!(sink.checkpoint_sync(&fenced).is_err());
+    assert_eq!(fence.checkpoint_progress().relieved_capacity(), None);
+    sink.checkpoint_sync(&fenced).unwrap();
+    assert_eq!(
+        fence.checkpoint_progress().relieved_capacity(),
+        Some((revision, Some(work)))
+    );
+    owner.join().unwrap();
+}

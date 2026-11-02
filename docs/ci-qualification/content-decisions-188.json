@@ -32,7 +32,8 @@
     "Retain the full graph inventory before accepting k HNSW hits; original exact recovery assertions remain.",
     "Repair independent review R1 without dropping a required Rig case or changing any original pin/workload.",
     "Coalesce an already completed capacity request within its publication owner while retaining merge, successor requests, failure retry and replacement fences.",
-    "Manual checkpoints cover a fixed coordinator committed-WAL boundary after initial capacity relief; retain original cold-reopen assertions."
+    "Manual checkpoints cover a fixed coordinator committed-WAL boundary after initial capacity relief; retain original cold-reopen assertions.",
+    "Record the first owner work boundary for a capacity demand and coalesce its already-served high-work successor without comparing request and work clocks."
   ],
   "resolved_source_gaps": [
     {
@@ -194,6 +195,30 @@
       "CI_parallelism_and_complete_release_include_ignored_unchanged": true,
       "overall_acceptance": false,
       "complete_new_head_CI_and_independent_review_required": true
+    },
+    "remaining_successor_race": {
+      "head": "ddebf98a029ff3f5e6bb727fd92b81e5a34fce4c",
+      "base": "211360180d11684d5825c2594c573801fdf5d90a",
+      "run": 41356621438,
+      "attempt": 1,
+      "failed_job": 125006630532,
+      "profile": "feature:release",
+      "observed_completed_checkpoints": 3,
+      "required_completed_checkpoints": 2,
+      "overall_acceptance": false,
+      "diagnostic": "Actual opt-in trace selected successor for old high work after its one capacity publication; diagnostic passing counter raced ahead of the extra save and is not acceptance",
+      "deterministic_regression_before_fix": {
+        "expected": null,
+        "actual": "Successor",
+        "owner_work_before": 6,
+        "request_revision": 12,
+        "request_owner_work": 12,
+        "owner_work_after": 12,
+        "active_after": 138227640
+      },
+      "source_repair": "Record the first owner work boundary for a capacity demand and coalesce its already-served high-work successor without comparing request and work clocks.",
+      "original_HTTP_file_and_all_existing_test_bodies_unchanged": true,
+      "new_current_complete_CI_and_independent_review_required": true
     }
   },
   "manual_committed_boundary_repair_204": {

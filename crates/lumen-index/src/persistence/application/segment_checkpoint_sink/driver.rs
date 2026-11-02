@@ -222,10 +222,10 @@ impl SegmentCheckpointSink {
                 let now = Instant::now();
                 let pending = budget.snapshot();
                 let owner_before = self.engine.capacity_owner_state();
-                schedule.observe_relieved_request(
+                schedule.observe_relieved_capacity(
                     periodic_fence
                         .as_ref()
-                        .and_then(|fence| fence.checkpoint_progress().relieved_revision()),
+                        .and_then(|fence| fence.checkpoint_progress().relieved_capacity()),
                 );
                 if let Some(reason) = schedule.select_attempt(now, pending, owner_before) {
                     #[cfg(not(test))]
@@ -274,6 +274,11 @@ impl SegmentCheckpointSink {
                         Ok(_) => {
                             let after = budget.snapshot();
                             let owner_after = self.engine.capacity_owner_state();
+                            schedule.observe_relieved_capacity(
+                                periodic_fence.as_ref().and_then(|fence| {
+                                    fence.checkpoint_progress().relieved_capacity()
+                                }),
+                            );
                             Self::complete_periodic_checkpoint(
                                 &mut schedule,
                                 after,

@@ -116,8 +116,8 @@ lock endpoint requests or owner registration. Existing replacement-owner and
 fallback tests retain their assertions. New regressions cover real held file
 IO, duplicate publication, new work, stale consumption, failure/retry, owner
 replacement and honest counters/diagnostics. The real duplicate-publication
-regression failed before the fix. All 230 affected unit executions pass across
-default and no-default profiles with zero ignored tests. Fresh complete hosted
+regression failed before the fix. At `7492a10`, all 230 affected unit executions
+passed across default and no-default profiles with zero ignored tests. Fresh complete hosted
 CI and independent Codex review remain required for the final head.
 
 The first combined repair run 41353187079 failed the new failed-publication
@@ -128,6 +128,30 @@ an independent real ChangeBudget at the same default 256 MiB limit. All four
 regression bodies and exact assertions are byte-identical. Production accounting,
 original shared-budget tests and normal CI parallelism remain unchanged. Debug
 ignored cases still require the original complete release execution in CI.
+
+Run 41356621438 at `ddebf98` still failed the original `feature:release`
+HTTP case: completed checkpoints were three instead of two. Other successful
+profiles did not qualify that failed run. An opt-in diagnostic copy, kept
+outside the committed suite, captured the remaining path: the periodic driver
+selected `successor` for the old high active prefix after its same capacity
+request had already received a real publication. That diagnostic run happened
+to read the counter before the extra save completed. Its passing assertion
+was not proof that the race was fixed.
+
+A deterministic scheduler regression uses the actual observed owner states.
+The old implementation returns `Successor` when the served episode requires
+no second publication. The repair records the first owner work boundary of a
+capacity demand under the same accounting lock as its request revision. The
+request clock can run ahead of owner work, so the two clocks are not guessed
+from each other. Successful publication carries that exact boundary to the
+scheduler. Only the served old prefix loses the duplicate successor.
+
+Fresh work after the request, a newer real refusal without new work, ordinary
+deadline saves, a drained owner's next crossing, unknown boundaries, failed
+publication, native fallback and replacement fences keep their progress rules.
+New positive and negative controls cover those cases. All original test
+bodies, including the six-case HTTP file, remain unchanged. The new source
+still requires complete current-head CI and independent review.
 
 ## Committed boundary in manual checkpoints (#204)
 
