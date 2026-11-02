@@ -212,6 +212,36 @@ All 320 focused unit executions pass across default and no-default settings,
 including the original checkpoint, capacity, budget, schedule and coordinator
 tests. The final source still requires complete hosted CI and independent review.
 
+## Large AOF startup capacity progress (#205)
+
+Head `e2d7f47` failed the original complete large-codec replay case in the
+default and backup integration jobs of run `41373917194`. Both children did
+not reach readiness within the unchanged 30-second startup bound. The same
+unmodified case failed locally. Keep its three authentic 60 MiB values, fast
+WAL/CBOR/legacy JSON codecs, CRC frames, exact live and cold values, CURRENT/AOF
+retention, 64 MiB frame maximum and 256 MiB pending limit unchanged.
+
+An opt-in trace shows that the first checkpoint captured only an older small
+cut. About 192 MiB (201 MB) of later active work remained when the capacity request was
+consumed. The blocked reservation still could not fit, but its condition wait
+did not request another publication. The normal 300-second snapshot period
+could not satisfy the startup deadline. A small real-accounting regression
+reproduces this missing request before the fix without leaking its waiter.
+
+Blocking reservation and growth now request existing checkpointable work only
+after their actual capacity predicate still fails. Consuming an actual request
+wakes those predicates. A new monotonic revision is issued when necessary;
+spurious wakes share the pending revision. Admitted work, oversized inputs,
+uncommitted reservations alone, raw work clocks, byte charges, owner retirement
+and stale-consumption fences keep their existing rules. Another owner's work
+can relieve a global wait without assigning work to an empty owner. Five small
+positive/negative accounting controls supplement all original assertions.
+
+The original large-codec test then completed locally with all live and cold
+assertions intact. This focused local pass grants no hosted qualification.
+The final commit still needs the complete original profiles and current-head
+CI, independent Codex review and actual protected operational acceptance.
+
 ## Acceptance
 
 Keep all 31 unit/static cases, four unit batches, their original shared

@@ -116,13 +116,22 @@ impl Owner {
             .state
             .lock()
             .expect("change budget lock poisoned");
+        let mut consumed = false;
         if let Some(owner) = state.owners.get_mut(&self.id) {
             if owner.checkpoint_request_revision == Some(revision) {
                 owner.checkpoint_request_revision = None;
+                consumed = true;
             }
         }
         if state.checkpoint_request_revision == Some(revision) {
             state.checkpoint_request_revision = None;
+            consumed = true;
+        }
+        if consumed {
+            // Publication may have released only an older, smaller cut. Wake
+            // blocked reserve/grow predicates so a still-real refusal can
+            // request the remaining work without waiting for the period.
+            self.budget.0.changed.notify_all();
         }
         self.budget.0.wake.signal();
     }

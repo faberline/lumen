@@ -244,3 +244,5 @@ mod retained;
 mod wake;
 
 mod capacity_episode;
+
+mod waiting_demand;

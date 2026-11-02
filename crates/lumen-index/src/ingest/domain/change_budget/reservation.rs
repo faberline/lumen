@@ -4,8 +4,8 @@
 use std::sync::{Arc, Mutex};
 
 use crate::ingest::domain::change_budget::{
-    snapshot, update_high_water, ActiveCharge, AdmissionError, Reservation, RetainedCharge,
-    RetainedChargeInner, SourceRetention, SourceRetentionHeld, State,
+    request_waiting_capacity, snapshot, update_high_water, ActiveCharge, AdmissionError,
+    Reservation, RetainedCharge, RetainedChargeInner, SourceRetention, SourceRetentionHeld, State,
 };
 
 #[cfg(test)]
@@ -183,6 +183,9 @@ impl Reservation {
                 });
             }
             waiting.get_or_insert_with(|| self.budget.mark_capacity_waiter());
+            if request_waiting_capacity(&mut state, self.owner) {
+                self.budget.0.wake.signal();
+            }
             state = self
                 .budget
                 .0

@@ -15,7 +15,8 @@
     201,
     202,
     203,
-    204
+    204,
+    205
   ],
   "user_content_authorization_comment": 6554991259,
   "recorded_head": "bbd97a2c226ff702f9dd44f00ef6dad6d6ee236c",
@@ -265,5 +266,37 @@
     "complete_new_head_CI_and_independent_review_required": true,
     "local_affected_unit_executions": 320,
     "local_ignored": 0
+  },
+  "startup_replay_capacity_repair_205": {
+    "parent": "e2d7f47e96eb1a0ee694df3cb66a70b36637c6aa",
+    "origin": "ACTUAL_HOSTED_CURRENT_REQUIRED_CI_FAILURE",
+    "run": 41373917194,
+    "attempt": 1,
+    "failed_jobs": [
+      125066195010,
+      125066195112
+    ],
+    "failed_profiles": [
+      "default",
+      "feature:backup"
+    ],
+    "test": "segment_startup_replay_budget::large_aof_codec_compatibility::complete_large_fast_cbor_and_legacy_json_aof_frames_replay_live_and_cold",
+    "unchanged_fixture_files": [
+      "crates/lumen/tests/it/segment_startup_replay_budget.rs",
+      "crates/lumen/tests/it/support/serve_budget_support.rs",
+      "crates/lumen/tests/indexing_capacity_http.rs"
+    ],
+    "large_value_bytes": 62914560,
+    "codecs": [
+      "fast",
+      "CBOR",
+      "legacy JSON"
+    ],
+    "startup_deadline_seconds": 30,
+    "root_cause": "A consumed partial-publication request left a still-blocked reserve/grow wait without a new relief request, although later active work remained.",
+    "source_repair": "Reassert actual blocked capacity demand under accounting lock and notify blocked predicates when a real request is consumed; do not request empty or already-admissible work.",
+    "added_accounting_controls": 5,
+    "qualification_granted": false,
+    "full_new_head_CI_and_independent_review_required": true
   }
 }

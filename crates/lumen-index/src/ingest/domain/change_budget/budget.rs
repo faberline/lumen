@@ -5,9 +5,9 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
 use crate::ingest::domain::change_budget::{
-    request_revision, snapshot, update_high_water, AdmissionError, BudgetWake, CapacityWaiter,
-    ChangeBudget, FrozenBatch, Inner, Owner, OwnerLifetime, OwnerState, Reservation, Snapshot,
-    State, HARD_LIMIT,
+    request_revision, request_waiting_capacity, snapshot, update_high_water, AdmissionError,
+    BudgetWake, CapacityWaiter, ChangeBudget, FrozenBatch, Inner, Owner, OwnerLifetime, OwnerState,
+    Reservation, Snapshot, State, HARD_LIMIT,
 };
 
 impl ChangeBudget {
@@ -173,6 +173,9 @@ impl ChangeBudget {
                 });
             }
             waiting.get_or_insert_with(|| self.mark_capacity_waiter());
+            if request_waiting_capacity(&mut state, owner) {
+                self.0.wake.signal();
+            }
             state = self
                 .0
                 .changed

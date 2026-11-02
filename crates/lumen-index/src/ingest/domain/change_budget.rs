@@ -111,6 +111,36 @@ fn request_revision(state: &mut State, work_revision: u64) -> u64 {
     revision
 }
 
+/// A committed operation that still cannot fit needs another real relief
+/// request after an earlier publication was consumed. Reservations alone do
+/// not qualify: only existing active/frozen work can make a checkpoint useful.
+fn request_waiting_capacity(state: &mut State, owner_id: u64) -> bool {
+    let pending = snapshot(state);
+    if pending.active == 0 && pending.frozen == 0 {
+        return false;
+    }
+    let owner = state.owners.get(&owner_id).expect("waiter owner checked");
+    let own_work = owner.active != 0
+        || !owner.frozen.is_empty()
+        || owner.resident.values().any(|bytes| *bytes != 0);
+    let previous_owner = owner.checkpoint_request_revision;
+    let work = if own_work {
+        owner.work_revision
+    } else {
+        state.next_work_revision
+    };
+    let previous = state.checkpoint_request_revision;
+    let revision = request_revision(state, work);
+    if own_work {
+        state
+            .owners
+            .get_mut(&owner_id)
+            .expect("waiter owner checked")
+            .checkpoint_request_revision = Some(revision);
+    }
+    previous != Some(revision) || (own_work && previous_owner != Some(revision))
+}
+
 pub(in crate::ingest) struct Inner {
     hard_limit: usize,
     capacity_waiters: AtomicUsize,
