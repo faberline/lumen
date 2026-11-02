@@ -37,3 +37,16 @@ The cloud workflow ends with CI evidence and the issue handoff. Local independen
 review and the controller own acceptance, merge, and closure. A failing applicable
 check keeps the issue in `todo` with its actual failure reason. This procedure
 does not publish releases, create tags, or close milestones.
+
+## A failure found during verification
+
+[Issue #209](https://github.com/faberline/lumen/issues/209) records an actual
+Raft cancellation-fixture failure from the first positive verification run.
+The fixture must observe real leadership before it arms the post-append gate.
+Setup uses the existing host proposal budget. The original two-second gate,
+cancellation, apply checks, host settings, and reservation assertions stay in
+force. Readiness must not append, apply, or admit a priming command.
+
+A repair changes the source tuple. Preserve the failed evidence, then repeat
+the negative and positive controls at the final fixed commit. An old passing
+source run or a local diagnostic does not grant current acceptance.
