@@ -246,3 +246,5 @@ fn newer_request_revision_bypasses_high_water_period_once() {
 }
 
 mod completion;
+
+mod publication;

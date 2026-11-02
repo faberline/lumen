@@ -38,15 +38,6 @@
 name: gke-test
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/gke-test.yml"
-      - ".github/workflows/lumen-test-image.yml"
-      - "Dockerfile.test"
-      - "k8s/**"
-      - "crates/lumen/tests/it/e2e/**"
-      - "crates/lumen/src/compat/operator/**"
-      - "crates/lumen-operator/**"
   workflow_dispatch:
     inputs:
       image:
@@ -100,7 +91,7 @@ permissions:
 jobs:
   image:
     name: build test image
-    if: inputs.image == ''
+    if: ${{ !cancelled() && inputs.image == '' }}
     permissions:
       contents: read
       packages: write
@@ -196,6 +187,7 @@ jobs:
 
   test-client:
     name: build the e2e test client
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:

@@ -119,7 +119,7 @@ pub(super) fn range_cache_key(
             key.push_str("e:");
             key.push_str(&v.bits().to_string());
         }
-        Bound::Unbounded => key.push_str("u"),
+        Bound::Unbounded => key.push('u'),
     }
     key.push('|');
     match hi {
@@ -131,7 +131,7 @@ pub(super) fn range_cache_key(
             key.push_str("e:");
             key.push_str(&v.bits().to_string());
         }
-        Bound::Unbounded => key.push_str("u"),
+        Bound::Unbounded => key.push('u'),
     }
     key
 }

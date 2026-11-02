@@ -206,7 +206,7 @@ fn select_staged_delta_window_uses_smallest_adjacent_pair() {
         }
         collections.pop().unwrap()
     };
-    let selected = select_staged_delta_window(root, &[collection.clone()]).unwrap();
+    let selected = select_staged_delta_window(root, std::slice::from_ref(&collection)).unwrap();
     assert_eq!(selected.len(), 1);
     assert_eq!(
         selected[0]
