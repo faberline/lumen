@@ -16,7 +16,8 @@
     202,
     203,
     204,
-    205
+    205,
+    206
   ],
   "user_content_authorization_comment": 6554991259,
   "recorded_head": "bbd97a2c226ff702f9dd44f00ef6dad6d6ee236c",
@@ -296,6 +297,30 @@
     "root_cause": "A consumed partial-publication request left a still-blocked reserve/grow wait without a new relief request, although later active work remained.",
     "source_repair": "Reassert actual blocked capacity demand under accounting lock and notify blocked predicates when a real request is consumed; do not request empty or already-admissible work.",
     "added_accounting_controls": 5,
+    "qualification_granted": false,
+    "full_new_head_CI_and_independent_review_required": true
+  },
+  "linux_process_rss_repair_206": {
+    "parent": "2316a564e920f863a125fc5facbf3a0b344f78b4",
+    "origin": "ACTUAL_HOSTED_CURRENT_REQUIRED_UNIT_FAILURE",
+    "run": 41385685625,
+    "attempt": 1,
+    "job": 125086132312,
+    "profile": "feature:operator",
+    "test": "app::observability::metrics::process::tests::linux_render_reads_this_process_vmhwm_and_marks_it_available",
+    "rendered_bytes": 16977920,
+    "pre_render_bytes": 16982016,
+    "full_job_log_sha256": "39298654b35f829fdfacf2c9b86117d6a3bac7ed6948166d6cbf7f78c5c55a1a",
+    "source_repair": [
+      "retain maximum actual observed process peak",
+      "capture peak and availability together for rendering",
+      "isolate the unchanged real Linux assertions in one verified child test"
+    ],
+    "original_lower_bound_nonzero_availability_assertions_unchanged": true,
+    "parser_unchanged": true,
+    "new_private_controls": 3,
+    "synthetic_samples_affect_production_state": false,
+    "tolerance_bytes": 0,
     "qualification_granted": false,
     "full_new_head_CI_and_independent_review_required": true
   }

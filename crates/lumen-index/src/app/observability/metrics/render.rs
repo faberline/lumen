@@ -15,7 +15,7 @@ impl Metrics {
     /// Prometheus text format (0.0.4 compatible). Always emits the same
     /// set of metric names so scrape configs are stable.
     pub fn render(&self) -> String {
-        self.refresh_process_rss_high_water();
+        let process_rss = self.read_process_rss_high_water();
         let budget = ChangeBudget::process_shared();
         let pending_changes = self.read_pending_change_accounting(&budget);
         let samples = [
@@ -171,7 +171,7 @@ impl Metrics {
             )];
             out.push_str(&metrics_prometheus::render_labeled(&groups));
         }
-        out.push_str(&self.render_segment_telemetry(pending_changes));
+        out.push_str(&self.render_segment_telemetry(pending_changes, process_rss));
         out
     }
 

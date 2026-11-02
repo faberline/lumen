@@ -242,6 +242,30 @@ assertions intact. This focused local pass grants no hosted qualification.
 The final commit still needs the complete original profiles and current-head
 CI, independent Codex review and actual protected operational acceptance.
 
+## Linux process RSS peak and scrape coherence (#206)
+
+Run `41385685625` at head `2316a564` failed the existing Linux process
+metric test in `lumen-index feature:operator`. The rendered peak was 4096
+bytes below the earlier `/proc/self/status` sample. This failed unit blocks
+acceptance. Linux documents this process-wide field as inaccurate. That fact
+does not identify a specific kernel interleaving as the cause.
+
+The exporter now retains the largest successfully observed real process peak.
+An unavailable current sample exports zero bytes and availability zero. It
+retains the observation history for recovery. Rendering uses one captured
+peak/availability pair. Later compatibility-gauge writes cannot mix the pair.
+Synthetic controls use private state and cannot seed the real process peak.
+
+The existing Linux test runs its unchanged assertions once in a fresh test
+process. The parent verifies the exact case name, successful status and one
+passed case with zero ignored cases. This isolates process memory accounting
+from unrelated parallel tests. It does not serialize the product matrix,
+retry a failure or weaken the original lower-bound, nonzero or availability
+checks. Three new controls cover peak retention, unavailable recovery and
+coherent output. Parser validation remains unchanged. No RSS tolerance,
+reference padding, larger memory budget or workload change is allowed.
+The complete new-head CI and independent Codex review remain required.
+
 ## Acceptance
 
 Keep all 31 unit/static cases, four unit batches, their original shared
