@@ -17,7 +17,8 @@
     203,
     204,
     205,
-    206
+    206,
+    207
   ],
   "user_content_authorization_comment": 6554991259,
   "recorded_head": "bbd97a2c226ff702f9dd44f00ef6dad6d6ee236c",
@@ -323,5 +324,37 @@
     "tolerance_bytes": 0,
     "qualification_granted": false,
     "full_new_head_CI_and_independent_review_required": true
+  },
+  "known_incomplete_graph_reuse_207": {
+    "parent": "262fc064f5531cd44b2f748a28e9adc6c06e66ca",
+    "origin": "ACTUAL_HOSTED_CURRENT_REQUIRED_INTEGRATION_FAILURE",
+    "run": 41392321719,
+    "attempt": 1,
+    "job": 125119119031,
+    "profile": "feature:jieba",
+    "target": "it",
+    "test": "field_query_correctness_contract::v2_hnsw_cpu_vector_sparse_delta_reuses_base_and_preserves_cold_layers",
+    "actual_nearest": [
+      "vector-base-004"
+    ],
+    "required_nearest": [
+      "runtime-id-900000"
+    ],
+    "phase": "after legacy-base restore and base checkpoint, before sparse updates or later cold open",
+    "original_rows": 129,
+    "full_log_sha256": "91e3b51e79e4561917f52463125bf33c9078f2a881538620a46dc1729b96d002",
+    "root_cause": "An explicit full-inventory fallback did not preserve the observed incomplete traversal for later smaller reads of the same graph.",
+    "source_repair": "Retain graph-scoped observed failure under the graph lock; use the existing live-store fallback until actual graph replacement; do not poison healthy graphs after unrelated filtered fallback.",
+    "new_private_controls": 5,
+    "original_integration_file_byte_identical": true,
+    "ef_unchanged": true,
+    "normal_healthy_bounded_path_unchanged": true,
+    "qualification_granted": false,
+    "full_new_head_CI_and_independent_review_required": true,
+    "fixed_restore_orders": [
+      "original",
+      "sorted",
+      "reverse"
+    ]
   }
 }

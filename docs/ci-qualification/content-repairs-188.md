@@ -266,6 +266,35 @@ coherent output. Parser validation remains unchanged. No RSS tolerance,
 reference padding, larger memory budget or workload change is allowed.
 The complete new-head CI and independent Codex review remain required.
 
+## Later queries after an incomplete graph inventory (#207)
+
+Run `41392321719` at head `262fc064` failed the existing Jieba sparse-vector
+contract. After legacy-base restore and the base checkpoint, the first nearest
+query returned `vector-base-004` instead of `runtime-id-900000`. This happens
+before sparse updates and later cold reopen. Keep all 129 original rows,
+independent-reference IDs, queries, layer checks, hard links and backend checks.
+The high external ID is an opaque label for row 129, not a dense allocation.
+
+The preceding full-inventory query could detect missing graph results and
+correctly use the live store. That observation was lost before the next small
+query. A deterministic 32-row control reproduces this sequence by leaving one
+real live row out of the graph. The original path passes the full read and then
+returns the wrong nearest ID. This control fails before the repair.
+
+An index now retains observed incomplete traversal under its graph lock.
+Later reads use the existing live-store fallback for that graph generation.
+Ordinary updates and deletes keep the observation. They still read current
+vectors and apply the caller's filter. Actual graph replacement starts a new
+unknown generation. Cache loading also creates a fresh runtime observation;
+this state is not a new persisted cache format or a claim of graph validation.
+A healthy filtered fallback does not mark the graph incomplete. Normal bounded
+and complete graph paths, ef values and borrowed-vector fallback stay intact.
+Five controls cover the later query, live changes and filters, a healthy graph,
+actual graph replacement, and the original 129-row geometry in three fixed
+restore orders. Every order must pass; no seed is selected for a passing result. No recall tolerance, seed retry, larger beam or
+blanket replacement of approximate search is allowed. The original integration
+file remains unchanged. Full new-head CI and independent review are required.
+
 ## Acceptance
 
 Keep all 31 unit/static cases, four unit batches, their original shared

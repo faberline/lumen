@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::RwLock;
 use std::time::Instant;
 
@@ -180,6 +180,7 @@ pub(in crate::index) fn load_timed(
                 next_id: manifest.next_id,
                 hnsw: HnswBackend::Cached(Box::new(owned)),
                 ef_search: hnsw_search_ef(),
+                graph_inventory_incomplete: AtomicBool::new(false),
             }),
             exact_scan_fallbacks: AtomicU64::new(0),
         }))

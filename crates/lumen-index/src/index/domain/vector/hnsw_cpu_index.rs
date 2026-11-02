@@ -6,7 +6,7 @@
 mod backend;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
@@ -101,6 +101,10 @@ pub(in crate::index) struct HnswCpuInner {
     /// [`hnsw_search_ef`]; a tuning/bench harness can override it via
     /// [`HnswCpuIndex::set_ef_search`] without rebuilding the graph.
     pub(in crate::index) ef_search: usize,
+    /// A full-inventory traversal proved this graph incomplete. Readers share
+    /// this observation under the same graph lock. Only graph replacement
+    /// starts a new, unknown generation; ordinary writes must not erase it.
+    pub(in crate::index) graph_inventory_incomplete: AtomicBool,
 }
 
 /// HNSW dispatch by metric. We keep an `Option` because for f32-SQ
@@ -270,6 +274,7 @@ impl HnswCpuIndex {
                 next_id: 0,
                 hnsw: HnswBackend::new(spec.metric, HNSW_DEFAULT_MAX_ELEMENTS),
                 ef_search: hnsw_search_ef(),
+                graph_inventory_incomplete: AtomicBool::new(false),
             }),
             exact_scan_fallbacks: AtomicU64::new(0),
         }
