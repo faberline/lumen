@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::sync::atomic::Ordering;
 use std::sync::{mpsc, Arc, Mutex};
 
 use crate::index::application::engine::tests::{build_users_schema, item};
@@ -16,13 +15,28 @@ use crate::shared_kernel::types::document::{FieldValue, IndexRequest};
 
 #[test]
 fn unavailable_retirement_worker_fails_safe_without_changing_apply_semantics() {
-    let before = RETIREMENT_FAILSAFE_RETAINS.load(Ordering::Relaxed);
+    let before = RETIREMENT_FAILSAFE_RETAINS.with(|count| count.get());
     let detached = Collection::new(BTreeMap::new()).unwrap();
     retire_collection_with(&CollectionRetirementWorker::Unavailable, detached);
     assert_eq!(
-        RETIREMENT_FAILSAFE_RETAINS.load(Ordering::Relaxed),
+        RETIREMENT_FAILSAFE_RETAINS.with(|count| count.get()),
         before + 1,
         "a failed worker handoff must retain the old generation instead of dropping it on the apply thread"
+    );
+}
+
+#[test]
+fn failsafe_retain_count_is_isolated_between_threads() {
+    let before = RETIREMENT_FAILSAFE_RETAINS.with(|count| count.get());
+    std::thread::spawn(|| {
+        let detached = Collection::new(BTreeMap::new()).unwrap();
+        retire_collection_with(&CollectionRetirementWorker::Unavailable, detached);
+    })
+    .join()
+    .unwrap();
+    assert_eq!(
+        RETIREMENT_FAILSAFE_RETAINS.with(|count| count.get()),
+        before
     );
 }
 
