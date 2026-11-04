@@ -155,6 +155,7 @@ use crate::shared_kernel::types::stats::{CacheStats, FieldStats, StatsResponse, 
         crate::shared_kernel::types::raft_role::RaftRole,
         HnswCacheSealMutationStamp,
         HnswCacheSealResponse,
+        crate::app::http::probes::VersionResponse,
     )),
     modifiers(&SecurityAddon),
     security(("bearerAuth" = []))

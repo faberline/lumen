@@ -152,6 +152,38 @@ async fn version_reports_build_provenance() {
     // git_sha + built_at are always present (degrading to "unknown" off-git).
     assert!(body["git_sha"].is_string(), "git_sha missing in {body}");
     assert!(body["built_at"].is_string(), "built_at missing in {body}");
+    // Compatibility capabilities: binary_capabilities, active_capabilities, effective_compatibility_version
+    assert_eq!(
+        body["binary_capabilities"],
+        serde_json::json!(["search_facets_v1"]),
+        "binary_capabilities mismatch in {body}"
+    );
+    assert_eq!(
+        body["active_capabilities"], body["binary_capabilities"],
+        "active_capabilities must equal binary_capabilities in standalone; body = {body}"
+    );
+    assert_eq!(
+        body["effective_compatibility_version"].as_str(),
+        Some(env!("CARGO_PKG_VERSION")),
+        "effective_compatibility_version mismatch in {body}"
+    );
+}
+
+#[tokio::test]
+async fn version_reports_compatibility_capabilities() {
+    let s = server();
+    let resp = s.get("/version").await;
+    resp.assert_status_ok();
+    let body: Value = resp.json();
+    assert_eq!(
+        body["binary_capabilities"],
+        serde_json::json!(["search_facets_v1"])
+    );
+    assert_eq!(body["active_capabilities"], body["binary_capabilities"]);
+    assert_eq!(
+        body["effective_compatibility_version"].as_str(),
+        Some(env!("CARGO_PKG_VERSION"))
+    );
 }
 
 #[tokio::test]

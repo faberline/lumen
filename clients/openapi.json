@@ -1527,15 +1527,17 @@
         "tags": [
           "Admin"
         ],
-        "summary": "Build provenance. `version` is the crate version; `git_sha` and `built_at`",
-        "description": "are stamped by `build.rs` and degrade to \"unknown\" outside a git checkout.",
+        "summary": "Build provenance and compatibility capabilities. `version` is the crate",
+        "description": "version; `git_sha` and `built_at` are stamped by `build.rs` and degrade to\n\"unknown\" outside a git checkout. `binary_capabilities`,\n`active_capabilities`, and `effective_compatibility_version` distinguish\nbinary support, active cluster capability, and compatibility version.",
         "operationId": "version",
         "responses": {
           "200": {
-            "description": "Build provenance: version, git sha, build time",
+            "description": "Build provenance and compatibility capabilities",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
               }
             }
           }
@@ -3034,6 +3036,43 @@
               }
             ],
             "nullable": true
+          }
+        }
+      },
+      "VersionResponse": {
+        "type": "object",
+        "required": [
+          "version",
+          "git_sha",
+          "built_at",
+          "binary_capabilities",
+          "active_capabilities",
+          "effective_compatibility_version"
+        ],
+        "properties": {
+          "active_capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "binary_capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "built_at": {
+            "type": "string"
+          },
+          "effective_compatibility_version": {
+            "type": "string"
+          },
+          "git_sha": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
           }
         }
       }
