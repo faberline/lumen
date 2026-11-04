@@ -67,7 +67,7 @@ async fn full_local_refusal_emits_one_numeric_diagnostic_without_wal_publish() {
     engine.create_collection("u", keyword_schema()).unwrap();
     let wal = Arc::new(MemWal::new());
     let coord = WriteCoordinator::start(wal.clone(), engine);
-    coord.set_diagnostic_capture(capture.token());
+    coord.set_diagnostic_capture(Arc::new(capture.token()));
     let filler = budget.owner();
     let _held = filler
         .try_reserve(1024 * 1024 - budget.snapshot().total)
@@ -99,7 +99,7 @@ async fn foreign_budget_full_without_local_work_has_unlinked_numeric_refusal() {
     let engine = Arc::new(Engine::with_change_budget(budget.clone()));
     let wal = Arc::new(MemWal::new());
     let coord = WriteCoordinator::start(wal.clone(), engine);
-    coord.set_diagnostic_capture(capture.token());
+    coord.set_diagnostic_capture(Arc::new(capture.token()));
     let foreign = budget.owner();
     let _held = foreign.try_reserve(1024 * 1024).unwrap();
     let error = coord

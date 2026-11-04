@@ -64,6 +64,9 @@ impl AppState {
     /// Build state with an explicit write log. Spawns the apply loop.
     pub fn with_wal(engine: Arc<Engine>, auth: Arc<AuthConfig>, wal: SharedWal) -> Self {
         let writer = WriteCoordinator::start(wal, engine.clone());
+        writer.set_capacity_trace(Arc::new(
+            crate::persistence::infrastructure::segment_rdb_store::diagnostic::CheckpointCapacityTrace,
+        ));
         Self::with_components(engine, auth, writer)
     }
 
