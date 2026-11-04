@@ -3,3 +3,5 @@
 //! sharding implements over in-process shards.
 
 pub mod write_backend;
+
+pub mod capacity_trace;
