@@ -76,3 +76,22 @@ fn auth_defaults_to_required() {
     assert_eq!(AuthMode::default(), AuthMode::Required);
     assert_eq!(AuthMode::default().as_env(), "required");
 }
+
+/// The Fleet CRD OpenAPI schema declares the rollout status fields.
+#[test]
+fn the_fleet_crd_names_rollout_status_fields() {
+    let yaml = fleet_crd_yaml();
+    for field in [
+        "phase",
+        "observedGeneration",
+        "desiredHash",
+        "phaseSince",
+        "stallReason",
+        "lastStall",
+    ] {
+        assert!(
+            yaml.contains(field),
+            "fleet CRD must contain rollout status field `{field}`: {yaml}"
+        );
+    }
+}

@@ -995,11 +995,43 @@ spec:
                 items:
                   description: One entry's outcome.
                   properties:
+                    desiredHash:
+                      nullable: true
+                      type: string
+                    lastStall:
+                      description: 'Transition history kept after recovery: the previous stall''s reason and start time.'
+                      nullable: true
+                      properties:
+                        reason:
+                          type: string
+                        time:
+                          default: ''
+                          type: string
+                      required:
+                      - reason
+                      type: object
                     message:
                       type: string
                     name:
                       type: string
                     namespace:
+                      type: string
+                    observedGeneration:
+                      format: int64
+                      nullable: true
+                      type: integer
+                    phase:
+                      description: Closed enum for per-entry rollout phase.
+                      enum:
+                      - Healthy
+                      - Stalled
+                      nullable: true
+                      type: string
+                    phaseSince:
+                      nullable: true
+                      type: string
+                    stallReason:
+                      nullable: true
                       type: string
                     state:
                       description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `Orphaned` | `Pruned`.'

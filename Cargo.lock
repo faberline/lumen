@@ -3265,6 +3265,7 @@ version = "0.6.2"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "k8s-openapi",
  "kube",
  "lumen-access",
@@ -3281,6 +3282,7 @@ dependencies = [
  "service-backup",
  "service-http",
  "service-k8s",
+ "sha2 0.10.9",
  "tokio",
  "tracing",
  "wiremock",
