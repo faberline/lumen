@@ -101,5 +101,24 @@ pub(super) fn backup_cron_job(lumen: &Lumen, cx: &RenderCtx<'_>) -> Option<Value
         cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["imagePullSecrets"] =
             json!(lumen.spec.image_pull_secrets);
     }
+    let labels =
+        crate::application::render::identity::data_artifact_labels(lumen, BACKUP_COMPONENT);
+    if let Some(cron_labels) = cron["metadata"]["labels"].as_object_mut() {
+        for (k, v) in &labels {
+            cron_labels.insert(k.clone(), Value::String(v.clone()));
+        }
+    } else {
+        cron["metadata"]["labels"] = serde_json::to_value(&labels).unwrap();
+    }
+    if let Some(pod_labels) =
+        cron["spec"]["jobTemplate"]["spec"]["template"]["metadata"]["labels"].as_object_mut()
+    {
+        for (k, v) in &labels {
+            pod_labels.insert(k.clone(), Value::String(v.clone()));
+        }
+    } else {
+        cron["spec"]["jobTemplate"]["spec"]["template"]["metadata"]["labels"] =
+            serde_json::to_value(&labels).unwrap();
+    }
     Some(cron)
 }
