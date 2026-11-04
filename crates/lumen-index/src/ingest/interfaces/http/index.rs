@@ -99,9 +99,9 @@ pub(crate) async fn index(
     path = "/collections/{collection_id}/reindex/stream",
     tag = "Index",
     params(("collection_id" = String, Path, description = "Collection namespace")),
-    request_body(content = String, description = "NDJSON of IndexItem records, one per line"),
+    request_body(content = String, content_type = "application/x-ndjson", description = "NDJSON of IndexItem records, one per line"),
     responses(
-        (status = 200, description = "NDJSON stream of progress events, terminated by a done event"),
+        (status = 200, description = "NDJSON stream of progress events, terminated by a done event", body = String, content_type = "application/x-ndjson"),
         (status = 501, description = "Not supported in routed multi-shard mode (#1442 R6)", body = ApiError)
     )
 )]

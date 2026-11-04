@@ -49,6 +49,9 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
           "403": {
             "description": "Missing admin role",
             "content": {
@@ -58,6 +61,9 @@
                 }
               }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -97,6 +103,9 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
           "403": {
             "description": "Missing admin role",
             "content": {
@@ -106,6 +115,9 @@
                 }
               }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -144,6 +156,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -174,6 +192,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -212,6 +236,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -250,6 +280,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -288,6 +324,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -326,6 +368,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -350,14 +398,7 @@
             }
           },
           "401": {
-            "description": "Authentication required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/401"
           },
           "403": {
             "description": "Missing admin role",
@@ -380,14 +421,7 @@
             }
           },
           "500": {
-            "description": "HNSW cache sealing failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/500"
           },
           "503": {
             "description": "Restart required",
@@ -432,6 +466,9 @@
           "204": {
             "description": "Engine state replaced from the snapshot"
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
           "403": {
             "description": "Missing admin role",
             "content": {
@@ -453,14 +490,7 @@
             }
           },
           "500": {
-            "description": "Restore failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/500"
           },
           "503": {
             "description": "Restore temporarily unavailable",
@@ -504,6 +534,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       },
@@ -514,6 +550,18 @@
         "summary": "msearch-style batch search: N independent `(collection, SearchRequest)`",
         "description": "items in one HTTP request, fanned out concurrently. `collections:search`\nis one literal path segment (AIP-136 custom-method syntax), so it\nregisters directly in axum next to `/collections` and\n`/collections/{collection_id}` without any capture ambiguity.\n\nOne item failing (e.g. an unknown collection) never fails the batch —\nthe batch-level status stays 200 and that item's [`BatchSearchResult`]\ncarries the error. Only a malformed body or an over-limit batch returns\n400. Cursors, sort, and collapse all stay per-item: there is no merged\ncursor and no cross-collection score merging.",
         "operationId": "query_collections",
+        "parameters": [
+          {
+            "name": "X-Read-Consistency",
+            "in": "header",
+            "description": "Read consistency level: `leader` (default), `any`, or `bounded(<ms>)` (e.g. `bounded(250)`).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -544,6 +592,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         },
         "x-post-twin": "/collections:search"
@@ -597,6 +651,12 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          },
           "507": {
             "description": "Node in ENOSPC degraded read-only mode (#2516)",
             "content": {
@@ -642,8 +702,14 @@
           "204": {
             "description": "Physically dropped"
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
           "404": {
             "description": "Unknown collection"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           },
           "507": {
             "description": "Node in ENOSPC degraded read-only mode (#2516)",
@@ -671,6 +737,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Read-Consistency",
+            "in": "header",
+            "description": "Read consistency level: `leader` (default), `any`, or `bounded(<ms>)` (e.g. `bounded(250)`).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
           }
         ],
         "requestBody": {
@@ -693,6 +769,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         },
         "x-post-twin": "/collections/{collection_id}/search"
@@ -757,6 +839,15 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          },
           "507": {
             "description": "Node in ENOSPC degraded read-only mode (#2516)",
             "content": {
@@ -799,6 +890,15 @@
         "responses": {
           "204": {
             "description": "Deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           },
           "507": {
             "description": "Node in ENOSPC degraded read-only mode (#2516)",
@@ -863,6 +963,18 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          },
           "507": {
             "description": "Node in ENOSPC degraded read-only mode (#2516)",
             "content": {
@@ -898,6 +1010,15 @@
         "responses": {
           "204": {
             "description": "Documents truncated; schema is unchanged"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           },
           "503": {
             "description": "Reshard fence or routed shard unavailable",
@@ -965,6 +1086,15 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          },
           "503": {
             "description": "Reshard fence or routed shard unavailable",
             "content": {
@@ -1005,6 +1135,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Read-Consistency",
+            "in": "header",
+            "description": "Read consistency level: `leader` (default), `any`, or `bounded(<ms>)` (e.g. `bounded(250)`).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
           }
         ],
         "requestBody": {
@@ -1027,6 +1167,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -1066,6 +1212,9 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
           "404": {
             "description": "Unknown collection or field",
             "content": {
@@ -1075,6 +1224,9 @@
                 }
               }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -1129,6 +1281,9 @@
               }
             }
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
           "404": {
             "description": "Unknown collection",
             "content": {
@@ -1139,6 +1294,9 @@
               }
             }
           },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
           "422": {
             "description": "Type mismatch",
             "content": {
@@ -1148,6 +1306,12 @@
                 }
               }
             }
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           },
           "507": {
             "description": "Node in ENOSPC degraded read-only mode (#2516)",
@@ -1203,6 +1367,15 @@
           "204": {
             "description": "Deleted"
           },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          },
           "507": {
             "description": "Node in ENOSPC degraded read-only mode (#2516)",
             "content": {
@@ -1239,7 +1412,7 @@
         "requestBody": {
           "description": "NDJSON of IndexItem records, one per line",
           "content": {
-            "text/plain": {
+            "application/x-ndjson": {
               "schema": {
                 "type": "string"
               }
@@ -1249,7 +1422,20 @@
         },
         "responses": {
           "200": {
-            "description": "NDJSON stream of progress events, terminated by a done event"
+            "description": "NDJSON stream of progress events, terminated by a done event",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           },
           "501": {
             "description": "Not supported in routed multi-shard mode (#1442 R6)",
@@ -1279,6 +1465,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Read-Consistency",
+            "in": "header",
+            "description": "Read consistency level: `leader` (default), `any`, or `bounded(<ms>)` (e.g. `bounded(250)`).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
           }
         ],
         "requestBody": {
@@ -1301,6 +1497,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -1321,6 +1523,16 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "X-Read-Consistency",
+            "in": "header",
+            "description": "Read consistency level: `leader` (default), `any`, or `bounded(<ms>)` (e.g. `bounded(250)`).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
             }
           }
         ],
@@ -1354,6 +1566,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -1385,6 +1603,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -1397,6 +1621,18 @@
         "summary": "msearch-style batch search: N independent `(collection, SearchRequest)`",
         "description": "items in one HTTP request, fanned out concurrently. `collections:search`\nis one literal path segment (AIP-136 custom-method syntax), so it\nregisters directly in axum next to `/collections` and\n`/collections/{collection_id}` without any capture ambiguity.\n\nOne item failing (e.g. an unknown collection) never fails the batch —\nthe batch-level status stays 200 and that item's [`BatchSearchResult`]\ncarries the error. Only a malformed body or an over-limit batch returns\n400. Cursors, sort, and collapse all stay per-item: there is no merged\ncursor and no cross-collection score merging.",
         "operationId": "batch_search",
+        "parameters": [
+          {
+            "name": "X-Read-Consistency",
+            "in": "header",
+            "description": "Read consistency level: `leader` (default), `any`, or `bounded(<ms>)` (e.g. `bounded(250)`).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1427,6 +1663,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
           }
         }
       }
@@ -3034,6 +3276,56 @@
               }
             ],
             "nullable": true
+          }
+        }
+      }
+    },
+    "responses": {
+      "401": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      },
+      "413": {
+        "description": "Payload Too Large",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      },
+      "429": {
+        "description": "Too Many Requests",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Retry-After delay in seconds"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      },
+      "500": {
+        "description": "Internal Server Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            }
           }
         }
       }
