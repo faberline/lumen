@@ -42,11 +42,23 @@ edit generated schema as a substitute for changing its source.
 
 ## Local Workflow
 
-Authorized behavior work runs through the agents in `.claude/agents/`.
-`lumen-pm` drafts product documents. `lumen-qa` writes the failing black-box
-case (`aw e2e`) before `lumen-dev` changes `src/` and adds the red unit test and
-implementation (`aw impl`). A fresh `lumen-qa` run executes the declared
-complete gate. The controller owns Git, tracker, and acceptance.
+Use the shared Faberline `issue-plan`, `issue-work`, and `issue-review`
+skills from [AW](https://github.com/faberline/aw/tree/main/plugins/faberline/skills).
+Each skill runs one pass; its `-loop` companion adds an explicit interval.
+Installing or updating a skill does not start a loop.
+
+Planning writes the bounded issue contract. Work submits one issue's PR and
+runs affected unit/static checks. CI runs the required functional, integration
+and performance checks. It alone sets `done` after all required current-input
+gates pass, leaving the issue open for independent local review. A required
+CI failure reports its evidence and returns the issue to `todo`. Review reads
+the issue, diff and current CI; it runs no tests and never merges, closes or
+changes lifecycle labels. The controller owns Git and final acceptance.
+
+Use the repository's existing complete gates for product claims. Keep local
+work limited to affected unit/static checks; functional, integration and
+performance execution belongs in authorized CI. Preserve all feature matrices,
+test selection checks, numeric limits and exact-head/base evidence.
 
 Keep Lumen-specific search, schema, shard, and health policy in this
 repository. Put reusable Kubernetes mechanisms in the
@@ -77,11 +89,15 @@ separate from target behavior.
 
 ### Product documents
 
+Use the retained shared validators from a checkout of the approved AW
+revision. Set `AW_CHECKOUT` to that checkout's absolute path:
+
 ```bash
-aw meta check
+python3 "${AW_CHECKOUT:?set the approved AW checkout}/scripts/meta/readme_contract.py" check README.md
+python3 "${AW_CHECKOUT:?set the approved AW checkout}/scripts/meta/project_docs_contract.py" check .
 ```
 
-The command scans the root documents and `docs/` against the META-doc rules.
+These commands check the README and adopted project-document contract.
 A docs-only change does not claim that product gates ran.
 
 ### Product behavior
