@@ -477,8 +477,8 @@ fn statefulset_wires_serving_contract_single_member() {
     assert_eq!(c["resources"]["requests"]["memory"], "4Gi");
     assert!(c["resources"].get("limits").is_none());
     assert_eq!(
-        sts["spec"]["template"]["spec"]["affinity"]["podAntiAffinity"]
-            ["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
+        sts["spec"]["template"]["spec"]["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]
+            [0]["topologyKey"],
         "kubernetes.io/hostname"
     );
 
@@ -1098,9 +1098,11 @@ fn reshard_status_with_usage_holds_on_pre_cutover_measurement() {
     assert_eq!(status.max_observed_percent, Some(90));
     assert_eq!(status.usage_measured_at_map_version, Some(0));
     assert_eq!(status.blocking_conditions, vec!["usageStalePostCutover"]);
-    assert!(status
-        .message
-        .contains("holding for a fresh post-cutover measurement"));
+    assert!(
+        status
+            .message
+            .contains("holding for a fresh post-cutover measurement")
+    );
 }
 
 #[test]
@@ -1195,6 +1197,10 @@ fn raft_ha_renders_serving_statefulset() {
     assert_eq!(sts["spec"]["serviceName"], "search-headless");
     assert_eq!(sts["spec"]["podManagementPolicy"], "Parallel");
     assert_eq!(sts["spec"]["replicas"], 6); // shard_count(2) × replicasPerShard(3)
+    assert_eq!(
+        sts["spec"]["updateStrategy"]["type"], "OnDelete",
+        "Managed replicated runtime must render OnDelete updateStrategy so controller choice is the only one"
+    );
 
     // Exactly the env `raft_runtime::cluster::ClusterTopology::from_env` reads.
     let env = env_names(&sts["spec"]["template"]["spec"]["containers"][0]);
@@ -1347,14 +1353,12 @@ fn placement_names_a_node_pool_without_replacing_the_anti_affinity() {
         && t["effect"] == "NoSchedule"));
 
     assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-            ["topologyKey"],
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
         "kubernetes.io/hostname",
         "naming a node pool must not cost the one-replica-per-host constraint"
     );
     assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-            ["namespaceSelector"],
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["namespaceSelector"],
         serde_json::json!({}),
         "anti-affinity must match cross-namespace"
     );
@@ -1366,14 +1370,12 @@ fn default_placement_renders_cross_namespace_anti_affinity() {
     let objs = render(&lumen("search", prod_spec()));
     let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
     assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-            ["namespaceSelector"],
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["namespaceSelector"],
         serde_json::json!({}),
         "anti-affinity must match cross-namespace"
     );
     assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-            ["topologyKey"],
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
         "kubernetes.io/hostname"
     );
 }
@@ -1511,8 +1513,8 @@ fn no_image_pull_secrets_renders_no_key() {
 #[test]
 fn the_crd_accepts_image_pull_secrets() {
     let doc = crd_document("lumens.lumen.dev");
-    let field = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
-        ["properties"]["imagePullSecrets"];
+    let field = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]["properties"]
+        ["imagePullSecrets"];
     assert_eq!(field["type"], "array");
     assert_eq!(field["items"]["properties"]["name"]["type"], "string");
 }
@@ -1520,8 +1522,8 @@ fn the_crd_accepts_image_pull_secrets() {
 #[test]
 fn crd_backup_schema_flattens_shared_policy() {
     let doc = crd_document("lumens.lumen.dev");
-    let backup_props = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]
-        ["spec"]["properties"]["serving"]["properties"]["backup"]["properties"];
+    let backup_props = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
+        ["properties"]["serving"]["properties"]["backup"]["properties"];
     for field in [
         "schedule",
         "destination",
@@ -1555,8 +1557,8 @@ fn crd_schema_reshard_recommendation_only_default_matches_runtime_default() {
         .iter()
         .find(|v| v["name"] == "v1alpha1")
         .expect("v1alpha1 version");
-    let recommendation_only = &v1alpha1["schema"]["openAPIV3Schema"]["properties"]["status"]
-        ["properties"]["reshard"]["properties"]["recommendationOnly"];
+    let recommendation_only = &v1alpha1["schema"]["openAPIV3Schema"]["properties"]["status"]["properties"]
+        ["reshard"]["properties"]["recommendationOnly"];
     assert_eq!(
         recommendation_only["default"],
         serde_yaml::Value::Bool(true),

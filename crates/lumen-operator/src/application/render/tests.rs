@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
 use kube::api::ObjectMeta;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::render;
 use crate::domain::lumen_spec::{
+    PlacementSpec,
     serving::{AuthMode, LogFormat, ServingSpec},
     topology::{ReshardPolicy, ShardMapSpec},
-    PlacementSpec,
 };
 use crate::{Lumen, LumenSpec};
 
@@ -81,5 +81,33 @@ fn embedded_data_is_an_exact_child_of_the_raft_pvc_mount() {
                 "readOnly": false,
             }),
         ]
+    );
+}
+
+#[test]
+fn single_replica_renders_rolling_update_strategy() {
+    let objs = render(&single_replica());
+    let sts = objs
+        .into_iter()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet");
+
+    assert_eq!(sts["spec"]["updateStrategy"]["type"], "RollingUpdate");
+}
+
+#[test]
+fn managed_replicated_runtime_renders_on_delete_update_strategy() {
+    let mut lumen = single_replica();
+    lumen.spec.replicas_per_shard = 3;
+    lumen.spec.voter_count = 3;
+    let objs = render(&lumen);
+    let sts = objs
+        .into_iter()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet");
+
+    assert_eq!(
+        sts["spec"]["updateStrategy"]["type"], "OnDelete",
+        "Managed replicated runtime must render OnDelete updateStrategy so controller choice is the only one"
     );
 }

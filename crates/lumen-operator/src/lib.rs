@@ -18,7 +18,7 @@ pub mod application;
 pub mod domain;
 pub mod infrastructure;
 
-pub use crate::application::{certificate, resize};
+pub use crate::application::{certificate, resize, runtime_rollout};
 pub use crate::infrastructure::lease;
 
 pub use crate::application::reconcile::run;
