@@ -522,6 +522,84 @@
       }
     ],
     "contracts": {
+      "183": {
+        "title_sha256": "08e401e68b115a642c561e0218e7f88fd176fcea69979bb351247d2aaf7fbb26",
+        "body_sha256": "3bc036b84f7d257263215384d563654bd451626d790dc3fde01f2c5246f17512",
+        "applicability": {
+          "unit": {
+            "status": "required",
+            "checks": [
+              "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+              "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+              "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+              "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+              "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+              "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+              "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+              "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+              "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+              "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+              "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+              "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+              "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+              "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+              "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+              "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+              "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+              "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+              "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+              "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+              "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+              "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+              "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+              "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+              "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+              "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+              "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+              "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+              "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+              "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+              "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175"
+            ],
+            "reason": "Retain complete normal-development unit evidence; unknown product content remains blocking."
+          },
+          "functional_e2e": {
+            "status": "required",
+            "checks": [
+              "functional-0",
+              "functional-1",
+              "functional-2",
+              "functional-3",
+              "functional-4",
+              "functional-5",
+              "functional-6",
+              "functional-7",
+              "functional-8",
+              "functional-9",
+              "functional-10",
+              "functional-11",
+              "functional-12",
+              "cloud-5",
+              "cloud-6",
+              "cloud-7",
+              "native-functional"
+            ],
+            "reason": "Retain complete normal-development functional_e2e evidence; unknown product content remains blocking."
+          },
+          "performance": {
+            "status": "required",
+            "checks": [
+              "coarse",
+              "index-latency",
+              "pagination",
+              "native-resource-performance"
+            ],
+            "reason": "Retain complete normal-development performance evidence; unknown product content remains blocking."
+          }
+        },
+        "additional": [],
+        "unresolved": []
+      },
       "188": {
         "title_sha256": "ed3b0edde9e91a2fa2124dd495d3ff07fe601d7fda58e4237901f992cbc6dafe",
         "body_sha256": "c89d644c10fe32590adf433f356076483708bc9210d2df7d91a89f9540521413",
@@ -1204,6 +1282,84 @@
         "188": {
           "title_sha256": "ed3b0edde9e91a2fa2124dd495d3ff07fe601d7fda58e4237901f992cbc6dafe",
           "body_sha256": "c89d644c10fe32590adf433f356076483708bc9210d2df7d91a89f9540521413",
+          "applicability": {
+            "unit": {
+              "status": "required",
+              "checks": [
+                "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+                "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+                "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+                "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+                "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+                "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+                "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+                "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+                "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+                "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+                "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+                "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+                "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+                "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+                "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+                "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+                "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+                "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+                "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+                "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+                "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+                "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+                "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+                "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+                "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+                "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+                "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+                "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+                "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+                "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+                "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175"
+              ],
+              "reason": "Retain complete normal-development unit evidence; unknown product content remains blocking."
+            },
+            "functional_e2e": {
+              "status": "required",
+              "checks": [
+                "functional-0",
+                "functional-1",
+                "functional-2",
+                "functional-3",
+                "functional-4",
+                "functional-5",
+                "functional-6",
+                "functional-7",
+                "functional-8",
+                "functional-9",
+                "functional-10",
+                "functional-11",
+                "functional-12",
+                "cloud-5",
+                "cloud-6",
+                "cloud-7",
+                "native-functional"
+              ],
+              "reason": "Retain complete normal-development functional_e2e evidence; unknown product content remains blocking."
+            },
+            "performance": {
+              "status": "required",
+              "checks": [
+                "coarse",
+                "index-latency",
+                "pagination",
+                "native-resource-performance"
+              ],
+              "reason": "Retain complete normal-development performance evidence; unknown product content remains blocking."
+            }
+          },
+          "additional": [],
+          "unresolved": []
+        },
+        "183": {
+          "title_sha256": "08e401e68b115a642c561e0218e7f88fd176fcea69979bb351247d2aaf7fbb26",
+          "body_sha256": "3bc036b84f7d257263215384d563654bd451626d790dc3fde01f2c5246f17512",
           "applicability": {
             "unit": {
               "status": "required",
