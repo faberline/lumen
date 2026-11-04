@@ -618,16 +618,6 @@ reason = "SharedAof is the coordinator's handle on the AofWriter: the apply loop
 
 [[exceptions]]
 rule = "B4"
-paths = [
-  "crates/lumen-index/src/ingest/application/write_coordinator.rs",
-  "crates/lumen-index/src/ingest/application/write_coordinator/capacity.rs",
-  "crates/lumen-index/src/ingest/application/write_coordinator/committed_scalar.rs",
-]
-subject = "persistence.application"
-reason = "The coordinator keeps a capacity Fallback in layer_capacity_owner and ensures it before the apply loop or the committed scalar path waits on layer capacity, so a coordinator without a configured checkpoint owner still has a worker to checkpoint and merge. P2: ingest defines a capacity-owner port the persistence capacity worker implements, which breaks the cycle."
-
-[[exceptions]]
-rule = "B4"
 paths = ["crates/lumen-index/src/persistence/infrastructure/segment_rdb_store/diagnostic.rs"]
 subject = "ingest.domain"
 reason = "The checkpoint diagnostic trace records the change budget's Snapshot when the scheduler selects a checkpoint. P2: ingest's application layer exposes the budget snapshot, or the trace takes the few counters it prints."
