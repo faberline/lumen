@@ -189,6 +189,8 @@ impl Drop for Release {
 
 mod capacity_requests;
 
+mod checkpoint_coalescing;
+
 mod owner;
 
 mod relay;

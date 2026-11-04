@@ -135,16 +135,22 @@ impl Engine {
                     .segment
                     .as_ref()
                     .is_some_and(|segment| segment.text_is_present(*id));
-                let old_len = old_present
-                    .then(|| {
+                let old_len = if old_present {
+                    {
                         idx.segment
                             .as_ref()
                             .map(|segment| segment.text_doc_len(*id))
                             .unwrap_or(0)
-                    })
-                    .unwrap_or(0);
+                    }
+                } else {
+                    0
+                };
                 let new_present = reader.text_is_present(row);
-                let new_len = new_present.then(|| reader.text_doc_len(row)).unwrap_or(0);
+                let new_len = if new_present {
+                    reader.text_doc_len(row)
+                } else {
+                    0
+                };
                 if old_present {
                     idx.doc_count = idx.doc_count.saturating_sub(1);
                     idx.total_doc_len = idx.total_doc_len.saturating_sub(old_len as u64);

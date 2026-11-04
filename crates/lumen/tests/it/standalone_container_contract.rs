@@ -38,6 +38,19 @@ fn replace_exact(source: &str, target: &str, replacement: &str) -> String {
     source.replacen(target, replacement, 1)
 }
 
+/// Mutation anchors use active tokens when Rustfmt split the same statement.
+/// Ambiguous, absent or changed tokens still refuse the fixture.
+fn replace_durable_exact(source: &str, target: &str, replacement: &str) -> String {
+    if source.matches(target).count() == 1 {
+        return replace_exact(source, target, replacement);
+    }
+    let spans = super::source_contract::spans(source, target).expect("valid mutation tokens");
+    assert_eq!(spans.len(), 1, "durable mutation anchor {target:?}");
+    let mut changed = source.to_owned();
+    changed.replace_range(spans[0].clone(), replacement);
+    changed
+}
+
 fn insert_after_first_from(source: &str, instruction: &str) -> String {
     let mut output = String::with_capacity(source.len() + instruction.len() + 1);
     let mut inserted = false;
@@ -58,7 +71,7 @@ const DURABLE_SUITE: &str = "crates/lumen/tests/it/e2e/standalone_container.rs";
 /// semantics below but still has to update this pin, so every change to the
 /// suite is reviewed against this contract.
 const DURABLE_SUITE_SHA256: &str =
-    "2c1345bae15e03884799d6670535452b75e7d3b897c99668eaacf963688beae7";
+    "338b632ce51a8cc66a489a8bfb0149f556d8e7e8b4cf4685dbd233b33677a19c";
 const DURABLE_HEADER: &str =
     "\n\n#[tokio::test]\n#[ignore = \"e2e: needs E2E_STANDALONE_IMAGE\"]\nasync fn durable() {\n";
 const BIND_HEADER: &str =
@@ -96,22 +109,35 @@ const DURABLE_STEPS: &[&str] = &[
     "scratch.volume(&reject_volume);",
     "let mount = format!(\"type=volume,src={volume},dst={DATA}\");",
     "let reject_mount = format!(\"type=volume,src={reject_volume},dst={DATA}\");",
-    "say(format!(\">> [{SUITE}] durable: the 0428 image writes a legacy layout\"));",
+    "say(format!(",
+    "\">> [{SUITE}] durable: the 0428 image writes a legacy layout\"",
+    "));",
     "let api = serve(",
     "&mut scratch,",
     "&old,",
     "&[",
-    "\"--mount\", &mount,",
-    "\"-e\", \"LUMEN_AUTH=off\",",
-    "\"-e\", &format!(\"LUMEN_DATA_DIR={DATA}\"),",
-    "\"-e\", \"LUMEN_PERSISTENCE=segment\",",
-    "\"-e\", \"LUMEN_SNAPSHOT_SECS=1\",",
-    "\"-e\", \"LUMEN_GRACE_SECS=1\",",
+    "\"--mount\",",
+    "&mount,",
+    "\"-e\",",
+    "\"LUMEN_AUTH=off\",",
+    "\"-e\",",
+    "&format!(\"LUMEN_DATA_DIR={DATA}\"),",
+    "\"-e\",",
+    "\"LUMEN_PERSISTENCE=segment\",",
+    "\"-e\",",
+    "\"LUMEN_SNAPSHOT_SECS=1\",",
+    "\"-e\",",
+    "\"LUMEN_GRACE_SECS=1\",",
     "],",
     "OLD_IMAGE,",
     ")",
     ".await;",
-    "api.put(\"/collections/durable\", &json!({\"fields\": {\"tag\": {\"type\": \"keyword\"}}}), TIMEOUT).await;",
+    "api.put(",
+    "\"/collections/durable\",",
+    "&json!({\"fields\": {\"tag\": {\"type\": \"keyword\"}}}),",
+    "TIMEOUT,",
+    ")",
+    ".await;",
     "index_tag(&api, \"first\").await;",
     "assert_search(&api, \"first\").await;",
     "let old_data = tmp.join(\"old-data\");",
@@ -130,55 +156,116 @@ const DURABLE_STEPS: &[&str] = &[
     "logs(&old)",
     ");",
     "scratch.remove(&old);",
-    "say(format!(\">> [{SUITE}] durable: the candidate adopts the legacy layout\"));",
-    "let json_logs = [\"--mount\", mount.as_str(), \"-e\", \"LUMEN_AUTH=off\", \"-e\", \"LUMEN_LOG_FORMAT=json\"];",
+    "say(format!(",
+    "\">> [{SUITE}] durable: the candidate adopts the legacy layout\"",
+    "));",
+    "let json_logs = [",
+    "\"--mount\",",
+    "mount.as_str(),",
+    "\"-e\",",
+    "\"LUMEN_AUTH=off\",",
+    "\"-e\",",
+    "\"LUMEN_LOG_FORMAT=json\",",
+    "];",
     "let api = serve(&mut scratch, &candidate, &json_logs, &image).await;",
     "assert_startup_decision(&candidate, \"adopted_legacy_0428\");",
     "let current = read_current(&scratch, &candidate, \"current-first\");",
-    "assert!(is_current(&current, false), \"adopted CURRENT is not generation:gen-<n>: {:?}\", String::from_utf8_lossy(&current));",
+    "assert!(",
+    "is_current(&current, false),",
+    "\"adopted CURRENT is not generation:gen-<n>: {:?}\",",
+    "String::from_utf8_lossy(&current)",
+    ");",
     "assert_search(&api, \"first\").await;",
     "index_tag(&api, \"second\").await;",
     "assert_search(&api, \"second\").await;",
     "let checkpoint = api.post(\"/admin/checkpoint\", &json!({}), TIMEOUT).await;",
-    "assert!(checkpoint[\"persisted\"] == true, \"checkpoint did not persist: {checkpoint}\");",
+    "assert!(",
+    "checkpoint[\"persisted\"] == true,",
+    "\"checkpoint did not persist: {checkpoint}\"",
+    ");",
     "let current = read_current(&scratch, &candidate, \"current-rev\");",
-    "assert!(is_current(&current, true), \"checkpointed CURRENT is not a revision: {:?}\", String::from_utf8_lossy(&current));",
+    "assert!(",
+    "is_current(&current, true),",
+    "\"checkpointed CURRENT is not a revision: {:?}\",",
+    "String::from_utf8_lossy(&current)",
+    ");",
     "must(&[\"kill\", &candidate]);",
     "scratch.remove(&candidate);",
-    "say(format!(\">> [{SUITE}] durable: a replacement restores the CURRENT revision\"));",
+    "say(format!(",
+    "\">> [{SUITE}] durable: a replacement restores the CURRENT revision\"",
+    "));",
     "let api = serve(&mut scratch, &replacement, &json_logs, &image).await;",
     "assert_startup_decision(&replacement, \"restored_current_generation\");",
     "let current = read_current(&scratch, &replacement, \"current-replacement\");",
-    "assert!(is_current(&current, true), \"restored CURRENT is not a revision: {:?}\", String::from_utf8_lossy(&current));",
+    "assert!(",
+    "is_current(&current, true),",
+    "\"restored CURRENT is not a revision: {:?}\",",
+    "String::from_utf8_lossy(&current)",
+    ");",
     "assert_search(&api, \"first\").await;",
     "assert_search(&api, \"second\").await;",
-    "say(format!(\">> [{SUITE}] durable: an unknown root is refused and left as it was\"));",
+    "say(format!(",
+    "\">> [{SUITE}] durable: an unknown root is refused and left as it was\"",
+    "));",
     "let foreign = tmp.join(\"foreign-layout\");",
     "std::fs::create_dir(&foreign).expect(\"create foreign-layout\");",
-    "std::fs::write(foreign.join(\"sentinel\"), b\"fail-closed unknown root\\n\").expect(\"write sentinel\");",
+    "std::fs::write(foreign.join(\"sentinel\"), b\"fail-closed unknown root\\n\")",
+    ".expect(\"write sentinel\");",
     "scratch.containers.push(seed.clone());",
     "must(&[\"create\", \"--name\", &seed, \"--mount\", &reject_mount, &image]);",
-    "must(&[\"cp\", foreign.to_str().expect(\"utf-8 path\"), &format!(\"{seed}:{DATA}/foreign-layout\")]);",
+    "must(&[",
+    "\"cp\",",
+    "foreign.to_str().expect(\"utf-8 path\"),",
+    "&format!(\"{seed}:{DATA}/foreign-layout\"),",
+    "]);",
     "scratch.remove(&seed);",
-    "scratch.run(&rejected, &[\"--mount\", &reject_mount, \"-e\", \"LUMEN_AUTH=off\"], &image);",
+    "scratch.run(",
+    "&rejected,",
+    "&[\"--mount\", &reject_mount, \"-e\", \"LUMEN_AUTH=off\"],",
+    "&image,",
+    ");",
     "wait_failed_exit(&rejected).await;",
-    "let port = published_port(&rejected).unwrap_or_else(|_| panic!(\"{}\", port_diagnostics(&rejected)));",
+    "let port =",
+    "published_port(&rejected).unwrap_or_else(|_| panic!(\"{}\", port_diagnostics(&rejected)));",
     "if !port.is_empty() {",
-    "assert!(is_port(&port), \"rejected container has an invalid published port {port}\\n{}\", port_diagnostics(&rejected));",
+    "assert!(",
+    "is_port(&port),",
+    "\"rejected container has an invalid published port {port}\\n{}\",",
+    "port_diagnostics(&rejected)",
+    ");",
     "let url = format!(\"http://127.0.0.1:{port}/readyz\");",
-    "assert!(!Api::new(&format!(\"http://127.0.0.1:{port}\")).answers(\"/readyz\").await, \"rejected container served {url}\");",
+    "assert!(",
+    "!Api::new(&format!(\"http://127.0.0.1:{port}\"))",
+    ".answers(\"/readyz\")",
+    ".await,",
+    "\"rejected container served {url}\"",
+    ");",
     "}",
     "let log = logs(&rejected);",
-    "assert!(refused_root(&log), \"rejected container did not refuse the unknown root\\n{log}\");",
+    "assert!(",
+    "refused_root(&log),",
+    "\"rejected container did not refuse the unknown root\\n{log}\"",
+    ");",
     "let rejected_data = tmp.join(\"rejected-data\");",
-    "must(&[\"cp\", &format!(\"{rejected}:{DATA}\"), rejected_data.to_str().expect(\"utf-8 path\")]);",
-    "assert!(!rejected_data.join(\"CURRENT\").exists(), \"the refused volume gained a CURRENT\");",
+    "must(&[",
+    "\"cp\",",
+    "&format!(\"{rejected}:{DATA}\"),",
+    "rejected_data.to_str().expect(\"utf-8 path\"),",
+    "]);",
+    "assert!(",
+    "!rejected_data.join(\"CURRENT\").exists(),",
+    "\"the refused volume gained a CURRENT\"",
+    ");",
     "assert_eq!(",
     "std::fs::read(rejected_data.join(\"foreign-layout/sentinel\")).ok(),",
     "Some(b\"fail-closed unknown root\\n\".to_vec()),",
     "\"the refused volume's sentinel changed\"",
     ");",
-    "evidence(SUITE, \"durable\", json!({\"image\": image, \"old_image\": OLD_IMAGE, \"result\": \"pass\"}));",
+    "evidence(",
+    "SUITE,",
+    "\"durable\",",
+    "json!({\"image\": image, \"old_image\": OLD_IMAGE, \"result\": \"pass\"}),",
+    ");",
     "say(format!(\">> [{SUITE}] durable PASS\"));",
 ];
 
@@ -217,7 +304,7 @@ const DURABLE_HELPER_LINES: &[(&str, &str)] = &[
     ("legacy layout has gen-N", ".and_then(|n| n.strip_prefix(\"gen-\"))"),
     (
         "CURRENT read from the data path",
-        "must(&[\"cp\", &format!(\"{container}:{DATA}/CURRENT\"), dest.to_str().expect(\"utf-8 path\")]);",
+        "must(&[\"cp\", &format!(\"{container}:{DATA}/CURRENT\"), dest.to_str().expect(\"utf-8 path\"),]);",
     ),
     (
         "every log line is JSON",
@@ -313,9 +400,8 @@ fn validate_durable_suite_semantics(source: &str) -> Result<(), String> {
             DURABLE_STEPS.get(at)
         ));
     }
-    let lines: Vec<&str> = source.lines().map(str::trim).collect();
     for (label, expected) in DURABLE_HELPER_LINES {
-        let count = lines.iter().filter(|line| *line == expected).count();
+        let count = super::source_contract::count(source, expected);
         if count != 1 {
             return Err(format!(
                 "{label}: expected {expected:?} once, found {count}"
@@ -357,7 +443,7 @@ fn test_durable_suite_contract_and_negative_mutations() {
     validate_durable_suite_semantics(&source).expect("durable suite contract");
     validate_durable_suite_bytes(&source).expect("durable suite bytes");
 
-    let byte_drift = replace_exact(
+    let byte_drift = replace_durable_exact(
         &source,
         "    scratch.remove(&old);\n",
         "    scratch.remove(&old);\n    // reviewed byte drift\n",
@@ -414,22 +500,22 @@ fn test_durable_suite_contract_and_negative_mutations() {
         ),
         (
             "plain-text logs",
-            "\"-e\", \"LUMEN_LOG_FORMAT=json\"];",
+            "\"-e\", \"LUMEN_LOG_FORMAT=json\",];",
             "\"-e\", \"LUMEN_LOG_FORMAT=text\"];",
         ),
         (
             "candidate durability override",
-            "\"-e\", \"LUMEN_LOG_FORMAT=json\"];",
+            "\"-e\", \"LUMEN_LOG_FORMAT=json\",];",
             "\"-e\", \"LUMEN_LOG_FORMAT=json\", \"-e\", \"LUMEN_SNAPSHOT_SECS=1\"];",
         ),
         (
             "0428 persistence flag dropped",
-            "            \"-e\", \"LUMEN_PERSISTENCE=segment\",\n",
+            "\"-e\", \"LUMEN_PERSISTENCE=segment\",",
             "",
         ),
         (
             "0428 data dir flag dropped",
-            "            \"-e\", &format!(\"LUMEN_DATA_DIR={DATA}\"),\n",
+            "\"-e\", &format!(\"LUMEN_DATA_DIR={DATA}\"),",
             "",
         ),
         (
@@ -490,7 +576,7 @@ fn test_durable_suite_contract_and_negative_mutations() {
         ),
         (
             "rejected exit not checked",
-            "assert!(code != \"0\", ",
+            "assert!(code != \"0\",",
             "assert!(code == code, ",
         ),
         (
@@ -530,11 +616,11 @@ fn test_durable_suite_contract_and_negative_mutations() {
         ),
         (
             "WAL override",
-            "\"-e\", \"LUMEN_AUTH=off\", \"-e\", \"LUMEN_LOG_FORMAT=json\"];",
-            "\"-e\", \"LUMEN_AUTH=off\", \"-e\", \"LUMEN_WAL=off\", \"-e\", \"LUMEN_LOG_FORMAT=json\"];",
+            "\"-e\", \"LUMEN_AUTH=off\", \"-e\", \"LUMEN_LOG_FORMAT=json\",];",
+            "\"-e\", \"LUMEN_AUTH=off\", \"-e\", \"LUMEN_WAL=off\", \"-e\", \"LUMEN_LOG_FORMAT=json\",];",
         ),
     ] {
-        assert_durable_rejected(label, replace_exact(&source, target, replacement));
+        assert_durable_rejected(label, replace_durable_exact(&source, target, replacement));
     }
 }
 

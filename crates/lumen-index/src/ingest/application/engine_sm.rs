@@ -193,26 +193,28 @@ impl EngineSm {
                     self.applied.store(index, Ordering::Release);
                     return Ok(());
                 }
-                Err(RepriceRecord {
-                    entry,
-                    mut reservation,
-                    required: Some(required),
-                    ..
-                }) => {
-                    match reservation.try_grow_to(required) {
-                        Ok(()) => (),
-                        Err(AdmissionError::Full { .. }) => {
-                            self.ensure_capacity_owner()?;
-                            self.engine.request_pending_checkpoint();
-                            reservation
-                                .wait_grow_to(required)
-                                .map_err(RecordAdmissionError::Capacity)?;
+                Err(reprice) => match *reprice {
+                    RepriceRecord {
+                        entry,
+                        mut reservation,
+                        required: Some(required),
+                        ..
+                    } => {
+                        match reservation.try_grow_to(required) {
+                            Ok(()) => (),
+                            Err(AdmissionError::Full { .. }) => {
+                                self.ensure_capacity_owner()?;
+                                self.engine.request_pending_checkpoint();
+                                reservation
+                                    .wait_grow_to(required)
+                                    .map_err(RecordAdmissionError::Capacity)?;
+                            }
+                            Err(error) => return Err(RecordAdmissionError::Capacity(error).into()),
                         }
-                        Err(error) => return Err(RecordAdmissionError::Capacity(error).into()),
+                        record = AdmittedRaftRecord { entry, reservation };
                     }
-                    record = AdmittedRaftRecord { entry, reservation };
-                }
-                Err(reprice) => return Err(reprice.error.into()),
+                    RepriceRecord { error, .. } => return Err(error.into()),
+                },
             }
         }
     }

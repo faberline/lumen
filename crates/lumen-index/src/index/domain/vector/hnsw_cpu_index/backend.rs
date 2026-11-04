@@ -115,6 +115,9 @@ impl VectorIndex for HnswCpuIndex {
                     inner.id_to_eid.insert(new_id, eid);
                 }
                 inner.hnsw = fresh_hnsw;
+                inner
+                    .graph_inventory_incomplete
+                    .store(false, Ordering::Release);
                 graph_rebuild = Some(rebuild_started.elapsed());
             }
             Ok(())
@@ -192,7 +195,19 @@ impl VectorIndex for HnswCpuIndex {
         let ef = inner.ef_search;
         let pool_limit = pool.max(ef).min(graph_len);
         loop {
+            if inner.graph_inventory_incomplete.load(Ordering::Acquire) {
+                break;
+            }
             let raw = inner.hnsw.search(query, pool, ef);
+            // A request for every allocated graph ID can still miss a live
+            // node in an incomplete traversal. Having k other hits does not
+            // make that full-inventory result conclusive.
+            let full_graph_was_incomplete = pool == graph_len && raw.len() < graph_len;
+            if full_graph_was_incomplete {
+                inner
+                    .graph_inventory_incomplete
+                    .store(true, Ordering::Release);
+            }
             let mut out: Vec<(String, f32)> = Vec::with_capacity(k);
             let mut has_unresolved_orphan = false;
             for (id, dist) in &raw {
@@ -211,7 +226,7 @@ impl VectorIndex for HnswCpuIndex {
                 }
             }
 
-            if out.len() == k && !has_unresolved_orphan {
+            if out.len() == k && !has_unresolved_orphan && !full_graph_was_incomplete {
                 return Ok(out);
             }
 

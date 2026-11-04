@@ -50,24 +50,24 @@ const WORKFLOW_BYTES_SHA256: &str =
     "f30ae02b3db5d81326f582a55e439e9bdab91dfe7182cfc0045603c2f77829ce";
 /// .github/workflows/gke-test.yml, which the gke-e2e job calls: deploy only.
 const GKE_TEST_WORKFLOW_BYTES_SHA256: &str =
-    "61ea7f3d2f2173540fc75bb7b59059db75834ea77e1e49d78869a9e68e78f864";
+    "a219a49317c426e76e5ca70dd5e6f37033802c5cd5336d889b401658c9240033";
 /// The Rust suites the GKE test Job runs, which decide pass or fail.
 const E2E_SUITE_BYTES_SHA256: &[(&str, &str)] = &[
     (
         "crates/lumen/tests/it/e2e/cluster.rs",
-        "81e86c38807cb8539a8aa172e5a7e7f995267b9099f847e1e0e101086c45bb06",
+        "a99bf3ff077c3820aa102b9c30a079ce0d54af7100b8543740a5200c7a694aa8",
     ),
     (
         "crates/lumen/tests/it/e2e/operator.rs",
-        "97a2ce1cc6cc18c0e310938e7f2ebfc3c1e38d299f08477b8a7cfb6afbee2cb6",
+        "cc1063bbc79c203aefe26b4e1e521e8965385b1bdbda9559bcb7610704e805ae",
     ),
     (
         "crates/lumen/tests/it/e2e/overlay.rs",
-        "1f144865c047a8a265bd163635c348454eb47029f4dedc27255ebab4f488deb4",
+        "71c46848558730bd5a6f23863389a0ef52bc61a9819ea2f08ef1a79241e3caf1",
     ),
     (
         "crates/lumen/tests/it/e2e/identity.rs",
-        "a8a160d0881f0692adbf690c1b783c72a58221b74b41ea74bf7a4f873f67e0f9",
+        "1524c35adc329d2461ef71262a793abf165cb8acfe1cdae07a4c3a4cac61c683",
     ),
 ];
 /// The standalone container smoke gate: the Rust suite
@@ -102,7 +102,7 @@ fn key(name: &str) -> Yaml {
     Yaml::String(name.into())
 }
 fn field<'a>(value: &'a Yaml, name: &str) -> Option<&'a Yaml> {
-    value.as_mapping()?.get(&key(name))
+    value.as_mapping()?.get(key(name))
 }
 fn job<'a>(workflow: &'a Yaml, name: &str) -> Option<&'a Yaml> {
     field(field(workflow, "jobs")?, name)
@@ -126,6 +126,14 @@ fn replace_once(source: &str, from: &str, to: &str) -> String {
     let changed = source.replacen(from, to, 1);
     assert_ne!(changed, source, "mutation did not change bytes");
     changed
+}
+
+fn replace_source_once(source: &str, from: &str, to: &str) -> String {
+    let matches = super::source_contract::spans(source, from).expect("valid source mutation");
+    assert_eq!(matches.len(), 1, "source mutation anchor {from:?}");
+    let mut result = source.to_owned();
+    result.replace_range(matches[0].clone(), to);
+    result
 }
 
 fn replace_occurrence(source: &str, from: &str, to: &str, occurrence: usize) -> String {
@@ -186,20 +194,20 @@ fn validate_uv_setup_in(workflow: &Yaml, job_name: &str, gate_name: &str) -> Res
         .ok_or(Finding("UV_SETUP"))?;
     require(setup.len() == 2, "UV_SETUP")?;
     require(
-        setup.get(&key("uses")).and_then(Yaml::as_str) == Some(UV_SETUP),
+        setup.get(key("uses")).and_then(Yaml::as_str) == Some(UV_SETUP),
         "UV_SETUP",
     )?;
     let with = setup
-        .get(&key("with"))
+        .get(key("with"))
         .and_then(Yaml::as_mapping)
         .ok_or(Finding("UV_SETUP"))?;
     require(with.len() == 2, "UV_SETUP")?;
     require(
-        with.get(&key("version")).and_then(Yaml::as_str) == Some("0.12.1"),
+        with.get(key("version")).and_then(Yaml::as_str) == Some("0.12.1"),
         "UV_SETUP",
     )?;
     require(
-        with.get(&key("enable-cache")).and_then(Yaml::as_bool) == Some(false),
+        with.get(key("enable-cache")).and_then(Yaml::as_bool) == Some(false),
         "UV_SETUP",
     )?;
     Ok(())
@@ -519,80 +527,96 @@ fn validate_e2e_semantics(sources: &E2eSources) -> Result<(), Finding> {
 
     // E2E_DURABLE_RESTART: index, persisted checkpoint, replace every serving
     // pod, read the pre-restart document before any new write, then write.
+    // Canonical representation of the original pinned source, rendered by
+    // Rustfmt1.99. Complete tokens keep every operation, bound and ordering.
     let expected = [
-        r#"let pre_id = format!("pre-restart-{}-{}", s.pod_name, s.name);"#,
-        r#"let pre_value = format!("{pre_id}@example.invalid");"#,
-        r#"let post_id = format!("post-restart-{}-{}", s.pod_name, s.name);"#,
-        r#"let post_value = format!("{post_id}@example.invalid");"#,
+        "let pre_id = format!(\"pre-restart-{}-{}\", s.pod_name, s.name);",
+        "let pre_value = format!(\"{pre_id}@example.invalid\");",
+        "let post_id = format!(\"post-restart-{}-{}\", s.pod_name, s.name);",
+        "let post_value = format!(\"{post_id}@example.invalid\");",
         "index_exact(s, &pre_id, &pre_value).await;",
-        r#"let checkpoint = s.api.post("/admin/checkpoint", &json!({}), Duration::from_secs(120)).await;"#,
-        r#"assert!(checkpoint["persisted"] == true, "/admin/checkpoint did not return persisted=true: {checkpoint}");"#,
+        "let checkpoint = s",
+        ".api",
+        ".post(\"/admin/checkpoint\", &json!({}), Duration::from_secs(120))",
+        ".await;",
+        "assert!(",
+        "checkpoint[\"persisted\"] == true,",
+        "\"/admin/checkpoint did not return persisted=true: {checkpoint}\"",
+        ");",
         "let before = serving_uids(s);",
-        r#"s.kube.run(&["delete", "pod", "-l", &s.label, "--wait=true"]);"#,
-        "wait_ready(&s.kube, &s.label, EXPECTED_STORAGE_PODS, Duration::from_secs(600));",
+        "s.kube",
+        ".run(&[\"delete\", \"pod\", \"-l\", &s.label, \"--wait=true\"]);",
+        "wait_ready(",
+        "&s.kube,",
+        "&s.label,",
+        "EXPECTED_STORAGE_PODS,",
+        "Duration::from_secs(600),",
+        ");",
         "let after = serving_uids(s);",
         "assert!(",
         "before.iter().all(|uid| !after.contains(uid)),",
-        r#""a serving pod survived the restart: before={before:?} after={after:?}""#,
+        "\"a serving pod survived the restart: before={before:?} after={after:?}\"",
         ");",
         "wait_service(s).await;",
         "assert_pods_on_pool(s);",
-        r#"record_version(s, "after-restart").await;"#,
+        "record_version(s, \"after-restart\").await;",
         "let old_hits = hits_for(&search_exact(s, &pre_value).await, &pre_id);",
-        r#"assert_eq!(old_hits, 1, "pre-restart document was not readable before any new write");"#,
+        "assert_eq!(",
+        "old_hits, 1,",
+        "\"pre-restart document was not readable before any new write\"",
+        ");",
         "index_exact(s, &post_id, &post_value).await;",
         "let post_hits = hits_for(&search_exact(s, &post_value).await, &post_id);",
-        r#"assert_eq!(post_hits, 1, "replacement pod did not accept the post-restart write");"#,
-        "s.evidence(",
-        r#""durable-restart","#,
-        r#"json!({"pre_id": pre_id, "post_id": post_id, "checkpoint": checkpoint, "pre_restart_hits": 1, "post_restart_hits": 1}),"#,
+        "assert_eq!(",
+        "post_hits, 1,",
+        "\"replacement pod did not accept the post-restart write\"",
         ");",
-        r#"say(format!("   durable restart preserved {pre_id} and accepted {post_id}"));"#,
+        "s.evidence(",
+        "\"durable-restart\",",
+        "json!({\"pre_id\": pre_id, \"post_id\": post_id, \"checkpoint\": checkpoint, \"pre_restart_hits\": 1, \"post_restart_hits\": 1}),",
+        ");",
+        "say(format!(",
+        "\"   durable restart preserved {pre_id} and accepted {post_id}\"",
+        "));",
     ];
-    let body = rust_fn_body(
+    let body = super::source_contract::body(
         &sources.cluster,
         "async fn durable_restart_oracle(s: &Suite) {",
     )
     .ok_or(Finding("E2E_DURABLE_RESTART"))?;
     require(
-        body.iter().map(String::as_str).eq(expected),
+        super::source_contract::same_tokens(body, &expected.join("\n")),
         "E2E_DURABLE_RESTART",
     )?;
 
-    let exercise = rust_fn_body(&sources.cluster, "pub async fn exercise(s: &Suite) {")
+    let exercise =
+        super::source_contract::body(&sources.cluster, "pub async fn exercise(s: &Suite) {")
+            .ok_or(Finding("E2E_DURABLE_RESTART"))?;
+    let collection = super::source_contract::spans(exercise, "s.api\n        .put(\"/collections/users\", &schema, Duration::from_secs(30))\n        .await;")
         .ok_or(Finding("E2E_DURABLE_RESTART"))?;
-    let positions = |needle: &str| {
-        exercise
-            .iter()
-            .enumerate()
-            .filter_map(|(index, line)| (line == needle).then_some(index))
-            .collect::<Vec<_>>()
-    };
-    let collection =
-        positions(r#"s.api.put("/collections/users", &schema, Duration::from_secs(30)).await;"#);
-    let oracle = positions(
-        r#"let step = s.step("5. checkpoint, replace serving pod, and prove durable recovery");"#,
-    );
+    let oracle = super::source_contract::spans(
+        exercise,
+        "let step = s.step(\"5. checkpoint, replace serving pod, and prove durable recovery\");",
+    )
+    .ok_or(Finding("E2E_DURABLE_RESTART"))?;
+    let calls = super::source_contract::spans(exercise, "durable_restart_oracle(s).await;")
+        .ok_or(Finding("E2E_DURABLE_RESTART"))?;
     require(
         collection.len() == 1
             && oracle.len() == 1
-            && collection[0] < oracle[0]
-            && exercise.get(oracle[0] + 1).map(String::as_str)
-                == Some("durable_restart_oracle(s).await;")
-            && !exercise[oracle[0]..]
-                .iter()
-                .any(|line| line.contains(".put(")),
+            && calls.len() == 1
+            && collection[0].end <= oracle[0].start
+            && oracle[0].end <= calls[0].start
+            && super::source_contract::tokens(&exercise[oracle[0].end..calls[0].start])
+                .is_ok_and(|between| between.is_empty())
+            && super::source_contract::count(&exercise[oracle[0].start..], ".put(") == 0,
         "E2E_DURABLE_RESTART",
     )?;
     for suite in [&sources.overlay, &sources.operator] {
-        let journey =
-            rust_fn_body(suite, "async fn journey() {").ok_or(Finding("E2E_DURABLE_RESTART"))?;
+        let journey = super::source_contract::body(suite, "async fn journey() {")
+            .ok_or(Finding("E2E_DURABLE_RESTART"))?;
         require(
-            journey
-                .iter()
-                .filter(|line| *line == "exercise(&s).await;")
-                .count()
-                == 1,
+            super::source_contract::count(journey, "exercise(&s).await;") == 1,
             "E2E_DURABLE_RESTART",
         )?;
     }
@@ -615,7 +639,8 @@ fn validate_e2e_semantics(sources: &E2eSources) -> Result<(), Finding> {
         r#"echo "E2E_EXPECTED_GIT_SHA=${git_sha}""#,
         "fail-fast: false",
         "suite: ${{ fromJSON(needs.resolve.outputs.suites) }}",
-        "uses: faberline/aw/.github/workflows/gke-test.yml@main",
+        "uses: faberline/aw/.github/workflows/gke-test.yml@6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb",
+        "aw-ref: 6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb",
         "image: ${{ needs.resolve.outputs.image }}",
         "test-job: k8s/gke-test-job/${{ matrix.suite }}",
         "test-env: ${{ needs.resolve.outputs.test-env }}",
@@ -930,7 +955,7 @@ fn validate_candidate_image_outputs(workflow: &Yaml) -> Result<(), Finding> {
     require(outputs.len() == expected_outputs.len(), "IMAGE")?;
     for (name, expected) in expected_outputs {
         require(
-            outputs.get(&key(name)).and_then(Yaml::as_str) == Some(expected),
+            outputs.get(key(name)).and_then(Yaml::as_str) == Some(expected),
             "IMAGE",
         )?;
     }
@@ -975,9 +1000,7 @@ fn validate_exact_run_step(
     let map = step.as_mapping().ok_or(Finding("GATE_COMMANDS"))?;
     require(
         map.len() == expected_keys.len()
-            && expected_keys
-                .iter()
-                .all(|name| map.contains_key(&key(name))),
+            && expected_keys.iter().all(|name| map.contains_key(key(name))),
         "GATE_COMMANDS",
     )?;
     require(
@@ -1011,7 +1034,7 @@ fn validate_candidate_and_gke_commands(workflow: &Yaml) -> Result<(), Finding> {
     .ok_or(Finding("GATE_COMMANDS"))?;
     require(
         supply_chain.len() == 1
-            && supply_chain.get(&key("GH_TOKEN")).and_then(Yaml::as_str)
+            && supply_chain.get(key("GH_TOKEN")).and_then(Yaml::as_str)
                 == Some("${{ github.token }}"),
         "GATE_COMMANDS",
     )?;
@@ -1025,7 +1048,7 @@ fn validate_candidate_and_gke_commands(workflow: &Yaml) -> Result<(), Finding> {
         gke_map.len() == 5
             && ["name", "needs", "permissions", "uses", "with"]
                 .iter()
-                .all(|name| gke_map.contains_key(&key(name))),
+                .all(|name| gke_map.contains_key(key(name))),
         "GATE_COMMANDS",
     )?;
     require(
@@ -1052,7 +1075,7 @@ fn validate_candidate_and_gke_commands(workflow: &Yaml) -> Result<(), Finding> {
         with.len() == inputs.len()
             && inputs
                 .iter()
-                .all(|(name, value)| with.get(&key(name)).and_then(Yaml::as_str) == Some(*value)),
+                .all(|(name, value)| with.get(key(name)).and_then(Yaml::as_str) == Some(*value)),
         "GATE_COMMANDS",
     )?;
     validate_exact_run_step(
@@ -1223,7 +1246,7 @@ fn validate_fail_closed_gate_conditions(workflow: &Yaml) -> Result<(), Finding> 
         let job = job(workflow, name).ok_or(Finding("CONDITIONS"))?;
         let job_map = job.as_mapping().ok_or(Finding("CONDITIONS"))?;
         for forbidden in ["if", "continue-on-error"] {
-            require(!job_map.contains_key(&key(forbidden)), "CONDITIONS")?;
+            require(!job_map.contains_key(key(forbidden)), "CONDITIONS")?;
         }
         // gke-e2e calls a workflow; its jobs are that workflow's.
         if name == "gke-e2e" {
@@ -1234,8 +1257,8 @@ fn validate_fail_closed_gate_conditions(workflow: &Yaml) -> Result<(), Finding> 
             .ok_or(Finding("CONDITIONS"))?;
         for step in steps {
             let step = step.as_mapping().ok_or(Finding("CONDITIONS"))?;
-            require(!step.contains_key(&key("continue-on-error")), "CONDITIONS")?;
-            require(!step.contains_key(&key("if")), "CONDITIONS")?;
+            require(!step.contains_key(key("continue-on-error")), "CONDITIONS")?;
+            require(!step.contains_key(key("if")), "CONDITIONS")?;
         }
     }
     Ok(())
@@ -1286,8 +1309,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
             .and_then(Yaml::as_mapping)
             .ok_or(Finding("GATES"))?;
         require(
-            env.len() == 1
-                && env.get(&key("CARGO_INCREMENTAL")).and_then(Yaml::as_str) == Some("0"),
+            env.len() == 1 && env.get(key("CARGO_INCREMENTAL")).and_then(Yaml::as_str) == Some("0"),
             "GATES",
         )?;
         let map = step.as_mapping().ok_or(Finding("GATES"))?;
@@ -1295,7 +1317,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
             map.len() == 4
                 && ["name", "env", "shell", "run"]
                     .iter()
-                    .all(|name| map.contains_key(&key(name))),
+                    .all(|name| map.contains_key(key(name))),
             "GATES",
         )?;
         require(
@@ -1317,7 +1339,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
             smoke_map.len() == 4
                 && ["name", "env", "shell", "run"]
                     .iter()
-                    .all(|name| smoke_map.contains_key(&key(name))),
+                    .all(|name| smoke_map.contains_key(key(name))),
             "GATES",
         )?;
         let smoke_env = field(smoke, "env")
@@ -1326,7 +1348,7 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
         require(
             smoke_env.len() == 1
                 && smoke_env
-                    .get(&key("CARGO_INCREMENTAL"))
+                    .get(key("CARGO_INCREMENTAL"))
                     .and_then(Yaml::as_str)
                     == Some("0"),
             "GATES",
@@ -1352,194 +1374,21 @@ fn validate_product_gate_partition(workflow: &Yaml, _source: &str) -> Result<(),
 }
 
 fn perf_gate_inventory(source: &str) -> Vec<(String, bool)> {
-    let mut attributes = Vec::new();
-    let mut inventory = Vec::new();
-    let mut in_block_comment = false;
-    for raw in source.lines() {
-        if in_block_comment {
-            if raw.contains("*/") {
-                in_block_comment = false;
-            }
-            continue;
-        }
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with("//") {
-            continue;
-        }
-        if let Some(start) = line.find("/*") {
-            if !line[start + 2..].contains("*/") {
-                in_block_comment = true;
-            }
-            continue;
-        }
-        if line.starts_with("#[") {
-            attributes.push(line.to_owned());
-        } else if let Some(rest) = line.strip_prefix("fn ") {
-            if attributes.iter().any(|attr| attr == "#[test]") {
-                inventory.push((
-                    rest.split('(').next().unwrap_or_default().to_owned(),
-                    attributes.iter().any(|attr| attr.starts_with("#[ignore")),
-                ));
-            }
-            attributes.clear();
-        } else {
-            attributes.clear();
-        }
-    }
-    inventory
+    super::source_contract::test_inventory(source).unwrap_or_default()
 }
 
 const DURABLE_WORKLOAD_BEGIN: &str = "// DURABLE-WORKLOAD-BEGIN";
 const DURABLE_WORKLOAD_END: &str = "// DURABLE-WORKLOAD-END";
 
-/// Finds a raw-string opener at one UTF-8 boundary and returns its content
-/// start plus its closing delimiter.
-fn raw_string_start_at(line: &str, start: usize) -> Option<(usize, String)> {
-    let bytes = line.as_bytes();
-    let raw = match bytes.get(start) {
-        Some(b'r') => start,
-        Some(b'b') if bytes.get(start + 1) == Some(&b'r') => start + 1,
-        _ => return None,
-    };
-    if start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_') {
-        return None;
-    }
-    let mut quote = raw + 1;
-    while quote < bytes.len() && bytes[quote] == b'#' {
-        quote += 1;
-    }
-    if quote >= bytes.len() || bytes[quote] != b'"' {
-        return None;
-    }
-    Some((quote + 1, format!("\"{}", "#".repeat(quote - raw - 1))))
-}
-
-/// Returns the byte after the next unescaped ordinary-string quote.
-fn next_unescaped_quote(line: &str, start: usize) -> Option<usize> {
-    let mut escaped = false;
-    for (relative, character) in line[start..].char_indices() {
-        if character == '\\' && !escaped {
-            escaped = true;
-            continue;
-        }
-        if character == '"' && !escaped {
-            return Some(start + relative + character.len_utf8());
-        }
-        escaped = false;
-    }
-    None
-}
-
-/// Looks only for one exact executable line. It intentionally does not try to
-/// parse Rust. Line comments, block comments, ordinary multiline strings, and
-/// raw multiline strings cannot satisfy a durable-workload requirement.
+/// Preserve complete active tokens across rustfmt line wrapping. Literal
+/// contents, numeric values and token order stay exact; comments cannot pass.
 fn has_active_line(source: &str, expected: &str) -> bool {
-    let mut in_block_comment = false;
-    let mut raw_string_terminator = None::<String>;
-    let mut in_quoted_string = false;
-    for raw in source.lines() {
-        let line = raw.trim();
-        let mut active = String::new();
-        let mut offset = 0usize;
-        loop {
-            if let Some(terminator) = raw_string_terminator.as_deref() {
-                let Some(relative) = line[offset..].find(terminator) else {
-                    break;
-                };
-                offset += relative + terminator.len();
-                raw_string_terminator = None;
-                continue;
-            }
-            if in_quoted_string {
-                let Some(end) = next_unescaped_quote(line, offset) else {
-                    break;
-                };
-                offset = end;
-                in_quoted_string = false;
-                continue;
-            }
-            if in_block_comment {
-                let Some(relative) = line[offset..].find("*/") else {
-                    break;
-                };
-                offset += relative + 2;
-                in_block_comment = false;
-                continue;
-            }
-            if offset == line.len() {
-                break;
-            }
-            let rest = &line[offset..];
-            if rest.starts_with("//") {
-                break;
-            }
-            if rest.starts_with("/*") {
-                let content_start = offset + 2;
-                if let Some(relative) = line[content_start..].find("*/") {
-                    offset = content_start + relative + 2;
-                    continue;
-                }
-                in_block_comment = true;
-                break;
-            }
-            if let Some((content_start, terminator)) = raw_string_start_at(line, offset) {
-                if let Some(relative) = line[content_start..].find(&terminator) {
-                    let end = content_start + relative + terminator.len();
-                    active.push_str(&line[offset..end]);
-                    offset = end;
-                    continue;
-                }
-                raw_string_terminator = Some(terminator);
-                break;
-            }
-            if rest.starts_with('"') {
-                let Some(end) = next_unescaped_quote(line, offset + 1) else {
-                    in_quoted_string = true;
-                    break;
-                };
-                active.push_str(&line[offset..end]);
-                offset = end;
-                continue;
-            }
-            let character = rest
-                .chars()
-                .next()
-                .expect("nonempty remaining source has one character");
-            active.push(character);
-            offset += character.len_utf8();
-        }
-        if active.trim() == expected {
-            return true;
-        }
-    }
-    false
+    super::source_contract::contains(source, expected)
 }
 
-/// Returns one executable source branch bounded by two unique active lines.
-/// A comment, quoted string, duplicate decoy, or missing bound refuses the
-/// static oracle before its inner requirement can count.
+/// Both executable bounds must be unique, in order, and outside literals.
 fn active_source_region<'a>(source: &'a str, begin: &str, end: &str) -> Option<&'a str> {
-    if !has_active_line(source, begin) || !has_active_line(source, end) {
-        return None;
-    }
-    // Match complete lines. A suffix of a later match arm is a different
-    // boundary, and a quoted substring must not determine the byte offsets.
-    let mut offset = 0;
-    let mut starts = Vec::new();
-    let mut ends = Vec::new();
-    for line in source.split_inclusive('\n') {
-        if line.trim() == begin {
-            starts.push(offset + line.len());
-        }
-        if line.trim() == end {
-            ends.push(offset);
-        }
-        offset += line.len();
-    }
-    match (starts.as_slice(), ends.as_slice()) {
-        ([start], [end]) if start <= end => Some(&source[*start..*end]),
-        _ => None,
-    }
+    super::source_contract::region(source, begin, end)
 }
 
 #[test]
@@ -1701,8 +1550,24 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
         .iter()
         .all(|expected| has_active_line(durable, expected));
     require(durable_ok, "PERF_GATE")?;
-    let ngram_positive = active_source_region(
+    let positive = super::source_contract::body(
         durable,
+        "fn semantic_field_clause(field: &str, value: &Value) -> Result<Value> {",
+    )
+    .ok_or(Finding("PERF_GATE"))?;
+    let negative = super::source_contract::body(durable,
+        "fn semantic_wrong_field_clause(field: &str, value: &Value, number: usize) -> Result<Value> {")
+        .ok_or(Finding("PERF_GATE"))?;
+    require(
+        has_active_line(durable, "semantic_field_clause(field, value)?,")
+            && has_active_line(
+                durable,
+                "semantic_wrong_field_clause(field, value, number)?,",
+            ),
+        "PERF_GATE",
+    )?;
+    let ngram_positive = active_source_region(
+        positive,
         "\"title_ngram\" | \"body_ngram\" | \"summary_ngram\" => {",
         "\"title_text\" | \"body_text\" => {",
     );
@@ -1711,7 +1576,7 @@ fn validate_perf_gate_source(source: &str) -> Result<(), Finding> {
         "PERF_GATE",
     )?;
     let text_mismatch = active_source_region(
-        durable,
+        negative,
         "\"title_ngram\" | \"body_ngram\" | \"summary_ngram\" | \"title_text\" | \"body_text\" => {",
         "unexpected => Err(HarnessError::DataInvariant(format!(",
     );
@@ -2143,9 +2008,11 @@ fn validate_restart_phase_diagnostics_source(source: &str) -> Result<(), Finding
         .get(start..end)
         .ok_or(Finding("RESTART_DIAGNOSTICS"))?;
     let has = |expected: &str| {
-        region.lines().map(str::trim).any(|line| {
-            !line.starts_with("//") && !line.starts_with("/*") && line.contains(expected)
-        })
+        if expected == "restart-failure-trace.json" {
+            super::source_contract::literal_fragment(region, expected)
+        } else {
+            super::source_contract::contains(region, expected)
+        }
     };
     let required = [
         "struct RestartPhaseDiagnostics {",
@@ -2168,7 +2035,7 @@ fn validate_restart_phase_diagnostics_source(source: &str) -> Result<(), Finding
         "diagnostics.readyz_wait_elapsed = Some(readyz_wait_started.elapsed());",
         "diagnostics.readiness_attempts += 1;",
         "diagnostics.first_ready_elapsed.get_or_insert_with(|| started.elapsed());",
-        "let record = emit_restart_phase_diagnostics(diagnostics, phase, outcome);",
+        super::source_contract::RESTART_RECORD_ASSIGNMENT,
         "observe(&record, *diagnostics);",
         "\"complete\", \"success\"",
         "\"docker-restart\", \"error\"",
@@ -2266,7 +2133,7 @@ const PERF_FINAL_RECEIPT: &str = "PERF_FINAL_RECEIPT";
 
 fn exact_mapping_keys(value: &Yaml, expected: &[&str]) -> bool {
     value.as_mapping().is_some_and(|map| {
-        map.len() == expected.len() && expected.iter().all(|name| map.contains_key(&key(name)))
+        map.len() == expected.len() && expected.iter().all(|name| map.contains_key(key(name)))
     })
 }
 
@@ -2319,7 +2186,7 @@ fn validate_durable_perf_workflow(source: &str) -> Result<(), Finding> {
     require(
         environment.len() == 1
             && environment
-                .get(&key("CARGO_INCREMENTAL"))
+                .get(key("CARGO_INCREMENTAL"))
                 .and_then(Yaml::as_str)
                 == Some("0"),
         PERF_WORKFLOW,
@@ -2385,7 +2252,7 @@ fn validate_workflow_semantics(source: &str, dockerfile: &str) -> Result<(), Fin
         .ok_or(Finding("TRIGGER"))?;
     require(events.len() == 1, "TRIGGER")?;
     let dispatch = events
-        .get(&key("workflow_dispatch"))
+        .get(key("workflow_dispatch"))
         .ok_or(Finding("TRIGGER"))?;
     let inputs = field(dispatch, "inputs").ok_or(Finding("INPUTS"))?;
     for name in ["version", "commit"] {
@@ -2782,7 +2649,8 @@ fn perf_gate_source() -> String {
     fs::read_to_string(root().join("crates/lumen/tests/it/perf_gate.rs")).unwrap()
 }
 fn perf_workload_ledger_source() -> String {
-    fs::read_to_string(root().join("crates/lumen/tests/it/support/perf_workload_ledger.rs")).unwrap()
+    fs::read_to_string(root().join("crates/lumen/tests/it/support/perf_workload_ledger.rs"))
+        .unwrap()
 }
 fn perf_gate_vs_db_source() -> String {
     fs::read_to_string(root().join("crates/lumen/tests/perf_gate_vs_db.rs")).unwrap()
@@ -3294,7 +3162,7 @@ fn e2e_durable_restart_mutations_fail_without_hash_oracle() {
             ("dead branch", format!("if false {{ {line} }}")),
             ("discarded", format!("let _ = 0; // {line}")),
         ] {
-            let changed = with_cluster(replace_once(
+            let changed = with_cluster(replace_source_once(
                 &sources.cluster,
                 &format!("    {line}"),
                 &format!("    {replacement}"),
@@ -3317,7 +3185,7 @@ fn e2e_durable_restart_mutations_fail_without_hash_oracle() {
         "    let old_hits = hits_for(&search_exact(s, &pre_value).await, &pre_id);\n",
         "    assert_eq!(old_hits, 1, \"pre-restart document was not readable before any new write\");\n",
     );
-    let reordered = with_cluster(replace_once(
+    let reordered = with_cluster(replace_source_once(
         &sources.cluster,
         old_read_then_new_write,
         new_write_then_old_read,
@@ -3339,7 +3207,7 @@ fn e2e_durable_restart_mutations_fail_without_hash_oracle() {
             format!("{oracle}    s.api.put(\"/collections/users\", &schema, Duration::from_secs(30)).await;\n"),
         ),
     ] {
-        let changed = with_cluster(replace_once(&sources.cluster, oracle, &to));
+        let changed = with_cluster(replace_source_once(&sources.cluster, oracle, &to));
         assert_eq!(
             validate_e2e_semantics(&changed).unwrap_err(),
             Finding("E2E_DURABLE_RESTART"),
@@ -3347,7 +3215,7 @@ fn e2e_durable_restart_mutations_fail_without_hash_oracle() {
         );
     }
     let overlay_skips = E2eSources {
-        overlay: replace_once(
+        overlay: replace_source_once(
             &sources.overlay,
             "    exercise(&s).await;\n",
             "    // exercise(&s).await;\n",
@@ -3402,7 +3270,7 @@ fn gke_deploy_mutations_fail_without_hash_oracle() {
         ),
         (
             "deploy workflow moved",
-            "uses: faberline/aw/.github/workflows/gke-test.yml@main",
+            "uses: faberline/aw/.github/workflows/gke-test.yml@6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb",
             "uses: faberline/aw/.github/workflows/gke-test.yml@dev",
         ),
     ] {
@@ -3543,7 +3411,8 @@ fn candidate_source_mutations_fail_with_stable_categories() {
     ] {
         expect_workflow(&source, from, to, code);
     }
-    for (occurrence, finding) in [(0, "UV_SETUP")] {
+    {
+        let (occurrence, finding) = (0, "UV_SETUP");
         let changed = replace_occurrence(&source, "version: 0.12.1", "version: 0.12.2", occurrence);
         assert_eq!(
             validate_workflow(&changed, &dockerfile()).unwrap_err(),
@@ -4171,12 +4040,7 @@ fn candidate_source_mutations_fail_with_stable_categories() {
         "schema:\"cclab.lumen.candidate-manifest.v3\"",
         "MANIFEST",
     );
-    expect_workflow(
-        &source,
-        "  gke-e2e:\n",
-        "  gke-e2e-missing:\n",
-        "JOBS",
-    );
+    expect_workflow(&source, "  gke-e2e:\n", "  gke-e2e-missing:\n", "JOBS");
     expect_workflow(
         &source,
         "\n  gke-e2e:\n",

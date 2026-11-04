@@ -54,3 +54,38 @@ pub(super) fn summarize(
         budget_us: SORTED_PAGE_BUDGET_US,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn summary_sorts_samples_and_retains_depth_and_budget() {
+        let report = summarize("sorted_page_deep", 20_000, 100, vec![9, 1, 4, 2]);
+        assert_eq!(
+            (report.min_us, report.p50_us, report.p99_us, report.max_us),
+            (1, 4, 9, 9)
+        );
+        assert_eq!(
+            (report.documents, report.pages_walked, report.measured_pages),
+            (20_000, 100, 4)
+        );
+        assert_eq!(report.cell, "sorted_page_deep");
+        assert_eq!(report.budget_us, SORTED_PAGE_BUDGET_US);
+    }
+
+    #[test]
+    fn one_sample_and_tail_outlier_are_not_discarded() {
+        let one = summarize("bool_filter", 1, 1, vec![77]);
+        assert_eq!(
+            (one.min_us, one.p50_us, one.p99_us, one.max_us),
+            (77, 77, 77, 77)
+        );
+        let mut samples = vec![1; 99];
+        samples.push(10_000);
+        let tail = summarize("sorted_page_deep", 100, 50, samples);
+        assert_eq!(tail.measured_pages, 100);
+        assert_eq!(tail.max_us, 10_000);
+        assert_eq!(tail.p99_us, 1);
+    }
+}

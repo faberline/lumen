@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 
 use super::cluster::{
-    assert_pool_placement, env_count, exercise, mounts_named, named, pod_images, wait_serving, Suite,
-    EXPECTED_STORAGE_PODS,
+    assert_pool_placement, env_count, exercise, mounts_named, named, pod_images, wait_serving,
+    Suite, EXPECTED_STORAGE_PODS,
 };
 use super::identity::replicas_of;
 use super::support::{say, DumpOnFailure};
@@ -30,16 +30,25 @@ fn raft_mounts() -> Vec<serde_json::Value> {
 }
 
 fn wait_operator_statefulset(s: &Suite) {
-    s.kube.run(&["rollout", "status", &format!("deploy/{OPERATOR}"), "--timeout=300s"]);
+    s.kube.run(&[
+        "rollout",
+        "status",
+        &format!("deploy/{OPERATOR}"),
+        "--timeout=300s",
+    ]);
     let deadline = Instant::now() + Duration::from_secs(180);
     while Instant::now() < deadline {
-        if s.kube.try_run(&["get", &format!("statefulset/{CR}"), "-o", "name"]).is_ok() {
+        if s.kube
+            .try_run(&["get", &format!("statefulset/{CR}"), "-o", "name"])
+            .is_ok()
+        {
             say(format!("   operator reconciled StatefulSet/{CR}"));
             return;
         }
         std::thread::sleep(Duration::from_secs(2));
     }
-    s.kube.show(&["logs", &format!("deploy/{OPERATOR}"), "--tail=60"]);
+    s.kube
+        .show(&["logs", &format!("deploy/{OPERATOR}"), "--tail=60"]);
     panic!("operator did not render StatefulSet/{CR} within 180s");
 }
 
@@ -64,7 +73,12 @@ fn assert_legacy_missing_catalog_event(s: &Suite) {
             .as_array()
             .into_iter()
             .flatten()
-            .map(|e| e["message"].as_str().or(e["note"].as_str()).unwrap_or_default())
+            .map(|e| {
+                e["message"]
+                    .as_str()
+                    .or(e["note"].as_str())
+                    .unwrap_or_default()
+            })
             .collect::<Vec<_>>()
             .join("\n");
         if message.contains("capacity catalog") {
@@ -81,12 +95,17 @@ fn assert_legacy_missing_catalog_event(s: &Suite) {
 fn assert_operator_topology(s: &Suite) {
     let sset = s.kube.get(&[&format!("statefulset/{CR}")]);
     let replicas = &sset["spec"]["replicas"];
-    say(format!("   StatefulSet replicas: {replicas} (expected {EXPECTED_STORAGE_PODS})"));
+    say(format!(
+        "   StatefulSet replicas: {replicas} (expected {EXPECTED_STORAGE_PODS})"
+    ));
     assert!(
         replicas.as_u64() == Some(EXPECTED_STORAGE_PODS as u64),
         "expected StatefulSet/{CR} replicas={EXPECTED_STORAGE_PODS}, got {replicas}"
     );
-    let claims = sset["spec"]["volumeClaimTemplates"].as_array().cloned().unwrap_or_default();
+    let claims = sset["spec"]["volumeClaimTemplates"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     let spec = &sset["spec"]["template"]["spec"];
     assert!(
         claims.len() == 1
@@ -107,7 +126,9 @@ fn assert_operator_topology(s: &Suite) {
         data["SHARD_COUNT"], data["VIRTUAL_BUCKET_COUNT"], data["SHARD_MAP_VERSION"]
     ));
     assert!(
-        data["SHARD_COUNT"] == "1" && !data["VIRTUAL_BUCKET_COUNT"].is_null() && !data["SHARD_MAP_VERSION"].is_null(),
+        data["SHARD_COUNT"] == "1"
+            && !data["VIRTUAL_BUCKET_COUNT"].is_null()
+            && !data["SHARD_MAP_VERSION"].is_null(),
         "ConfigMap topology keys are missing or wrong"
     );
 }
@@ -119,7 +140,9 @@ fn assert_operator_storage_live(s: &Suite) {
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|v| v["name"] == "raft" && v["persistentVolumeClaim"]["claimName"] == claim.as_str())
+        .filter(|v| {
+            v["name"] == "raft" && v["persistentVolumeClaim"]["claimName"] == claim.as_str()
+        })
         .count();
     assert!(
         mounts_named(&pod["spec"], "server", "raft") == raft_mounts() && claimed == 1,
@@ -129,10 +152,14 @@ fn assert_operator_storage_live(s: &Suite) {
     assert!(
         pvc["metadata"]["name"] == claim.as_str()
             && pvc["status"]["phase"] == "Bound"
-            && pvc["spec"]["volumeName"].as_str().is_some_and(|v| !v.is_empty()),
+            && pvc["spec"]["volumeName"]
+                .as_str()
+                .is_some_and(|v| !v.is_empty()),
         "{claim} PVC is not bound"
     );
-    say(format!("   live pod mounts the bound {claim} PVC at parent and exact data child paths"));
+    say(format!(
+        "   live pod mounts the bound {claim} PVC at parent and exact data child paths"
+    ));
 }
 
 /// The operator, the Lumen CR, and the StatefulSet it rendered all ask for
@@ -145,20 +172,31 @@ fn assert_identity(s: &Suite) {
     let pods = id.assert_pods(&s.kube, OPERATOR_LABEL, "operator", replicas);
     pod_images(s, "operator", &pods);
     let cr = s.kube.get(&[&format!("lumen/{CR}")]);
-    assert!(cr["spec"]["image"] == id.image.as_str(), "Lumen CR spec.image {} != {}", cr["spec"]["image"], id.image);
+    assert!(
+        cr["spec"]["image"] == id.image.as_str(),
+        "Lumen CR spec.image {} != {}",
+        cr["spec"]["image"],
+        id.image
+    );
     let sset = format!("statefulset/{CR}");
     let replicas = replicas_of(&s.kube, &sset);
     id.assert_template_image(&s.kube, &sset, "server");
     let pods = id.assert_pods(&s.kube, LABEL, "server", replicas);
     pod_images(s, "server", &pods);
-    say(format!("   the operator, Lumen/{CR}, and its StatefulSet run {} on pool-lumen-server", id.image));
+    say(format!(
+        "   the operator, Lumen/{CR}, and its StatefulSet run {} on pool-lumen-server",
+        id.image
+    ));
 }
 
 #[tokio::test]
 #[ignore = "e2e: needs E2E_ENDPOINT"]
 async fn journey() {
     let s = Suite::from_env("operator", LABEL);
-    let _dump = DumpOnFailure { suite: s.name, kube: &s.kube };
+    let _dump = DumpOnFailure {
+        suite: s.name,
+        kube: &s.kube,
+    };
 
     let step = s.step(format!("2. wait for operator StatefulSet/{CR}"));
     wait_operator_statefulset(&s);

@@ -8,7 +8,7 @@ use metrics_prometheus::Sample;
 use crate::app::observability::metrics::histogram::{
     render_apply_duration_histogram, render_duration_histogram,
 };
-use crate::app::observability::metrics::process::PendingChangeAccounting;
+use crate::app::observability::metrics::process::{PendingChangeAccounting, ProcessRssSnapshot};
 use crate::app::observability::metrics::Metrics;
 
 impl Metrics {
@@ -18,6 +18,7 @@ impl Metrics {
     pub(super) fn render_segment_telemetry(
         &self,
         pending_changes: PendingChangeAccounting,
+        process_rss: ProcessRssSnapshot,
     ) -> String {
         let samples = [
             Sample::new("lumen_text_row_stage_rows_total", "counter",
@@ -112,13 +113,13 @@ impl Metrics {
                 "lumen_process_rss_high_water_bytes",
                 "gauge",
                 "Linux process peak resident set size from /proc/self/status VmHWM in bytes; require lumen_process_rss_high_water_available=1.",
-                self.process_rss_high_water_bytes.get(),
+                process_rss.bytes,
             ),
             Sample::new(
                 "lumen_process_rss_high_water_available",
                 "gauge",
                 "1 when this scrape parsed Linux /proc/self/status VmHWM, 0 when unavailable.",
-                self.process_rss_high_water_available.get(),
+                u64::from(process_rss.available),
             ),
             Sample::new(
                 "lumen_pending_change_reserved_bytes",

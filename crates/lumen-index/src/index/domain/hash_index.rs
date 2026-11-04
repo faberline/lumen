@@ -45,13 +45,6 @@ impl HashIndex {
         }
         None
     }
-
-    /// `true` once the sealed forward payload has been dropped to disk
-    /// (Phase 2f-1) — the segment is attached. See `KeywordIndex::forward_dropped`.
-    #[inline]
-    fn forward_dropped(&self) -> bool {
-        self.segment.is_some()
-    }
 }
 
 /// Parse a `hash` field value: a 64-bit hex string, optionally `0x`-prefixed.

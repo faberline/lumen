@@ -165,7 +165,9 @@ pub(super) fn serving_statefulset(
         lifecycle: None,
         volumes,
         volume_mounts,
-        affinity: Some(crate::domain::capacity::placement::cross_namespace_dedicated_data_node_affinity()),
+        affinity: Some(
+            crate::domain::capacity::placement::cross_namespace_dedicated_data_node_affinity(),
+        ),
         // `profile` supplies the operator-resolved capacity selector and toleration;
         // `spec.placement` layers additional user selectors/tolerations.
         // The cross-namespace anti-affinity above stays operator-owned so data members of any
