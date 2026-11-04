@@ -16,6 +16,7 @@ pub mod keyword_index;
 pub mod number_index;
 pub mod postings;
 pub mod query;
+pub mod rebuild_operation;
 pub mod record_ram;
 pub mod schema_validation;
 pub mod set_index;
