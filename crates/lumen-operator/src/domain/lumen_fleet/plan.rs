@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use serde_json::{json, Value};
 
 use crate::domain::lumen_fleet::{
-    LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL, FLEET_MANAGER,
+    LumenFleet, PlanOutcome, PlannedInstance, PrunePolicy, FLEET_LABEL, FLEET_MANAGER,
 };
 use crate::domain::lumen_spec::LumenSpec;
 
@@ -193,4 +193,80 @@ fn fleet_labels(fleet: &str) -> Value {
         FLEET_LABEL: fleet,
         "app.kubernetes.io/managed-by": FLEET_MANAGER,
     })
+}
+
+/// The status message reported when an instance is retained under [`PrunePolicy::Retain`].
+pub const ORPHANED_MESSAGE: &str =
+    "no longer declared by this fleet; retained (set prunePolicy: Delete to remove)";
+
+/// The decision for what to do with one live `Lumen` object during fleet prune.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PruneDecision {
+    /// The object is declared by the fleet; keep it untouched.
+    Keep,
+    /// The object is no longer declared by the fleet; retain it and report it as orphaned.
+    Orphaned { message: String },
+    /// The object is no longer declared by the fleet; delete it.
+    Delete,
+}
+
+impl PruneDecision {
+    pub fn is_keep(&self) -> bool {
+        matches!(self, Self::Keep)
+    }
+
+    pub fn is_delete(&self) -> bool {
+        matches!(self, Self::Delete)
+    }
+
+    pub fn is_orphaned(&self) -> bool {
+        matches!(self, Self::Orphaned { .. })
+    }
+
+    pub fn message(&self) -> Option<&str> {
+        match self {
+            Self::Orphaned { message } => Some(message),
+            _ => None,
+        }
+    }
+}
+
+/// Decide the prune action for each live object: keep, report Orphaned, or delete.
+/// Makes no Kubernetes calls.
+pub fn plan_prune<A: AsRef<str>, B: AsRef<str>>(
+    policy: PrunePolicy,
+    declared: &BTreeSet<(String, String)>,
+    live: &[(A, B)],
+) -> Vec<PruneDecision> {
+    live.iter()
+        .map(|(ns, name)| decide_prune_object(policy, declared, ns.as_ref(), name.as_ref()))
+        .collect()
+}
+
+/// Alias for [`plan_prune`].
+pub fn decide_prune<A: AsRef<str>, B: AsRef<str>>(
+    policy: PrunePolicy,
+    declared: &BTreeSet<(String, String)>,
+    live: &[(A, B)],
+) -> Vec<PruneDecision> {
+    plan_prune(policy, declared, live)
+}
+
+/// Decide the prune action for a single live object.
+pub fn decide_prune_object(
+    policy: PrunePolicy,
+    declared: &BTreeSet<(String, String)>,
+    namespace: &str,
+    name: &str,
+) -> PruneDecision {
+    if declared.contains(&(namespace.to_string(), name.to_string())) {
+        PruneDecision::Keep
+    } else {
+        match policy {
+            PrunePolicy::Retain => PruneDecision::Orphaned {
+                message: ORPHANED_MESSAGE.to_string(),
+            },
+            PrunePolicy::Delete => PruneDecision::Delete,
+        }
+    }
 }
