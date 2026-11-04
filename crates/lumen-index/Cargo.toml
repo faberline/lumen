@@ -74,6 +74,7 @@ raft-wal = ["dep:reqwest"]
 backup = ["dep:reqwest", "service-backup/http-client", "service-backup/s3"]
 # Cross-pod shard routing (sharding::infrastructure::routing_remote).
 operator = ["dep:reqwest"]
+test-support = []
 
 [lints]
 workspace = true

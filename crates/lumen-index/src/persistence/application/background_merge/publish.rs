@@ -452,6 +452,7 @@ impl SegmentRdbStore {
                 .lock()
                 .unwrap_or_else(|p| p.into_inner()) =
                 Some((record.name.clone(), serde_json::to_vec(&manifest)?));
+            self.mark_inventory_stale();
             let binding = engine
                 .capture_barrier
                 .capture(latest.sequence)
