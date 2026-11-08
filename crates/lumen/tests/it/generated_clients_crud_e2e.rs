@@ -499,6 +499,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{
     let query = serde_json::json!({{"term": {{"field": "email", "value": "a@x.com"}}}});
     let found = client.search(
         "users".to_string(),
+        None,
         models::SearchRequest {{
             collapse: None,
             offset: Some(0),
@@ -522,6 +523,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{
     client.delete_external_id("users".to_string(), "u1".to_string(), Some("email".to_string()))?;
     let after_delete = client.search(
         "users".to_string(),
+        None,
         models::SearchRequest {{
             collapse: None,
             offset: Some(0),
