@@ -47,34 +47,62 @@ impl Fact {
 
 pub static REACHABLE_FACTS: &[Fact] = &[
     // X-Read-Consistency request headers
-    Fact::header("/collections/{collection_id}/search", "post", "X-Read-Consistency"),
-    Fact::header("/collections/{collection_id}/search:all", "post", "X-Read-Consistency"),
+    Fact::header(
+        "/collections/{collection_id}/search",
+        "post",
+        "X-Read-Consistency",
+    ),
+    Fact::header(
+        "/collections/{collection_id}/search:all",
+        "post",
+        "X-Read-Consistency",
+    ),
     Fact::header("/collections:search", "post", "X-Read-Consistency"),
-    Fact::header("/collections/{collection_id}/duplicates", "post", "X-Read-Consistency"),
-    Fact::header("/collections/{collection_id}", "query", "X-Read-Consistency"),
+    Fact::header(
+        "/collections/{collection_id}/duplicates",
+        "post",
+        "X-Read-Consistency",
+    ),
+    Fact::header(
+        "/collections/{collection_id}",
+        "query",
+        "X-Read-Consistency",
+    ),
     Fact::header("/collections", "query", "X-Read-Consistency"),
-
     // Shared responses under components.responses
     Fact::status("#/components/responses/401", "", "401"),
     Fact::status("#/components/responses/413", "", "413"),
     Fact::status("#/components/responses/429", "", "429"),
     Fact::status("#/components/responses/500", "", "500"),
     Fact::header("#/components/responses/429", "", "Retry-After"),
-
     // Reindex stream media types
-    Fact::media_type("/collections/{collection_id}/reindex/stream", "post", "application/x-ndjson"),
-
+    Fact::media_type(
+        "/collections/{collection_id}/reindex/stream",
+        "post",
+        "application/x-ndjson",
+    ),
     // Write operations mapping BulkLimit (413) and/or PendingChangeCapacity (429)
     Fact::status("/collections/{collection_id}/index", "post", "413"),
     Fact::status("/collections/{collection_id}/index", "post", "429"),
     Fact::status("/collections/{collection_id}/docs:replace", "put", "413"),
     Fact::status("/collections/{collection_id}/docs:replace", "put", "429"),
-    Fact::status("/collections/{collection_id}/docs/{external_id}", "put", "429"),
-    Fact::status("/collections/{collection_id}/index/{external_id}", "delete", "429"),
-    Fact::status("/collections/{collection_id}/docs/{external_id}", "delete", "429"),
+    Fact::status(
+        "/collections/{collection_id}/docs/{external_id}",
+        "put",
+        "429",
+    ),
+    Fact::status(
+        "/collections/{collection_id}/index/{external_id}",
+        "delete",
+        "429",
+    ),
+    Fact::status(
+        "/collections/{collection_id}/docs/{external_id}",
+        "delete",
+        "429",
+    ),
     Fact::status("/collections/{collection_id}/docs:truncate", "post", "429"),
     Fact::status("/collections/{collection_id}/docs:unindex", "post", "429"),
-
     // BearerAuth operations referencing shared 401 and 500
     Fact::status("/admin/backup", "get", "401"),
     Fact::status("/admin/backup", "get", "500"),
@@ -106,10 +134,26 @@ pub static REACHABLE_FACTS: &[Fact] = &[
     Fact::status("/collections/{collection_id}", "delete", "500"),
     Fact::status("/collections/{collection_id}", "query", "401"),
     Fact::status("/collections/{collection_id}", "query", "500"),
-    Fact::status("/collections/{collection_id}/docs/{external_id}", "put", "401"),
-    Fact::status("/collections/{collection_id}/docs/{external_id}", "put", "500"),
-    Fact::status("/collections/{collection_id}/docs/{external_id}", "delete", "401"),
-    Fact::status("/collections/{collection_id}/docs/{external_id}", "delete", "500"),
+    Fact::status(
+        "/collections/{collection_id}/docs/{external_id}",
+        "put",
+        "401",
+    ),
+    Fact::status(
+        "/collections/{collection_id}/docs/{external_id}",
+        "put",
+        "500",
+    ),
+    Fact::status(
+        "/collections/{collection_id}/docs/{external_id}",
+        "delete",
+        "401",
+    ),
+    Fact::status(
+        "/collections/{collection_id}/docs/{external_id}",
+        "delete",
+        "500",
+    ),
     Fact::status("/collections/{collection_id}/docs:replace", "put", "401"),
     Fact::status("/collections/{collection_id}/docs:replace", "put", "500"),
     Fact::status("/collections/{collection_id}/docs:truncate", "post", "401"),
@@ -118,12 +162,28 @@ pub static REACHABLE_FACTS: &[Fact] = &[
     Fact::status("/collections/{collection_id}/docs:unindex", "post", "500"),
     Fact::status("/collections/{collection_id}/duplicates", "post", "401"),
     Fact::status("/collections/{collection_id}/duplicates", "post", "500"),
-    Fact::status("/collections/{collection_id}/fields/{field_name}", "delete", "401"),
-    Fact::status("/collections/{collection_id}/fields/{field_name}", "delete", "500"),
+    Fact::status(
+        "/collections/{collection_id}/fields/{field_name}",
+        "delete",
+        "401",
+    ),
+    Fact::status(
+        "/collections/{collection_id}/fields/{field_name}",
+        "delete",
+        "500",
+    ),
     Fact::status("/collections/{collection_id}/index", "post", "401"),
     Fact::status("/collections/{collection_id}/index", "post", "500"),
-    Fact::status("/collections/{collection_id}/index/{external_id}", "delete", "401"),
-    Fact::status("/collections/{collection_id}/index/{external_id}", "delete", "500"),
+    Fact::status(
+        "/collections/{collection_id}/index/{external_id}",
+        "delete",
+        "401",
+    ),
+    Fact::status(
+        "/collections/{collection_id}/index/{external_id}",
+        "delete",
+        "500",
+    ),
     Fact::status("/collections/{collection_id}/reindex/stream", "post", "401"),
     Fact::status("/collections/{collection_id}/reindex/stream", "post", "500"),
     Fact::status("/collections/{collection_id}/search", "post", "401"),
@@ -217,7 +277,11 @@ fn parity_negative_control_reports_missing_retry_after() {
     let missing = missing_facts(&doc);
     assert_eq!(
         missing,
-        vec![Fact::header("#/components/responses/429", "", "Retry-After")],
+        vec![Fact::header(
+            "#/components/responses/429",
+            "",
+            "Retry-After"
+        )],
         "negative control did not report exactly the missing Retry-After header on shared 429"
     );
 }

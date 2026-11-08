@@ -230,7 +230,10 @@ impl Modify for SharedResponsesAddon {
                 "Retry-After",
                 openapi::HeaderBuilder::new()
                     .description(Some("Retry-After delay in seconds"))
-                    .schema(openapi::ObjectBuilder::new().schema_type(openapi::schema::SchemaType::Integer))
+                    .schema(
+                        openapi::ObjectBuilder::new()
+                            .schema_type(openapi::schema::SchemaType::Integer),
+                    )
                     .build(),
             )
             .build();
@@ -245,10 +248,18 @@ impl Modify for SharedResponsesAddon {
             )
             .build();
 
-        components.responses.insert("401".to_string(), openapi::RefOr::T(resp_401));
-        components.responses.insert("413".to_string(), openapi::RefOr::T(resp_413));
-        components.responses.insert("429".to_string(), openapi::RefOr::T(resp_429));
-        components.responses.insert("500".to_string(), openapi::RefOr::T(resp_500));
+        components
+            .responses
+            .insert("401".to_string(), openapi::RefOr::T(resp_401));
+        components
+            .responses
+            .insert("413".to_string(), openapi::RefOr::T(resp_413));
+        components
+            .responses
+            .insert("429".to_string(), openapi::RefOr::T(resp_429));
+        components
+            .responses
+            .insert("500".to_string(), openapi::RefOr::T(resp_500));
 
         let ref_401 = openapi::RefOr::Ref(openapi::Ref::new("#/components/responses/401"));
         let ref_413 = openapi::RefOr::Ref(openapi::Ref::new("#/components/responses/413"));
@@ -256,31 +267,41 @@ impl Modify for SharedResponsesAddon {
         let ref_500 = openapi::RefOr::Ref(openapi::Ref::new("#/components/responses/500"));
 
         for (path_str, path_item) in &mut openapi.paths.paths {
-            for (_method, op) in &mut path_item.operations {
+            for op in path_item.operations.values_mut() {
                 let requires_bearer = match &op.security {
                     None => true,
                     Some(sec) => sec.iter().any(|req| {
                         serde_json::to_value(req)
-                            .map(|v| v.as_object().map_or(false, |m| m.contains_key("bearerAuth")))
+                            .map(|v| v.as_object().is_some_and(|m| m.contains_key("bearerAuth")))
                             .unwrap_or(false)
                     }),
                 };
                 if requires_bearer {
-                    op.responses.responses.insert("401".to_string(), ref_401.clone());
-                    op.responses.responses.insert("500".to_string(), ref_500.clone());
+                    op.responses
+                        .responses
+                        .insert("401".to_string(), ref_401.clone());
+                    op.responses
+                        .responses
+                        .insert("500".to_string(), ref_500.clone());
                 }
 
                 if path_str == "/collections/{collection_id}/index"
                     || path_str == "/collections/{collection_id}/docs:replace"
                 {
-                    op.responses.responses.insert("413".to_string(), ref_413.clone());
-                    op.responses.responses.insert("429".to_string(), ref_429.clone());
+                    op.responses
+                        .responses
+                        .insert("413".to_string(), ref_413.clone());
+                    op.responses
+                        .responses
+                        .insert("429".to_string(), ref_429.clone());
                 } else if path_str == "/collections/{collection_id}/docs/{external_id}"
                     || path_str == "/collections/{collection_id}/index/{external_id}"
                     || path_str == "/collections/{collection_id}/docs:truncate"
                     || path_str == "/collections/{collection_id}/docs:unindex"
                 {
-                    op.responses.responses.insert("429".to_string(), ref_429.clone());
+                    op.responses
+                        .responses
+                        .insert("429".to_string(), ref_429.clone());
                 }
             }
         }
