@@ -368,7 +368,7 @@ async fn vector_with_scalar_quantization_works_end_to_end() {
         .await
         .assert_status_ok();
 
-    let mut rng = Lcg::new(0xA11C_E_BEEF);
+    let mut rng = Lcg::new(0x000A_11CE_BEEF);
     let mut items = Vec::new();
     let mut vecs: Vec<(String, Vec<f32>)> = Vec::new();
     for i in 0..40 {
@@ -400,7 +400,7 @@ async fn vector_with_scalar_quantization_works_end_to_end() {
     resp.assert_status_ok();
     let body: Value = resp.json();
     let hits = body["hits"].as_array().unwrap();
-    assert!(hits.len() >= 1);
+    assert!(!hits.is_empty());
     assert_eq!(hits[0]["external_id"], target_eid);
 }
 

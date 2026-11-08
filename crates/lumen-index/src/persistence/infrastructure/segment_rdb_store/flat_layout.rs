@@ -137,22 +137,6 @@ pub(super) fn collection_schema_path(root: &Path, collection: &CollectionCatalog
     }
 }
 
-pub(super) fn collection_output_path(
-    root: &Path,
-    collection: &CollectionCatalog,
-    relative: &str,
-) -> PathBuf {
-    if flat_layout(collection) {
-        root.join(flat_payload_name(
-            &collection.collection_id,
-            Path::new(relative),
-        ))
-    } else {
-        root.join(collection_checkpoint_dir_name(&collection.collection_id))
-            .join(relative)
-    }
-}
-
 pub(super) fn collection_output_relative(collection: &CollectionCatalog, relative: &str) -> String {
     if flat_layout(collection) {
         flat_payload_name(&collection.collection_id, Path::new(relative))
@@ -257,64 +241,4 @@ pub(super) fn materialize_flat_reopen_tree(
         }
     }
     Ok(created)
-}
-
-fn flatten_checkpoint_payload(root: &Path, collections: &mut [CollectionCatalog]) -> Result<()> {
-    let payload = root.join(FLAT_PAYLOAD_DIR);
-    std::fs::create_dir_all(&payload)?;
-    for collection in collections {
-        let source = root.join(collection_checkpoint_dir_name(&collection.collection_id));
-        let mut files = Vec::new();
-        let mut pending = vec![source.clone()];
-        while let Some(dir) = pending.pop() {
-            for entry in std::fs::read_dir(&dir)? {
-                let entry = entry?;
-                let path = entry.path();
-                let metadata = std::fs::symlink_metadata(&path)?;
-                if metadata.is_dir() {
-                    pending.push(path);
-                } else if metadata.is_file() {
-                    files.push(path);
-                } else {
-                    bail!(
-                        "checkpoint contains unsupported payload entry: {}",
-                        path.display()
-                    );
-                }
-            }
-        }
-        let mut moved = BTreeMap::new();
-        for file in files {
-            let relative = file.strip_prefix(&source)?;
-            let old = format!(
-                "{}/{}",
-                collection_checkpoint_dir_name(&collection.collection_id),
-                relative.to_string_lossy()
-            );
-            let target_rel = flat_payload_name(&collection.collection_id, relative);
-            let target = root.join(&target_rel);
-            std::fs::rename(&file, &target)?;
-            moved.insert(old, target_rel);
-        }
-        for segment in &mut collection.segments {
-            if let Some(path) = moved.get(&segment.path) {
-                segment.path = path.clone();
-            }
-            if let Some(rows) = &mut segment.local_rows {
-                if let Some(path) = moved.get(&rows.path) {
-                    rows.path = path.clone();
-                }
-            }
-        }
-        let old_schema = format!(
-            "{}/{}",
-            collection_checkpoint_dir_name(&collection.collection_id),
-            CHECKPOINT_SCHEMA_FILE
-        );
-        if !moved.contains_key(&old_schema) {
-            bail!("collection schema was not staged");
-        }
-        std::fs::remove_dir_all(source)?;
-    }
-    Ok(())
 }

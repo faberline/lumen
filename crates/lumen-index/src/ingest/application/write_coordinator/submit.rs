@@ -192,10 +192,9 @@ impl WriteCoordinator {
         let reservation = self
             .admit_local_record_with_relief(&entry, capacity_deadline)
             .await
-            .map_err(|error| {
-                diagnostic.admission_end(Some(&error));
-                diagnostic.prepublication_error(&error);
-                error
+            .inspect_err(|error| {
+                diagnostic.admission_end(Some(error));
+                diagnostic.prepublication_error(error);
             })?;
         if tokio::time::Instant::now() >= admission_deadline {
             let error = anyhow::Error::new(SubmitStalled(
@@ -217,15 +216,13 @@ impl WriteCoordinator {
                         "mutation permit was unavailable before the submit deadline".into(),
                     ))
                 })
-                .map_err(|error| {
-                    diagnostic.admission_end(Some(&error));
-                    diagnostic.prepublication_error(&error);
-                    error
+                .inspect_err(|error| {
+                    diagnostic.admission_end(Some(error));
+                    diagnostic.prepublication_error(error);
                 })?
-                .map_err(|error| {
-                    diagnostic.admission_end(Some(&error));
-                    diagnostic.prepublication_error(&error);
-                    error
+                .inspect_err(|error| {
+                    diagnostic.admission_end(Some(error));
+                    diagnostic.prepublication_error(error);
                 })?;
         diagnostic.admission_end(None);
         self.engine.metrics().observe_coordinator_stage(
@@ -238,9 +235,8 @@ impl WriteCoordinator {
             .self_weak
             .upgrade()
             .ok_or_else(|| anyhow::anyhow!("write coordinator stopped before publish"))
-            .map_err(|error| {
-                diagnostic.prepublication_error(&error);
-                error
+            .inspect_err(|error| {
+                diagnostic.prepublication_error(error);
             })?;
         let wal = self.wal.clone();
         let publication = diagnostic.publication_begin();

@@ -378,7 +378,7 @@ fn eval_has_child(
     let matched = eval_query(child, &hc.collection, &hc.query, &child_universe, state)?;
     // Distinct parent external_ids → PARENT docids → constant-score set.
     let mut parents = RoaringBitmap::new();
-    for (child_doc, _) in &matched {
+    for child_doc in matched.keys() {
         // Route through `keyword_at` (segment for sealed ids after a Phase 2f-1
         // seal-and-drop, else the live `forward` tail) so the parent-id lookup
         // survives a dropped forward payload. Default build is unaffected.

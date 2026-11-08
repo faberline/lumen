@@ -54,9 +54,9 @@ pub struct AppState {
     /// Cross-pod shard router for operator/k8s serving (#1398 R1-R3).
     /// `None` for every deployment shape except the routed one (`SHARD_COUNT`
     /// > 1, `replicasPerShard <= 1`, no `--search-shard-segment-dirs`) — see
-    /// [`RoutedBackend`]. The server binary wires a real
-    /// `sharding::infrastructure::routed_router::RoutedRouter` via [`Self::with_routed`]; tests and
-    /// every other deployment shape leave this `None`.
+    /// > [`RoutedBackend`]. The server binary wires a real
+    /// > `sharding::infrastructure::routed_router::RoutedRouter` via [`Self::with_routed`]; tests and
+    /// > every other deployment shape leave this `None`.
     pub routed: Option<Arc<dyn RoutedBackend>>,
 }
 

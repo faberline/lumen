@@ -69,7 +69,16 @@ impl Engine {
     /// Request relief for this Engine and return the revision atomically with
     /// the request. `None` means it had no active or frozen local work.
     pub(crate) fn request_pending_checkpoint_revision(&self) -> Option<u64> {
-        self.changes.owner.request_checkpoint_revision()
+        match self.layer_maintenance.checkpoint_progress() {
+            Some(progress) => progress.request_revision(|relieved| {
+                self.changes.owner.request_checkpoint_demand_after(relieved)
+            }),
+            None => self.changes.owner.request_checkpoint_revision(),
+        }
+    }
+
+    pub(crate) fn notify_checkpoint_progress(&self) {
+        self.changes.owner.notify_checkpoint_progress();
     }
 
     #[cfg(test)]
@@ -89,6 +98,18 @@ impl Engine {
     /// its waiter demand remains process-global to relieve other Engines too.
     pub(crate) fn capacity_owner_state(&self) -> Option<OwnerCapacityState> {
         self.changes.owner.capacity_state().ok()
+    }
+
+    pub(crate) fn capacity_schedule_state(&self) -> Option<OwnerCapacityState> {
+        self.changes.owner.capacity_schedule_state().ok()
+    }
+
+    pub(crate) fn capacity_publication_state(&self) -> Option<OwnerCapacityState> {
+        let request = self
+            .capacity_owner_state()
+            .and_then(|owner| owner.checkpoint_request_revision);
+        self.changes.owner.record_capacity_relief(request);
+        self.capacity_schedule_state()
     }
 
     pub(crate) fn checkpoint_wake(&self) -> std::sync::Arc<BudgetWake> {

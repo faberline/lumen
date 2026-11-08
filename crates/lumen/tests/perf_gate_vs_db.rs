@@ -353,10 +353,10 @@ struct Doc {
 /// selectivity is exact regardless of the filler RNG. No embeddings (search gate).
 fn gen_doc(i: usize, rng: &mut Lcg) -> Doc {
     let mut words: Vec<&str> = (0..10).map(|_| rng.pick(VOCAB)).collect();
-    if i % 40 == 0 {
+    if i.is_multiple_of(40) {
         words.push("engineer");
     }
-    if i % 80 == 0 {
+    if i.is_multiple_of(80) {
         words.push("rust");
     }
     Doc {
@@ -366,7 +366,11 @@ fn gen_doc(i: usize, rng: &mut Lcg) -> Doc {
         age: 18 + ((i as i64 * 7919) % 63) as i32,
         // present on 25% of docs → `exists`/`not exists` is selective; `city`
         // (50-way, every value repeats) drives the `duplicated` cell instead.
-        note: if i % 4 == 0 { Some("present") } else { None },
+        note: if i.is_multiple_of(4) {
+            Some("present")
+        } else {
+            None
+        },
         embedding: None, // populated by gen_corpus only when LUMEN_GATE_VECTOR=1
     }
 }
@@ -773,10 +777,10 @@ async fn lumen_serve_native(engine: Arc<lumen::storage::Engine>) -> NativeEndpoi
                 let _ = lumen::native_wire::serve_unix_search(listener, engine).await;
             });
         });
-        return NativeEndpoint {
+        NativeEndpoint {
             addr: path.to_string_lossy().into_owned(),
             dir: Some(dir),
-        };
+        }
     }
 
     #[cfg(not(unix))]
@@ -1886,7 +1890,7 @@ async fn connect_native_tcp(addr: &str) -> Option<tokio::net::TcpStream> {
 }
 
 async fn native_pool(addr: &str, cell: &str, requested: usize) -> Option<Req> {
-    let n = requested.max(1).min(NATIVE_MAX_POOL);
+    let n = requested.clamp(1, NATIVE_MAX_POOL);
     let frame = Arc::new(lumen_native_frame(cell));
     #[cfg(unix)]
     {
@@ -1894,11 +1898,11 @@ async fn native_pool(addr: &str, cell: &str, requested: usize) -> Option<Req> {
         for _ in 0..n {
             streams.push(Mutex::new(connect_native_unix(addr).await?));
         }
-        return Some(Req::Native {
+        Some(Req::Native {
             pool: NativePool::Unix(Arc::new(streams)),
             frame,
             sem: Arc::new(Semaphore::new(n)),
-        });
+        })
     }
 
     #[cfg(not(unix))]
@@ -3106,7 +3110,7 @@ fn scale_doc_key(document: usize) -> String {
 /// Present for nine out of every ten rows. The value is unique and sorted by
 /// document ordinal, while the omitted tenth exercises `missing:last`.
 fn scale_sort_key(document: usize) -> Option<String> {
-    (document % 10 != 0).then(|| format!("scale-sort-{document:010}"))
+    (!document.is_multiple_of(10)).then(|| format!("scale-sort-{document:010}"))
 }
 
 /// Stream-index docs DIRECTLY through the `Engine::index` API (NOT over HTTP)
@@ -3190,7 +3194,7 @@ fn scale_index_direct_range(
             });
         }
         let done = completed_before + local_i + 1;
-        if total >= progress_every && done % progress_every == 0 {
+        if total >= progress_every && done.is_multiple_of(progress_every) {
             println!(
                 "    indexed {done}/{total} docs ({:.1}%)",
                 (done as f64 / total as f64) * 100.0
@@ -3862,11 +3866,11 @@ async fn scale_mutation_probe_waits_for_reclaimer_drain() {
     assert_eq!(measurement.batch_ids, 1_000);
     assert!(
         measurement.reclaimer_after_truncate.submitted_generations
-            >= measurement.reclaimer_baseline.submitted_generations + 1
+            > measurement.reclaimer_baseline.submitted_generations
     );
     assert!(
         measurement.reclaimer_drained.completed_generations
-            >= measurement.reclaimer_baseline.completed_generations + 1
+            > measurement.reclaimer_baseline.completed_generations
     );
     assert_eq!(
         measurement.reclaimer_drained.pending_generations,
@@ -3987,7 +3991,7 @@ impl ShardedScale {
             "docs",
             req,
             &self.shards,
-            |shard, collection_id, req| Ok(shard.engine.search(collection_id, req)?),
+            |shard, collection_id, req| shard.engine.search(collection_id, req),
             |hit, field| match field {
                 "age" => Some(doc_age(&hit.external_id) as f64),
                 // `doc_key` is a zero-padded rendering of the same document

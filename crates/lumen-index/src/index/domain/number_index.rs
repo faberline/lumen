@@ -2,6 +2,8 @@
 //! doc-to-value forward map and the lazy order statistics that answer a range
 //! estimate, over a sealed segment base plus the live tail.
 
+type KeywordRangeEntries = std::sync::Arc<Vec<(u64, u32)>>;
+
 mod range;
 mod sorted;
 
@@ -97,8 +99,7 @@ pub(in crate::index) struct NumberIndex {
     /// instead of random-probing the numeric forward column. This is deliberately
     /// lazy per term, not whole-field, so the segment tier does not materialize a
     /// high-cardinality keyword field into RAM just because one hot term was read.
-    pub(in crate::index) keyword_range_cache:
-        RwLock<FastHashMap<String, std::sync::Arc<Vec<(u64, u32)>>>>,
+    pub(in crate::index) keyword_range_cache: RwLock<FastHashMap<String, KeywordRangeEntries>>,
     /// Per `(keyword field, term, numeric range)` candidate bitmaps for hot
     /// `Match(text) ∩ Term(keyword) ∩ Range(number)` shapes. This is query-only
     /// derived state, invalidated with `keyword_range_cache`.
@@ -229,13 +230,6 @@ impl NumberIndex {
             .filter(|bits| **bits != MISSING_SORTABLE_F64_BITS)
             .count()
             + self.forward.len()
-    }
-
-    /// `true` once the sealed forward payload has been dropped to disk
-    /// (Phase 2f-1) — the segment is attached. See `KeywordIndex::forward_dropped`.
-    #[inline]
-    fn forward_dropped(&self) -> bool {
-        self.segment.is_some()
     }
 
     /// The attached disk segment, if any — the entry the SORT planner

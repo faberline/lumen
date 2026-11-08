@@ -12,16 +12,16 @@ use crate::persistence::application::segment_checkpoint_sink::{
 };
 use crate::persistence::infrastructure::segment_rdb_store::SegmentRdbStore;
 use anyhow::{anyhow, Result};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 
-#[path = "../infrastructure/segment_save_gate.rs"]
-mod publication_gate;
+use crate::persistence::infrastructure::segment_save_gate as publication_gate;
 
 #[derive(Default)]
 pub(crate) struct Registry {
     publication: Arc<crate::persistence::application::capacity::publication_gate::SaveGate>,
     registration: Mutex<Registration>,
+    checkpoint_progress: Mutex<Weak<CheckpointProgress>>,
     frozen_windows: AtomicUsize,
 }
 
@@ -47,6 +47,122 @@ impl Drop for FrozenWindow {
 pub(crate) struct PublicationFence {
     registry: Weak<Registry>,
     token: u64,
+    checkpoints: Arc<CheckpointProgress>,
+}
+
+/// Periodic and native relief share progress only within one publication
+/// owner. A replacement owner gets fresh progress, even for the same Engine.
+pub(crate) struct CheckpointProgress {
+    execution: Mutex<()>,
+    state: Mutex<CheckpointProgressState>,
+    active: AtomicBool,
+}
+
+#[derive(Default)]
+struct CheckpointProgressState {
+    relieved: Option<u64>,
+    relieved_work: Option<u64>,
+    requested: Option<(u64, u64)>,
+    published_owner: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
+    published_request_work: Option<u64>,
+    completed_owner: Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
+}
+
+impl Default for CheckpointProgress {
+    fn default() -> Self {
+        Self {
+            execution: Mutex::new(()),
+            state: Mutex::default(),
+            active: AtomicBool::new(true),
+        }
+    }
+}
+
+impl CheckpointProgress {
+    pub(crate) fn lock_execution(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.execution.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub(crate) fn request_revision(
+        &self,
+        request: impl FnOnce(Option<u64>) -> Option<(u64, u64)>,
+    ) -> Option<u64> {
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        let (revision, work) = request(state.relieved)?;
+        // Keep the first demand boundary for this episode. Work arriving
+        // after that refusal still earns the normal publication successor.
+        if state.requested.map(|(pending, _)| pending) != Some(revision) {
+            state.requested = Some((revision, work));
+        }
+        Some(revision)
+    }
+
+    pub(crate) fn has_relieved(&self, revision: u64) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .relieved
+            .is_some_and(|completed| completed >= revision)
+    }
+
+    pub(crate) fn relieved_capacity(&self) -> Option<(u64, Option<u64>)> {
+        let state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        state
+            .relieved
+            .map(|revision| (revision, state.relieved_work))
+    }
+
+    pub(crate) fn completed_owner_state(
+        &self,
+    ) -> Option<crate::ingest::domain::change_budget::OwnerCapacityState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .completed_owner
+    }
+
+    pub(crate) fn record_publication(
+        &self,
+        acknowledge: impl FnOnce() -> Result<
+            Option<crate::ingest::domain::change_budget::OwnerCapacityState>,
+        >,
+    ) -> Result<()> {
+        // The caller still owns the capture barrier. Holding this state lock
+        // across acknowledgement keeps a newly woken refusal out of the
+        // publication it has not received. No apply/IO waits enter here.
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        let owner = acknowledge()?;
+        state.published_owner = owner;
+        state.published_request_work = owner
+            .and_then(|owner| owner.checkpoint_request_revision)
+            .and_then(|revision| {
+                state
+                    .requested
+                    .filter(|(pending, _)| *pending == revision)
+                    .map(|(_, work)| work)
+            });
+        Ok(())
+    }
+
+    pub(crate) fn completed(&self) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        // Capture before diagnostic callbacks and before the async driver can
+        // resume. Later applied writes do not belong to this completed IO.
+        let owner = state.published_owner;
+        state.completed_owner = owner;
+        let Some(revision) = owner.and_then(|owner| owner.checkpoint_request_revision) else {
+            return false;
+        };
+        if state
+            .relieved
+            .is_some_and(|completed| completed >= revision)
+        {
+            return false;
+        }
+        state.relieved = Some(revision);
+        state.relieved_work = state.published_request_work;
+        true
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -58,6 +174,10 @@ pub(crate) struct PublicationPermit {
 }
 
 impl PublicationFence {
+    pub(crate) fn checkpoint_progress(&self) -> Arc<CheckpointProgress> {
+        self.checkpoints.clone()
+    }
+
     pub(crate) fn acquire(&self) -> Result<PublicationPermit> {
         let registry = self.registry.upgrade().ok_or(Superseded)?;
         let permit = registry.publication.lock_owned();
@@ -103,6 +223,10 @@ impl Endpoint {
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .stopped = true;
+        self.fence
+            .checkpoints
+            .active
+            .store(false, Ordering::Release);
         self.changed.notify_all();
     }
 
@@ -143,6 +267,17 @@ impl Endpoint {
 }
 
 impl Registry {
+    pub(crate) fn checkpoint_progress(&self) -> Option<Arc<CheckpointProgress>> {
+        // Admission can publish a request while a caller holds endpoint.requests.
+        // Do not acquire either that mutex or registration from this path.
+        let progress = self
+            .checkpoint_progress
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .upgrade()?;
+        progress.active.load(Ordering::Acquire).then_some(progress)
+    }
+
     pub(crate) fn owner(&self) -> Option<Arc<Endpoint>> {
         let owner = self
             .registration

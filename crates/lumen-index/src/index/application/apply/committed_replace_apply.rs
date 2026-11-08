@@ -54,7 +54,6 @@ impl ReplacementLedger {
                         code: code.to_owned(),
                         message,
                     },
-                    _ => unreachable!("rendered item error"),
                 },
             })
             .collect();
@@ -121,10 +120,8 @@ impl Engine {
                 },
                 FastIndexValue::Vector { values, .. } => {
                     let mut hash = rustc_hash::FxHasher::default();
-                    for value in values.chunks_exact(4) {
-                        hash.write_u32(u32::from_le_bytes(
-                            value.try_into().expect("validated f32 span"),
-                        ));
+                    for value in values.as_chunks::<4>().0 {
+                        hash.write_u32(u32::from_le_bytes(*value));
                     }
                     ParsedValue {
                         hash: None,

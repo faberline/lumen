@@ -62,12 +62,14 @@ const CANARY: &str = "canary-control-plane-token-must-never-be-printed";
 /// rotation test meaningful — a replacement file carrying a different subject
 /// authenticates as a different principal, so "the new token reached the wire"
 /// is observable at the serving side rather than inferred from the client.
+type Permission = (String, String, Option<String>, String);
+
 struct Cluster {
     /// `sub` claim -> the username kube-apiserver would report.
     subjects: HashMap<String, String>,
     /// `(username, resource, name, verb)`, exactly as a SubjectAccessReview
     /// would be asked.
-    grants: Mutex<HashSet<(String, String, Option<String>, String)>>,
+    grants: Mutex<HashSet<Permission>>,
     /// Every principal that successfully authenticated, in order.
     authenticated: Mutex<Vec<String>>,
 }

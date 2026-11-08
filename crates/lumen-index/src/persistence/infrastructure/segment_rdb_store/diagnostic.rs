@@ -88,13 +88,13 @@ impl DiagnosticCapture {
     pub(crate) fn new() -> Self {
         static NEXT_TOKEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let token = DiagnosticCaptureToken(
-            NEXT_TOKEN
-                .fetch_update(
-                    std::sync::atomic::Ordering::Relaxed,
-                    std::sync::atomic::Ordering::Relaxed,
-                    |next| next.checked_add(1),
-                )
-                .expect("diagnostic capture tokens exhausted"),
+            crate::atomic_update::update_u64(
+                &NEXT_TOKEN,
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |next| next.checked_add(1),
+            )
+            .expect("diagnostic capture tokens exhausted"),
         );
         let (sender, receiver) = std::sync::mpsc::sync_channel(64);
         capture_senders().lock().unwrap().insert(token, sender);

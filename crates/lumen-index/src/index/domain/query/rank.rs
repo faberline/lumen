@@ -25,6 +25,18 @@ pub(super) fn bm25_contrib(idf: f32, tf: f32, doc_len: f32, avgdl: f32) -> f32 {
     idf * tf * (BM25_K1 + 1.0) / denom
 }
 
+/// Query-wide token columns can share this exact per-document expression.
+/// Keep its arithmetic order identical to `bm25_contrib` above.
+#[inline(always)]
+pub(super) fn bm25_normalization(doc_len: f32, avgdl: f32) -> f32 {
+    BM25_K1 * (1.0 - BM25_B + BM25_B * doc_len / avgdl)
+}
+
+#[inline(always)]
+pub(super) fn bm25_contrib_normalized(idf: f32, tf: f32, normalization: f32) -> f32 {
+    idf * tf * (BM25_K1 + 1.0) / (tf + normalization)
+}
+
 #[inline]
 pub(super) fn bm25_contrib_cached(
     cache: &mut Vec<(u32, u32, f32)>,

@@ -337,7 +337,7 @@ fn unresolved_nearest_orphans_force_exact_fallback() {
         backend: VectorBackend::HnswCpu,
         quantize: None,
     };
-    let orphaned = HnswCpuIndex::new(spec.clone());
+    let orphaned = HnswCpuIndex::new(spec);
     orphaned.set_ef_search(EF_SEARCH);
     for i in 0..CORPUS {
         let eid = format!("v{i:02}");

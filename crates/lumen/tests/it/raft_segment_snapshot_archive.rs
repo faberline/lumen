@@ -56,7 +56,7 @@ use lumen::types::{
     VectorMetric,
 };
 use lumen::wal::WalRecord;
-use raft_runtime::{PreparedSnapshot, RaftStateMachine, SnapshotPreparation};
+use raft_runtime::RaftStateMachine;
 use tempfile::TempDir;
 
 const ARCHIVE_MAGIC: &[u8] = b"LSEGRAFT";

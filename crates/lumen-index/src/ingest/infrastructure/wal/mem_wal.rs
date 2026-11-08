@@ -65,7 +65,7 @@ impl MemWalInner {
             return; // no consumers → keep everything for a future replay
         }
         let low_water = self.subs.values().copied().min().unwrap_or(0);
-        while !self.records.is_empty() && self.base + 1 <= low_water {
+        while !self.records.is_empty() && self.base < low_water {
             self.records.pop_front();
             self.base += 1;
         }
@@ -184,10 +184,7 @@ impl WalLog for MemWal {
                         // above the truncation floor (never < base+1).
                         let want = (delivered + 1).max(s.base + 1);
                         let idx = (want - s.base - 1) as usize;
-                        match s.records.get(idx).cloned() {
-                            Some(slot) => Some((want, slot)),
-                            None => None,
-                        }
+                        s.records.get(idx).cloned().map(|slot| (want, slot))
                     };
                     if let Some((seq, slot)) = next {
                         let rec = slot
