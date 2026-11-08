@@ -251,25 +251,14 @@ fn shared_pending_frozen(root: &Path) -> Result<Arc<Mutex<Option<PendingFrozenCh
     Ok(pending)
 }
 
-fn shared_inventory(
-    root: &Path,
-) -> Result<
-    Arc<
-        Mutex<
-            Option<
-                crate::persistence::infrastructure::segment_rdb_store::telemetry::RetainedInventory,
-            >,
-        >,
-    >,
-> {
-    static ROOT_INVENTORY: OnceLock<
-        Mutex<
-            HashMap<
-                PathBuf,
-                Weak<Mutex<Option<crate::persistence::infrastructure::segment_rdb_store::telemetry::RetainedInventory>>>,
-            >,
-        >,
-    > = OnceLock::new();
+/// The lazily built inventory of one checkpoint root, shared by its open stores.
+type SharedInventorySlot = Mutex<
+    Option<crate::persistence::infrastructure::segment_rdb_store::telemetry::RetainedInventory>,
+>;
+
+fn shared_inventory(root: &Path) -> Result<Arc<SharedInventorySlot>> {
+    static ROOT_INVENTORY: OnceLock<Mutex<HashMap<PathBuf, Weak<SharedInventorySlot>>>> =
+        OnceLock::new();
     let registry = ROOT_INVENTORY.get_or_init(|| Mutex::new(HashMap::new()));
     let mut registry = registry
         .lock()

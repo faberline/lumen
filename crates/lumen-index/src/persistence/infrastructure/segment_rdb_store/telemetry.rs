@@ -24,6 +24,30 @@ pub fn inspected_file_entries() -> u64 {
     INSPECTED_FILE_ENTRIES.with(std::cell::Cell::get)
 }
 
+#[cfg(test)]
+thread_local! {
+    static PRUNE_FAILURE_AFTER_REMOVALS: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
+/// Makes the next `prune` on this thread fail once `removals` generations are gone.
+#[cfg(test)]
+pub(in crate::persistence) fn inject_prune_failure_after(removals: usize) {
+    PRUNE_FAILURE_AFTER_REMOVALS.with(|c| c.set(Some(removals)));
+}
+
+/// Consumes the injected failure when exactly `removed` generations are gone.
+#[cfg(test)]
+pub(super) fn take_injected_prune_failure(removed: usize) -> bool {
+    PRUNE_FAILURE_AFTER_REMOVALS.with(|c| {
+        if c.get() == Some(removed) {
+            c.set(None);
+            true
+        } else {
+            false
+        }
+    })
+}
+
 #[inline]
 pub(super) fn note_inspected_file_entry() {
     #[cfg(any(test, feature = "test-support"))]
@@ -61,6 +85,10 @@ impl Drop for MeasuredCapture<'_> {
         );
     }
 }
+
+/// The changed files of one generation: each collection id with its files as
+/// `(file identity, bytes)`.
+pub(in crate::persistence) type ChangedFiles = BTreeMap<String, Vec<((u64, u64), u64)>>;
 
 #[derive(Debug, Default, Clone)]
 pub(in crate::persistence) struct RetainedInventory {
@@ -145,20 +173,21 @@ impl RetainedInventory {
                     });
                     entry.generations.insert(name_str.clone());
                 } else if child_path.is_dir() {
-                    let collection_id =
-                        crate::index::infrastructure::checkpoint_fs::collection_name_from_dir(
-                            &child_path,
-                        )
-                        .unwrap_or_else(|| {
-                            file_name_str
-                                .strip_prefix("c-")
-                                .unwrap_or(&file_name_str)
-                                .to_string()
-                        });
                     let mut coll_files = BTreeSet::new();
                     scan_directory_identities(&child_path, &mut coll_files, &mut files, &name_str)?;
                     gen_files.all.extend(coll_files.iter().copied());
-                    gen_files.collections.insert(collection_id, coll_files);
+                    // The save path keys a collection by its hex-encoded id, the
+                    // same name that `collection_checkpoint_dir_name` writes. A
+                    // directory with another name still counts in `all` and
+                    // `files`, but it has no key: a save that expects it finds
+                    // no entry and marks the inventory stale.
+                    if let Some(collection_id) =
+                        crate::index::infrastructure::checkpoint_fs::collection_name_from_dir(
+                            &child_path,
+                        )
+                    {
+                        gen_files.collections.insert(collection_id, coll_files);
+                    }
                 }
             }
             generations.insert(name_str, gen_files);
@@ -181,11 +210,11 @@ impl RetainedInventory {
         bail!("segment file identity measurements require Unix")
     }
 
-    pub(super) fn record_published_generation(
+    pub(in crate::persistence) fn record_published_generation(
         &mut self,
         generation_name: &str,
         manifest_id: ((u64, u64), u64),
-        changed_files: BTreeMap<String, Vec<((u64, u64), u64)>>,
+        changed_files: ChangedFiles,
         reused_collections: &BTreeSet<String>,
         previous_generation: Option<&str>,
     ) -> bool {
@@ -207,17 +236,20 @@ impl RetainedInventory {
         if let Some(prev) = previous_generation {
             if let Some(prev_gen) = self.generations.get(prev) {
                 for reused_id in reused_collections {
-                    if let Some(prev_coll_files) = prev_gen.collections.get(reused_id) {
-                        gen_files
-                            .collections
-                            .entry(reused_id.clone())
-                            .or_default()
-                            .extend(prev_coll_files.iter().copied());
-                        for &id in prev_coll_files {
-                            gen_files.all.insert(id);
-                            if let Some(entry) = self.files.get_mut(&id) {
-                                entry.generations.insert(generation_name.to_string());
-                            }
+                    // A reused collection with no recorded files would drop its
+                    // hard links from this generation. Mark the inventory stale.
+                    let Some(prev_coll_files) = prev_gen.collections.get(reused_id) else {
+                        return false;
+                    };
+                    gen_files
+                        .collections
+                        .entry(reused_id.clone())
+                        .or_default()
+                        .extend(prev_coll_files.iter().copied());
+                    for &id in prev_coll_files {
+                        gen_files.all.insert(id);
+                        if let Some(entry) = self.files.get_mut(&id) {
+                            entry.generations.insert(generation_name.to_string());
                         }
                     }
                 }
@@ -283,11 +315,11 @@ fn scan_directory_identities(
 }
 
 #[cfg(unix)]
-pub(super) fn collect_staged_changed_files(
+pub(in crate::persistence) fn collect_staged_changed_files(
     staging_path: &Path,
     collections: &[CollectionCatalog],
     idle: &BTreeSet<String>,
-) -> Result<BTreeMap<String, Vec<((u64, u64), u64)>>> {
+) -> Result<ChangedFiles> {
     use crate::persistence::infrastructure::segment_rdb_store::flat_layout::collection_checkpoint_dir_name;
 
     let mut changed = BTreeMap::new();
@@ -311,7 +343,7 @@ pub(super) fn collect_staged_changed_files(
     _staging_path: &Path,
     _collections: &[CollectionCatalog],
     _idle: &BTreeSet<String>,
-) -> Result<BTreeMap<String, Vec<((u64, u64), u64)>>> {
+) -> Result<ChangedFiles> {
     bail!("segment file identity measurements require Unix")
 }
 
@@ -335,8 +367,8 @@ fn scan_staged_files(dir: &Path, out: &mut Vec<((u64, u64), u64)>) -> Result<()>
     Ok(())
 }
 
-#[cfg(unix)]
-#[allow(dead_code)]
+/// Test oracle: a full walk of every file under a path, one entry per identity.
+#[cfg(all(test, unix))]
 fn inventory(path: &Path, files: &mut BTreeMap<(u64, u64), u64>) -> Result<()> {
     use std::os::unix::fs::MetadataExt;
     note_inspected_file_entry();
@@ -355,12 +387,11 @@ fn inventory(path: &Path, files: &mut BTreeMap<(u64, u64), u64>) -> Result<()> {
     }
     Ok(())
 }
-#[cfg(not(unix))]
-#[allow(dead_code)]
+#[cfg(all(test, not(unix)))]
 fn inventory(_path: &Path, _files: &mut BTreeMap<(u64, u64), u64>) -> Result<()> {
     bail!("segment file identity measurements require Unix")
 }
-#[allow(dead_code)]
+#[cfg(test)]
 fn sum(mut files: impl Iterator<Item = u64>) -> Result<u64> {
     files.try_fold(0u64, |total, bytes| {
         total
@@ -368,7 +399,7 @@ fn sum(mut files: impl Iterator<Item = u64>) -> Result<u64> {
             .ok_or_else(|| anyhow::anyhow!("segment byte count overflow"))
     })
 }
-#[allow(dead_code)]
+#[cfg(test)]
 pub(super) fn new_file_bytes(staging: &Path, previous: Option<&Path>) -> Result<u64> {
     let mut old = BTreeMap::new();
     if let Some(previous) = previous {
@@ -383,7 +414,7 @@ pub(super) fn new_file_bytes(staging: &Path, previous: Option<&Path>) -> Result<
 }
 
 /// `_generation.json` is written after the checkpoint payload snapshot.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(super) fn manifest_bytes(staging: &Path) -> Result<u64> {
     note_inspected_file_entry();
     let metadata = std::fs::symlink_metadata(staging.join(super::GENERATION_MANIFEST_FILE))?;
@@ -394,7 +425,7 @@ pub(super) fn manifest_bytes(staging: &Path) -> Result<u64> {
 }
 
 #[cfg(unix)]
-pub(super) fn manifest_identity(staging: &Path) -> Result<((u64, u64), u64)> {
+pub(in crate::persistence) fn manifest_identity(staging: &Path) -> Result<((u64, u64), u64)> {
     use std::os::unix::fs::MetadataExt;
     note_inspected_file_entry();
     let metadata = std::fs::symlink_metadata(staging.join(super::GENERATION_MANIFEST_FILE))?;
@@ -409,7 +440,8 @@ pub(super) fn manifest_identity(_staging: &Path) -> Result<((u64, u64), u64)> {
     bail!("segment file identity measurements require Unix")
 }
 
-#[allow(dead_code)]
+/// Test oracle: a fresh walk of every retained generation under `root`.
+#[cfg(test)]
 pub(in crate::persistence) fn generation_disk_bytes(root: &Path) -> Result<u64> {
     let mut files = BTreeMap::new();
     for entry in std::fs::read_dir(root)? {

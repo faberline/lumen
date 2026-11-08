@@ -215,9 +215,15 @@ fn incremental_disk_bytes_matches_full_generation_walk_after_saves_and_prunes() 
     }
 }
 
+fn generation_dir_count(store: &SegmentRdbStore) -> usize {
+    store.generation_entries().unwrap().len()
+}
+
 #[test]
 fn failed_prune_marks_inventory_stale_and_rebuilds_on_next_disk_bytes() {
-    use crate::persistence::infrastructure::segment_rdb_store::telemetry::generation_disk_bytes;
+    use crate::persistence::infrastructure::segment_rdb_store::telemetry::{
+        generation_disk_bytes, inject_prune_failure_after,
+    };
 
     let dir = tempfile::tempdir().unwrap();
     let store = SegmentRdbStore::new(dir.path()).unwrap();
@@ -230,41 +236,63 @@ fn failed_prune_marks_inventory_stale_and_rebuilds_on_next_disk_bytes() {
         store.save(&engine, seq).unwrap();
     }
 
-    #[cfg(unix)]
+    // Fail after one generation is really removed. The inventory then holds a
+    // removal it has not applied, so only the stale mark can make it correct.
+    // A directory mode cannot force this failure: root ignores it.
+    // Background merges publish generations too. Let them finish, so the
+    // count below sees only this prune.
+    store
+        .wait_for_merges(std::time::Duration::from_secs(10))
+        .unwrap();
+    let before = generation_dir_count(&store);
+    inject_prune_failure_after(1);
+    let prune_result = store.prune(3);
+    assert!(
+        prune_result.is_err(),
+        "the injected prune failure must surface"
+    );
+    assert_eq!(
+        before - generation_dir_count(&store),
+        1,
+        "exactly one generation is removed before the injected failure"
+    );
+
+    let rebuilt_bytes = store.disk_bytes().unwrap();
+    let expected = generation_disk_bytes(dir.path()).unwrap();
+    assert_eq!(
+        rebuilt_bytes, expected,
+        "rebuilt disk bytes after failed prune must equal fresh generation walk"
+    );
+}
+
+#[test]
+fn reopened_store_keeps_idle_collections_reusable_across_saves_and_prunes() {
+    use crate::persistence::infrastructure::segment_rdb_store::telemetry::generation_disk_bytes;
+
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Arc::new(Engine::new());
+    engine.create_collection("u", kw_schema()).unwrap();
+    engine.create_collection("idle", kw_schema()).unwrap();
+    index_kw(&engine, "doc1", "val1");
+    index_kw_in(&engine, "idle", "idle_item", "val");
     {
-        use std::os::unix::fs::PermissionsExt;
-        let mut gen_dirs: Vec<_> = std::fs::read_dir(dir.path())
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| {
-                p.file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.starts_with("gen-"))
-            })
-            .collect();
-        gen_dirs.sort();
-        let oldest_gen = &gen_dirs[0];
-
-        let blocker = oldest_gen.join("unremovable_file");
-        std::fs::write(&blocker, b"blocked").unwrap();
-        let original_perms = std::fs::metadata(oldest_gen).unwrap().permissions();
-        std::fs::set_permissions(oldest_gen, std::fs::Permissions::from_mode(0o555)).unwrap();
-
-        let prune_result = store.prune(3);
-        assert!(
-            prune_result.is_err(),
-            "prune must fail when generation directory cannot be removed"
-        );
-
-        std::fs::set_permissions(oldest_gen, original_perms).unwrap();
-        let _ = std::fs::remove_file(blocker);
-
-        let rebuilt_bytes = store.disk_bytes().unwrap();
-        let expected = generation_disk_bytes(dir.path()).unwrap();
-        assert_eq!(
-            rebuilt_bytes, expected,
-            "rebuilt disk bytes after failed prune must equal fresh generation walk"
-        );
+        let store = SegmentRdbStore::new(dir.path()).unwrap();
+        store.save(&engine, 1).unwrap();
+        index_kw(&engine, "doc2", "val2");
+        store.save(&engine, 2).unwrap();
     }
+    // Dropping the first store releases the shared inventory. The reopened
+    // store therefore starts from a full walk, whose keys must let the idle
+    // collection be reused by the next save.
+    let store = SegmentRdbStore::new(dir.path()).unwrap();
+    index_kw(&engine, "doc3", "val3");
+    store.save(&engine, 3).unwrap();
+    store.prune(2).unwrap();
+    index_kw(&engine, "doc4", "val4");
+    store.save(&engine, 4).unwrap();
+    assert_eq!(
+        store.disk_bytes().unwrap(),
+        generation_disk_bytes(dir.path()).unwrap(),
+        "incremental disk bytes after reopen, saves and prune must match a full walk"
+    );
 }

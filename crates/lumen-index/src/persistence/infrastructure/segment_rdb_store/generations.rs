@@ -57,6 +57,11 @@ impl SegmentRdbStore {
             {
                 continue;
             }
+            #[cfg(test)]
+            if super::telemetry::take_injected_prune_failure(removed) {
+                self.mark_inventory_stale();
+                return Err(anyhow!("injected prune failure after {removed} removals"));
+            }
             if let Err(error) = std::fs::remove_dir_all(&path) {
                 self.mark_inventory_stale();
                 return Err(error)
