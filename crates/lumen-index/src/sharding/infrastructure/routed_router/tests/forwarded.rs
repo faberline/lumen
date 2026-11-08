@@ -64,7 +64,7 @@ fn check_forwarded_map_version_rejects_mismatch() {
 /// still be rejected, proving the exemption is scoped to keyless
 /// requests only, not a blanket bypass.
 #[tokio::test]
-async fn search_already_forwarded_keyless_ignores_map_version_mismatch() {
+async fn search_already_forwarded_ignores_map_version_mismatch_with_or_without_routing_key() {
     let router = test_router(0);
     let mut fields = BTreeMap::new();
     fields.insert(
@@ -101,13 +101,15 @@ async fn search_already_forwarded_keyless_ignores_map_version_mismatch() {
         .expect("a keyless scatter sub-request must not be rejected on map-version mismatch");
     assert_eq!(resp.hits.len(), 0);
 
+    // A search that carries a routing key is also a scatter sub-request now:
+    // `RoutedRouter::search` clears the key, so the map-version mismatch must
+    // not reject it either.
     let mut keyed_req = search_req(None);
     keyed_req.routing_key = Some("some-key".into());
-    let err = router
-        .search("coll", keyed_req, &headers)
-        .await
-        .expect_err("a keyed forward must still enforce the map-version check");
-    assert!(err.downcast_ref::<ShardMapVersionMismatch>().is_some());
+    let resp = router.search("coll", keyed_req, &headers).await.expect(
+        "a forwarded search with a routing key must not be rejected on map-version mismatch",
+    );
+    assert_eq!(resp.hits.len(), 0);
 }
 
 /// #1467 R6/AC6: the availability-over-completeness exemption above is
