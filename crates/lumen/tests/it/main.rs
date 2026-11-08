@@ -122,6 +122,7 @@ mod shared_stateful_foundations;
 mod snapshot_round_trip_keeps_sealed_inverted_index;
 mod snapshot_ships_only_the_forward_column;
 mod sort_missing_topk_e2e;
+mod source_contract;
 mod spec_cli;
 mod spec_gen_e2e;
 mod spec_route_parity;

@@ -105,8 +105,10 @@ fn capacity_wait_observes_ready_state_even_when_scheduled_after_deadline() {
 
 #[test]
 fn capacity_request_rechecks_the_idle_revision_before_rejecting() {
-    let mut state = WorkState::default();
-    state.published_revision = 7;
+    let mut state = WorkState {
+        published_revision: 7,
+        ..Default::default()
+    };
     let deadline = Some(Instant::now() + TEST_TIMEOUT);
     assert!(state
         .validate_capacity_retry(Some(7), deadline)
@@ -143,8 +145,10 @@ fn stale_retry_is_allowed_to_retake_capacity_request_without_self_requeue() {
 
 #[test]
 fn a_new_publication_cannot_restart_an_expired_capacity_deadline() {
-    let mut state = WorkState::default();
-    state.published_revision = 8;
+    let state = WorkState {
+        published_revision: 8,
+        ..Default::default()
+    };
     let expired = Some(Instant::now() - Duration::from_secs(1));
     assert!(state
         .validate_capacity_retry(Some(7), expired)
@@ -160,9 +164,11 @@ fn a_new_publication_cannot_restart_an_expired_capacity_deadline() {
 
 #[test]
 fn an_in_progress_capacity_retry_keeps_a_new_terminal_failure_visible() {
-    let mut state = WorkState::default();
-    state.published_revision = 8;
-    state.error = Some("new terminal failure".into());
+    let state = WorkState {
+        published_revision: 8,
+        error: Some("new terminal failure".into()),
+        ..Default::default()
+    };
     let expired = Some(Instant::now() - Duration::from_secs(1));
     assert!(state
         .validate_capacity_retry(Some(7), expired)

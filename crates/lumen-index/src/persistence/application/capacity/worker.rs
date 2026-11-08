@@ -51,6 +51,7 @@ impl Owner {
         let fence = PublicationFence {
             registry: Arc::downgrade(registry),
             token,
+            checkpoints: Arc::default(),
         };
         let endpoint = Arc::new(Endpoint {
             requests: Mutex::new(Requests::default()),
@@ -68,6 +69,10 @@ impl Owner {
         registration.token = token;
         registration.endpoint = Arc::downgrade(&endpoint);
         registration.configured = configured;
+        *registry
+            .checkpoint_progress
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Arc::downgrade(&endpoint.fence.checkpoints);
         Ok(Some(Self {
             endpoint,
             worker: Some(worker),
@@ -140,7 +145,14 @@ fn run(sink: Arc<SegmentCheckpointSink>, endpoint: Arc<Endpoint>) {
                 .clone()
                 .with_publication_fence(endpoint.fence.clone());
             if checkpoint || (merge && !store.has_current_generation()?) {
-                sink.checkpoint_sync(&store)?;
+                let request = sink
+                    .engine
+                    .capacity_owner_state()
+                    .and_then(|state| state.checkpoint_request_revision);
+                match request {
+                    Some(revision) => sink.checkpoint_sync_requested(&store, Some(revision))?,
+                    None => sink.checkpoint_sync(&store)?,
+                }
             }
             if merge {
                 let revision = store.request_capacity_merge(&sink.engine)?;
@@ -179,6 +191,11 @@ fn run(sink: Arc<SegmentCheckpointSink>, endpoint: Arc<Endpoint>) {
         }
         endpoint.changed.notify_all();
         if state.stopped {
+            endpoint
+                .fence
+                .checkpoints
+                .active
+                .store(false, Ordering::Release);
             return;
         }
     }

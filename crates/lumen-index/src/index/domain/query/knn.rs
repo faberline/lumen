@@ -100,7 +100,7 @@ fn eval_knn_inner(
     let pairs = match allow {
         None => idx.search_knn(&q.vector, q.k as usize)?,
         Some(bm) => {
-            let allow_fn = |eid: &str| coll.interner.id(eid).map_or(false, |id| bm.contains(id));
+            let allow_fn = |eid: &str| coll.interner.id(eid).is_some_and(|id| bm.contains(id));
             idx.search_knn_filtered(&q.vector, q.k as usize, &allow_fn)?
         }
     };

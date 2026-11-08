@@ -93,9 +93,7 @@ async fn aggregate_shard_usage_skips_unreachable_pods() {
 
 #[test]
 fn pod_metrics_urls_covers_every_storage_pod_by_headless_dns() {
-    use crate::domain::lumen_spec::{
-        serving::ServingSpec, topology::ShardMapSpec, LumenSpec,
-    };
+    use crate::domain::lumen_spec::{serving::ServingSpec, topology::ShardMapSpec, LumenSpec};
     let spec = LumenSpec {
         image: "lumen:latest".into(),
         image_pull_policy: None,

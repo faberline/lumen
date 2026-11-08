@@ -28,7 +28,9 @@ pub fn is_dns_label(s: &str) -> bool {
 }
 
 pub fn is_lower_hex(s: &str, len: usize) -> bool {
-    s.len() == len && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+    s.len() == len
+        && s.bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
 
 /// One line on the process's stdout. libtest captures `println!` and drops it
@@ -41,7 +43,10 @@ pub fn say(line: impl AsRef<str>) {
 
 /// `E2E_EVIDENCE {"suite":…,"step":…,"data":…}` (rust-tests.md rule 9).
 pub fn evidence(suite: &str, step: &str, data: Value) {
-    say(format!("E2E_EVIDENCE {}", json!({"suite": suite, "step": step, "data": data})));
+    say(format!(
+        "E2E_EVIDENCE {}",
+        json!({"suite": suite, "step": step, "data": data})
+    ));
 }
 
 /// A numbered step of a journey: says where the run is, and records how long
@@ -56,13 +61,21 @@ impl Step {
     pub fn begin(suite: &'static str, name: impl Into<String>) -> Self {
         let name = name.into();
         say(format!(">> [{suite}] {name}"));
-        Self { suite, name, start: Instant::now() }
+        Self {
+            suite,
+            name,
+            start: Instant::now(),
+        }
     }
 
     pub fn end(self) {
         let seconds = self.start.elapsed().as_secs();
         say(format!("   ({} finished in {seconds}s)", self.name));
-        evidence(self.suite, "timing", json!({"step": self.name, "seconds": seconds}));
+        evidence(
+            self.suite,
+            "timing",
+            json!({"step": self.name, "seconds": seconds}),
+        );
     }
 }
 
@@ -78,7 +91,10 @@ pub struct Kube {
 impl Kube {
     pub fn from_env() -> Self {
         let namespace = required("E2E_NAMESPACE");
-        assert!(is_dns_label(&namespace), "invalid E2E_NAMESPACE: {namespace}");
+        assert!(
+            is_dns_label(&namespace),
+            "invalid E2E_NAMESPACE: {namespace}"
+        );
         Self { namespace }
     }
 
@@ -110,7 +126,8 @@ impl Kube {
         all.extend_from_slice(args);
         all.extend_from_slice(&["-o", "json"]);
         let text = self.run(&all);
-        serde_json::from_str(&text).unwrap_or_else(|e| panic!("kubectl {all:?}: not JSON ({e}): {text}"))
+        serde_json::from_str(&text)
+            .unwrap_or_else(|e| panic!("kubectl {all:?}: not JSON ({e}): {text}"))
     }
 
     /// Whether `kind/name` exists. NotFound is no; any other failure fails
@@ -151,8 +168,14 @@ impl Drop for DumpOnFailure<'_> {
         }
         say(format!("!! [{}] FAIL; cluster state follows", self.suite));
         self.kube.show(&["get", "lumens.lumen.dev", "-o", "yaml"]);
-        self.kube.show(&["get", "statefulsets,deployments,pods,pvc,endpoints", "-o", "wide"]);
-        self.kube.show(&["logs", "deploy/lumen-operator", "--tail=400"]);
+        self.kube.show(&[
+            "get",
+            "statefulsets,deployments,pods,pvc,endpoints",
+            "-o",
+            "wide",
+        ]);
+        self.kube
+            .show(&["logs", "deploy/lumen-operator", "--tail=400"]);
     }
 }
 
@@ -170,14 +193,27 @@ pub fn wait_pods_exist(kube: &Kube, label: &str, expected: usize, timeout: Durat
         std::thread::sleep(Duration::from_secs(2));
     }
     kube.show(&["get", "pod", "-l", label]);
-    panic!("expected at least {expected} pod(s) for {label} within {}s", timeout.as_secs());
+    panic!(
+        "expected at least {expected} pod(s) for {label} within {}s",
+        timeout.as_secs()
+    );
 }
 
 pub fn wait_ready(kube: &Kube, label: &str, expected: usize, timeout: Duration) {
-    say(format!("   waiting up to {}s for serving pods ({label}) Ready", timeout.as_secs()));
+    say(format!(
+        "   waiting up to {}s for serving pods ({label}) Ready",
+        timeout.as_secs()
+    ));
     wait_pods_exist(kube, label, expected, timeout);
     let timeout = format!("--timeout={}s", timeout.as_secs());
-    kube.run(&["wait", "--for=condition=Ready", "pod", "-l", label, &timeout]);
+    kube.run(&[
+        "wait",
+        "--for=condition=Ready",
+        "pod",
+        "-l",
+        label,
+        &timeout,
+    ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +249,13 @@ impl Api {
     /// reply, timeout) waits and repeats it, up to 5 attempts; an HTTP error
     /// status fails at once. Every request made through here is safe to
     /// repeat: index items carry external ids.
-    pub async fn call(&self, method: reqwest::Method, path: &str, body: Option<&Value>, timeout: Duration) -> Value {
+    pub async fn call(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&Value>,
+        timeout: Duration,
+    ) -> Value {
         let url = format!("{}{path}", self.base);
         let mut last = String::new();
         for attempt in 1..=5u64 {
@@ -238,11 +280,14 @@ impl Api {
                     if text.trim().is_empty() {
                         return Value::Null;
                     }
-                    return serde_json::from_str(&text).unwrap_or_else(|_| Value::String(text.into_owned()));
+                    return serde_json::from_str(&text)
+                        .unwrap_or_else(|_| Value::String(text.into_owned()));
                 }
                 Err(e) => {
                     last = format!("{e:?}");
-                    say(format!("   transport failure ({method} {url}, attempt {attempt}): {e}; retrying"));
+                    say(format!(
+                        "   transport failure ({method} {url}, attempt {attempt}): {e}; retrying"
+                    ));
                     tokio::time::sleep(Duration::from_secs(attempt * 3)).await;
                 }
             }
@@ -255,17 +300,25 @@ impl Api {
     }
 
     pub async fn post(&self, path: &str, body: &Value, timeout: Duration) -> Value {
-        self.call(reqwest::Method::POST, path, Some(body), timeout).await
+        self.call(reqwest::Method::POST, path, Some(body), timeout)
+            .await
     }
 
     pub async fn put(&self, path: &str, body: &Value, timeout: Duration) -> Value {
-        self.call(reqwest::Method::PUT, path, Some(body), timeout).await
+        self.call(reqwest::Method::PUT, path, Some(body), timeout)
+            .await
     }
 
     /// Whether `path` answers with a success status within 5s, once.
     pub async fn answers(&self, path: &str) -> bool {
         let url = format!("{}{path}", self.base);
-        match self.client.get(&url).timeout(Duration::from_secs(5)).send().await {
+        match self
+            .client
+            .get(&url)
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+        {
             Ok(resp) => resp.status().is_success(),
             Err(_) => false,
         }
@@ -303,18 +356,40 @@ pub fn hits_for(resp: &Value, external_id: &str) -> usize {
 pub const DOCS_PER_BATCH: u64 = 500;
 
 const ADJ: &[&str] = &[
-    "fast", "quiet", "fierce", "kind", "bold", "calm", "eager", "proud", "happy", "curious", "brave", "gentle", "lucky",
-    "wise", "young", "old",
+    "fast", "quiet", "fierce", "kind", "bold", "calm", "eager", "proud", "happy", "curious",
+    "brave", "gentle", "lucky", "wise", "young", "old",
 ];
 const NOUN: &[&str] = &[
-    "engineer", "designer", "writer", "doctor", "teacher", "musician", "scientist", "explorer", "chef", "pilot", "farmer",
+    "engineer",
+    "designer",
+    "writer",
+    "doctor",
+    "teacher",
+    "musician",
+    "scientist",
+    "explorer",
+    "chef",
+    "pilot",
+    "farmer",
     "architect",
 ];
 const LANG: &[&str] = &[
-    "rust", "python", "go", "typescript", "kotlin", "swift", "java", "c++", "haskell", "ocaml", "elixir", "ruby",
+    "rust",
+    "python",
+    "go",
+    "typescript",
+    "kotlin",
+    "swift",
+    "java",
+    "c++",
+    "haskell",
+    "ocaml",
+    "elixir",
+    "ruby",
 ];
 const HOBBY: &[&str] = &[
-    "hiking", "cycling", "running", "reading", "gaming", "cooking", "painting", "writing", "climbing", "skiing", "surfing",
+    "hiking", "cycling", "running", "reading", "gaming", "cooking", "painting", "writing",
+    "climbing", "skiing", "surfing",
 ];
 
 fn h(i: u64, k: u64) -> u64 {
@@ -339,7 +414,7 @@ fn doc(i: u64) -> [Value; 2] {
         pick(LANG, i, 1_299_709),
         pick(HOBBY, i, 15_485_863)
     );
-    let email = if h(i, 32_452_843) % 20 == 0 {
+    let email = if h(i, 32_452_843).is_multiple_of(20) {
         format!("shared{}@example.com", h(i, 49_979_687) % 50)
     } else {
         format!("user{i}@example.com")
@@ -358,7 +433,9 @@ pub fn batch_count(docs: u64) -> u64 {
 /// a request_id unique per batch (the server dedups a repeated id as an
 /// idempotent retry).
 pub fn batch(docs: u64, b: u64) -> Value {
-    let items: Vec<Value> = (b * DOCS_PER_BATCH..((b + 1) * DOCS_PER_BATCH).min(docs)).flat_map(doc).collect();
+    let items: Vec<Value> = (b * DOCS_PER_BATCH..((b + 1) * DOCS_PER_BATCH).min(docs))
+        .flat_map(doc)
+        .collect();
     json!({"items": items, "request_id": format!("e2e-gke-{docs}-{b}")})
 }
 
@@ -386,7 +463,10 @@ mod tests {
             format!("{:x}", sha.finalize()),
             "56052727b45081159f3d8675862aac5aff613014b94f7f63c331aaffc338a808"
         );
-        assert_eq!(doc(0)[0]["value"], "a old musician who codes in java and loves reading");
+        assert_eq!(
+            doc(0)[0]["value"],
+            "a old musician who codes in java and loves reading"
+        );
         assert_eq!(doc(6)[1]["value"], "shared12@example.com");
         assert_eq!(batch_count(1201), 3);
         assert_eq!(batch(1201, 2)["items"].as_array().unwrap().len(), 402);

@@ -207,10 +207,7 @@ fn validate_release_image_pin_contract(content: &str) -> Result<(), String> {
         return Err("local preparation must direct the next candidate workflow step".to_string());
     }
 
-    for path in [
-        "k8s/base/deployment.yaml",
-        "k8s/operator/deployment.yaml",
-    ] {
+    for path in ["k8s/base/deployment.yaml", "k8s/operator/deployment.yaml"] {
         if content.matches(path).count() != 1 {
             return Err(format!(
                 "release image synchronization must name {path} exactly once"
@@ -391,8 +388,7 @@ fn test_build_surfaces_release_invocation() {
 #[test]
 fn test_release_preparation_updates_all_checked_in_image_pins() {
     let base_dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
-    let build_script =
-        std::fs::read_to_string(base_dir.join("build.sh")).expect("read build.sh");
+    let build_script = std::fs::read_to_string(base_dir.join("build.sh")).expect("read build.sh");
     validate_release_image_pin_contract(&build_script)
         .expect("release preparation must update every checked-in image pin");
 
@@ -550,16 +546,55 @@ fn test_release_preparation_rejects_retired_routes_and_stale_llms_guidance() {
 fn test_compiled_cfgs_when_release_feature_enabled() {
     #[cfg(feature = "release")]
     {
-        assert!(cfg!(feature = "otel"), "otel must be active");
-        assert!(cfg!(feature = "operator"), "operator must be active");
-        assert!(cfg!(feature = "raft-wal"), "raft-wal must be active");
-        assert!(cfg!(feature = "self-update"), "self-update must be active");
-        assert!(cfg!(feature = "issue"), "issue must be active");
+        let compiled = [
+            ("otel", cfg!(feature = "otel")),
+            ("operator", cfg!(feature = "operator")),
+            ("raft-wal", cfg!(feature = "raft-wal")),
+            ("self-update", cfg!(feature = "self-update")),
+            ("issue", cfg!(feature = "issue")),
+            ("delegated-auth", cfg!(feature = "delegated-auth")),
+            ("backup", cfg!(feature = "backup")),
+        ];
+        for (feature, active) in compiled {
+            assert!(active, "{feature} must be active");
+        }
+        // Explicit all-features builds also enable Jieba. Resolve the actual
+        // release-only profile separately and retain its original exclusion.
+        let output = Command::new(env!("CARGO"))
+            .args([
+                "metadata",
+                "--locked",
+                "--format-version",
+                "1",
+                "--manifest-path",
+            ])
+            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"))
+            .args(["--no-default-features", "--features", "release"])
+            .output()
+            .expect("resolve release-only feature contract");
         assert!(
-            cfg!(feature = "delegated-auth"),
-            "delegated-auth must be active"
+            output.status.success(),
+            "release metadata: {}",
+            String::from_utf8_lossy(&output.stderr)
         );
-        assert!(cfg!(feature = "backup"), "transitive backup must be active");
-        assert!(!cfg!(feature = "jieba"), "jieba must NOT be active");
+        let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let package = metadata["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == "lumen")
+            .expect("lumen package");
+        let node = metadata["resolve"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == package["id"])
+            .expect("resolved lumen features");
+        let enabled = node["features"].as_array().unwrap();
+        assert!(enabled.iter().any(|v| v == "release"));
+        assert!(
+            !enabled.iter().any(|v| v == "jieba"),
+            "jieba must NOT be active in release-only resolution"
+        );
     }
 }

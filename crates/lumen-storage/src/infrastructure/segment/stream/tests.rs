@@ -1,3 +1,4 @@
+use crate::infrastructure::segment::reader_cache::CachedTextPosting;
 use crate::infrastructure::segment::stream::scalar_projection::KeywordStreamProjection;
 use crate::infrastructure::segment::stream::text_projection::TextStreamView;
 use crate::infrastructure::segment::text_writer::test_postings::Postings;
@@ -113,7 +114,7 @@ fn set_source(path: &Path, rows: &[Option<Vec<String>>]) -> Arc<SegmentReader> {
 
 struct Projection {
     rows: Vec<Option<u32>>,
-    terms: Vec<(String, Arc<(Vec<u32>, Vec<u32>)>)>,
+    terms: Vec<(String, CachedTextPosting)>,
 }
 
 impl TextStreamView for Projection {

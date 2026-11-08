@@ -647,8 +647,7 @@ impl HttpPhaseWriter {
         self.records()
             .into_iter()
             .filter(|row| {
-                row["event"] == "lumen_write_phase"
-                    && row["attributes"]["attempt_id"] == attempt_id
+                row["event"] == "lumen_write_phase" && row["attributes"]["attempt_id"] == attempt_id
             })
             .collect()
     }

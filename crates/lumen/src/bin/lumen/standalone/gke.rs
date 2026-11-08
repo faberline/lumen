@@ -1,5 +1,6 @@
 //! Standalone GKE configuration and the atomic publication of its manifests.
 
+type ManifestDocuments = (Vec<(String, Value)>, Vec<(String, Value)>);
 mod manifest;
 mod validate;
 
@@ -127,7 +128,7 @@ fn render(a: StandaloneGkeRenderArgs) -> Result<()> {
     Ok(())
 }
 
-fn write_stage(stage: &Path, docs: (Vec<(String, Value)>, Vec<(String, Value)>)) -> Result<()> {
+fn write_stage(stage: &Path, docs: ManifestDocuments) -> Result<()> {
     let storage = stage.join("storage");
     let runtime = stage.join("runtime");
     fs::create_dir(&storage)?;

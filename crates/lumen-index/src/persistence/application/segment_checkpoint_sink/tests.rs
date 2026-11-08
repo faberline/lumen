@@ -143,6 +143,10 @@ async fn wait_for_checkpoint_count(engine: &Engine, expected: u64) {
     .expect("actual checkpoint driver made no progress");
 }
 
+mod checkpoint_coalescing;
+
+mod committed_boundary;
+
 mod driver;
 
 mod driver_lifecycle;
