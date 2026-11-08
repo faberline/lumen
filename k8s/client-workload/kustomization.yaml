@@ -1,0 +1,13 @@
+# CODEGEN-BEGIN
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Copy this directory next to your application and reference it as a component.
+# The patch adds the ManagedKsa contract to the existing Deployment; it creates
+# no Namespace, ServiceAccount or Secret.
+
+patches:
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+# CODEGEN-END

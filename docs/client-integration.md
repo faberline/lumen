@@ -121,12 +121,13 @@ retry runtime.
 
 ## Kubernetes workload template
 
-The planned client template is a versioned, copy-to-customize starting point.
-It is separate from `k8s/overlays/template`, which is the current Standalone
-runtime compatibility template.
+The client template lives in `k8s/client-workload/`. It is a versioned,
+copy-to-customize Kustomize component. It is separate from
+`k8s/overlays/template`, which is the current Standalone runtime compatibility
+template.
 
-The future client template will require an existing application workload and
-KSA. It will make these changes explicit:
+The client template requires an existing application workload and KSA. It
+makes these changes explicit:
 
 ```yaml
 spec:
@@ -161,18 +162,19 @@ spec:
               readOnly: true
 ```
 
-The actual template will also include placeholder validation and an optional
-egress NetworkPolicy. It will not use `subPath` for the CA mount, because that
-would prevent in-place ConfigMap updates from reaching the container.
+The template also includes an optional egress NetworkPolicy component in
+`k8s/client-workload/egress/`. It does not use `subPath` for the CA mount,
+because that would prevent in-place ConfigMap updates from reaching the
+container.
 
 The operator will publish one runtime-specific public CA ConfigMap into every
 namespace that contains an allowed KSA. Multiple allowed KSAs in the same
 namespace share that bundle. The ConfigMap contains no token, private key, or
 client credential.
 
-The template itself is not present today. Do not copy the example above as if
-it were a supported artifact. Until the roadmap outcome lands, the application
-platform must build and verify its own equivalent patch.
+Copy `k8s/client-workload/`, replace every `REPLACE_ME__*` placeholder listed in
+its README, and run `grep -rn REPLACE_ME__` on your copy before apply. Do not
+apply the example above as-is.
 
 ## Source integration
 
