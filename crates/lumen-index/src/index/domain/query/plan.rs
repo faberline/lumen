@@ -43,7 +43,7 @@ pub(in crate::index) fn try_plan(
     req: &SearchRequest,
     offset: usize,
     sort_after: Option<&SortAfter>,
-) -> Result<Option<(Vec<(u32, f32)>, u64, PlanKind)>> {
+) -> Result<Option<super::PlannedPage>> {
     if offset != 0 {
         return Ok(None);
     }
@@ -312,7 +312,7 @@ pub(in crate::index) fn try_plan(
         let values = n.sorted_values();
         for (_v, docs) in values.range((lo, hi)) {
             // Exact total is a cheap sum of bucket lengths — no per-doc work.
-            total += docs.len() as u64;
+            total += docs.len();
             if page.len() < want {
                 for id in docs {
                     page.push((id, 1.0));

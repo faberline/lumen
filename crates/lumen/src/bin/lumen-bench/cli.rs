@@ -59,3 +59,50 @@ pub(super) fn parse_types(raw: &str) -> Result<Vec<&'static str>> {
     }
     Ok(cells)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cell_parser_preserves_requested_order_and_rejects_unknown_or_empty_input() {
+        assert_eq!(
+            parse_types(" bool_filter, ,sorted_page_deep ").unwrap(),
+            ["bool_filter", "sorted_page_deep"]
+        );
+        assert!(parse_types(" , \t").is_err());
+        assert!(parse_types("sorted_page_deep,unsupported").is_err());
+    }
+
+    #[test]
+    fn run_parser_keeps_workload_defaults_and_explicit_overrides() {
+        let Cli {
+            command: Command::Run(defaults),
+        } = Cli::try_parse_from(["lumen-bench", "run"]).unwrap();
+        assert_eq!(defaults.documents, DEFAULT_DOCUMENTS);
+        assert_eq!(defaults.page_size, DEFAULT_PAGE_SIZE);
+        assert_eq!(defaults.queries, DEFAULT_QUERIES);
+        assert_eq!(parse_types(&defaults.types).unwrap(), ["sorted_page_deep"]);
+        let Cli {
+            command: Command::Run(explicit),
+        } = Cli::try_parse_from([
+            "lumen-bench",
+            "run",
+            "--documents",
+            "40000",
+            "--page-size",
+            "20",
+            "--queries",
+            "80",
+            "--types",
+            "bool_filter",
+        ])
+        .unwrap();
+        assert_eq!(
+            (explicit.documents, explicit.page_size, explicit.queries),
+            (40_000, 20, 80)
+        );
+        assert_eq!(parse_types(&explicit.types).unwrap(), ["bool_filter"]);
+        assert!(Cli::try_parse_from(["lumen-bench", "run", "--queries", "invalid"]).is_err());
+    }
+}

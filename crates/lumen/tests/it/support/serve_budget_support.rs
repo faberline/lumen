@@ -304,16 +304,6 @@ impl LumenProcess {
         );
     }
 
-    /// Wait for a SIGTERM shutdown without replacing the server's configured
-    /// grace period with a shorter test timeout. The returned duration is used
-    /// only to prove that an idle server does not consume the full default
-    /// grace when its HTTP drain is already complete.
-    #[cfg(unix)]
-    pub fn wait_for_exit(&mut self, grace: Duration) -> (Duration, String) {
-        let started = Instant::now();
-        self.wait_for_exit_before(started + grace)
-    }
-
     /// Wait for a SIGTERM exit within a caller-owned monotonic deadline.
     #[cfg(unix)]
     pub fn wait_for_exit_before(&mut self, deadline: Instant) -> (Duration, String) {
@@ -337,7 +327,11 @@ impl LumenProcess {
     }
 
     fn finish_exited_child(&mut self) -> String {
-        self.child.take().expect("lumen child is available");
+        self.child
+            .take()
+            .expect("lumen child is available")
+            .wait()
+            .expect("reap exited lumen child");
         self.port_bind_handoff.take();
         self.logs()
     }

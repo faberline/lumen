@@ -107,7 +107,7 @@ pub fn estimate_record_decode_peak(entry: &RaftLogEntry) -> Result<usize, Record
         // payload, discriminant and alignment. Its cautious size hint can
         // force geometric Vec growth even for a definite CBOR array. Include
         // both allocations during reallocation, independent of final values.
-        allocation(mul(mul(count.max(4), 8 * size_of::<usize>())?, 3)?)
+        allocation(mul(mul(count.max(4), usize::BITS as usize)?, 3)?)
     };
     match entry {
         RaftLogEntry::Index { req, .. } => {

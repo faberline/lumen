@@ -3,6 +3,9 @@
 //! Non-text leaves score a constant 1.0, a match scores BM25, and the
 //! combinators sum their children's scores.
 
+pub(in crate::index) type RankedPage = (Vec<(u32, f32)>, u64);
+pub(in crate::index) type PlannedPage = (Vec<(u32, f32)>, u64, plan::PlanKind);
+
 mod clause;
 pub(in crate::index) mod eval;
 mod filter_page;

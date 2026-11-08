@@ -73,7 +73,7 @@ impl Header {
 
 impl Footer {
     /// Serialize the 24 footer bytes little-endian.
-    pub(super) fn to_bytes(&self) -> [u8; FOOTER_LEN] {
+    pub(super) fn to_bytes(self) -> [u8; FOOTER_LEN] {
         let mut out = [0u8; FOOTER_LEN];
         out[0..8].copy_from_slice(&self.dir_offset.to_le_bytes());
         out[8..16].copy_from_slice(&self.dir_len.to_le_bytes());
@@ -143,7 +143,7 @@ pub(super) fn append_present_bitset(
     let pad = (8 - (buf.len() % 8)) % 8;
     buf.resize(buf.len() + pad, 0);
     let off = buf.len();
-    let n_words = (present.len() + 63) / 64;
+    let n_words = present.len().div_ceil(64);
     let mut words = vec![0u64; n_words];
     for (i, &p) in present.iter().enumerate() {
         if p {

@@ -180,23 +180,23 @@ pub(super) struct ScalarPlan {
     pub(super) winners: BTreeMap<PlannedCell, usize>,
     pub(super) bytes_by_field: BTreeMap<String, u64>,
     pub(super) applied: u32,
-    pub(super) source_items: usize,
+    pub(super) _source_items: usize,
     pub(super) business_error: Option<BusinessError>,
-    pub(super) reservation: usize,
+    pub(super) _reservation: usize,
 }
 
 #[derive(Debug)]
 pub(super) enum PlanResult {
-    Planned(ScalarPlan),
+    Planned(Box<ScalarPlan>),
     /// A schema change exposed a Hash field after the caller's parse snapshot.
     /// The caller retries and parses it outside state and apply locks.
     NeedsHash,
     /// Internal routing signal only.  It must fall back to the owned current
     /// path, never become a new HTTP rejection.
     Unsupported {
-        ordinal: usize,
-        field: String,
-        kind: FieldType,
+        _ordinal: usize,
+        _field: String,
+        _kind: FieldType,
     },
 }
 

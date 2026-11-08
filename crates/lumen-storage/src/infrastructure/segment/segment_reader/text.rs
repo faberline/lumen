@@ -4,7 +4,9 @@
 use std::sync::Arc;
 
 use crate::infrastructure::segment::codecs::{decode_posting_block, read_varint};
-use crate::infrastructure::segment::reader_cache::{posting_cache_key, CachedTextPosting};
+use crate::infrastructure::segment::reader_cache::{
+    posting_cache_key, CachedTextPosting, TextTokenPosting,
+};
 use crate::infrastructure::segment::{
     SegmentReader, CODEC_RAW_VAR, ROLE_DICT, ROLE_TEXT_DOCLEN, ROLE_TEXT_POSTINGS,
 };
@@ -238,7 +240,7 @@ impl SegmentReader {
     /// taken after a Text seal, where the in-RAM `tokens` was dropped). The
     /// `(docids, tfs)` streams are byte-identical to what the live index held at
     /// seal.
-    pub fn text_tokens_all(&self) -> Option<Vec<(String, Vec<u32>, Vec<u32>)>> {
+    pub fn text_tokens_all(&self) -> Option<Vec<TextTokenPosting>> {
         let col = self.column(ROLE_DICT)?;
         let n = u32::try_from(col.elem_count).ok()?;
         let mut out = Vec::with_capacity(n as usize);

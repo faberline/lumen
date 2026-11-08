@@ -4,11 +4,42 @@
 use std::sync::{Arc, Mutex};
 
 use crate::ingest::domain::change_budget::{
-    snapshot, update_high_water, ActiveCharge, AdmissionError, RamCharge, Reservation,
-    RetainedCharge, RetainedChargeInner, SourceRetention, SourceRetentionHeld,
+    request_waiting_capacity, snapshot, update_high_water, ActiveCharge, AdmissionError,
+    Reservation, RetainedCharge, RetainedChargeInner, SourceRetention, SourceRetentionHeld, State,
 };
 
+#[cfg(test)]
+use crate::ingest::domain::change_budget::RamCharge;
+
 impl Reservation {
+    pub(crate) fn set_capacity_episode(&mut self, revision: u64) {
+        self.capacity_episode = Some(revision);
+    }
+
+    fn record_work_revision(&self, state: &mut State) {
+        state.next_work_revision = state
+            .next_work_revision
+            .checked_add(1)
+            .expect("work revision exhausted");
+        let revision = state.next_work_revision;
+        let owner = state
+            .owners
+            .get_mut(&self.owner)
+            .expect("owner checked above");
+        owner.work_revision = revision;
+        match self.capacity_episode {
+            None => owner.independent_work_revision = revision,
+            Some(episode)
+                if owner
+                    .relieved_capacity_revision
+                    .is_none_or(|served| episode > served) =>
+            {
+                owner.capacity_cohort_work.insert(episode, revision);
+            }
+            Some(_) => {}
+        }
+    }
+
     /// Divide one already-admitted reservation without changing process
     /// accounting. The original half keeps its source-retention bridge; the
     /// new half is ordinary transient ownership. This is deliberately a pure
@@ -30,6 +61,7 @@ impl Reservation {
             lifetime: self.lifetime.clone(),
             bytes,
             committed: false,
+            capacity_episode: None,
             // The source must stay with the apply half. The transient half
             // protects only temporary encode/AOF ownership.
             source_retention: None,
@@ -40,7 +72,9 @@ impl Reservation {
         let retained = self
             .source_retention
             .get_or_insert_with(|| Arc::new(Mutex::new(None)));
-        SourceRetention(retained.clone())
+        SourceRetention {
+            _held: retained.clone(),
+        }
     }
 
     pub(crate) fn bytes(&self) -> usize {
@@ -149,6 +183,9 @@ impl Reservation {
                 });
             }
             waiting.get_or_insert_with(|| self.budget.mark_capacity_waiter());
+            if request_waiting_capacity(&mut state, self.owner) {
+                self.budget.0.wake.signal();
+            }
             state = self
                 .budget
                 .0
@@ -180,16 +217,7 @@ impl Reservation {
             .active
             .checked_add(self.bytes)
             .expect("active accounting overflow");
-        state.next_work_revision = state
-            .next_work_revision
-            .checked_add(1)
-            .expect("work revision exhausted");
-        let revision = state.next_work_revision;
-        state
-            .owners
-            .get_mut(&self.owner)
-            .expect("owner checked above")
-            .work_revision = revision;
+        self.record_work_revision(&mut state);
         self.budget.0.wake.signal();
         self.committed = true;
         Ok(ActiveCharge {
@@ -230,34 +258,30 @@ impl Reservation {
             }
             capture_epoch
         };
-        state.next_work_revision = state
-            .next_work_revision
-            .checked_add(1)
-            .expect("work revision exhausted");
-        let revision = state.next_work_revision;
-        state
-            .owners
-            .get_mut(&self.owner)
-            .expect("owner checked above")
-            .work_revision = revision;
+        self.record_work_revision(&mut state);
         self.budget.0.wake.signal();
         self.committed = true;
-        let charge = RetainedCharge(Arc::new(RetainedChargeInner {
-            budget: self.budget.clone(),
-            owner: self.owner,
-            _lifetime: self.lifetime.clone(),
-            capture_epoch,
-            bytes: self.bytes,
-        }));
+        let charge = RetainedCharge {
+            _inner: Arc::new(RetainedChargeInner {
+                budget: self.budget.clone(),
+                owner: self.owner,
+                _lifetime: self.lifetime.clone(),
+                capture_epoch,
+                bytes: self.bytes,
+            }),
+        };
         if let Some(retention) = self.source_retention.take() {
             *retention.lock().expect("source retention poisoned") =
-                Some(SourceRetentionHeld::Retained(charge.clone()));
+                Some(SourceRetentionHeld::Retained {
+                    _charge: charge.clone(),
+                });
         }
         Ok(charge)
     }
 
     /// Commit pre-apply RAM that is eligible only for a verified durable-stage
     /// transition. Applied journal work must use [`Self::commit`] instead.
+    #[cfg(test)]
     pub(crate) fn commit_ram(
         mut self,
         sequence: u64,
@@ -311,10 +335,11 @@ impl Drop for Reservation {
                 lifetime: self.lifetime.clone(),
                 bytes: self.bytes,
                 committed: false,
+                capacity_episode: self.capacity_episode,
                 source_retention: None,
             };
             *retention.lock().expect("source retention poisoned") =
-                Some(SourceRetentionHeld::Reservation(held));
+                Some(SourceRetentionHeld::Reservation { _reservation: held });
             self.committed = true;
             return;
         }

@@ -157,6 +157,52 @@ fn hnsw_selective_search_bounds_graph_pool_before_exact_fallback() {
 }
 
 #[test]
+fn hnsw_incomplete_full_graph_uses_exact_live_rows() {
+    const N: usize = 32;
+    const K: usize = 10;
+    let query = [0.173, 0.2];
+    let index = HnswCpuIndex::new(spec(2, VectorMetric::L2, None));
+    for i in 0..N {
+        if i != 13 {
+            index
+                .add(&format!("id-{i}"), &[(i as f32 + 1.0) / 64.0, 0.2])
+                .unwrap();
+        }
+    }
+    // Reproduce an incomplete traversal without depending on random graph
+    // topology. The authoritative row and its ID exist, but the graph omits it.
+    {
+        let mut inner = index.inner.write().unwrap();
+        let id = inner.next_id;
+        inner.next_id += 1;
+        inner.store.put("id-13", &[14.0 / 64.0, 0.2]).unwrap();
+        inner.eid_to_id.insert("id-13".into(), id);
+        inner.id_to_eid.insert(id, "id-13".into());
+    }
+    assert_eq!(index.len(), N);
+    HNSW_SEARCH_POOLS.with(|pools| pools.borrow_mut().clear());
+    let before = index.exact_scan_fallbacks();
+    let hits = index.search_knn(&query, K).unwrap();
+    let expected: Vec<_> = [10, 11, 9, 12, 8, 13, 7, 14, 6, 15]
+        .into_iter()
+        .map(|i| {
+            let vector = [(i as f32 + 1.0) / 64.0, 0.2];
+            (format!("id-{i}"), -l2_squared(&query, &vector).sqrt())
+        })
+        .collect();
+    assert_eq!(hits, expected);
+    for ((id, actual), (_, expected)) in hits.iter().zip(&expected) {
+        assert_eq!(actual.to_bits(), expected.to_bits(), "score bits for {id}");
+    }
+    assert_eq!(index.exact_scan_fallbacks(), before + 1);
+    assert_eq!(
+        HNSW_SEARCH_POOLS.with(|pools| pools.borrow().clone()),
+        vec![N],
+        "an incomplete full-graph request must use one bounded traversal"
+    );
+}
+
+#[test]
 fn hnsw_clean_permissive_search_keeps_the_graph_answer() {
     let index = HnswCpuIndex::new(spec(3, VectorMetric::L2, None));
     index.set_ef_search(64);
@@ -431,5 +477,161 @@ fn hnsw_cold_collection_flat_sidecar_mismatch_still_fails_closed() {
             error.to_string(),
             "vector sidecar row count does not match segment"
         );
+    }
+}
+
+fn graph_with_one_unreachable_live_row() -> HnswCpuIndex {
+    let index = HnswCpuIndex::new(spec(2, VectorMetric::L2, None));
+    for i in 0..32 {
+        if i != 13 {
+            index
+                .add(&format!("id-{i}"), &[(i as f32 + 1.0) / 64.0, 0.2])
+                .unwrap();
+        }
+    }
+    let mut inner = index.inner.write().unwrap();
+    let id = inner.next_id;
+    inner.next_id += 1;
+    inner.store.put("id-13", &[14.0 / 64.0, 0.2]).unwrap();
+    inner.eid_to_id.insert("id-13".into(), id);
+    inner.id_to_eid.insert(id, "id-13".into());
+    drop(inner);
+    index
+}
+
+#[test]
+fn hnsw_remembers_incomplete_inventory_for_a_later_small_query() {
+    let index = graph_with_one_unreachable_live_row();
+    let query = [14.0 / 64.0, 0.2];
+    let before = index.exact_scan_fallbacks();
+    let inventory = index.search_knn(&query, 32).unwrap();
+    assert_eq!(inventory.len(), 32);
+    assert_eq!(inventory[0].0, "id-13");
+    assert_eq!(index.exact_scan_fallbacks(), before + 1);
+
+    HNSW_SEARCH_POOLS.with(|pools| pools.borrow_mut().clear());
+    let nearest = index.search_knn(&query, 1).unwrap();
+    assert_eq!(nearest[0].0, "id-13", "a graph already known incomplete must not replace the exact nearest live row on a later smaller query");
+    assert_eq!(nearest[0].1.to_bits(), (-0.0_f32).to_bits());
+    assert_eq!(index.exact_scan_fallbacks(), before + 2);
+    assert!(
+        HNSW_SEARCH_POOLS.with(|pools| pools.borrow().is_empty()),
+        "do not repeat a known incomplete graph traversal"
+    );
+}
+
+#[test]
+fn hnsw_incomplete_inventory_fallback_reads_live_mutations_and_filters() {
+    let index = graph_with_one_unreachable_live_row();
+    index.search_knn(&[14.0 / 64.0, 0.2], 32).unwrap();
+    let before = index.exact_scan_fallbacks();
+    index.add("id-13", &[2.0, 0.2]).unwrap();
+    assert!(index.remove("id-31").unwrap());
+    HNSW_SEARCH_POOLS.with(|pools| pools.borrow_mut().clear());
+    let updated = index.search_knn(&[2.0, 0.2], 1).unwrap();
+    assert_eq!(updated[0].0, "id-13");
+    assert_eq!(updated[0].1.to_bits(), (-0.0_f32).to_bits());
+    let filtered = index
+        .search_knn_filtered(&[2.0, 0.2], 1, &|id| id != "id-13")
+        .unwrap();
+    assert_eq!(filtered[0].0, "id-30");
+    let expected = -l2_squared(&[2.0, 0.2], &[31.0 / 64.0, 0.2]).sqrt();
+    assert_eq!(filtered[0].1.to_bits(), expected.to_bits());
+    assert!(index.remove("id-13").unwrap());
+    let removed = index.search_knn(&[2.0, 0.2], 1).unwrap();
+    assert_eq!(removed, filtered);
+    assert_eq!(index.exact_scan_fallbacks(), before + 3);
+    assert!(HNSW_SEARCH_POOLS.with(|pools| pools.borrow().is_empty()));
+}
+
+#[test]
+fn hnsw_healthy_filter_fallback_does_not_poison_the_graph() {
+    let index = HnswCpuIndex::new(spec(2, VectorMetric::L2, None));
+    index.add("one", &[1.0, 0.0]).unwrap();
+    assert!(index
+        .search_knn_filtered(&[1.0, 0.0], 1, &|_| false)
+        .unwrap()
+        .is_empty());
+    let before = index.exact_scan_fallbacks();
+    assert_eq!(before, 1);
+    HNSW_SEARCH_POOLS.with(|pools| pools.borrow_mut().clear());
+    let hits = index.search_knn(&[1.0, 0.0], 1).unwrap();
+    assert_eq!(hits[0].0, "one");
+    assert_eq!(hits[0].1.to_bits(), (-0.0_f32).to_bits());
+    assert_eq!(index.exact_scan_fallbacks(), before);
+    assert_eq!(
+        HNSW_SEARCH_POOLS.with(|pools| pools.borrow().clone()),
+        vec![1]
+    );
+}
+
+#[test]
+fn hnsw_graph_replacement_discards_the_old_inventory_failure() {
+    let index = graph_with_one_unreachable_live_row();
+    index.search_knn(&[14.0 / 64.0, 0.2], 32).unwrap();
+    let before = index.exact_scan_fallbacks();
+    assert_eq!(before, 1);
+    for i in 0..32 {
+        if i != 13 {
+            assert!(index.remove(&format!("id-{i}")).unwrap());
+        }
+    }
+    index.add("id-13", &[2.0, 0.2]).unwrap();
+    assert!(index.take_hnsw_graph_rebuild_timing().is_some());
+    HNSW_SEARCH_POOLS.with(|pools| pools.borrow_mut().clear());
+    let hits = index.search_knn(&[2.0, 0.2], 1).unwrap();
+    assert_eq!(hits[0].0, "id-13");
+    assert_eq!(index.exact_scan_fallbacks(), before);
+    assert_eq!(
+        HNSW_SEARCH_POOLS.with(|pools| pools.borrow().clone()),
+        vec![1]
+    );
+}
+
+#[test]
+fn hnsw_restored_129_row_inventory_keeps_the_original_nearest_anchor() {
+    let mut vectors: Vec<_> = (0..128)
+        .map(|i| {
+            let x = match i {
+                0 => 0.1,
+                1 => 10.1,
+                2 => 20.0,
+                3 => 20.1,
+                4 => 30.0,
+                5 => 30.1,
+                6 => 40.1,
+                _ => 1_000.0 + i as f32,
+            };
+            (format!("vector-base-{i:03}"), vec![x, 0.0])
+        })
+        .collect();
+    vectors.push(("runtime-id-900000".to_owned(), vec![0.0, 0.0]));
+    let mut sorted = vectors.clone();
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut reversed = vectors.clone();
+    reversed.reverse();
+    // Fixed insertion orders cover the original restore geometry. Every order
+    // must pass; there is no seed search or retry after a failed assertion.
+    for (order, rows) in [
+        ("original", vectors),
+        ("sorted", sorted),
+        ("reverse", reversed),
+    ] {
+        let index = HnswCpuIndex::restore(spec(2, VectorMetric::L2, None), rows, None).unwrap();
+        let all = index.search_knn(&[0.0, 0.0], 129).unwrap();
+        assert_eq!(all.len(), 129, "full inventory in {order} order");
+        assert_eq!(all[0].0, "runtime-id-900000");
+        let nearest = index.search_knn(&[0.0, 0.0], 1).unwrap();
+        let incomplete = index
+            .inner
+            .read()
+            .unwrap()
+            .graph_inventory_incomplete
+            .load(std::sync::atomic::Ordering::Acquire);
+        assert_eq!(
+            nearest[0].0, "runtime-id-900000",
+            "nearest anchor in {order} order; known incomplete={incomplete}"
+        );
+        assert_eq!(nearest[0].1.to_bits(), (-0.0_f32).to_bits());
     }
 }

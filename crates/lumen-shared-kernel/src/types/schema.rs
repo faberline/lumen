@@ -175,7 +175,7 @@ pub enum VectorMetric {
 
 /// Index backend for `FieldType::Vector`. Wire forms are
 /// `hnsw-cpu` / `flat-cpu` (kebab-case).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum VectorBackend {
     /// Approximate HNSW graph (CPU). Sub-linear, recall < 1.

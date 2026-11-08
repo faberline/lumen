@@ -49,8 +49,7 @@ impl Cluster {
         }
     }
 
-    #[allow(clippy::wrong_self_convention)]
-    fn as_user(mut self, username: &str) -> Self {
+    fn with_user(mut self, username: &str) -> Self {
         self.username = username.to_string();
         self
     }
