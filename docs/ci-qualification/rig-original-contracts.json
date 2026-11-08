@@ -1,0 +1,286 @@
+{
+  "schema": "LUMEN_ORIGINAL_REQUIRED_RIG_V1",
+  "origin_revision": "822b1a2eef6b43b94dcb0d961d23418ede289a89",
+  "cases": {
+    "endurance/fd_leak": {
+      "path": "crates/lumen/tests/rig/cases/endurance/fd_leak.toml",
+      "original_sha256": "c68906e77f4a7422731846dbc937e7faa3796371a96b66e5711ef91d3a31229a",
+      "record": {
+        "suite": "lumen",
+        "dimension": "endurance",
+        "case": "fd_leak",
+        "subject": "file-descriptor, socket, and thread counts stay bounded across sustained work",
+        "kind": "e2e",
+        "expected": "pass",
+        "required": true
+      },
+      "steps": [
+        "collection_exists",
+        "resolve_lumen_pid",
+        "warmup_index",
+        "warmup_searches",
+        "fd_count_before",
+        "socket_count_before",
+        "thread_count_before",
+        "resource_baselines_sane",
+        "sustained_index",
+        "sustained_searches",
+        "fd_count_after",
+        "socket_count_after",
+        "thread_count_after",
+        "no_search_errors",
+        "process_resources_bounded"
+      ],
+      "load": null,
+      "limits": {
+        "timeout_secs": 600
+      }
+    },
+    "endurance/soak_p99_drift": {
+      "path": "crates/lumen/tests/rig/cases/endurance/soak_p99_drift.toml",
+      "original_sha256": "a572b3a158a7365af0f14d813fcda076f0dffc6408790223c30df17263ade6d4",
+      "record": {
+        "suite": "lumen",
+        "dimension": "endurance",
+        "case": "soak_p99_drift",
+        "subject": "search p99 does not drift up across windows of a bounded-keyspace soak",
+        "kind": "e2e",
+        "expected": "pass",
+        "required": true
+      },
+      "steps": [
+        "collection_exists",
+        "warmup_index",
+        "warmup_searches",
+        "window_1_index",
+        "window_1_searches",
+        "window_2_index",
+        "window_2_searches",
+        "window_3_index",
+        "window_3_searches",
+        "no_errors",
+        "p99_baseline_sane",
+        "p99_drift_within_10pct"
+      ],
+      "load": null,
+      "limits": {
+        "timeout_secs": 600
+      }
+    },
+    "endurance/soak_rss_plateau": {
+      "path": "crates/lumen/tests/rig/cases/endurance/soak_rss_plateau.toml",
+      "original_sha256": "8643212190553ff58f593a7d5a02b2e234fd5c96b740225ef5eb0cb6d2dd089c",
+      "record": {
+        "suite": "lumen",
+        "dimension": "endurance",
+        "case": "soak_rss_plateau",
+        "subject": "steady-state RSS plateaus under a bounded-keyspace mixed workload",
+        "kind": "e2e",
+        "expected": "pass",
+        "required": true
+      },
+      "steps": [
+        "collection_exists",
+        "resolve_lumen_pid",
+        "warmup_index_round_1",
+        "warmup_index_round_2",
+        "warmup_searches",
+        "warmup_duplicates",
+        "window_a_index",
+        "window_a_searches",
+        "rss_window_a",
+        "window_b_index",
+        "window_b_searches",
+        "window_b_duplicates",
+        "rss_window_b",
+        "no_errors",
+        "rss_plateau_within_10pct"
+      ],
+      "load": null,
+      "limits": {
+        "timeout_secs": 600
+      }
+    },
+    "load/backpressure_overload": {
+      "path": "crates/lumen/tests/rig/cases/load/backpressure_overload.toml",
+      "original_sha256": "b047ad882b7b8f9dba63536bd06fc14d092d4907023d636cc9a336ca3194196c",
+      "record": {
+        "suite": "lumen",
+        "dimension": "load",
+        "case": "backpressure_overload",
+        "subject": "search stays up with bounded error_rate/p99 under 3x steady-state offered load",
+        "kind": "load",
+        "expected": "pass",
+        "required": true
+      },
+      "steps": [
+        "liveness_before",
+        "collection_exists",
+        "seed_corpus"
+      ],
+      "load": {
+        "target_qps": 600,
+        "workers": 16,
+        "duration_secs": 30,
+        "warmup_secs": 5,
+        "request": {
+          "method": "POST",
+          "url": "http://{{upstream}}/collections/{{collection}}/search",
+          "body": "{\"query\": {\"match\": {\"field\": \"bio\", \"text\": \"engineer\"}}, \"limit\": 1}",
+          "expect": {
+            "status": 200,
+            "timeout_ms": 2000
+          }
+        }
+      },
+      "limits": {
+        "timeout_secs": 180
+      }
+    },
+    "load/data_table_browse": {
+      "path": "crates/lumen/tests/rig/cases/load/data_table_browse.toml",
+      "original_sha256": "f02138e0c1d99b54855a0c65518fd54b702e32102e72984417fe53905349580c",
+      "record": {
+        "suite": "lumen",
+        "dimension": "load",
+        "case": "data_table_browse",
+        "subject": "filter plus sort cursor pagination remains depth-invariant over HTTP",
+        "kind": "e2e",
+        "expected": "pass",
+        "required": true
+      },
+      "steps": [
+        "capture_p99_ms"
+      ],
+      "load": null,
+      "limits": {}
+    },
+    "load/search_qps": {
+      "path": "crates/lumen/tests/rig/cases/load/search_qps.toml",
+      "original_sha256": "60c1582d4829d97e1853ae8c7f9144455c316a7bff9b421925f09094402897d9",
+      "record": {
+        "suite": "lumen",
+        "dimension": "load",
+        "case": "search_qps",
+        "subject": "search p99/error_rate at a fixed offered 200 qps",
+        "kind": "load",
+        "expected": "pass",
+        "required": true
+      },
+      "steps": [
+        "collection_exists",
+        "seed_corpus"
+      ],
+      "load": {
+        "target_qps": 200,
+        "workers": 8,
+        "duration_secs": 30,
+        "warmup_secs": 5,
+        "request": {
+          "method": "POST",
+          "url": "http://{{upstream}}/collections/{{collection}}/search",
+          "body": "{\"query\": {\"match\": {\"field\": \"bio\", \"text\": \"engineer\"}}, \"limit\": 1}",
+          "expect": {
+            "status": 200,
+            "timeout_ms": 2000
+          }
+        }
+      },
+      "limits": {
+        "timeout_secs": 180
+      }
+    },
+    "resilience/packet_loss_p99": {
+      "path": "crates/lumen/tests/rig/cases/resilience/packet_loss_p99.toml",
+      "original_sha256": "f41b9f68d1eb1f9eeabf83c15ef6207f8cdb8557b855cdd491e286a2cecd64b6",
+      "record": {
+        "suite": "lumen",
+        "dimension": "resilience",
+        "case": "packet_loss_p99",
+        "subject": "search p99 stays within 2x baseline under 5% packet loss",
+        "kind": "e2e",
+        "expected": "pass",
+        "required": true
+      },
+      "steps": [
+        "collection_exists",
+        "seed_corpus",
+        "clean_stale_proxy",
+        "create_proxy",
+        "baseline",
+        "baseline_sane",
+        "add_loss_toxic",
+        "under_loss",
+        "remove_loss_toxic",
+        "loss_recovered",
+        "post_loss_recovery",
+        "loss_p99_survives_reconnect_under_loss",
+        "delete_proxy"
+      ],
+      "load": null,
+      "limits": {
+        "timeout_secs": 180
+      }
+    },
+    "resilience/partition_recovery": {
+      "path": "crates/lumen/tests/rig/cases/resilience/partition_recovery.toml",
+      "original_sha256": "85291ab8398925b5b302a7cdb3a052cbbc3699646ed68fa0aa987cda57d8a40c",
+      "record": {
+        "suite": "lumen",
+        "dimension": "resilience",
+        "case": "partition_recovery",
+        "subject": "search p99 survives a full network partition and recovers within budget",
+        "kind": "e2e",
+        "expected": "pass",
+        "required": true
+      },
+      "steps": [
+        "collection_exists",
+        "seed_corpus",
+        "clean_stale_proxy",
+        "create_proxy",
+        "baseline",
+        "baseline_sane",
+        "add_partition_toxic",
+        "during_partition",
+        "partition_observed",
+        "remove_partition_toxic",
+        "recovered",
+        "post_recovery",
+        "recovery_within_2x_baseline",
+        "delete_proxy"
+      ],
+      "load": null,
+      "limits": {
+        "timeout_secs": 300
+      }
+    }
+  },
+  "pins": [
+    {
+      "issue": "axiom#5",
+      "scenario": "load/backpressure_overload",
+      "metric": "error_rate",
+      "floor": 0.05
+    },
+    {
+      "issue": "axiom#5",
+      "scenario": "load/backpressure_overload",
+      "metric": "p99_ms",
+      "floor": 250.0
+    },
+    {
+      "issue": "axiom#5",
+      "scenario": "load/search_qps",
+      "metric": "p99_ms",
+      "floor": 25.0,
+      "ratchet": 0.8
+    },
+    {
+      "issue": "axiom#5",
+      "scenario": "load/search_qps",
+      "metric": "error_rate",
+      "floor": 0.01
+    }
+  ]
+}

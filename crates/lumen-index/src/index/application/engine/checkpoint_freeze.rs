@@ -2,6 +2,8 @@
 //! background merge bound to a capture, the dirty fields a capture may reuse,
 //! and the collections frozen under the capture barrier.
 
+type FrozenCollectionSummary = BTreeMap<String, (u64, u32, BTreeSet<String>)>;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{anyhow, bail, Result};
@@ -100,9 +102,7 @@ impl Engine {
         })
     }
 
-    pub(crate) fn checkpoint_dirty_fields(
-        &self,
-    ) -> Result<BTreeMap<String, (u64, u32, BTreeSet<String>)>> {
+    pub(crate) fn checkpoint_dirty_fields(&self) -> Result<FrozenCollectionSummary> {
         let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
         Ok(state
             .collections
@@ -161,7 +161,7 @@ impl Engine {
     pub(crate) fn checkpoint_reusable_dirty_fields(
         &self,
         root: &std::path::Path,
-    ) -> Result<BTreeMap<String, (u64, u32, BTreeSet<String>)>> {
+    ) -> Result<FrozenCollectionSummary> {
         let state = self.state.read().map_err(|_| anyhow!("state poisoned"))?;
         Ok(state
             .collections

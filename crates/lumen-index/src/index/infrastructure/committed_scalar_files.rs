@@ -8,6 +8,7 @@ mod selected;
 
 use crate::index::infrastructure::committed_scalar_files::selected::Selected;
 
+#[cfg(test)]
 use crate::index::application::engine::index::MAX_INDEX_ITEMS;
 use crate::index::domain::sortable_f64::SortableF64;
 use crate::ingest::infrastructure::wal::fast_index_scanner::{FastIndexScanner, FastIndexValue};
@@ -29,15 +30,16 @@ static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug)]
 pub(in crate::index) struct PreparedScalarFile {
     pub(in crate::index) reader: Arc<SegmentReader>,
-    external_ids: Vec<String>,
-    item_ordinals: Vec<usize>,
-    field: String,
-    bytes: u64,
+    _external_ids: Vec<String>,
+    _item_ordinals: Vec<usize>,
+    _field: String,
+    _bytes: u64,
     pub(in crate::index) retained_bytes: usize,
 }
 
 /// A total requirement, not an incremental allocation request. Both callbacks
 /// run outside apply. A failed callback leaves the source entirely unchanged.
+#[cfg(test)]
 fn prepare(
     scanner: &FastIndexScanner<'_>,
     field: &str,
@@ -227,13 +229,13 @@ pub(in crate::index) fn prepare_validated_fields(
     directory.transferred = true;
     Ok(PreparedScalarFile {
         reader,
-        external_ids: winning
+        _external_ids: winning
             .iter()
             .map(|&ordinal| items[ordinal].external_id.to_owned())
             .collect(),
-        item_ordinals: winning.to_vec(),
-        field: field.to_owned(),
-        bytes,
+        _item_ordinals: winning.to_vec(),
+        _field: field.to_owned(),
+        _bytes: bytes,
         retained_bytes: reader_bytes
             .checked_add(
                 winning

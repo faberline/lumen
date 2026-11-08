@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the trusted failure-only rollout without blocking real failures."""
+"""Validate retained legacy policy or the explicit local completion contract."""
 import importlib.util
 from pathlib import Path
 import sys
@@ -18,10 +18,15 @@ def check(path):
     if not all(callable(getattr(controller, name, None)) for name in ('load_config', 'evaluate_policy')):
         raise RuntimeError('failure-only rollout requires the reviewed policy-aware controller')
     policy = controller.load_config(path)
-    if policy.get('lifecycle_mode') != 'failure-only':
-        raise RuntimeError('this rollout requires explicit lifecycle_mode failure-only')
-    if not isinstance(policy.get('qualification_blockers'), list) or not policy['qualification_blockers']:
-        raise RuntimeError('this rollout requires an explicit nonempty qualification_blockers list')
+    if policy.get('completion_owner') == 'local':
+        controller.validate_adoption(policy)
+        if policy.get('lifecycle_mode') != 'full' or controller.development_module().validate(policy) is None:
+            raise RuntimeError('local completion needs explicit full qualification and development stages')
+    else:
+        if policy.get('lifecycle_mode') != 'failure-only':
+            raise RuntimeError('legacy rollout requires explicit failure-only mode')
+        if not isinstance(policy.get('qualification_blockers'), list) or not policy['qualification_blockers']:
+            raise RuntimeError('legacy rollout requires nonempty qualification blockers')
     return policy
 
 

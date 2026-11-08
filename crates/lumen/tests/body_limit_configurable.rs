@@ -7,7 +7,7 @@
 //! that variable.
 
 use std::sync::Arc;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 
 use axum::body::Body;
 use axum::http::{header, Request, StatusCode};
@@ -20,7 +20,7 @@ use lumen::storage::Engine;
 use serde_json::Value;
 use tower::ServiceExt;
 
-static ENV_LOCK: Mutex<()> = Mutex::new(());
+static ENV_LOCK: Mutex<()> = Mutex::const_new(());
 
 fn app_router() -> axum::Router {
     let engine = Arc::new(Engine::new());
@@ -56,7 +56,7 @@ fn test_spec() -> LumenSpec {
 
 #[tokio::test]
 async fn omitted_body_limit_preserves_default_8mib() {
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _guard = ENV_LOCK.lock().await;
     std::env::remove_var("LUMEN_BODY_LIMIT_BYTES");
 
     let app = app_router();
@@ -87,7 +87,7 @@ async fn omitted_body_limit_preserves_default_8mib() {
 
 #[tokio::test]
 async fn configured_body_limit_enforces_at_custom_threshold() {
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _guard = ENV_LOCK.lock().await;
     let limit_1mib = 1024 * 1024;
     std::env::set_var("LUMEN_BODY_LIMIT_BYTES", limit_1mib.to_string());
 
@@ -121,7 +121,7 @@ async fn configured_body_limit_enforces_at_custom_threshold() {
 
 #[tokio::test]
 async fn streamed_body_exceeding_limit_fails_mid_read_with_413() {
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _guard = ENV_LOCK.lock().await;
     let limit_1mib = 1024 * 1024;
     std::env::set_var("LUMEN_BODY_LIMIT_BYTES", limit_1mib.to_string());
 
@@ -179,7 +179,7 @@ fn crd_validation_rejects_out_of_range_body_limit() {
 
 #[tokio::test]
 async fn under_limit_body_is_not_refused_by_body_limit_layer() {
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _guard = ENV_LOCK.lock().await;
     let limit_1mib = 1024 * 1024;
     std::env::set_var("LUMEN_BODY_LIMIT_BYTES", limit_1mib.to_string());
 
@@ -202,7 +202,7 @@ async fn under_limit_body_is_not_refused_by_body_limit_layer() {
 
 #[tokio::test]
 async fn configured_limit_above_two_mib_accepts_a_body_under_it() {
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _guard = ENV_LOCK.lock().await;
     let limit_4mib = 4 * 1024 * 1024;
     std::env::set_var("LUMEN_BODY_LIMIT_BYTES", limit_4mib.to_string());
 

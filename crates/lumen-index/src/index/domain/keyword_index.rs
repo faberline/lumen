@@ -119,16 +119,6 @@ impl KeywordIndex {
         self.dense_forward.iter().filter(|v| v.is_some()).count() + self.forward.len()
     }
 
-    /// `true` once the forward payload for the sealed range has been dropped to
-    /// disk (Phase 2f-1): the segment is attached AND the in-RAM `forward` map
-    /// no longer holds sealed ids. After a production seal, EVERY forward read
-    /// (predicate, value retrieval, drop) must route through `keyword_at`, not a
-    /// raw `forward.get`, because the payload is on the mmap, not in RAM.
-    #[inline]
-    fn forward_dropped(&self) -> bool {
-        self.segment.is_some()
-    }
-
     /// UNIFIED inverted-index accessor (Phase 2h-1): term `value`'s posting
     /// bitmap on the ACTIVE source, composing the disk segment (sealed base ids
     /// `[0..seg.n_docs)`) with the in-RAM `terms` tail (ids added after the
@@ -262,7 +252,7 @@ impl KeywordIndex {
                 Ok(cursor) => cursor,
                 Err(_) => return Ok(KeywordBucketWalk::Unavailable),
             };
-            let mut disk = match cursor.next() {
+            let mut disk = match cursor.try_next() {
                 Ok(term) => term,
                 Err(_) => return Ok(KeywordBucketWalk::Unavailable),
             };
@@ -294,7 +284,7 @@ impl KeywordIndex {
                         posting |= tail_posting;
                     }
                     if take_disk {
-                        disk = match cursor.next() {
+                        disk = match cursor.try_next() {
                             Ok(term) => term,
                             Err(_) => return Ok(KeywordBucketWalk::Unavailable),
                         };
@@ -331,7 +321,7 @@ impl KeywordIndex {
                         posting |= tail_posting;
                     }
                     if take_disk {
-                        disk = match cursor.next() {
+                        disk = match cursor.try_next() {
                             Ok(term) => term,
                             Err(_) => return Ok(KeywordBucketWalk::Unavailable),
                         };

@@ -192,11 +192,12 @@ impl WritePhase {
             return Self(None);
         }
         static NEXT_ATTEMPT: AtomicU64 = AtomicU64::new(1);
-        let Ok(attempt_id) =
-            NEXT_ATTEMPT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
-                next.checked_add(1)
-            })
-        else {
+        let Ok(attempt_id) = crate::atomic_update::update_u64(
+            &NEXT_ATTEMPT,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |next| next.checked_add(1),
+        ) else {
             // Exhaustion disables only diagnostics. IDs never wrap or repeat.
             return Self(None);
         };

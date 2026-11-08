@@ -5,9 +5,9 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
 use crate::ingest::domain::change_budget::{
-    request_revision, snapshot, update_high_water, AdmissionError, BudgetWake, CapacityWaiter,
-    ChangeBudget, FrozenBatch, Inner, Owner, OwnerLifetime, OwnerState, Reservation, Snapshot,
-    State, HARD_LIMIT,
+    request_revision, request_waiting_capacity, snapshot, update_high_water, AdmissionError,
+    BudgetWake, CapacityWaiter, ChangeBudget, FrozenBatch, Inner, Owner, OwnerLifetime, OwnerState,
+    Reservation, Snapshot, State, HARD_LIMIT,
 };
 
 impl ChangeBudget {
@@ -81,12 +81,13 @@ impl ChangeBudget {
     }
 
     pub(super) fn mark_capacity_waiter(&self) -> CapacityWaiter {
-        self.0
-            .capacity_waiters
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                count.checked_add(1)
-            })
-            .expect("capacity waiter count overflow");
+        crate::atomic_update::update_usize(
+            &self.0.capacity_waiters,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+            |count| count.checked_add(1),
+        )
+        .expect("capacity waiter count overflow");
         self.0.wake.signal();
         CapacityWaiter(self.clone())
     }
@@ -160,6 +161,7 @@ impl ChangeBudget {
                     lifetime: lifetime.clone(),
                     bytes,
                     committed: false,
+                    capacity_episode: None,
                     source_retention: None,
                 });
             }
@@ -171,6 +173,9 @@ impl ChangeBudget {
                 });
             }
             waiting.get_or_insert_with(|| self.mark_capacity_waiter());
+            if request_waiting_capacity(&mut state, owner) {
+                self.0.wake.signal();
+            }
             state = self
                 .0
                 .changed

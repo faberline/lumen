@@ -159,13 +159,10 @@ impl VectorIndex for FlatCpuIndex {
                 flat.live_slots()
                     .map(|slot| (flat.eids[slot].clone(), flat.row(slot).to_vec()))
                     .collect(),
-                inner.store.codebook.clone(),
+                inner.store.codebook,
             ))
         } else {
-            Ok((
-                inner.store.iter_decoded().collect(),
-                inner.store.codebook.clone(),
-            ))
+            Ok((inner.store.iter_decoded().collect(), inner.store.codebook))
         }
     }
     fn seal_to_segment_prod(&self, path: &std::path::Path) -> Result<Option<Vec<String>>> {
