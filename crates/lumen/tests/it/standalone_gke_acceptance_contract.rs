@@ -2764,10 +2764,7 @@ fn runtime_image_identity_binds_root_or_scheduled_child_inside_pod_wait_predicat
     }
 
     for (name, pod_image) in [
-        (
-            "wrong repository",
-            "ghcr.io/faberline/other@sha256:root",
-        ),
+        ("wrong repository", "ghcr.io/faberline/other@sha256:root"),
         ("child instead of root", amd64_child),
     ] {
         let result = run_service_link_wait(

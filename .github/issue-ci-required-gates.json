@@ -1,15 +1,30 @@
 {
-  "controller_source": "faberline/aw@67af8d020df3ca2ec4b064289408cfb0c2f8b299:plugins/faberline/skills/issue-ci/scripts/handoff.py",
-  "qualification_blockers": [
-    "No general pull_request unit workflow exists on the default branch.",
-    "Existing gke-test is path-filtered and does not establish affected functional and E2E coverage for every product change.",
-    "No declared affected performance pull_request gate exists; manual/release workflows are not PR qualification.",
-    "A reviewed coverage selection policy and real qualifying jobs are needed before clearing these blockers; no blanket docs-only zero-check bypass is approved."
-  ],
+  "aw_revision": "4223a4534f0197e1ea23004b9388ffd1eea34639",
   "workflows": [
     {
-      "path": ".github/workflows/gke-test.yml",
+      "path": ".github/workflows/pr-unit-static.yml",
       "jobs": [
+        "development preflight",
+        "workspace unit inventory and controls",
+        "workspace formatting",
+        "milestone document contracts",
+        "unit-static batch (01/04)",
+        "unit-static batch (02/04)",
+        "unit-static batch (03/04)",
+        "unit-static batch (04/04)",
+        "integration contracts (lumen, default)",
+        "integration contracts (lumen, all-features)",
+        "integration contracts (lumen, feature:backup)",
+        "integration contracts (lumen, feature:delegated-auth)",
+        "integration contracts (lumen, feature:issue)",
+        "integration contracts (lumen, feature:jieba)",
+        "integration contracts (lumen, feature:operator)",
+        "integration contracts (lumen, feature:otel)",
+        "integration contracts (lumen, feature:raft-wal)",
+        "integration contracts (lumen, feature:release)",
+        "integration contracts (lumen, feature:report-issue)",
+        "integration contracts (lumen, feature:self-update)",
+        "integration contracts (lumen, no-default)",
         "build the e2e test client",
         "build test image / build (x86_64-unknown-linux-musl)",
         "build test image / build (aarch64-unknown-linux-musl)",
@@ -17,9 +32,1322 @@
         "resolve image identity",
         "standalone container e2e",
         "GKE e2e (overlay) / deploy + test on shared GKE",
-        "GKE e2e (operator) / deploy + test on shared GKE"
+        "GKE e2e (operator) / deploy + test on shared GKE",
+        "measured performance",
+        "native functional contracts",
+        "native resource and performance contracts"
       ]
     }
   ],
-  "lifecycle_mode": "failure-only"
+  "lifecycle_mode": "full",
+  "qualification_blockers": [],
+  "completion_owner": "local",
+  "qualification": {
+    "version": 2,
+    "checks": {
+      "preflight": {
+        "kind": "policy",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "development preflight"
+      },
+      "inventory": {
+        "kind": "policy",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "workspace unit inventory and controls"
+      },
+      "format": {
+        "kind": "policy",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "workspace formatting"
+      },
+      "milestone": {
+        "kind": "policy",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "milestone document contracts"
+      },
+      "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (01/04)",
+        "case_id": "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+        "case_label": "unit-static (lumen, default)"
+      },
+      "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (01/04)",
+        "case_id": "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+        "case_label": "unit-static (lumen-replication, default)"
+      },
+      "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (01/04)",
+        "case_id": "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+        "case_label": "unit-static (lumen, feature:backup)"
+      },
+      "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (01/04)",
+        "case_id": "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+        "case_label": "unit-static (lumen, feature:operator)"
+      },
+      "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (01/04)",
+        "case_id": "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+        "case_label": "unit-static (lumen, feature:report-issue)"
+      },
+      "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (01/04)",
+        "case_id": "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+        "case_label": "unit-static (lumen-access, feature:delegated-auth)"
+      },
+      "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (01/04)",
+        "case_id": "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+        "case_label": "unit-static (lumen-index, feature:jieba)"
+      },
+      "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (01/04)",
+        "case_id": "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+        "case_label": "unit-static (lumen-storage, all-features)"
+      },
+      "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (02/04)",
+        "case_id": "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+        "case_label": "unit-static (lumen-access, default)"
+      },
+      "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (02/04)",
+        "case_id": "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+        "case_label": "unit-static (lumen-shared-kernel, default)"
+      },
+      "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (02/04)",
+        "case_id": "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+        "case_label": "unit-static (lumen, feature:delegated-auth)"
+      },
+      "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (02/04)",
+        "case_id": "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+        "case_label": "unit-static (lumen, feature:otel)"
+      },
+      "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (02/04)",
+        "case_id": "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+        "case_label": "unit-static (lumen, feature:self-update)"
+      },
+      "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (02/04)",
+        "case_id": "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+        "case_label": "unit-static (lumen-access, no-default)"
+      },
+      "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (02/04)",
+        "case_id": "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+        "case_label": "unit-static (lumen-index, feature:operator)"
+      },
+      "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (02/04)",
+        "case_id": "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+        "case_label": "unit-static (lumen-storage, feature:test-support)"
+      },
+      "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (03/04)",
+        "case_id": "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+        "case_label": "unit-static (lumen-index, default)"
+      },
+      "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (03/04)",
+        "case_id": "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+        "case_label": "unit-static (lumen-storage, default)"
+      },
+      "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (03/04)",
+        "case_id": "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+        "case_label": "unit-static (lumen, feature:issue)"
+      },
+      "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (03/04)",
+        "case_id": "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+        "case_label": "unit-static (lumen, feature:raft-wal)"
+      },
+      "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (03/04)",
+        "case_id": "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+        "case_label": "unit-static (lumen, no-default)"
+      },
+      "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (03/04)",
+        "case_id": "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+        "case_label": "unit-static (lumen-index, all-features)"
+      },
+      "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (03/04)",
+        "case_id": "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+        "case_label": "unit-static (lumen-index, feature:raft-wal)"
+      },
+      "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (03/04)",
+        "case_id": "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+        "case_label": "unit-static (lumen-storage, no-default)"
+      },
+      "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (04/04)",
+        "case_id": "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+        "case_label": "unit-static (lumen-operator, default)"
+      },
+      "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (04/04)",
+        "case_id": "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+        "case_label": "unit-static (lumen, all-features)"
+      },
+      "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (04/04)",
+        "case_id": "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+        "case_label": "unit-static (lumen, feature:jieba)"
+      },
+      "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (04/04)",
+        "case_id": "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+        "case_label": "unit-static (lumen, feature:release)"
+      },
+      "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (04/04)",
+        "case_id": "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+        "case_label": "unit-static (lumen-access, all-features)"
+      },
+      "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (04/04)",
+        "case_id": "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+        "case_label": "unit-static (lumen-index, feature:backup)"
+      },
+      "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175": {
+        "kind": "unit",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "unit-static batch (04/04)",
+        "case_id": "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175",
+        "case_label": "unit-static (lumen-index, no-default)"
+      },
+      "functional-0": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, default)"
+      },
+      "functional-1": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, all-features)"
+      },
+      "functional-2": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:backup)"
+      },
+      "functional-3": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:delegated-auth)"
+      },
+      "functional-4": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:issue)"
+      },
+      "functional-5": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:jieba)"
+      },
+      "functional-6": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:operator)"
+      },
+      "functional-7": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:otel)"
+      },
+      "functional-8": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:raft-wal)"
+      },
+      "functional-9": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:release)"
+      },
+      "functional-10": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:report-issue)"
+      },
+      "functional-11": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, feature:self-update)"
+      },
+      "functional-12": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "integration contracts (lumen, no-default)"
+      },
+      "cloud-0": {
+        "kind": "policy",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "build the e2e test client"
+      },
+      "cloud-1": {
+        "kind": "policy",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "build test image / build (x86_64-unknown-linux-musl)"
+      },
+      "cloud-2": {
+        "kind": "policy",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "build test image / build (aarch64-unknown-linux-musl)"
+      },
+      "cloud-3": {
+        "kind": "policy",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "build test image / publish ghcr test image"
+      },
+      "cloud-4": {
+        "kind": "policy",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "resolve image identity"
+      },
+      "cloud-5": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "standalone container e2e"
+      },
+      "cloud-6": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "GKE e2e (overlay) / deploy + test on shared GKE"
+      },
+      "cloud-7": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "GKE e2e (operator) / deploy + test on shared GKE"
+      },
+      "coarse": {
+        "kind": "performance",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "measured performance",
+        "case_id": "coarse",
+        "case_label": "coarse performance gates"
+      },
+      "index-latency": {
+        "kind": "performance",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "measured performance",
+        "case_id": "index-latency",
+        "case_label": "500k AND match original 50ms bound"
+      },
+      "pagination": {
+        "kind": "performance",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "measured performance",
+        "case_id": "pagination",
+        "case_label": "deep pagination original 20x bound"
+      },
+      "native-functional": {
+        "kind": "functional_e2e",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "native functional contracts"
+      },
+      "native-resource-performance": {
+        "kind": "performance",
+        "workflow": ".github/workflows/pr-unit-static.yml",
+        "job": "native resource and performance contracts"
+      }
+    },
+    "trusted_workflows": {
+      ".github/workflows/pr-unit-static.yml": {
+        "id": 399074736,
+        "definition_sha": "4bf55ec5343dec7af8c4ce50306e78bd9a5335c2"
+      }
+    },
+    "always": [
+      "preflight",
+      "inventory",
+      "format",
+      "milestone",
+      "cloud-0",
+      "cloud-1",
+      "cloud-2",
+      "cloud-3",
+      "cloud-4"
+    ],
+    "protected_paths": [
+      ".github/issue-ci-required-gates.json",
+      ".github/development-test-batches.json",
+      "scripts/pr-gates/**",
+      "scripts/issue-ci/**",
+      "Cargo.toml",
+      "Cargo.lock",
+      "crates/*/Cargo.toml",
+      ".cargo/**",
+      "rust-toolchain",
+      "rust-toolchain.toml",
+      "Dockerfile.test",
+      "k8s/**",
+      "crates/lumen/tests/it/e2e/**",
+      "crates/lumen/tests/it/perf_gate.rs",
+      "crates/lumen-index/src/index/domain/query/zip_cursor/tests.rs",
+      "crates/lumen-index/src/index/application/engine/search/tests/pagination/cursors.rs",
+      "docs/ci-qualification/normal-pr-ignored-tests.json",
+      "crates/lumen/tests/rig/**",
+      "crates/lumen/tests/it/support/native_contracts.rs",
+      "crates/lumen/tests/disk_scale_proof.rs",
+      "crates/lumen/tests/perf_gate_vs_db.rs"
+    ],
+    "rules": [
+      {
+        "paths": [
+          "**"
+        ],
+        "require": [
+          "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+          "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+          "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+          "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+          "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+          "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+          "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+          "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+          "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+          "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+          "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+          "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+          "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+          "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+          "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+          "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+          "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+          "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+          "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+          "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+          "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+          "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+          "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+          "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+          "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+          "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+          "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+          "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+          "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+          "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+          "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175",
+          "functional-0",
+          "functional-1",
+          "functional-2",
+          "functional-3",
+          "functional-4",
+          "functional-5",
+          "functional-6",
+          "functional-7",
+          "functional-8",
+          "functional-9",
+          "functional-10",
+          "functional-11",
+          "functional-12",
+          "cloud-5",
+          "cloud-6",
+          "cloud-7",
+          "coarse",
+          "index-latency",
+          "pagination",
+          "native-functional",
+          "native-resource-performance"
+        ],
+        "exempt": {}
+      }
+    ],
+    "contracts": {
+      "188": {
+        "title_sha256": "ed3b0edde9e91a2fa2124dd495d3ff07fe601d7fda58e4237901f992cbc6dafe",
+        "body_sha256": "c89d644c10fe32590adf433f356076483708bc9210d2df7d91a89f9540521413",
+        "applicability": {
+          "unit": {
+            "status": "required",
+            "checks": [
+              "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+              "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+              "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+              "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+              "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+              "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+              "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+              "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+              "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+              "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+              "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+              "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+              "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+              "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+              "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+              "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+              "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+              "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+              "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+              "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+              "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+              "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+              "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+              "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+              "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+              "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+              "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+              "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+              "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+              "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+              "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175"
+            ],
+            "reason": "Retain complete normal-development unit evidence; unknown product content remains blocking."
+          },
+          "functional_e2e": {
+            "status": "required",
+            "checks": [
+              "functional-0",
+              "functional-1",
+              "functional-2",
+              "functional-3",
+              "functional-4",
+              "functional-5",
+              "functional-6",
+              "functional-7",
+              "functional-8",
+              "functional-9",
+              "functional-10",
+              "functional-11",
+              "functional-12",
+              "cloud-5",
+              "cloud-6",
+              "cloud-7",
+              "native-functional"
+            ],
+            "reason": "Retain complete normal-development functional_e2e evidence; unknown product content remains blocking."
+          },
+          "performance": {
+            "status": "required",
+            "checks": [
+              "coarse",
+              "index-latency",
+              "pagination",
+              "native-resource-performance"
+            ],
+            "reason": "Retain complete normal-development performance evidence; unknown product content remains blocking."
+          }
+        },
+        "additional": [],
+        "unresolved": []
+      }
+    }
+  },
+  "development_pipeline": {
+    "version": 1,
+    "workflow": ".github/workflows/pr-unit-static.yml",
+    "stages": {
+      "preflight": [
+        "development-preflight"
+      ],
+      "impact": [
+        "inventory"
+      ],
+      "unit": [
+        "workspace-format",
+        "workspace-unit-static",
+        "milestone-docs"
+      ],
+      "functional": [
+        "image",
+        "resolve",
+        "test-client",
+        "standalone-container",
+        "gke-test",
+        "workspace-contracts",
+        "native-contracts"
+      ],
+      "performance": [
+        "measured-performance"
+      ]
+    },
+    "replaces": {
+      ".github/workflows/gke-test.yml": ".github/workflows/pr-unit-static.yml"
+    },
+    "grouped_checks": [
+      "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+      "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+      "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+      "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+      "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+      "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+      "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+      "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+      "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+      "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+      "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+      "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+      "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+      "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+      "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+      "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+      "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+      "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+      "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+      "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+      "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+      "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+      "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+      "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+      "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+      "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+      "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+      "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+      "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+      "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+      "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175",
+      "coarse",
+      "index-latency",
+      "pagination"
+    ]
+  },
+  "development_reporter": {
+    "path": ".github/workflows/issue-ci.yml",
+    "id": 394215197,
+    "definition_sha": "e1b8b3cb111325c76f8551c2e62a41816c21ce24",
+    "job": "report",
+    "link_job": "source-pr-links"
+  },
+  "ci_handoff_policy": {
+    "aw_revision": "4223a4534f0197e1ea23004b9388ffd1eea34639",
+    "workflows": [
+      {
+        "path": ".github/workflows/pr-unit-static.yml",
+        "jobs": [
+          "development preflight",
+          "workspace unit inventory and controls",
+          "workspace formatting",
+          "milestone document contracts",
+          "unit-static batch (01/04)",
+          "unit-static batch (02/04)",
+          "unit-static batch (03/04)",
+          "unit-static batch (04/04)",
+          "integration contracts (lumen, default)",
+          "integration contracts (lumen, all-features)",
+          "integration contracts (lumen, feature:backup)",
+          "integration contracts (lumen, feature:delegated-auth)",
+          "integration contracts (lumen, feature:issue)",
+          "integration contracts (lumen, feature:jieba)",
+          "integration contracts (lumen, feature:operator)",
+          "integration contracts (lumen, feature:otel)",
+          "integration contracts (lumen, feature:raft-wal)",
+          "integration contracts (lumen, feature:release)",
+          "integration contracts (lumen, feature:report-issue)",
+          "integration contracts (lumen, feature:self-update)",
+          "integration contracts (lumen, no-default)",
+          "build the e2e test client",
+          "build test image / build (x86_64-unknown-linux-musl)",
+          "build test image / build (aarch64-unknown-linux-musl)",
+          "build test image / publish ghcr test image",
+          "resolve image identity",
+          "standalone container e2e",
+          "GKE e2e (overlay) / deploy + test on shared GKE",
+          "GKE e2e (operator) / deploy + test on shared GKE",
+          "measured performance",
+          "native functional contracts",
+          "native resource and performance contracts"
+        ]
+      }
+    ],
+    "lifecycle_mode": "full",
+    "qualification_blockers": [],
+    "completion_owner": "local",
+    "qualification": {
+      "version": 2,
+      "checks": {
+        "preflight": {
+          "kind": "policy",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "development preflight"
+        },
+        "inventory": {
+          "kind": "policy",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "workspace unit inventory and controls"
+        },
+        "format": {
+          "kind": "policy",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "workspace formatting"
+        },
+        "milestone": {
+          "kind": "policy",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "milestone document contracts"
+        },
+        "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (01/04)",
+          "case_id": "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+          "case_label": "unit-static (lumen, default)"
+        },
+        "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (01/04)",
+          "case_id": "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+          "case_label": "unit-static (lumen-replication, default)"
+        },
+        "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (01/04)",
+          "case_id": "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+          "case_label": "unit-static (lumen, feature:backup)"
+        },
+        "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (01/04)",
+          "case_id": "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+          "case_label": "unit-static (lumen, feature:operator)"
+        },
+        "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (01/04)",
+          "case_id": "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+          "case_label": "unit-static (lumen, feature:report-issue)"
+        },
+        "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (01/04)",
+          "case_id": "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+          "case_label": "unit-static (lumen-access, feature:delegated-auth)"
+        },
+        "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (01/04)",
+          "case_id": "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+          "case_label": "unit-static (lumen-index, feature:jieba)"
+        },
+        "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (01/04)",
+          "case_id": "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+          "case_label": "unit-static (lumen-storage, all-features)"
+        },
+        "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (02/04)",
+          "case_id": "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+          "case_label": "unit-static (lumen-access, default)"
+        },
+        "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (02/04)",
+          "case_id": "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+          "case_label": "unit-static (lumen-shared-kernel, default)"
+        },
+        "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (02/04)",
+          "case_id": "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+          "case_label": "unit-static (lumen, feature:delegated-auth)"
+        },
+        "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (02/04)",
+          "case_id": "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+          "case_label": "unit-static (lumen, feature:otel)"
+        },
+        "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (02/04)",
+          "case_id": "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+          "case_label": "unit-static (lumen, feature:self-update)"
+        },
+        "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (02/04)",
+          "case_id": "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+          "case_label": "unit-static (lumen-access, no-default)"
+        },
+        "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (02/04)",
+          "case_id": "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+          "case_label": "unit-static (lumen-index, feature:operator)"
+        },
+        "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (02/04)",
+          "case_id": "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+          "case_label": "unit-static (lumen-storage, feature:test-support)"
+        },
+        "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (03/04)",
+          "case_id": "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+          "case_label": "unit-static (lumen-index, default)"
+        },
+        "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (03/04)",
+          "case_id": "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+          "case_label": "unit-static (lumen-storage, default)"
+        },
+        "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (03/04)",
+          "case_id": "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+          "case_label": "unit-static (lumen, feature:issue)"
+        },
+        "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (03/04)",
+          "case_id": "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+          "case_label": "unit-static (lumen, feature:raft-wal)"
+        },
+        "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (03/04)",
+          "case_id": "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+          "case_label": "unit-static (lumen, no-default)"
+        },
+        "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (03/04)",
+          "case_id": "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+          "case_label": "unit-static (lumen-index, all-features)"
+        },
+        "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (03/04)",
+          "case_id": "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+          "case_label": "unit-static (lumen-index, feature:raft-wal)"
+        },
+        "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (03/04)",
+          "case_id": "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+          "case_label": "unit-static (lumen-storage, no-default)"
+        },
+        "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (04/04)",
+          "case_id": "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+          "case_label": "unit-static (lumen-operator, default)"
+        },
+        "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (04/04)",
+          "case_id": "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+          "case_label": "unit-static (lumen, all-features)"
+        },
+        "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (04/04)",
+          "case_id": "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+          "case_label": "unit-static (lumen, feature:jieba)"
+        },
+        "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (04/04)",
+          "case_id": "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+          "case_label": "unit-static (lumen, feature:release)"
+        },
+        "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (04/04)",
+          "case_id": "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+          "case_label": "unit-static (lumen-access, all-features)"
+        },
+        "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (04/04)",
+          "case_id": "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+          "case_label": "unit-static (lumen-index, feature:backup)"
+        },
+        "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175": {
+          "kind": "unit",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "unit-static batch (04/04)",
+          "case_id": "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175",
+          "case_label": "unit-static (lumen-index, no-default)"
+        },
+        "functional-0": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, default)"
+        },
+        "functional-1": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, all-features)"
+        },
+        "functional-2": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:backup)"
+        },
+        "functional-3": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:delegated-auth)"
+        },
+        "functional-4": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:issue)"
+        },
+        "functional-5": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:jieba)"
+        },
+        "functional-6": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:operator)"
+        },
+        "functional-7": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:otel)"
+        },
+        "functional-8": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:raft-wal)"
+        },
+        "functional-9": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:release)"
+        },
+        "functional-10": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:report-issue)"
+        },
+        "functional-11": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, feature:self-update)"
+        },
+        "functional-12": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "integration contracts (lumen, no-default)"
+        },
+        "cloud-0": {
+          "kind": "policy",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "build the e2e test client"
+        },
+        "cloud-1": {
+          "kind": "policy",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "build test image / build (x86_64-unknown-linux-musl)"
+        },
+        "cloud-2": {
+          "kind": "policy",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "build test image / build (aarch64-unknown-linux-musl)"
+        },
+        "cloud-3": {
+          "kind": "policy",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "build test image / publish ghcr test image"
+        },
+        "cloud-4": {
+          "kind": "policy",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "resolve image identity"
+        },
+        "cloud-5": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "standalone container e2e"
+        },
+        "cloud-6": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "GKE e2e (overlay) / deploy + test on shared GKE"
+        },
+        "cloud-7": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "GKE e2e (operator) / deploy + test on shared GKE"
+        },
+        "coarse": {
+          "kind": "performance",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "measured performance",
+          "case_id": "coarse",
+          "case_label": "coarse performance gates"
+        },
+        "index-latency": {
+          "kind": "performance",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "measured performance",
+          "case_id": "index-latency",
+          "case_label": "500k AND match original 50ms bound"
+        },
+        "pagination": {
+          "kind": "performance",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "measured performance",
+          "case_id": "pagination",
+          "case_label": "deep pagination original 20x bound"
+        },
+        "native-functional": {
+          "kind": "functional_e2e",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "native functional contracts"
+        },
+        "native-resource-performance": {
+          "kind": "performance",
+          "workflow": ".github/workflows/pr-unit-static.yml",
+          "job": "native resource and performance contracts"
+        }
+      },
+      "trusted_workflows": {
+        ".github/workflows/pr-unit-static.yml": {
+          "id": 399074736,
+          "definition_sha": "4bf55ec5343dec7af8c4ce50306e78bd9a5335c2"
+        }
+      },
+      "always": [
+        "preflight",
+        "inventory",
+        "format",
+        "milestone",
+        "cloud-0",
+        "cloud-1",
+        "cloud-2",
+        "cloud-3",
+        "cloud-4"
+      ],
+      "protected_paths": [
+        ".github/issue-ci-required-gates.json",
+        ".github/development-test-batches.json",
+        "scripts/pr-gates/**",
+        "scripts/issue-ci/**",
+        "Cargo.toml",
+        "Cargo.lock",
+        "crates/*/Cargo.toml",
+        ".cargo/**",
+        "rust-toolchain",
+        "rust-toolchain.toml",
+        "Dockerfile.test",
+        "k8s/**",
+        "crates/lumen/tests/it/e2e/**",
+        "crates/lumen/tests/it/perf_gate.rs",
+        "crates/lumen-index/src/index/domain/query/zip_cursor/tests.rs",
+        "crates/lumen-index/src/index/application/engine/search/tests/pagination/cursors.rs",
+        "docs/ci-qualification/normal-pr-ignored-tests.json",
+        "crates/lumen/tests/rig/**",
+        "crates/lumen/tests/it/support/native_contracts.rs",
+        "crates/lumen/tests/disk_scale_proof.rs",
+        "crates/lumen/tests/perf_gate_vs_db.rs"
+      ],
+      "rules": [
+        {
+          "paths": [
+            "**"
+          ],
+          "require": [
+            "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+            "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+            "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+            "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+            "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+            "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+            "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+            "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+            "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+            "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+            "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+            "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+            "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+            "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+            "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+            "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+            "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+            "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+            "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+            "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+            "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+            "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+            "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+            "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+            "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+            "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+            "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+            "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+            "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+            "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+            "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175",
+            "functional-0",
+            "functional-1",
+            "functional-2",
+            "functional-3",
+            "functional-4",
+            "functional-5",
+            "functional-6",
+            "functional-7",
+            "functional-8",
+            "functional-9",
+            "functional-10",
+            "functional-11",
+            "functional-12",
+            "cloud-5",
+            "cloud-6",
+            "cloud-7",
+            "coarse",
+            "index-latency",
+            "pagination",
+            "native-functional",
+            "native-resource-performance"
+          ],
+          "exempt": {}
+        }
+      ],
+      "contracts": {
+        "188": {
+          "title_sha256": "ed3b0edde9e91a2fa2124dd495d3ff07fe601d7fda58e4237901f992cbc6dafe",
+          "body_sha256": "c89d644c10fe32590adf433f356076483708bc9210d2df7d91a89f9540521413",
+          "applicability": {
+            "unit": {
+              "status": "required",
+              "checks": [
+                "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+                "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+                "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+                "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+                "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+                "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+                "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+                "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+                "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+                "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+                "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+                "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+                "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+                "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+                "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+                "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+                "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+                "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+                "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+                "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+                "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+                "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+                "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+                "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+                "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+                "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+                "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+                "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+                "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+                "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+                "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175"
+              ],
+              "reason": "Retain complete normal-development unit evidence; unknown product content remains blocking."
+            },
+            "functional_e2e": {
+              "status": "required",
+              "checks": [
+                "functional-0",
+                "functional-1",
+                "functional-2",
+                "functional-3",
+                "functional-4",
+                "functional-5",
+                "functional-6",
+                "functional-7",
+                "functional-8",
+                "functional-9",
+                "functional-10",
+                "functional-11",
+                "functional-12",
+                "cloud-5",
+                "cloud-6",
+                "cloud-7",
+                "native-functional"
+              ],
+              "reason": "Retain complete normal-development functional_e2e evidence; unknown product content remains blocking."
+            },
+            "performance": {
+              "status": "required",
+              "checks": [
+                "coarse",
+                "index-latency",
+                "pagination",
+                "native-resource-performance"
+              ],
+              "reason": "Retain complete normal-development performance evidence; unknown product content remains blocking."
+            }
+          },
+          "additional": [],
+          "unresolved": []
+        }
+      }
+    },
+    "development_pipeline": {
+      "version": 1,
+      "workflow": ".github/workflows/pr-unit-static.yml",
+      "stages": {
+        "preflight": [
+          "development-preflight"
+        ],
+        "impact": [
+          "inventory"
+        ],
+        "unit": [
+          "workspace-format",
+          "workspace-unit-static",
+          "milestone-docs"
+        ],
+        "functional": [
+          "image",
+          "resolve",
+          "test-client",
+          "standalone-container",
+          "gke-test",
+          "workspace-contracts",
+          "native-contracts"
+        ],
+        "performance": [
+          "measured-performance"
+        ]
+      },
+      "replaces": {
+        ".github/workflows/gke-test.yml": ".github/workflows/pr-unit-static.yml"
+      },
+      "grouped_checks": [
+        "97bd63441182cc55ddf80a9c5114f27dc015806005b915ba3d8ee9aada1d6b5a",
+        "9d15c5029abf224453639a488d3e6eedc24eaf93ce981c07a3b87532efd8bfc6",
+        "8e6a20ed279614d1f6e983d962d46d4cd4e15cdcc649a0c39276d5f0bf59e22b",
+        "553afd465336b95f914f52ed01752a0feef5ee177ad90eefb3afbc14ad576f5e",
+        "d129927f4f0f9321b580234613547f2703640197449b73258a2a78b7cd53b80c",
+        "f2650c0ca261b08085bc7040f66333cd9d70c07fa5d905c182d63e027886921f",
+        "144f12ef1ae409097439d3848255245d6e4cdd8578f479516a3dcbdc8ed9cf6b",
+        "32588ef6c81fc80a931ad8bb99ed55f0c1338f0cebdad52091c0befa8f2a523e",
+        "4fa7de8e5a27e0ea5229e6bd75d008a0f42116867089a60ae0951d20642e78c8",
+        "da93e6c1075c761cfe40192baaca67dcd1d1496d8b826087076bbd75afbee04c",
+        "fa3c2d13af76c1eaf15a782a371227e1c160f1a40d75b99c1233dab50a1db498",
+        "346d63cef0f7637cf6e9b3740c4a56ff5c21254f7c15a89d858ae6ec8ef5d354",
+        "c7dff125ddaf4c5dc8e6671b8998b7e0806121b1cff3266c5d48968eefabe3c7",
+        "73ed959859c6920916943c7db3fcd678883b8ca9029876ae7b7e3ded9337546e",
+        "db4edbeace9f70b450dd973ea752668683fb9b505492c62bc7a1dfd7662de202",
+        "7978573910a98da75d3be6130ce47ff008127e37d4237aa8b2c15400f238ebdb",
+        "f870f54eafbadc08af9d5bc1bcce1519cb05505f8cf4e1ab2a97f90f66bfaef9",
+        "2fc815f8b796026b33644e25cc6949376821378b32d5e17b027c2d8f93463887",
+        "be195566fcd589ae2abdd78a153af35916c493ab0f3c29a422ff972c112188e5",
+        "9fa076a8161d8f5566f5d6d3f35fc0bb52574ba42785842e31bd25b271741d1a",
+        "6d453cb610ce7c816128b3b8656ac4707abd800b07247b4b5640315a62060341",
+        "fe3aedc8bd8ffb5f0c63d7d26c7d0c7473122f873d6fb1503e4686355664bd9a",
+        "11c59218df284bd2d5a94e3b90acd269fdef0c4fd3f7783565ab337add192ffc",
+        "6e431f0bfcc1bde56067fbdf5cddd61215aed9010ea25c54ffacdc48ab8ac5a5",
+        "ab67ffadeed3ce7793d9463fc1e6cc9aff6f14d26dd15971decab16977a1a5d9",
+        "7cf119ccf4340116f69b24240a85fba712d1c4005622d5d172e9533874ecf22a",
+        "7fbe99a07052c0a487cafe93cd4009544f3945304237f574aae3df2ce4b343aa",
+        "45a89daa7daa8f32e1307336943fe65b5ef1b3cfbf0496efea499a805923ee0e",
+        "6ef5b9f7bb069621d77fd9f9dd768be3b5797550a070ad991493ba61c88ea0cd",
+        "42292324b96caa070f0813409e36d265f28766ac31576172cd629e90ebc3b1d7",
+        "06f9cecd81908e90f64abc43e06da530fdf72116e7c42901f17246932204f175",
+        "coarse",
+        "index-latency",
+        "pagination"
+      ]
+    }
+  }
 }

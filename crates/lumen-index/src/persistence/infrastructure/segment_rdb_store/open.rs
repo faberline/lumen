@@ -2,6 +2,8 @@
 //! every handle on one root, the constructors, and the handle accessors the
 //! engine and the background merge use.
 
+type PendingFrozenRoots = Mutex<HashMap<PathBuf, Weak<Mutex<Option<PendingFrozenCheckpoint>>>>>;
+
 use crate::index::application::{engine::Engine, recovery_profile::RecoveryProfile};
 use crate::persistence::infrastructure::merge_worker::shared;
 use crate::persistence::infrastructure::segment_rdb_store::save_gate::SaveGate;
@@ -31,8 +33,8 @@ impl SegmentRdbStore {
             background: self.background.clone(),
             _root_guard: self.root_guard.clone(),
             name: name.as_str().to_owned(),
-            path: record.path,
-            sequence: record.sequence,
+            _path: record.path,
+            _sequence: record.sequence,
         })
     }
 
@@ -51,6 +53,14 @@ impl SegmentRdbStore {
 
     pub(crate) fn has_publication_fence(&self) -> bool {
         self.publication_fence.is_some()
+    }
+
+    pub(crate) fn checkpoint_progress(
+        &self,
+    ) -> Option<Arc<crate::persistence::application::capacity::CheckpointProgress>> {
+        self.publication_fence
+            .as_ref()
+            .map(|fence| fence.checkpoint_progress())
     }
 
     pub(crate) fn request_capacity_merge(&self, engine: &Arc<Engine>) -> Result<u64> {
@@ -139,6 +149,7 @@ impl SegmentRdbStore {
         Self::open_with_injector_and_observer(root, Arc::new(NoFailures), Arc::new(NoMergeObserver))
     }
 
+    #[cfg(test)]
     fn open_with_injector(
         root: impl Into<PathBuf>,
         injector: Arc<dyn FailureInjector>,
@@ -226,9 +237,7 @@ fn shared_save_gate(root: &Path) -> Result<Arc<SaveGate>> {
 }
 
 fn shared_pending_frozen(root: &Path) -> Result<Arc<Mutex<Option<PendingFrozenCheckpoint>>>> {
-    static ROOT_PENDING: OnceLock<
-        Mutex<HashMap<PathBuf, Weak<Mutex<Option<PendingFrozenCheckpoint>>>>>,
-    > = OnceLock::new();
+    static ROOT_PENDING: OnceLock<PendingFrozenRoots> = OnceLock::new();
     let registry = ROOT_PENDING.get_or_init(|| Mutex::new(HashMap::new()));
     let mut registry = registry
         .lock()

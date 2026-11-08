@@ -13,8 +13,9 @@ use crate::ingest::domain::change_budget::Snapshot;
 /// the checkpoint and remains above the trigger. A drained owner also retains
 /// one successor for its next active-byte crossing, even if reservations keep
 /// the process total high. Unchanged high work waits for the normal
-/// post-completion period. New capacity requests can also schedule an immediate
-/// attempt without waiting for the pressure to drain.
+/// post-completion period. A served capacity episode does not publish its own
+/// already-named high work twice. Work after that demand, a real new refusal
+/// and a drained owner's next crossing retain their original progress rules.
 pub(in crate::persistence) struct CheckpointSchedule {
     period: Duration,
     pub(in crate::persistence) next_deadline: Instant,
@@ -25,6 +26,9 @@ pub(in crate::persistence) struct CheckpointSchedule {
     /// earlier checkpoint may have completed while the process remained near
     /// its hard limit.
     last_request_revision: Option<u64>,
+    /// Work actually named by a served local capacity episode. This is an
+    /// owner work clock, never inferred from the process request clock.
+    last_relieved_work_revision: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,9 +65,11 @@ impl CheckpointSchedule {
             early_attempted: false,
             immediate_successor: None,
             last_request_revision: None,
+            last_relieved_work_revision: None,
         }
     }
 
+    #[cfg(test)]
     fn should_attempt(&mut self, now: Instant, pending: Snapshot, _work_revision: u64) -> bool {
         self.select_ordinary_attempt(now, pending).is_some()
     }
@@ -146,6 +152,14 @@ impl CheckpointSchedule {
             self.immediate_successor = None;
             return false;
         };
+        if self
+            .last_relieved_work_revision
+            .is_some_and(|served| owner.work_revision <= served)
+            && owner.active >= crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER
+        {
+            self.immediate_successor = None;
+            return false;
+        }
         if owner.active < crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER {
             // Reservations are not checkpointable. Keep the successful
             // publication's one successor until this owner's active work
@@ -175,6 +189,9 @@ impl CheckpointSchedule {
             (Some(before), Some(after))
                 if after.active > 0
                     && after.work_revision > before.work_revision
+                    && self
+                        .last_relieved_work_revision
+                        .is_none_or(|served| after.work_revision > served)
                     && (after.active
                         >= crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER
                         || after
@@ -187,6 +204,33 @@ impl CheckpointSchedule {
         };
         if after.total < crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER {
             self.early_attempted = false;
+        }
+    }
+
+    pub(in crate::persistence) fn observe_relieved_request(&mut self, revision: Option<u64>) {
+        if let Some(revision) = revision {
+            // Only actual owner completion can suppress a repeat. A later
+            // pending request sampled after publication is still new demand.
+            self.last_request_revision = Some(
+                self.last_request_revision
+                    .map_or(revision, |last| last.max(revision)),
+            );
+        }
+    }
+
+    pub(in crate::persistence) fn observe_relieved_capacity(
+        &mut self,
+        relief: Option<(u64, Option<u64>)>,
+    ) {
+        let Some((request, work)) = relief else {
+            return;
+        };
+        self.observe_relieved_request(Some(request));
+        if let Some(work) = work {
+            self.last_relieved_work_revision = Some(
+                self.last_relieved_work_revision
+                    .map_or(work, |previous| previous.max(work)),
+            );
         }
     }
 }

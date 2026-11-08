@@ -381,7 +381,6 @@ struct PendingItem {
 
 #[derive(Debug)]
 struct PendingRequest {
-    body_started_at: Duration,
     /// Start of the current attempt. A capacity refusal moves it to the
     /// resend time so the `Retry-After` wait is not counted as latency.
     attempt_started_at: Duration,
@@ -787,7 +786,6 @@ impl WorkloadLedger {
         self.requests.insert(
             request.id,
             PendingRequest {
-                body_started_at: request.body_started_at,
                 attempt_started_at: request.body_started_at,
                 capacity_refusals: 0,
                 body_started_in_input,
@@ -1446,7 +1444,7 @@ fn percentile_99(samples: &[Duration]) -> Option<Duration> {
     }
     let mut sorted = samples.to_vec();
     sorted.sort_unstable();
-    let rank = (sorted.len() * 99 + 99) / 100;
+    let rank = (sorted.len() * 99).div_ceil(100);
     sorted.get(rank.saturating_sub(1)).copied()
 }
 

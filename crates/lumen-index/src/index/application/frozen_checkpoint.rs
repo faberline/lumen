@@ -49,7 +49,7 @@ pub(super) enum FrozenCollectionFiles {
 }
 
 pub(super) enum FrozenField {
-    Column(FieldIndex),
+    Column(Box<FieldIndex>),
     Vectors {
         spec: VectorSpec,
         rows: Vec<(String, Vec<f32>)>,
@@ -87,7 +87,6 @@ impl FrozenField {
                 segment: index.segment.clone(),
                 tombstones: index.tombstones.clone(),
                 bytes: index.bytes,
-                ..Default::default()
             }),
             FieldIndex::Text { analyzer, idx } => FieldIndex::Text {
                 analyzer: *analyzer,
@@ -122,7 +121,7 @@ impl FrozenField {
                 return Ok(Self::Vectors { spec: *spec, rows });
             }
         };
-        Ok(Self::Column(column))
+        Ok(Self::Column(Box::new(column)))
     }
 }
 
@@ -152,7 +151,7 @@ impl FrozenCheckpoint {
         }
         for (name, files) in &self.files {
             checkpoint_write_boundary();
-            let dir = root.join(collection_dir_name(&name));
+            let dir = root.join(collection_dir_name(name));
             // Build the empty codec inputs here, after the capture barrier.
             // No live index or HNSW graph is inspected or replaced.
             let empty = if let FrozenCollectionFiles::EmptyBase { schema, version } = files {
@@ -211,7 +210,7 @@ impl FrozenCheckpoint {
                         .map_err(|_| anyhow!("base row count exceeds u32"))?;
                     let collection_name = name.clone();
                     for (name, field) in fields {
-                        let stem = CheckpointLayout::Encoded.field_stem(&name);
+                        let stem = CheckpointLayout::Encoded.field_stem(name);
                         match field {
                             FrozenField::Column(index) => {
                                 let live = |id| {

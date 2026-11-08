@@ -38,7 +38,7 @@ pub fn write_vector_stream(
             .ok_or_else(|| anyhow!("vector row byte count overflow"))?,
     )
     .context("vector row byte count exceeds platform size")?;
-    let word_count = usize::try_from((u64::from(n_docs) + 63) / 64)
+    let word_count = usize::try_from(u64::from(n_docs).div_ceil(64))
         .context("vector present bitset exceeds platform size")?;
 
     stream_atomic(path, |out, at| {

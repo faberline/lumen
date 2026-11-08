@@ -6,6 +6,7 @@ metadata:
     app: lumen
     role: server
 spec:
+  storageClassName: dynamic-rwo
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:

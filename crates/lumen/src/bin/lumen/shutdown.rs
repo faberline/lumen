@@ -112,7 +112,7 @@ mod tests {
         let event = RaftShutdownCoordinator::event(&report, 0);
 
         assert_eq!(event.handoff, "not_leader");
-        assert_eq!(event.incomplete_phase.as_deref(), Some("quiesce"));
+        assert_eq!(event.incomplete_phase, Some("quiesce"));
         assert_eq!(event.listener_action, PeerListenerAction::AbortAfterReport);
     }
 

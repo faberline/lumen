@@ -48,11 +48,15 @@ case (`aw e2e`) before `lumen-dev` changes `src/` and adds the red unit test and
 implementation (`aw impl`). A fresh `lumen-qa` run executes the declared
 complete gate. The controller owns Git, tracker, and acceptance.
 
-Keep Lumen-specific search, schema, shard, and health policy in this
-repository. Put reusable Kubernetes mechanisms in the
-[faberline/core](https://github.com/faberline/core) `service-k8s` crate after
-their shared contract is defined. Do not move Lumen's protected reshard fields
-into a generic Fleet policy.
+Keep Lumen-specific search behavior, schema, storage format, and the data-plane
+hooks that core calls in this repository: request classification and result
+merge, bucket data, domain readiness, and domain alerts. Operations move to
+[faberline/core](https://github.com/faberline/core), as its ADR 0002
+(faberline/core#98) records. Core owns topology, membership, scaling, sharding,
+routing between pods, rollout, certificates, client trust, data retention,
+placement, and Fleet. Until core ships the engine, contributors may fix defects
+in the existing `lumen-operator`. Send new operations policy to core, not to
+`lumen-operator`.
 
 Keep the Lumen audience, token path, anonymous routes, typed access API, and
 SubjectAccessReview resource mapping in this repository. Put token and review

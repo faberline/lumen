@@ -24,52 +24,6 @@ pub trait TokenPostings {
     fn tfs(&self) -> &[u32];
 }
 
-/// A plain posting list for the segment tests.
-#[cfg(test)]
-pub mod test_postings {
-    /// Docid-sorted `(docid, tf)` arrays.
-    #[derive(Debug, Default, Clone)]
-    pub struct Postings {
-        docids: Vec<u32>,
-        tfs: Vec<u32>,
-    }
-
-    impl Postings {
-        /// Build a posting list from ascending `(docid, tf)` pairs.
-        pub fn from_sorted(docids: Vec<u32>, tfs: Vec<u32>) -> Self {
-            debug_assert_eq!(docids.len(), tfs.len());
-            Postings { docids, tfs }
-        }
-        /// Insert or overwrite `id`'s tf, keeping the doc ids sorted.
-        pub fn upsert(&mut self, id: u32, tf: u32) {
-            match self.docids.binary_search(&id) {
-                Ok(pos) => self.tfs[pos] = tf,
-                Err(pos) => {
-                    self.docids.insert(pos, id);
-                    self.tfs.insert(pos, tf);
-                }
-            }
-        }
-        /// The docid-sorted doc ids.
-        pub fn docids(&self) -> &[u32] {
-            &self.docids
-        }
-        /// The term frequencies, parallel to [`Self::docids`].
-        pub fn tfs(&self) -> &[u32] {
-            &self.tfs
-        }
-    }
-
-    impl super::TokenPostings for Postings {
-        fn docids(&self) -> &[u32] {
-            &self.docids
-        }
-        fn tfs(&self) -> &[u32] {
-            &self.tfs
-        }
-    }
-}
-
 /// Write a Text segment (Phase 2e-B). Stores the WHOLE inverted text field for
 /// `n_docs` docs at `applied_seq`:
 ///
@@ -153,4 +107,50 @@ pub fn write_text_segment<P: TokenPostings>(
         postings_ref,
     ];
     finalize_and_write(path, buf, dir)
+}
+
+/// A plain posting list for the segment tests.
+#[cfg(test)]
+pub mod test_postings {
+    /// Docid-sorted `(docid, tf)` arrays.
+    #[derive(Debug, Default, Clone)]
+    pub struct Postings {
+        docids: Vec<u32>,
+        tfs: Vec<u32>,
+    }
+
+    impl Postings {
+        /// Build a posting list from ascending `(docid, tf)` pairs.
+        pub fn from_sorted(docids: Vec<u32>, tfs: Vec<u32>) -> Self {
+            debug_assert_eq!(docids.len(), tfs.len());
+            Postings { docids, tfs }
+        }
+        /// Insert or overwrite `id`'s tf, keeping the doc ids sorted.
+        pub fn upsert(&mut self, id: u32, tf: u32) {
+            match self.docids.binary_search(&id) {
+                Ok(pos) => self.tfs[pos] = tf,
+                Err(pos) => {
+                    self.docids.insert(pos, id);
+                    self.tfs.insert(pos, tf);
+                }
+            }
+        }
+        /// The docid-sorted doc ids.
+        pub fn docids(&self) -> &[u32] {
+            &self.docids
+        }
+        /// The term frequencies, parallel to [`Self::docids`].
+        pub fn tfs(&self) -> &[u32] {
+            &self.tfs
+        }
+    }
+
+    impl super::TokenPostings for Postings {
+        fn docids(&self) -> &[u32] {
+            &self.docids
+        }
+        fn tfs(&self) -> &[u32] {
+            &self.tfs
+        }
+    }
 }

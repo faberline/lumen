@@ -157,7 +157,7 @@ fn forced_borrowed_replace_matches_owned_prefix_errors_duplicate_order_and_versi
         "Replace checksum ledger differs"
     );
     assert!(
-        actual_collection.cell_versions.get(&same).is_none(),
+        !actual_collection.cell_versions.contains_key(&same),
         "Replace must not create per-cell LWW versions"
     );
 }

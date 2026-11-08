@@ -53,11 +53,12 @@ impl<'a> std::ops::Deref for MeasuredCapture<'a> {
 impl Drop for MeasuredCapture<'_> {
     fn drop(&mut self) {
         let nanos = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
-        let _ = self
-            .total
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |total| {
-                Some(total.saturating_add(nanos))
-            });
+        let _ = crate::atomic_update::update_u64(
+            self.total,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |total| Some(total.saturating_add(nanos)),
+        );
     }
 }
 

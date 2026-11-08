@@ -22,8 +22,8 @@ fn hpa_api_resource() -> ApiResource {
 }
 
 /// Production [`HpaControl`]: real `kube::Client` calls.
-pub(in crate) struct KubeHpaControl {
-    pub(in crate) client: Client,
+pub(crate) struct KubeHpaControl {
+    pub(crate) client: Client,
 }
 
 #[async_trait::async_trait]

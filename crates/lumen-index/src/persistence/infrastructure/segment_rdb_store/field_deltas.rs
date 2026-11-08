@@ -197,7 +197,7 @@ pub(super) fn write_field_deltas(
             .unwrap_or(0)
             .checked_add(1)
             .ok_or_else(|| anyhow!("segment ordinal exhausted"))?;
-        let field_dir = collection_checkpoint_dir_name(field);
+        let _field_dir = collection_checkpoint_dir_name(field);
         let prefix = delta_path_prefix(&collection.collection_id, field, ordinal);
         let segment_path = format!("{prefix}.lseg");
         let rows_path = format!("{prefix}.rows.cbor");
@@ -317,7 +317,6 @@ pub(super) fn write_field_deltas(
                         as usize;
                     write_vector_segment(&root.join(&segment_path), sequence, dim, &values)?;
                 }
-                _ => bail!("unsupported delta field"),
             }
         }
         encode_sparse_local_rows(&root.join(&rows_path), &ids)?;
