@@ -66,5 +66,27 @@ class SelectionTests(unittest.TestCase):
         job=config['qualification']['checks'][name]['job'];batch=job.removeprefix('unit-static batch (').removesuffix(')')
         with self.assertRaisesRegex(ValueError,'unit cases'):s.inventory_contract(config,dict(batches=[dict(batch=batch,cases=[dict(case_id=name)])]),[])
 
+    def test_unregistered_issue_runs_full_roster_but_remains_unqualified(self):
+        p=pull();p['body']='Closes #7\n';p['changed_files']=2
+        target=dict(number=7,state='open',title='Fleet change',body='Keep all behavior',labels=[],
+                    url=f'https://api.github.com/repos/{REPO}/issues/7',
+                    repository_url=f'https://api.github.com/repos/{REPO}')
+        changed=[dict(filename='Cargo.lock',status='modified'),dict(filename='crates/lumen-operator/src/lib.rs',status='modified')]
+        defs={(path,ref):{'sha':item['definition_sha']} for path,item in config['qualification']['trusted_workflows'].items() for ref in (HEAD,BASE)}
+        value=s.build(shared,config,'diff',REPO,HEAD,BASE,p,changed,target,config,fallback=shared,definitions=defs)
+        self.assertEqual(set(value['test_plan']['selected']),set(config['qualification']['checks']))
+        self.assertEqual(value['qualification'],'not_evaluated')
+        self.assertIn('linked issue has no reviewed contract',value['pending_applicability'])
+        self.assertIn('gate infrastructure change requires reviewed policy update: Cargo.lock',value['pending_applicability'])
+        with self.assertRaisesRegex(ValueError,'no reviewed contract'):
+            shared.select(config,'diff',REPO,HEAD,BASE,pull=p,files=changed,issue=target)
+        defs[next(iter(defs))]={'sha':'f'*40}
+        with self.assertRaisesRegex(ValueError,'untrusted head/base'):
+            s.build(shared,config,'diff',REPO,HEAD,BASE,p,changed,target,config,fallback=shared,definitions=defs)
+
+    def test_execution_planner_is_exact_reviewed_aw_source(self):
+        loaded=s.execution_planner(ROOT)
+        self.assertTrue(callable(loaded.execute_unregistered_issue))
+
 
 if __name__=='__main__':unittest.main()

@@ -55,6 +55,42 @@ def select(config, mode, repo, head, base, *, pull=None, files=None, issue=None)
     return result
 
 
+def execute_unregistered_issue(config, repo, head, base, *, pull, files, issue, definitions):
+    """Plan the full trusted roster without granting an issue qualification."""
+    q = qualification()
+    policy = q.validate(config)
+    require(policy['version'] == 2, 'unregistered execution requires reviewed v2 policy')
+    require(isinstance(pull, dict) and pull.get('state') == 'open' and pull.get('draft') is False
+            and pull.get('head', {}).get('sha') == head and pull.get('base', {}).get('sha') == base
+            and all(pull.get(side, {}).get('repo', {}).get('full_name') == repo for side in ('head', 'base')),
+            'execution needs the exact open same-repository PR')
+    number = q.linked_issue(pull)
+    require(type(number) is int and isinstance(issue, dict) and issue.get('number') == number
+            and type(issue.get('number')) is int and issue.get('state') == 'open'
+            and issue.get('url') == f'https://api.github.com/repos/{repo}/issues/{number}'
+            and issue.get('repository_url') == f'https://api.github.com/repos/{repo}'
+            and 'pull_request' not in issue, 'linked issue identity is not verified')
+    require(all(isinstance(issue.get(field), str) and issue[field].strip() for field in ('title', 'body')),
+            'linked issue title or body is missing')
+    labels = issue.get('labels')
+    require(isinstance(labels, list) and all(isinstance(x, dict) and isinstance(x.get('name'), str) for x in labels)
+            and not any(x['name'].lower() in ('blocked', 'agy:blocked') for x in labels), 'linked issue is blocked or labels unknown')
+    require(isinstance(files, list), 'complete changed-file inventory required')
+    scope = q.select(config, pull, files, issue)
+    protected = [reason for reason in scope['issues']
+                 if reason.startswith('gate infrastructure change requires reviewed policy update: ')]
+    remaining = [reason for reason in scope['issues'] if reason not in protected]
+    require(remaining == ['linked issue has no reviewed contract'],
+            'execution-only fallback requires an unregistered contract and no other blockers')
+    require(isinstance(definitions, dict), 'trusted workflow definitions required')
+    for path, identity in policy['trusted_workflows'].items():
+        require(all(definitions.get((path, ref), {}).get('sha') == identity['definition_sha']
+                    for ref in (head, base)), 'untrusted head/base workflow definition: ' + path)
+    plan = select(config, 'all', repo, head, base)
+    return dict(schema='AW_TEST_EXECUTION_ONLY_V1', plan=plan, changed_paths=scope['paths'],
+                qualification='not_evaluated', unresolved=protected + remaining)
+
+
 def validate_plan(plan):
     require(isinstance(plan, dict) and plan.get('schema') == 'AW_TEST_PLAN_V1', 'invalid plan schema')
     value = {k: v for k, v in plan.items() if k != 'sha256'}
