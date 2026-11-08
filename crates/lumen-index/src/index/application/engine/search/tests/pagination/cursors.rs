@@ -230,17 +230,20 @@ fn deep_pagination_depth_invariance() {
     assert_eq!(deep.hits.len(), 10);
     assert_eq!(deep.hits[0].external_id, "u050000");
 
-    // Legacy offset to the same depth for contrast.
+    // Legacy offset cursors cannot be mixed with explicit sorting. Keep
+    // this negative contract check without preventing the keyset timing gate.
     let mut offset_req = base.clone();
     offset_req.cursor = Some(make_cursor(50_000));
     let t2 = std::time::Instant::now();
-    let via_offset = e.search("users", offset_req).unwrap();
+    let offset_error = e
+        .search("users", offset_req)
+        .expect_err("legacy offset plus sort must be rejected");
     let offset_us = t2.elapsed().as_micros();
+    assert!(offset_error
+        .to_string()
+        .contains("offset pagination cannot be combined with sort"));
 
-    eprintln!(
-        "page#1 {first_us}us | keyset@50k {deep_us}us | offset@50k {offset_us}us (hits {})",
-        via_offset.hits.len()
-    );
+    eprintln!("page#1 {first_us}us | keyset@50k {deep_us}us | rejected-offset@50k {offset_us}us");
     // The keyset deep page must be the same order of magnitude as page 1 —
     // depth invariance. (Loose 20x bound to survive CI jitter.)
     assert!(

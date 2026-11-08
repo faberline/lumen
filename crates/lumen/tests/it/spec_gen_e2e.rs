@@ -13,7 +13,13 @@ fn lumen() -> Command {
     Command::new(env!("CARGO_BIN_EXE_lumen"))
 }
 
-fn run_generated_python(
+fn run_generator(command: &mut Command) -> std::process::Output {
+    // Child output must not enter the parent's libtest progress row.
+    // Callers retain the exit check and include both streams on failure.
+    command.output().expect("capture generated client command")
+}
+
+pub(super) fn run_generated_python(
     manifest_or_dir: &Path,
     python_args: &[&str],
     uv_bin: Option<&Path>,
@@ -165,12 +171,17 @@ fn run_generated_python(
 #[test]
 fn gen_py_writes_pydantic_h2c_client() {
     let dir = tempfile::tempdir().unwrap();
-    let status = lumen()
-        .args(["spec", "gen", "--lang", "py", "--out"])
-        .arg(dir.path())
-        .status()
-        .unwrap();
-    assert!(status.success(), "spec gen --lang py failed");
+    let status = run_generator(
+        lumen()
+            .args(["spec", "gen", "--lang", "py", "--out"])
+            .arg(dir.path()),
+    );
+    assert!(
+        status.status.success(),
+        "spec gen --lang py failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&status.stdout),
+        String::from_utf8_lossy(&status.stderr)
+    );
 
     for f in [
         "models.py",
@@ -264,12 +275,17 @@ fn gen_py_writes_pydantic_h2c_client() {
 fn gen_lang_selects_emitter() {
     for (lang, marker) in [("ts", "client.ts"), ("rust", "client.rs")] {
         let dir = tempfile::tempdir().unwrap();
-        let status = lumen()
-            .args(["spec", "gen", "--lang", lang, "--out"])
-            .arg(dir.path())
-            .status()
-            .unwrap();
-        assert!(status.success(), "spec gen --lang {lang} failed");
+        let status = run_generator(
+            lumen()
+                .args(["spec", "gen", "--lang", lang, "--out"])
+                .arg(dir.path()),
+        );
+        assert!(
+            status.status.success(),
+            "spec gen --lang {lang} failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&status.stdout),
+            String::from_utf8_lossy(&status.stderr)
+        );
         assert!(dir.path().join(marker).exists(), "{lang}: missing {marker}");
     }
 }
@@ -301,11 +317,11 @@ fn gen_all_languages_opt_into_the_default_ksa_token_per_request() {
         ),
     ] {
         let dir = tempfile::tempdir().unwrap();
-        let output = lumen()
-            .args(["spec", "gen", "--lang", lang, "--out"])
-            .arg(dir.path())
-            .output()
-            .unwrap();
+        let output = run_generator(
+            lumen()
+                .args(["spec", "gen", "--lang", lang, "--out"])
+                .arg(dir.path()),
+        );
         assert!(
             output.status.success(),
             "spec gen --lang {lang} failed\nstdout:\n{}\nstderr:\n{}",
@@ -336,20 +352,25 @@ fn gen_all_languages_opt_into_the_default_ksa_token_per_request() {
 #[test]
 fn gen_target_override_writes_the_requested_contract() {
     let dir = tempfile::tempdir().unwrap();
-    let status = lumen()
-        .args([
-            "spec",
-            "gen",
-            "--lang",
-            "py",
-            "--target",
-            "python-3.11",
-            "--out",
-        ])
-        .arg(dir.path())
-        .status()
-        .unwrap();
-    assert!(status.success(), "spec gen target override failed");
+    let status = run_generator(
+        lumen()
+            .args([
+                "spec",
+                "gen",
+                "--lang",
+                "py",
+                "--target",
+                "python-3.11",
+                "--out",
+            ])
+            .arg(dir.path()),
+    );
+    assert!(
+        status.status.success(),
+        "spec gen target override failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&status.stdout),
+        String::from_utf8_lossy(&status.stderr)
+    );
 
     let manifest: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(dir.path().join(".openapi-codegen.json")).unwrap(),
@@ -376,12 +397,17 @@ fn generated_client_live_h2c_public_api_journey() {
     let package_dir = dir.path().join("lumen_client");
     std::fs::create_dir(&package_dir).unwrap();
 
-    let status = lumen()
-        .args(["spec", "gen", "--lang", "py", "--out"])
-        .arg(&package_dir)
-        .status()
-        .unwrap();
-    assert!(status.success(), "spec gen --lang py failed");
+    let status = run_generator(
+        lumen()
+            .args(["spec", "gen", "--lang", "py", "--out"])
+            .arg(&package_dir),
+    );
+    assert!(
+        status.status.success(),
+        "spec gen --lang py failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&status.stdout),
+        String::from_utf8_lossy(&status.stderr)
+    );
 
     let port = free_local_port();
     let mut child = ChildGuard::spawn(port);
@@ -406,12 +432,17 @@ fn generated_client_live_h2c_public_api_journey() {
 #[test]
 fn generated_python_toolchain_ignores_ambient_python3() {
     let dir = tempfile::tempdir().unwrap();
-    let status = lumen()
-        .args(["spec", "gen", "--lang", "py", "--out"])
-        .arg(dir.path())
-        .status()
-        .unwrap();
-    assert!(status.success(), "spec gen --lang py failed");
+    let status = run_generator(
+        lumen()
+            .args(["spec", "gen", "--lang", "py", "--out"])
+            .arg(dir.path()),
+    );
+    assert!(
+        status.status.success(),
+        "spec gen --lang py failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&status.stdout),
+        String::from_utf8_lossy(&status.stderr)
+    );
 
     let fake_bin_dir = tempfile::tempdir().unwrap();
     let sentinel = dir.path().join("ambient_python3_sentinel.txt");
@@ -459,12 +490,17 @@ fn generated_python_toolchain_ignores_ambient_python3() {
 #[test]
 fn generated_python_toolchain_reports_missing_uv() {
     let dir = tempfile::tempdir().unwrap();
-    let status = lumen()
-        .args(["spec", "gen", "--lang", "py", "--out"])
-        .arg(dir.path())
-        .status()
-        .unwrap();
-    assert!(status.success(), "spec gen --lang py failed");
+    let status = run_generator(
+        lumen()
+            .args(["spec", "gen", "--lang", "py", "--out"])
+            .arg(dir.path()),
+    );
+    assert!(
+        status.status.success(),
+        "spec gen --lang py failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&status.stdout),
+        String::from_utf8_lossy(&status.stderr)
+    );
 
     let nonexistent_uv = Path::new("/nonexistent/uv_binary_for_lumen_negative_test");
     let res = run_generated_python(

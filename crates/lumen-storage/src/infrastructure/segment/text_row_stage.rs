@@ -134,7 +134,6 @@ pub fn stage_text_row(
     if let Err(error) = stream(&mut emit) {
         feed_error = Some(error);
     }
-    drop(emit);
     if let Some(error) = feed_error {
         return Err(error);
     }

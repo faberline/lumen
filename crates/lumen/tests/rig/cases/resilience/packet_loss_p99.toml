@@ -38,7 +38,7 @@ expect = { statuses = [200, 201, 400, 409] }
 [[steps]]
 type = "exec"
 name = "seed_corpus"
-cmd = ["python3", "-c", "import json,sys,urllib.request\nupstream,coll=sys.argv[1],sys.argv[2]\nitems=[]\nfor i in range(2000):\n    items.append({'external_id':f'rig-seed-{i}','field':'bio','value':f'senior engineer number {i} in taipei'})\nbody=json.dumps({'items':items}).encode()\nreq=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\nwith urllib.request.urlopen(req,timeout=30) as r:\n    sys.exit(0 if r.status<400 else 2)", "{{upstream}}", "{{collection}}"]
+cmd = ["python3", "-c", "import json,sys,urllib.request\nupstream,coll=sys.argv[1],sys.argv[2]\nitems=[]\nfor i in range(2000):\n    items.append({'external_id':f'rig-seed-{i}','field':'bio','value':f'senior engineer number {i} in taipei'})\nfor batch_start in range(0,len(items),1000):\n    body=json.dumps({'items':items[batch_start:batch_start+1000]}).encode()\n    req=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\n    with urllib.request.urlopen(req,timeout=30) as r:\n        if r.status>=400: sys.exit(2)", "{{upstream}}", "{{collection}}"]
 timeout_secs = 60
 
 [[steps]]

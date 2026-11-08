@@ -26,10 +26,6 @@ impl Postings {
     pub(crate) fn docids(&self) -> &[u32] {
         &self.docids
     }
-    /// The term frequencies, parallel to [`Self::docids`]. Phase 2e-B.
-    pub(crate) fn tfs(&self) -> &[u32] {
-        &self.tfs
-    }
     /// Insert/overwrite `id`'s tf, keeping `docids` sorted. For the monotonic
     /// bulk-index path the insertion point is the tail (O(1) amortized); a reused
     /// id (interner reuses ids; an overwrite drops first) lands in sorted order.

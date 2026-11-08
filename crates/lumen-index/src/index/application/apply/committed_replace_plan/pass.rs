@@ -29,7 +29,7 @@ pub(in crate::index::application::apply) fn plan<V: ReplacePlanView>(
     docs: &[ReplaceDocDescriptor<'_>],
     parsed: &ParsedValues,
     view: &V,
-    now: Instant,
+    _now: Instant,
     mut reserve_total: impl FnMut(usize) -> Result<()>,
 ) -> Result<ReplacePlan> {
     let reservation = metadata_bound(scanner, docs, view)?;
@@ -266,9 +266,9 @@ pub(in crate::index::application::apply) fn plan<V: ReplacePlanView>(
             winners,
             bytes_by_field,
             applied,
-            source_items: scanner.cost().item_count,
+            _source_items: scanner.cost().item_count,
             business_error: None,
-            reservation,
+            _reservation: reservation,
         },
         outcomes,
         final_docs: final_docs.into_values().collect(),
@@ -278,7 +278,7 @@ pub(in crate::index::application::apply) fn plan<V: ReplacePlanView>(
             .collect(),
         fields_written: written,
         fields_skipped: skipped,
-        reservation,
+        _reservation: reservation,
     })
 }
 

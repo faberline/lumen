@@ -223,7 +223,7 @@ async fn evict_old_shards_rearms_fence_mid_loop_across_slow_multi_shard_round() 
         "every one of the 3 old shards must be evicted exactly once"
     );
     assert!(
-        total_fence_calls > 0 && total_fence_calls % 3 == 0,
+        total_fence_calls > 0 && total_fence_calls.is_multiple_of(3),
         "evict_old_shards's own loop must have re-armed at least once (a full arm round \
              is 3 fence calls, one per old shard) — this test never arms the fence itself \
              before calling evict_old_shards, so any fence calls observed at all are proof \

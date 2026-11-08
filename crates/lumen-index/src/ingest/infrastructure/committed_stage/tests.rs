@@ -116,7 +116,7 @@ fn orphan_payload_is_not_auto_removed_and_marker_corruption_fails_closed() {
     assert!(orphan.exists());
 
     let stage = store.stage(8, 1, source(), Cursor::new(b"eight")).unwrap();
-    fs::write(&stage.marker_path, b"unknown").unwrap();
+    fs::write(&stage._marker_path, b"unknown").unwrap();
     assert!(store.recover().is_err());
 }
 
@@ -135,7 +135,7 @@ fn recovery_rejects_missing_and_truncated_committed_pairs() {
     let truncated = truncated_store
         .stage(21, 1, source(), Cursor::new(b"twenty-one"))
         .unwrap();
-    fs::write(&truncated.marker_path, FORMAT_MAGIC).unwrap();
+    fs::write(&truncated._marker_path, FORMAT_MAGIC).unwrap();
     assert!(truncated_store.recover().is_err());
 }
 
@@ -146,7 +146,7 @@ fn removal_requires_verified_watermark_and_never_happens_on_drop() {
     let stage = store
         .stage(12, 7, source(), Cursor::new(b"twelve"))
         .unwrap();
-    let marker = stage.marker_path.clone();
+    let marker = stage._marker_path.clone();
     drop(stage);
     assert!(marker.exists());
     let stage = store.recover().unwrap().pop().unwrap();
@@ -235,7 +235,7 @@ fn identical_retry_removes_only_its_redundant_payload_temp() {
 
     let first = store.stage(51, 4, source(), Cursor::new(b"same")).unwrap();
     let original_record = first.record_path.clone();
-    let original_marker = first.marker_path.clone();
+    let original_marker = first._marker_path.clone();
     store.stage(51, 4, source(), Cursor::new(b"same")).unwrap();
 
     let mut record_names = fs::read_dir(store.records_dir())
@@ -290,6 +290,6 @@ fn retry_after_marker_publish_fault_keeps_prior_marker_orphan_only() {
         prior_marker_orphan.exists(),
         "first uncertain marker orphan must stay"
     );
-    assert!(receipt.marker_path.exists());
+    assert!(receipt._marker_path.exists());
     assert_eq!(store.recover().unwrap().len(), 1);
 }

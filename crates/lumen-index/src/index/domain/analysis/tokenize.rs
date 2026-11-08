@@ -42,9 +42,9 @@ pub fn tokenize(text: &str, analyzer: Analyzer) -> Vec<String> {
 
 pub(in crate::index) fn for_whitespace_lower_cow<'a>(
     text: &'a str,
-    mut emit: impl FnMut(Cow<'a, str>),
+    emit: impl FnMut(Cow<'a, str>),
 ) -> u32 {
-    index_text::for_whitespace_lower_cow(text, |token| emit(token))
+    index_text::for_whitespace_lower_cow(text, emit)
 }
 
 fn shared_analyzer(analyzer: Analyzer) -> index_text::Analyzer {
@@ -93,7 +93,7 @@ mod tests {
         #[cfg(not(feature = "jieba"))]
         assert_eq!(tokens, vec!["北京", "京大", "大學"]);
         #[cfg(feature = "jieba")]
-        assert!(tokens.len() >= 1);
+        assert!(!tokens.is_empty());
     }
 
     #[test]
@@ -111,7 +111,7 @@ mod tests {
             assert!(!tokens.contains(&"搜尋引擎".to_string()));
         }
         #[cfg(feature = "jieba")]
-        assert!(tokens.len() >= 1);
+        assert!(!tokens.is_empty());
     }
 
     #[test]
