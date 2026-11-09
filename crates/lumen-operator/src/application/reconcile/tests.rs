@@ -20,6 +20,8 @@ mod auth_delegator;
 
 mod conditions;
 
+mod handover;
+
 mod hpa;
 
 mod peer_identity;

@@ -1,6 +1,8 @@
 use crate::domain::lumen_spec::serving::AuthMode;
 use crate::infrastructure::crd_manifest::{crd_yaml, fleet_crd_yaml, FORBIDDEN_CEL_OPERATOR};
 
+mod compat;
+
 /// A namespaced fleet could not legally own objects in other namespaces:
 /// Kubernetes rejects cross-namespace owner references and its garbage
 /// collector deletes the dependents. Cluster scope is the load-bearing
