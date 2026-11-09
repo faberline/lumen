@@ -601,30 +601,14 @@ subject = "ingest.domain"
 reason = "The schedule selects and re-arms from the change budget's Snapshot and OwnerCapacityState and compares them against CHECKPOINT_TRIGGER. P2: the schedule takes its own value with the counters it reads and the trigger, which the driver fills from the budget."
 
 # ingest and persistence depend on each other (E16). depends_on declares
-# persistence -> ingest; the coordinator's use of the checkpoint diagnostic, of
-# the AOF writer and of the capacity fallback is the other direction.
-
-[[exceptions]]
-rule = "B4"
-paths = ["crates/lumen-index/src/ingest/application/write_coordinator/capacity.rs"]
-subject = "persistence.infrastructure"
-reason = "The coordinator's capacity refusal records a numeric event in the checkpoint diagnostic trace (checkpoint_diagnostic_enabled, send_numeric_event, DiagnosticCaptureToken) so one trace shows both sides of a capacity wait. P2: ingest defines a capacity-trace port the persistence diagnostic implements, which breaks the cycle."
+# persistence -> ingest; the coordinator uses the AOF writer and the
+# capacity fallback in the other direction.
 
 [[exceptions]]
 rule = "B4"
 paths = ["crates/lumen-index/src/ingest/application/write_coordinator.rs"]
 subject = "persistence.infrastructure"
 reason = "SharedAof is the coordinator's handle on the AofWriter: the apply loop appends each applied record to it, the AOF sync task fsyncs it, and the checkpoint snapshotter truncates the prefix a checkpoint covers. P2: ingest defines a durable-log port (append, sync, truncate_through) the AOF writer implements, which breaks the cycle."
-
-[[exceptions]]
-rule = "B4"
-paths = [
-  "crates/lumen-index/src/ingest/application/write_coordinator.rs",
-  "crates/lumen-index/src/ingest/application/write_coordinator/capacity.rs",
-  "crates/lumen-index/src/ingest/application/write_coordinator/committed_scalar.rs",
-]
-subject = "persistence.application"
-reason = "The coordinator keeps a capacity Fallback in layer_capacity_owner and ensures it before the apply loop or the committed scalar path waits on layer capacity, so a coordinator without a configured checkpoint owner still has a worker to checkpoint and merge. P2: ingest defines a capacity-owner port the persistence capacity worker implements, which breaks the cycle."
 
 [[exceptions]]
 rule = "B4"
