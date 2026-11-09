@@ -1,7 +1,7 @@
 //! A serving node's startup: the write log it opens, the bootstrap seed it
 //! restores, and where its segments and cold start come from.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -9,6 +9,22 @@ use lumen::rdb::{LocalFsRdbStore, RdbStore};
 use lumen::storage::Engine;
 
 use crate::cli::serve::{Persistence, ServeArgs, WalBackend};
+
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum DurabilityMode {
+    Ephemeral,
+    Persistent,
+}
+
+pub(super) fn durability_mode(backend: WalBackend, data_dir: Option<&Path>) -> DurabilityMode {
+    match backend {
+        WalBackend::Auto => unreachable!("auto is resolved by resolve_wal_backend"),
+        WalBackend::Embedded if data_dir.is_none() => DurabilityMode::Ephemeral,
+        WalBackend::Embedded => DurabilityMode::Persistent,
+        #[cfg(feature = "raft-wal")]
+        WalBackend::Raft => DurabilityMode::Persistent,
+    }
+}
 
 pub(super) fn recovery_phase_start<T>(phase: &'static str, work: impl FnOnce() -> T) -> T {
     if std::env::var_os("LUMEN_RECOVERY_PROFILE").is_some_and(|value| value == "1") {
