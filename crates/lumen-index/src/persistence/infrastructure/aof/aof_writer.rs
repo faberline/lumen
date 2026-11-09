@@ -1,6 +1,8 @@
 //! The AOF writer: appending frames in applied-sequence order, the fsync policy
 //! and its off-lock sync plan, and trimming the prefix a checkpoint covers.
 
+type CompleteSync = Box<dyn FnOnce(&mut FramedLogWriter) -> Result<()> + Send>;
+
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -35,7 +37,7 @@ pub struct AofWriter {
 
 pub(crate) struct AofSyncPlan {
     sync: Option<Box<dyn FnOnce() -> Result<()> + Send>>,
-    complete: Option<Box<dyn FnOnce(&mut FramedLogWriter) -> Result<()> + Send>>,
+    complete: Option<CompleteSync>,
 }
 
 impl AofSyncPlan {

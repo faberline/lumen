@@ -315,7 +315,7 @@ async fn gke_backup(path: PathBuf, out: PathBuf) -> Result<()> {
         };
         result?;
         println!("backup complete: {}", out.display());
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(feature = "delegated-auth"))]
     let _ = (path, out);
@@ -367,7 +367,7 @@ async fn gke_restore(path: PathBuf, bytes: Vec<u8>) -> Result<()> {
         };
         result?;
         println!("restore complete");
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(feature = "delegated-auth"))]
     let _ = (path, bytes);

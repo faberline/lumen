@@ -139,13 +139,6 @@ impl SetIndex {
         self.set_members(id)
     }
 
-    /// `true` once the sealed forward payload has been dropped to disk
-    /// (Phase 2f-1) — the segment is attached. See `KeywordIndex::forward_dropped`.
-    #[inline]
-    fn forward_dropped(&self) -> bool {
-        self.segment.is_some()
-    }
-
     /// UNIFIED inverted-index accessor (Phase 2h-2): element `el`'s posting
     /// bitmap (docids whose set contains `el`) on the ACTIVE source, composing
     /// the disk segment (sealed base ids `[0..seg.n_docs)`) with the in-RAM

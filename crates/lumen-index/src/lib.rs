@@ -15,6 +15,7 @@ use lumen_shared_kernel as shared_kernel;
 use lumen_storage as storage;
 
 pub mod app;
+mod atomic_update;
 pub mod index;
 pub mod ingest;
 pub mod persistence;

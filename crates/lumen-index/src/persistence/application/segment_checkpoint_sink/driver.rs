@@ -14,9 +14,11 @@ use tokio::time::Instant;
 
 use crate::ingest::domain::change_budget::{BudgetWake, ChangeBudget, Snapshot};
 use crate::persistence::application::segment_checkpoint_sink::{
-    CheckpointTraceOrigin, SegmentCheckpointSink,
+    CheckpointSelection, CheckpointTraceOrigin, SegmentCheckpointSink,
 };
-use crate::persistence::domain::checkpoint_schedule::CheckpointSchedule;
+use crate::persistence::domain::checkpoint_schedule::{
+    CheckpointSchedule, CheckpointSelectionReason,
+};
 use crate::persistence::infrastructure::checkpoint_process_state::NEXT_CHECKPOINT_ATTEMPT_ID;
 #[cfg(test)]
 use crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCaptureToken;
@@ -219,7 +221,12 @@ impl SegmentCheckpointSink {
                 // if it predates creation of the waiter.
                 let now = Instant::now();
                 let pending = budget.snapshot();
-                let owner_before = self.engine.capacity_owner_state();
+                let owner_before = self.engine.capacity_schedule_state();
+                schedule.observe_relieved_capacity(
+                    periodic_fence
+                        .as_ref()
+                        .and_then(|fence| fence.checkpoint_progress().relieved_capacity()),
+                );
                 if let Some(reason) = schedule.select_attempt(now, pending, owner_before) {
                     #[cfg(not(test))]
                     let diagnostic_context = checkpoint_diagnostic_enabled().then(|| {
@@ -241,24 +248,40 @@ impl SegmentCheckpointSink {
                                 context
                             }
                         });
-                    if let Some(context) = diagnostic_context {
-                        context.trace_scheduler_selected(
-                            reason.label(),
-                            resample_source.label(),
-                            pending,
-                        );
-                    }
+                    let request_revision = (reason == CheckpointSelectionReason::CapacityRequest)
+                        .then_some(
+                            owner_before
+                                .and_then(|owner| owner.checkpoint_request_revision)
+                                .filter(|revision| {
+                                    Some(*revision) == pending.checkpoint_request_revision
+                                }),
+                        )
+                        .flatten();
                     match self
-                        .checkpoint_with_fence(
+                        .checkpoint_requested_with_fence(
                             periodic_fence.clone(),
                             CheckpointTraceOrigin::Periodic,
                             diagnostic_context,
+                            request_revision,
+                            Some(CheckpointSelection {
+                                reason: reason.label(),
+                                source: resample_source.label(),
+                                pending,
+                            }),
                         )
                         .await
                     {
                         Ok(_) => {
                             let after = budget.snapshot();
-                            let owner_after = self.engine.capacity_owner_state();
+                            let owner_after = match periodic_fence.as_ref() {
+                                Some(fence) => fence.checkpoint_progress().completed_owner_state(),
+                                None => self.engine.capacity_schedule_state(),
+                            };
+                            schedule.observe_relieved_capacity(
+                                periodic_fence.as_ref().and_then(|fence| {
+                                    fence.checkpoint_progress().relieved_capacity()
+                                }),
+                            );
                             Self::complete_periodic_checkpoint(
                                 &mut schedule,
                                 after,

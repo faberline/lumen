@@ -8,6 +8,9 @@ kind = "e2e"
 expected = "pass"
 required = true
 
+[env]
+upstream = "127.0.0.1:7373"
+
 [[steps]]
 type = "exec"
 name = "capture_p99_ms"
@@ -22,7 +25,7 @@ import time
 import urllib.error
 import urllib.request
 
-base = "http://127.0.0.1:7373"
+base = "http://" + sys.argv[1]
 headers = {"content-type": "application/json"}
 collection = "browse_docs_%d" % int(time.time() * 1000)
 n = 1000
@@ -48,7 +51,10 @@ try:
         city = "taipei" if i % 3 == 0 else "tokyo"
         items.append({"external_id": eid, "field": "city", "value": city})
         items.append({"external_id": eid, "field": "age", "value": i})
-    send("POST", "/collections/" + collection + "/index", {"items": items})
+    for batch_start in range(0, len(items), 1000):
+        send("POST", "/collections/" + collection + "/index", {
+            "items": items[batch_start:batch_start + 1000]
+        })
 
     base_query = {
         "query": {"range": {"field": "age", "gte": 0}},
@@ -62,6 +68,8 @@ try:
         hit["external_id"]
         for hit in send("POST", "/collections/" + collection + "/search", oracle_req)["hits"]
     ]
+    if oracle != ["doc-%06d" % i for i in range(n)]:
+        raise SystemExit("one-shot oracle did not return the complete original corpus")
 
     cursor = None
     got = []
@@ -92,6 +100,7 @@ except urllib.error.HTTPError as exc:
     sys.stderr.write(exc.read().decode() + "\\n")
     raise
 """,
+  "{{upstream}}",
 ]
 timeout_secs = 120
 capture = { p99_ms = "stdout" }

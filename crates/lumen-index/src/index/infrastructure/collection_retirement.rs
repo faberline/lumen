@@ -88,7 +88,7 @@ impl RetiredGeneration {
                 .expect("retired generation collection disappeared during final task");
             RetireTaskProgress::Complete {
                 retired_documents,
-                collection,
+                collection: Box::new(collection),
             }
         } else {
             RetireTaskProgress::More { retired_documents }
@@ -102,7 +102,7 @@ enum RetireTaskProgress {
     },
     Complete {
         retired_documents: usize,
-        collection: Collection,
+        collection: Box<Collection>,
     },
 }
 

@@ -11,9 +11,7 @@ use crate::application::reshard_driver::cluster_control::ClusterControl;
 use crate::application::reshard_driver::fence::set_write_fence;
 use crate::application::reshard_driver::migration::run_migration_pass;
 use crate::application::reshard_driver::oversize::should_skip_for_oversize;
-use crate::application::reshard_driver::trigger::{
-    compute_target_map, current_shard_map,
-};
+use crate::application::reshard_driver::trigger::{compute_target_map, current_shard_map};
 use crate::application::reshard_driver::{DriveOutcome, WRITE_FENCE_TTL_SECS};
 use crate::domain::lumen_spec::Lumen;
 use crate::sharding::domain::bucket_move::bucket_moves;

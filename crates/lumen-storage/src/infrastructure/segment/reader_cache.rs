@@ -64,6 +64,9 @@ pub(super) type CachedPosting = Arc<roaring::RoaringBitmap>;
 /// `Postings` held. `Arc`-shared like [`CachedPosting`].
 pub type CachedTextPosting = Arc<(Vec<u32>, Vec<u32>)>;
 
+/// One owned token with its parallel document-id and frequency columns.
+pub type TextTokenPosting = (String, Vec<u32>, Vec<u32>);
+
 /// Pack a `(role, id)` pair into a collision-free `u64` cache key. `role` is a
 /// `ROLE_*` discriminant (small); `id` is a dense segment-local dict-id or
 /// sorted-value index (`< 2^32`), so the high byte carries the role and the low

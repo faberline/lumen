@@ -309,6 +309,56 @@ fn build_and_ranked_general_lane_agrees_with_reference() {
     }
 }
 
+#[test]
+fn aligned_live_columns_keep_original_token_order_and_score_bits() {
+    let mut idx = TextIndex {
+        lens: vec![0, 0, 13, 0, 0, 47, 0, 0, 113],
+        ..Default::default()
+    };
+    let ids = [2, 5, 8];
+    let token_rows = [vec![1, 3, 2], vec![4, 1, 3], vec![2, 7, 1]];
+    for (token, tfs) in token_rows.iter().enumerate() {
+        idx.tokens.insert(
+            format!("token{token}"),
+            Postings::from_sorted(ids.to_vec(), tfs.clone()),
+        );
+    }
+    let posts: Vec<_> = (0..token_rows.len())
+        .map(|token| idx.tok_probe(&format!("token{token}")))
+        .collect();
+    let idfs = [0.37f32, 1.1, 0.001];
+    let avgdl = 57.666_668f32;
+    let actual = build_and_ranked(AndRankInput {
+        idx: &idx,
+        posts: &posts,
+        idfs: &idfs,
+        drive: 2,
+        drive_len: ids.len(),
+        avgdl,
+    });
+    let expected: Vec<_> = ids
+        .iter()
+        .enumerate()
+        .map(|(position, &id)| {
+            let doc_len = idx.lens[id as usize] as f32;
+            let mut score = 0.0f32;
+            for (token, &idf) in idfs.iter().enumerate() {
+                let tf = token_rows[token][position] as f32;
+                let denom = tf + 1.2f32 * (1.0 - 0.75 + 0.75 * doc_len / avgdl);
+                score += idf * tf * (1.2f32 + 1.0) / denom;
+            }
+            (id, score.to_bits())
+        })
+        .collect();
+    assert_eq!(
+        actual
+            .into_iter()
+            .map(|(id, score)| (id, score.to_bits()))
+            .collect::<Vec<_>>(),
+        expected
+    );
+}
+
 /// TIMING HARNESS (not a correctness gate) — measures the two cold-path
 /// stages `build_and_ranked` used to spend ~550-800ms in: the probe/score
 /// loop, and (via `ensure_sorted_prefix`) the top-k extraction that used

@@ -2,10 +2,15 @@
 //! per segment and never materialize the complete dictionary.
 
 use crate::infrastructure::composed_segment::{note_text_posting_clones, ComposedSegmentReader};
+use crate::infrastructure::segment::reader_cache::TextTokenPosting;
 use crate::infrastructure::segment::SegmentReader;
 use anyhow::{anyhow, Result};
 use roaring::RoaringBitmap;
 use std::borrow::Cow;
+
+type LayerOrdinals = Vec<(usize, u32)>;
+type OwnedTermEntry = (String, LayerOrdinals);
+type BorrowedTermEntry<'a> = (Cow<'a, str>, LayerOrdinals);
 
 impl ComposedSegmentReader {
     pub fn string_terms(&self, descending: bool) -> Result<StringTermCursor<'_>> {
@@ -73,7 +78,7 @@ impl ComposedSegmentReader {
         }
         let mut cursor = self.string_terms(false).ok()?;
         let mut out = Vec::new();
-        while let Some(term) = cursor.next().ok()? {
+        while let Some(term) = cursor.try_next().ok()? {
             if let Some(posting) = self.set_postings(&term) {
                 out.push((term, posting));
             }
@@ -86,14 +91,14 @@ impl ComposedSegmentReader {
         }
         let mut cursor = self.number_keys(None, None, false).ok()?;
         let mut out = Vec::new();
-        while let Some(key) = cursor.next().ok()? {
+        while let Some(key) = cursor.try_next().ok()? {
             if let Some(posting) = self.number_value_postings(key) {
                 out.push((key, posting));
             }
         }
         Some(out)
     }
-    pub fn text_tokens_all(&self) -> Option<Vec<(String, Vec<u32>, Vec<u32>)>> {
+    pub fn text_tokens_all(&self) -> Option<Vec<TextTokenPosting>> {
         if self.dense_base_only() {
             let all = self.base.text_tokens_all()?;
             note_text_posting_clones(all.len() as u64);
@@ -101,7 +106,7 @@ impl ComposedSegmentReader {
         }
         let mut cursor = self.string_terms(false).ok()?;
         let mut out = Vec::new();
-        while let Some(term) = cursor.next().ok()? {
+        while let Some(term) = cursor.try_next().ok()? {
             if let Some(posting) = self.text_postings_arc(&term) {
                 note_text_posting_clones(1);
                 out.push((term, posting.0.clone(), posting.1.clone()));
@@ -154,7 +159,7 @@ impl<'a> StringTermCursor<'a> {
             descending,
         })
     }
-    pub fn next(&mut self) -> Result<Option<String>> {
+    pub fn try_next(&mut self) -> Result<Option<String>> {
         Ok(self.next_cow()?.map(Cow::into_owned))
     }
     /// Advance one dictionary term without copying raw mmap bytes.
@@ -163,7 +168,7 @@ impl<'a> StringTermCursor<'a> {
     }
     /// The selected dictionary ordinal is already known for each matching
     /// layer. Preserve it before advancing so callers need no point lookup.
-    fn next_with_ordinals(&mut self) -> Result<Option<(String, Vec<(usize, u32)>)>> {
+    fn next_with_ordinals(&mut self) -> Result<Option<OwnedTermEntry>> {
         Ok(self
             .next_entry_cow(true)?
             .map(|(term, ordinals)| (term.into_owned(), ordinals)))
@@ -171,7 +176,7 @@ impl<'a> StringTermCursor<'a> {
     pub(super) fn next_entry_cow(
         &mut self,
         include_ordinals: bool,
-    ) -> Result<Option<(Cow<'a, str>, Vec<(usize, u32)>)>> {
+    ) -> Result<Option<BorrowedTermEntry<'a>>> {
         let mut selected: Option<usize> = None;
         for (index, source) in self.sources.iter().enumerate() {
             let Some(head) = source.head.as_ref() else {
@@ -234,6 +239,22 @@ impl<'a> StringTermCursor<'a> {
     }
 }
 
+impl Iterator for StringTermCursor<'_> {
+    type Item = Result<String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        StringTermCursor::try_next(self).transpose()
+    }
+}
+
+impl Iterator for NumberKeyCursor<'_> {
+    type Item = Result<u64>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        NumberKeyCursor::try_next(self).transpose()
+    }
+}
+
 struct NumberSource<'a> {
     reader: &'a SegmentReader,
     next_ordinal: Option<u32>,
@@ -286,7 +307,7 @@ impl<'a> NumberKeyCursor<'a> {
             descending,
         })
     }
-    pub fn next(&mut self) -> Result<Option<u64>> {
+    pub fn try_next(&mut self) -> Result<Option<u64>> {
         let heads = self.sources.iter().filter_map(|source| source.head);
         let selected = if self.descending {
             heads.max()

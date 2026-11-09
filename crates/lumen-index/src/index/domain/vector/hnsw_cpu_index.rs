@@ -6,7 +6,7 @@
 mod backend;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
@@ -101,6 +101,10 @@ pub(in crate::index) struct HnswCpuInner {
     /// [`hnsw_search_ef`]; a tuning/bench harness can override it via
     /// [`HnswCpuIndex::set_ef_search`] without rebuilding the graph.
     pub(in crate::index) ef_search: usize,
+    /// A full-inventory traversal proved this graph incomplete. Readers share
+    /// this observation under the same graph lock. Only graph replacement
+    /// starts a new, unknown generation; ordinary writes must not erase it.
+    pub(in crate::index) graph_inventory_incomplete: AtomicBool,
 }
 
 /// HNSW dispatch by metric. We keep an `Option` because for f32-SQ
@@ -207,6 +211,7 @@ impl HnswBackend {
 }
 
 impl HnswCpuIndex {
+    #[cfg(test)]
     pub(in crate::index) fn restore_with_graph_cache(
         spec: VectorSpec,
         vectors: Vec<(String, Vec<f32>)>,
@@ -223,7 +228,7 @@ impl HnswCpuIndex {
         vectors: Vec<(String, Vec<f32>)>,
         codebook: Option<ScalarCodebook>,
         directory: Option<&std::path::Path>,
-    ) -> std::result::Result<(Self, HnswRestoreTiming), HnswRestoreFailure> {
+    ) -> std::result::Result<(Self, HnswRestoreTiming), Box<HnswRestoreFailure>> {
         let started = Instant::now();
         let mut timing = HnswRestoreTiming::default();
         if let Some(directory) = directory {
@@ -256,7 +261,7 @@ impl HnswCpuIndex {
         timing.total = started.elapsed();
         rebuilt
             .map(|index| (index, timing))
-            .map_err(|error| HnswRestoreFailure { error, timing })
+            .map_err(|error| Box::new(HnswRestoreFailure { error, timing }))
     }
 
     /// Construct a fresh, empty CPU HNSW index for the given spec.
@@ -269,6 +274,7 @@ impl HnswCpuIndex {
                 next_id: 0,
                 hnsw: HnswBackend::new(spec.metric, HNSW_DEFAULT_MAX_ELEMENTS),
                 ef_search: hnsw_search_ef(),
+                graph_inventory_incomplete: AtomicBool::new(false),
             }),
             exact_scan_fallbacks: AtomicU64::new(0),
         }
