@@ -9,7 +9,7 @@ use crate::access::application::authorization::{AuthContext, Role};
 use crate::app::http::{
     api_err::ApiErr,
     app_state::AppState,
-    guards::{enforce_storage_writable, enforce_write_fence},
+    guards::{enforce_storage_writable, enforce_write_fence, idempotency_key_from},
 };
 use crate::shared_kernel::types::document::{
     IndexItem, IndexRequest, IndexResponse, MAX_INDEX_BATCH_SIZE,
@@ -37,10 +37,11 @@ pub(crate) async fn index(
     Extension(auth): Extension<AuthContext>,
     headers: HeaderMap,
     Path(collection_id): Path<String>,
-    Json(req): Json<IndexRequest>,
+    Json(mut req): Json<IndexRequest>,
 ) -> Result<Json<IndexResponse>, ApiErr> {
     auth.ensure(&collection_id, Role::Write).await?;
     enforce_storage_writable(&state)?;
+    req.request_id = idempotency_key_from(&headers, req.request_id.take())?;
     if req.items.len() > MAX_INDEX_BATCH_SIZE {
         return Err(ApiErr::new(
             StatusCode::BAD_REQUEST,
