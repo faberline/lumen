@@ -92,26 +92,6 @@ impl RebuildOperationStore {
         Ok(Some(op))
     }
 
-    /// Persist `op` atomically, but only while the record on disk still
-    /// belongs to `op.operation_id`.
-    pub fn save(&self, op: &RebuildOperation) -> Result<(), RebuildStoreError> {
-        let lock = record_lock(&self.record_path(&op.collection));
-        let _held = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        match self.load(&op.collection)? {
-            None => Err(RebuildStoreError::Stale {
-                collection: op.collection.clone(),
-                operation_id: op.operation_id.clone(),
-            }),
-            Some(current) if current.operation_id != op.operation_id => {
-                Err(RebuildStoreError::Conflict {
-                    collection: op.collection.clone(),
-                    active_operation_id: current.operation_id,
-                })
-            }
-            Some(_) => self.write_record(op),
-        }
-    }
-
     /// Single-writer arbitration: begin a new rebuild operation for `collection`.
     /// Returns `Conflict` while a non-terminal operation exists for that collection.
     /// Succeeds again once the previous operation is `Done`, `Cancelled`, or `Failed`.
