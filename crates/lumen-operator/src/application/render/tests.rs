@@ -134,7 +134,6 @@ fn rendered_objects_never_name_the_operator() {
 }
 
 #[test]
-#[should_panic(expected = "names the operator")]
 fn injecting_an_operator_env_var_fails_the_independence_check() {
     // Negative control: the independence helper must reject an operator
     // reference injected into the serving pod's environment.
@@ -152,5 +151,10 @@ fn injecting_an_operator_env_var_fails_the_independence_check() {
         .expect("serving env")
         .push(json!({ "name": "POD_NAMESPACE", "value": "lumen-operator-system" }));
 
-    assert_operator_independent(&objects);
+    let result = std::panic::catch_unwind(|| assert_operator_independent(&objects));
+    let message = result
+        .err()
+        .and_then(|payload| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_default();
+    assert!(message.contains("names the operator"), "got: {message:?}");
 }
