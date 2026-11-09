@@ -554,3 +554,16 @@ async fn committed_record_waiting_on_layer_capacity_completes_when_fallback_chec
     assert_eq!(coord.applied_seq(), 1);
     assert_eq!(engine.stats("u").unwrap().documents_indexed, 1);
 }
+
+#[test]
+fn noop_capacity_owner_is_inactive_after_ensure() {
+    use crate::ingest::application::ports::{CapacityOwner, NoopCapacityOwner};
+
+    let engine = Arc::new(Engine::with_change_budget(ChangeBudget::with_hard_limit(
+        1024 * 1024,
+    )));
+    let mut owner = NoopCapacityOwner;
+    assert!(!owner.is_active());
+    assert!(owner.ensure(&engine).is_ok());
+    assert!(!owner.is_active());
+}
