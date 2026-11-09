@@ -2,6 +2,8 @@
 //! every handle on one root, the constructors, and the handle accessors the
 //! engine and the background merge use.
 
+type PendingFrozenRoots = Mutex<HashMap<PathBuf, Weak<Mutex<Option<PendingFrozenCheckpoint>>>>>;
+
 use crate::index::application::{engine::Engine, recovery_profile::RecoveryProfile};
 use crate::persistence::infrastructure::merge_worker::shared;
 use crate::persistence::infrastructure::segment_rdb_store::save_gate::SaveGate;
@@ -31,8 +33,8 @@ impl SegmentRdbStore {
             background: self.background.clone(),
             _root_guard: self.root_guard.clone(),
             name: name.as_str().to_owned(),
-            path: record.path,
-            sequence: record.sequence,
+            _path: record.path,
+            _sequence: record.sequence,
         })
     }
 
@@ -51,6 +53,14 @@ impl SegmentRdbStore {
 
     pub(crate) fn has_publication_fence(&self) -> bool {
         self.publication_fence.is_some()
+    }
+
+    pub(crate) fn checkpoint_progress(
+        &self,
+    ) -> Option<Arc<crate::persistence::application::capacity::CheckpointProgress>> {
+        self.publication_fence
+            .as_ref()
+            .map(|fence| fence.checkpoint_progress())
     }
 
     pub(crate) fn request_capacity_merge(&self, engine: &Arc<Engine>) -> Result<u64> {
@@ -139,6 +149,7 @@ impl SegmentRdbStore {
         Self::open_with_injector_and_observer(root, Arc::new(NoFailures), Arc::new(NoMergeObserver))
     }
 
+    #[cfg(test)]
     fn open_with_injector(
         root: impl Into<PathBuf>,
         injector: Arc<dyn FailureInjector>,
@@ -161,6 +172,7 @@ impl SegmentRdbStore {
         let store = Self {
             save_gate: shared_save_gate(&root)?,
             pending_frozen: shared_pending_frozen(&root)?,
+            inventory: shared_inventory(&root)?,
             merge_observer: observer,
             background: shared(&root)?,
             root_guard: None,
@@ -174,6 +186,7 @@ impl SegmentRdbStore {
         };
         let _guard = store.save_gate.lock_owned();
         let bootstrap = store.prepare_startup_root()?;
+        let _ = store.ensure_inventory();
         drop(_guard);
         Ok(Self { bootstrap, ..store })
     }
@@ -224,9 +237,7 @@ fn shared_save_gate(root: &Path) -> Result<Arc<SaveGate>> {
 }
 
 fn shared_pending_frozen(root: &Path) -> Result<Arc<Mutex<Option<PendingFrozenCheckpoint>>>> {
-    static ROOT_PENDING: OnceLock<
-        Mutex<HashMap<PathBuf, Weak<Mutex<Option<PendingFrozenCheckpoint>>>>>,
-    > = OnceLock::new();
+    static ROOT_PENDING: OnceLock<PendingFrozenRoots> = OnceLock::new();
     let registry = ROOT_PENDING.get_or_init(|| Mutex::new(HashMap::new()));
     let mut registry = registry
         .lock()
@@ -238,4 +249,25 @@ fn shared_pending_frozen(root: &Path) -> Result<Arc<Mutex<Option<PendingFrozenCh
     let pending = Arc::new(Mutex::new(None));
     registry.insert(root.to_path_buf(), Arc::downgrade(&pending));
     Ok(pending)
+}
+
+/// The lazily built inventory of one checkpoint root, shared by its open stores.
+type SharedInventorySlot = Mutex<
+    Option<crate::persistence::infrastructure::segment_rdb_store::telemetry::RetainedInventory>,
+>;
+
+fn shared_inventory(root: &Path) -> Result<Arc<SharedInventorySlot>> {
+    static ROOT_INVENTORY: OnceLock<Mutex<HashMap<PathBuf, Weak<SharedInventorySlot>>>> =
+        OnceLock::new();
+    let registry = ROOT_INVENTORY.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut registry = registry
+        .lock()
+        .map_err(|_| anyhow!("segment inventory registry poisoned"))?;
+    registry.retain(|_, inventory| inventory.strong_count() > 0);
+    if let Some(inventory) = registry.get(root).and_then(Weak::upgrade) {
+        return Ok(inventory);
+    }
+    let inventory = Arc::new(Mutex::new(None));
+    registry.insert(root.to_path_buf(), Arc::downgrade(&inventory));
+    Ok(inventory)
 }

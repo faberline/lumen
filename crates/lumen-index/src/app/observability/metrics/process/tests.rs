@@ -2,6 +2,59 @@ use crate::app::observability::metrics::process::parse_linux_vmhwm_bytes;
 use crate::app::observability::metrics::Metrics;
 use crate::ingest::domain::change_budget::ChangeBudget;
 
+#[test]
+fn rss_peak_keeps_the_largest_observed_sample_when_a_later_value_is_lower() {
+    let mut state = super::RssHighWaterState::default();
+    assert_eq!(state.observe(Some(8192)).bytes, 8192);
+    assert_eq!(state.observe(Some(4096)).bytes, 8192);
+    assert_eq!(state.observe(Some(12288)).bytes, 12288);
+}
+
+#[test]
+fn rss_peak_marks_unavailable_without_erasing_observed_history() {
+    let mut state = super::RssHighWaterState::default();
+    state.observe(Some(8192));
+    let unavailable = state.observe(None);
+    assert_eq!(unavailable.bytes, 0);
+    assert!(!unavailable.available);
+    let recovered = state.observe(Some(4096));
+    assert_eq!(recovered.bytes, 8192);
+    assert!(recovered.available);
+}
+
+#[test]
+fn rss_render_uses_one_captured_pair_after_compatibility_gauges_change() {
+    let mut state = super::RssHighWaterState::default();
+    let metrics = Metrics::new();
+    let budget = ChangeBudget::with_hard_limit(64);
+    let pending = metrics.read_pending_change_accounting(&budget);
+    let available = state.observe(Some(8192));
+    metrics.process_rss_high_water_bytes.set(0);
+    metrics.process_rss_high_water_available.set(0);
+    let out = metrics.render_segment_telemetry(pending, available);
+    assert_eq!(
+        rendered_pending_gauge(&out, "lumen_process_rss_high_water_bytes"),
+        8192
+    );
+    assert_eq!(
+        rendered_pending_gauge(&out, "lumen_process_rss_high_water_available"),
+        1
+    );
+
+    let unavailable = state.observe(None);
+    metrics.process_rss_high_water_bytes.set(12288);
+    metrics.process_rss_high_water_available.set(1);
+    let out = metrics.render_segment_telemetry(pending, unavailable);
+    assert_eq!(
+        rendered_pending_gauge(&out, "lumen_process_rss_high_water_bytes"),
+        0
+    );
+    assert_eq!(
+        rendered_pending_gauge(&out, "lumen_process_rss_high_water_available"),
+        0
+    );
+}
+
 fn rendered_pending_gauge(rendered: &str, name: &str) -> u64 {
     rendered
         .lines()
@@ -119,6 +172,40 @@ fn parse_linux_vmhwm_requires_one_exact_kilobyte_row() {
 #[cfg(target_os = "linux")]
 #[test]
 fn linux_render_reads_this_process_vmhwm_and_marks_it_available() {
+    // VmHWM belongs to the whole process. Run the real assertions in a fresh
+    // process so unrelated parallel tests cannot change its memory accounting.
+    const CASE: &str = "app::observability::metrics::process::tests::linux_render_reads_this_process_vmhwm_and_marks_it_available";
+    const CHILD: &str = "LUMEN_VMHWM_TEST_CHILD";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                CASE,
+                "--exact",
+                "--format",
+                "pretty",
+                "--color",
+                "never",
+                "--test-threads=1",
+            ])
+            .env(CHILD, CASE)
+            .output()
+            .expect("run the original VmHWM assertions in an isolated process");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            output.status.success(),
+            "isolated VmHWM test failed:\n{stdout}\n{stderr}"
+        );
+        assert!(
+            stdout.contains(&format!("test {CASE} ... ok")),
+            "original case did not run:\n{stdout}"
+        );
+        assert!(
+            stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+            "original assertions did not pass exactly once:\n{stdout}"
+        );
+        return;
+    }
     let expected = std::fs::read_to_string("/proc/self/status")
         .ok()
         .and_then(|status| parse_linux_vmhwm_bytes(&status))

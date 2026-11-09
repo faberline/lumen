@@ -49,6 +49,7 @@ impl<V> SharedValue<V> {
 
     /// Compare the underlying payload allocation without exposing a clonable
     /// bare `Arc<V>` that could escape its retained charge.
+    #[cfg(test)]
     pub(crate) fn same_identity(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.payload, &other.payload)
     }
@@ -60,7 +61,7 @@ pub(crate) struct Row<V> {
     value: Option<SharedValue<V>>,
     // Tombstones have no value wrapper, so their retained charge stays here.
     // It follows the value field to preserve payload-before-charge drops.
-    charge: Option<crate::ingest::domain::change_budget::RetainedCharge>,
+    _charge: Option<crate::ingest::domain::change_budget::RetainedCharge>,
 }
 
 impl<V> Row<V> {
@@ -72,6 +73,7 @@ impl<V> Row<V> {
         self.value.as_ref()
     }
 
+    #[cfg(test)]
     pub(crate) fn is_delete(&self) -> bool {
         self.value.is_none()
     }
@@ -142,6 +144,7 @@ impl<V> ChangeJournal<V> {
     }
 
     /// Replace the outstanding active value. `None` records a deletion.
+    #[cfg(test)]
     pub(crate) fn record(
         &self,
         field: String,
@@ -190,7 +193,7 @@ impl<V> ChangeJournal<V> {
             Row {
                 revision,
                 value,
-                charge,
+                _charge: charge,
             },
         )
     }
@@ -217,6 +220,7 @@ impl<V> ChangeJournal<V> {
     }
 
     /// The latest active revision after a capture, if that row has changed.
+    #[cfg(test)]
     pub(crate) fn active_revision(&self, field: &str, external_id: &str) -> Option<u64> {
         self.inner
             .state
@@ -230,6 +234,7 @@ impl<V> ChangeJournal<V> {
 
     /// Release the journal's retained frozen ownership after durable publish.
     /// It never clears active rows, so newer updates and deletions survive.
+    #[cfg(test)]
     pub(crate) fn acknowledge(&self, frozen: &FrozenChanges<V>) -> bool {
         let Some(inner) = frozen.journal.upgrade() else {
             return false;
@@ -278,6 +283,7 @@ impl<V> ChangeJournal<V> {
 }
 
 impl<V> FrozenChanges<V> {
+    #[cfg(test)]
     pub(crate) fn id(&self) -> u64 {
         self.id
     }
@@ -291,6 +297,7 @@ impl<V> FrozenChanges<V> {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn row(&self, field: &str, external_id: &str) -> Option<&Row<V>> {
         self.rows.get(field)?.get(external_id)
     }

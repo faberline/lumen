@@ -143,17 +143,7 @@ impl ReplaceItemError {
 /// only after planning releases its state-read adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum RenderedReplaceItemOutcome {
-    Ok {
-        fields_written: u32,
-        fields_skipped: u32,
-    },
-    Dropped {
-        current_version: u64,
-    },
-    Error {
-        code: &'static str,
-        message: String,
-    },
+    Error { code: &'static str, message: String },
 }
 
 /// Final document metadata. The common adapter applies actions in source
@@ -181,7 +171,7 @@ pub(super) struct ReplacePlan {
     pub(super) final_checksums: Vec<ReplaceChecksumFinal>,
     pub(super) fields_written: u64,
     pub(super) fields_skipped: u64,
-    reservation: usize,
+    _reservation: usize,
 }
 
 /// Replacement has a document limit, not the generic Index field-item limit.

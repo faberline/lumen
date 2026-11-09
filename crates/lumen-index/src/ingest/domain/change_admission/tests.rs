@@ -97,6 +97,7 @@ fn checkpoint_never_releases_committed_records_waiting_for_apply() {
         source("orders"),
     )
     .unwrap();
+    assert_eq!(record.charge_bytes(), 240);
     let _applied = owner.try_reserve(16).unwrap().commit().unwrap();
     let frozen = owner.freeze().unwrap();
     assert_eq!(
@@ -138,7 +139,22 @@ fn retired_admission_returns_the_committed_payload_to_its_owner() {
         0,
         "admission failure must return ownership of the committed payload"
     );
-    drop(refusal);
+    let failure = match refusal {
+        Err(failure) => failure,
+        Ok(_) => panic!("retired owner admitted a committed record"),
+    };
+    let (error, mut payload, sequence, epoch, identity) = failure.into_parts();
+    assert!(matches!(
+        error,
+        crate::ingest::domain::change_budget::AdmissionError::Retired
+    ));
+    assert_eq!((sequence, epoch), (2, 1));
+    assert_eq!(identity, source("orders"));
+    let mut returned = Vec::new();
+    payload.0.read_to_end(&mut returned).unwrap();
+    assert_eq!(returned, b"payload");
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    drop(payload);
     assert_eq!(drops.load(Ordering::SeqCst), 1);
 }
 

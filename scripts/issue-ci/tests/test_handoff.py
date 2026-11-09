@@ -23,7 +23,8 @@ def module(name, path):
 
 ci = module('handoff', SCRIPTS / 'handoff.py')
 policy = module('check_policy', SCRIPTS / 'check-policy.py')
-CONFIG = json.loads((ROOT / '.github/issue-ci-required-gates.json').read_text())
+CONFIG = json.loads((SCRIPTS / 'tests/fixtures/pre-local-policy.json').read_text())
+CURRENT = json.loads((ROOT / '.github/issue-ci-required-gates.json').read_text())
 GATES = CONFIG['workflows']
 SHA = 'a' * 40
 
@@ -39,14 +40,16 @@ def evidence():
 
 class HandoffTests(unittest.TestCase):
     def test_controller_matches_verified_aw_merge(self):
-        self.assertEqual(hashlib.sha256((SCRIPTS / 'handoff.py').read_bytes()).hexdigest(), 'c67533b39d45ad62d407af3748856be396941647c349b63464424fa6aff1c198')
-        self.assertIn('67af8d020df3ca2ec4b064289408cfb0c2f8b299', CONFIG['controller_source'])
+        self.assertEqual(hashlib.sha256((SCRIPTS / 'handoff.py').read_bytes()).hexdigest(), '312108f04cf379b2e69c79f5bf8afd4e6d026d33143eed60cadc978fab3c9c26')
+        self.assertEqual(CURRENT['aw_revision'], '4223a4534f0197e1ea23004b9388ffd1eea34639')
+        self.assertIn('67af8d020df3ca2ec4b064289408cfb0c2f8b299', CONFIG['ci_handoff_policy']['controller_source'])
+        self.assertEqual(CONFIG['controller_source'], 'faberline/aw@8e2e93e5ba8feb30b6668de39139980ea3bb085c:plugins/faberline/skills/issue-ci/scripts/native_merge.py')
 
     def test_exact_complete_inventory(self):
         inventory = json.loads((SCRIPTS / 'tests/fixtures/gate-inventory.json').read_text())
         self.assertEqual(GATES, [dict(path=inventory['path'], jobs=inventory['jobs'])])
         self.assertEqual(len(GATES[0]['jobs']), 8)
-        source = (ROOT / inventory['path']).read_text()
+        source = (SCRIPTS / 'tests/fixtures/pre-local-gke-test.yml').read_text()
         self.assertIn('name: ' + inventory['workflow_name'], source)
         self.assertIn('  pull_request:\n    paths:', source)
         self.assertIn('name: resolve image identity', source)
@@ -62,6 +65,7 @@ class HandoffTests(unittest.TestCase):
                     ci.load_config(path)
 
     def test_guard_requires_explicit_failure_only_policy_and_new_controller(self):
+        policy.check(SCRIPTS / 'tests/fixtures/pre-local-policy.json')
         policy.check(ROOT / '.github/issue-ci-required-gates.json')
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'policy.json'
@@ -134,7 +138,7 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(api.call_args_list[0].args, ('repos/o/r/pulls/7',))
 
     def test_trusted_workflow_guard_precedes_controller(self):
-        workflow = (ROOT / '.github/workflows/issue-ci.yml').read_text()
+        workflow = (SCRIPTS / 'tests/fixtures/historical-handoff/issue-ci.yml').read_text()
         self.assertIn('ref: ${{ github.event.repository.default_branch }}', workflow)
         self.assertIn('persist-credentials: false', workflow)
         self.assertLess(workflow.index('python3 scripts/issue-ci/check-policy.py'), workflow.index('python3 scripts/issue-ci/handoff.py'))
@@ -144,6 +148,32 @@ class HandoffTests(unittest.TestCase):
         self.assertNotIn('pull_request_target', workflow.replace('# This is a trusted default-branch workflow, NOT pull_request_target execution.', ''))
         for forbidden in ('pull_request.head', 'download-artifact', 'workflow_dispatch:', 'id-token:', 'packages:'):
             self.assertNotIn(forbidden, workflow)
+
+
+    def test_live_writer_and_review_use_pinned_trusted_actions(self):
+        writer = (SCRIPTS / 'tests/fixtures/pre-local-issue-ci.yml').read_text()
+        review = (SCRIPTS / 'tests/fixtures/pre-local-review.yml').read_text()
+        revision = '8e2e93e5ba8feb30b6668de39139980ea3bb085c'
+        self.assertIn('group: issue-ci-handoff', writer)
+        self.assertIn('branches: [main]', writer)
+        self.assertIn('faberline/aw/.github/actions/native-auto-merge@' + revision, writer)
+        self.assertIn('faberline/aw/.github/actions/issue-ci@' + revision, review)
+        self.assertIn('faberline/aw/.github/actions/claude-review@' + revision, review)
+        self.assertNotIn('actions/checkout@', writer)
+        self.assertNotIn('CLAUDE_CODE_OAUTH_TOKEN', writer)
+        self.assertEqual(CONFIG['lifecycle_mode'], 'failure-only')
+        self.assertEqual(len(CONFIG['qualification_blockers']), 4)
+        self.assertEqual(CONFIG['ci_handoff_policy']['workflows'], CONFIG['workflows'])
+        for spec in (CONFIG['claude_final_review']['producer'], CONFIG['native_auto_merge']['producer']):
+            fixture = 'pre-local-review.yml' if spec['path'].endswith('/claude-final-review.yml') else 'pre-local-issue-ci.yml'
+            raw = (SCRIPTS / 'tests/fixtures' / fixture).read_bytes()
+            actual = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+            self.assertEqual(spec['definition_sha'], actual)
+        active = (ROOT / '.github/workflows/issue-ci.yml').read_text()
+        self.assertNotIn('native-auto-merge@', active)
+        self.assertNotIn('claude-review@', active)
+        self.assertFalse((ROOT / '.github/workflows/claude-final-review.yml').exists())
+        self.assertEqual(CURRENT['completion_owner'], 'local')
 
 class FailureOnlyApplyTests(unittest.TestCase):
     def setUp(self):

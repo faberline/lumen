@@ -175,7 +175,7 @@ mod capacity_http_contract {
 
     struct CapacityFixture {
         _dir: tempfile::TempDir,
-        root: PathBuf,
+        _root: PathBuf,
         server: TestServer,
         store: Arc<SegmentRdbStore>,
         checkpoint: Arc<SegmentCheckpointSink>,
@@ -213,8 +213,16 @@ mod capacity_http_contract {
         });
         let wal = Arc::new(MemWal::new());
         let shared_wal: SharedWal = wal.clone();
-        let writer =
-            WriteCoordinator::start_from_with_aof(shared_wal, engine.clone(), 0, aof.clone());
+        let writer = WriteCoordinator::start_from_with_aof_and_capacity_owner(
+            shared_wal,
+            engine.clone(),
+            0,
+            Some(aof.clone()),
+            Box::new(lumen_index::persistence::application::capacity::Fallback::default()),
+        );
+        writer.set_capacity_trace(Arc::new(
+            lumen_index::persistence::infrastructure::segment_rdb_store::diagnostic::CheckpointCapacityTrace,
+        ));
         let sink_writer: Arc<dyn WriteSink> = writer.clone();
         let checkpoint = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),
@@ -228,7 +236,7 @@ mod capacity_http_contract {
         let server = TestServer::new(router(state)).expect("capacity HTTP server");
         CapacityFixture {
             _dir: dir,
-            root,
+            _root: root,
             server,
             store,
             checkpoint,
@@ -487,7 +495,7 @@ mod capacity_http_contract {
         budget
             .checkpointable_bytes()
             .checked_add(LARGE_KEYWORD_VALUE_BYTES as u64)
-            .map_or(true, |required| required > PENDING_HARD_LIMIT_BYTES as u64)
+            .is_none_or(|required| required > PENDING_HARD_LIMIT_BYTES as u64)
     }
 
     async fn fill_checkpointable_budget_until_external_value_cannot_fit(
@@ -2101,4 +2109,6 @@ mod capacity_http_contract {
             }
         }
     }
+
+    mod interleavings;
 }

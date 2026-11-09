@@ -153,7 +153,7 @@ fn setup(
     engine.create_collection("u", keyword_schema()).unwrap();
     let coord = WriteCoordinator::start(wal, engine.clone());
     let enable = DiagnosticCapture::new();
-    coord.set_diagnostic_capture(enable.token());
+    coord.set_diagnostic_capture(Arc::new(enable.token()));
     (coord, engine, budget, enable)
 }
 
@@ -377,7 +377,7 @@ async fn write_phase_diagnostics_are_truthful_and_request_scoped() {
     let wal = Arc::new(MemWal::new());
     let coord = WriteCoordinator::start(wal.clone(), engine);
     let enable = DiagnosticCapture::new();
-    coord.set_diagnostic_capture(enable.token());
+    coord.set_diagnostic_capture(Arc::new(enable.token()));
     let foreign = budget.owner();
     let _held = foreign.try_reserve(1024 * 1024).unwrap();
     let before = coord.engine.metrics().segment_backpressure_total.get();
@@ -647,8 +647,7 @@ impl HttpPhaseWriter {
         self.records()
             .into_iter()
             .filter(|row| {
-                row["event"] == "lumen_write_phase"
-                    && row["attributes"]["attempt_id"] == attempt_id
+                row["event"] == "lumen_write_phase" && row["attributes"]["attempt_id"] == attempt_id
             })
             .collect()
     }

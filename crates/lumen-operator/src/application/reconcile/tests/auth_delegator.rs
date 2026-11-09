@@ -197,7 +197,7 @@ async fn sweep_deletes_a_binding_whose_instance_is_gone() {
         ),
     ]);
 
-    sweep_stale_auth_delegator_bindings(&control, &[live.clone()]).await;
+    sweep_stale_auth_delegator_bindings(&control, std::slice::from_ref(&live)).await;
 
     assert_eq!(
         control.deletes.lock().unwrap().as_slice(),
