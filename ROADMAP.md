@@ -562,16 +562,19 @@ release. Search v2 is outside this release, and its activation remains
   replication, configuration, capacity, and degraded state without conflating
   them.
 - Boundary: Reusable ownership, adoption, prune, status-projection, and watch
-  mechanics move to `service_k8s::fleet` in faberline/core. Lumen supplies child objects,
-  protected topology projection, and health mapping. `Ready` continues to mean
-  searchable. `Writable`, `ReplicationReady`, `ConfigReady`, `CapacityReady`,
-  and `Degraded` remain separate conditions. A low-frequency repair requeue
-  remains as a safety net.
+  mechanics move to `service_k8s::fleet` in faberline/core. This outcome adopts
+  `shared-fleet-controller` in faberline/core `crates/service-k8s/ROADMAP.md`.
+  Lumen supplies child objects, protected topology projection, and health
+  mapping. `Ready` continues to mean searchable. `Writable`,
+  `ReplicationReady`, `ConfigReady`, `CapacityReady`, and `Degraded` remain
+  separate conditions. A low-frequency repair requeue remains as a safety net.
 - Completion evidence: Library and Lumen tests prove Fleet and child watches,
   leader failover, duplicate-target rejection, adoption safety, per-entry API
   failure isolation, ready and degraded counts, desired and observed generation
   reporting, retained-orphan warnings, and recovery after a failed dependency
-  returns.
+  returns. On core's `shared-fleet-controller` mechanics, Lumen must still prove
+  its child objects, topology projection, and health mapping, and that the five
+  conditions stay separate.
 - Tracking: [Milestone #19](https://github.com/faberline/lumen/milestone/19).
 
 ### Fleet safe rollout
@@ -584,10 +587,15 @@ release. Search v2 is outside this release, and its activation remains
   observed generation to catch up and searchable `Ready=True`. The first
   version has no automatic wall-clock timeout. A failed child resumes
   automatically after recovery. This policy orders child runtimes. It does not
-  control Raft members inside one runtime.
+  control Raft members inside one runtime. This outcome adopts
+  `shared-fleet-controller` in faberline/core `crates/service-k8s/ROADMAP.md`,
+  which owns the rollout mechanics. Lumen supplies the child readiness that
+  gates each step.
 - Completion evidence: Reconcile tests prove one-at-a-time default rollout,
   explicit concurrency, manual pause, generation gating, Ready gating, stop on
   degradation, leader failover, and automatic continuation after recovery.
+  On core's mechanics, Lumen must still prove that its searchable `Ready`
+  signal gates each child step.
 - Tracking: [Milestone #7](https://github.com/faberline/lumen/milestone/7).
 
 ### GKE regional production profile
@@ -621,12 +629,17 @@ release. Search v2 is outside this release, and its activation remains
   Three-voter shards require three distinct zones. Whole-runtime topology spread
   can remain a soft packing hint, but it is not the HA guarantee. A one-Pod
   profile does not claim node-failure or zone-failure availability. Two voters
-  remain a compatibility shape and are not production HA.
+  remain a compatibility shape and are not production HA. This outcome adopts
+  `failure-domain-placement-primitives` in faberline/core
+  `crates/service-k8s/ROADMAP.md`. Core owns the placement primitives. The
+  `Lumen` spec blocks these rely on come from `service-profile-engine` in the
+  same core roadmap. Lumen supplies the shard membership and voter counts.
 - Completion evidence: Render, scheduler, and regional failure tests prove
   shard-scoped labels and selectors, hard same-shard host separation,
   three-zone voter placement, allowed node sharing across different shards and
   runtimes, correct unschedulable status when domains are insufficient, and
-  continued quorum through one Pod, node, or zone loss.
+  continued quorum through one Pod, node, or zone loss. On core's placement
+  primitives, Lumen must still prove its voter counts and shard-scoped labels.
 - Tracking: [Milestone #8](https://github.com/faberline/lumen/milestone/8).
 
 ### Quorum-safe runtime rollout
@@ -634,17 +647,22 @@ release. Search v2 is outside this release, and its activation remains
 - ID: `quorum-safe-runtime-rollout`
 - Outcome: A Managed runtime changes one Raft member at a time and waits for the
   shard to recover before it changes the next member.
-- Boundary: The runtime controller, not Fleet, owns this inner rollout. It gates
-  progress on desired and observed generation, searchable `Ready`, quorum, and
+- Boundary: Neither Fleet nor the Lumen runtime controller drives this inner
+  rollout. This outcome adopts `controlled-statefulset-member-rollout` in
+  faberline/core `crates/service-k8s/ROADMAP.md`, whose member rollout
+  controller changes one member at a time. Lumen supplies the domain readiness
+  gates: desired and observed generation, searchable `Ready`, quorum, and
   replication readiness. A three-voter shard uses quorum-safe PDB availability.
   PDB protects voluntary eviction only. It does not constrain a StatefulSet
-  rolling update. The controller must therefore drive or partition the member
-  rollout explicitly.
+  rolling update. Core's controller must therefore drive or partition the
+  member rollout explicitly.
 - Completion evidence: Multi-member tests prove one-at-a-time default updates,
   generation and readiness gates, quorum and replication recovery, pause on
   member loss, recovery and continuation, leader movement, voluntary drain
   within PDB limits, direct StatefulSet update safety, interrupted operator
-  recovery, and no second unavailable voter.
+  recovery, and no second unavailable voter. On core's member rollout
+  controller, Lumen must still prove its domain readiness gates and quorum
+  recovery.
 - Tracking: [Milestone #10](https://github.com/faberline/lumen/milestone/10).
 
 ### Kubernetes-native placement
@@ -658,13 +676,18 @@ release. Search v2 is outside this release, and its activation remains
   node auto-provisioning. Stateful ComputeClasses disable active migration.
   StorageClasses use `WaitForFirstConsumer`. Existing
   `placement.initialMachineType` and the capacity catalog remain a legacy
-  compatibility path. New manifests do not require that catalog.
+  compatibility path. New manifests do not require that catalog. This outcome
+  adopts `failure-domain-placement-primitives` in faberline/core
+  `crates/service-k8s/ROADMAP.md`. The `Lumen` spec blocks it relies on come
+  from `service-profile-engine` in the same core roadmap. Lumen supplies the
+  manifest fields, the existing catalog compatibility path, and the GKE profile.
 - Completion evidence: Additive CRD, render, and controller tests prove that
   new manifests use only Kubernetes-native fields and never read the catalog,
   old manifests keep materializing through the existing catalog, resource and
   storage requests reach each Pod and PVC, placement intent maps to standard
   scheduling fields, and a GKE profile selects a custom ComputeClass without
-  placing a GCE machine type in the core API.
+  placing a GCE machine type in the core API. On core's placement primitives,
+  Lumen must still prove that its manifests map to those primitives.
 - Tracking: [Milestone #8](https://github.com/faberline/lumen/milestone/8).
 
 ### Managed runtime certificates
@@ -678,12 +701,18 @@ release. Search v2 is outside this release, and its activation remains
   topology. It stores leaf material in runtime Secrets and keeps serving and
   peer certificates separate. The runtime keeps its existing hot reload. The
   pre-created Secret path remains a compatibility path. Private keys never
-  enter Fleet, status, Events, or logs.
+  enter Fleet, status, Events, or logs. This outcome adopts
+  `managed-certificate-lifecycle` in faberline/core
+  `crates/service-k8s/ROADMAP.md`, which owns issue, renewal, and rotation.
+  Lumen supplies the serving and peer identities (Service DNS and Raft
+  topology) and the hot-reload hook.
 - Completion evidence: Controller and regional tests prove identity derivation,
   initial issue, serving and peer Secret separation, renewal before expiry,
   issuer outage and recovery, hot reload without unsafe member fan-out,
   ownership and adoption refusal, redaction, compatibility with pre-created
-  Secrets, and no private key outside the owned Secret volume.
+  Secrets, and no private key outside the owned Secret volume. On core's
+  certificate lifecycle, Lumen must still prove its identities and hot-reload
+  hook.
 - Tracking: [Milestone #17](https://github.com/faberline/lumen/milestone/17).
 
 ### Managed client trust
@@ -697,12 +726,16 @@ release. Search v2 is outside this release, and its activation remains
   conflict sets `ClientTrustReady=False`, which blocks complete Managed
   readiness. The first version does not depend on ClusterTrustBundle
   projection. It creates no namespace, ServiceAccount, client Deployment, or
-  token Secret.
+  token Secret. This outcome adopts `public-trust-bundle-convergence` in
+  faberline/core `crates/service-k8s/ROADMAP.md`, which owns trust bundle
+  convergence. Lumen supplies the allowed clients in `Lumen.spec.access`, which
+  name the target namespaces.
 - Completion evidence: Cross-namespace controller tests prove create, update,
   multi-KSA sharing, root overlap, removal after the overlap, exact ownership,
   adoption refusal, stale-object prune, retained foreign objects, per-object
   failure recovery, `ClientTrustReady` gating, public-only data, and no change
-  to client Deployments.
+  to client Deployments. On core's trust bundle convergence, Lumen must still
+  prove its allowed-client mapping and `ClientTrustReady` gating.
 - Tracking: [Milestone #17](https://github.com/faberline/lumen/milestone/17).
 
 ### Managed data retention
@@ -710,14 +743,19 @@ release. Search v2 is outside this release, and its activation remains
 - ID: `managed-data-retention`
 - Outcome: Fleet child deletion and instance data deletion become separate,
   explicit policies with Retain defaults.
-- Boundary: `prunePolicy` keeps controlling the child `Lumen` only. A new
-  `Lumen.spec.dataRetentionPolicy` controls PVC objects and defaults to Retain.
+- Boundary: `prunePolicy` keeps controlling the child `Lumen` only. This
+  outcome adopts `instance-data-retention` in faberline/core
+  `crates/service-k8s/ROADMAP.md`. Core's retention field takes the place of
+  the planned `Lumen.spec.dataRetentionPolicy`, which is no longer a Lumen
+  field. Core's retention field controls PVC objects and defaults to Retain.
   Delete uses a finalizer and selects only PVCs owned by that instance. The
-  StorageClass reclaim policy continues to decide the PV lifecycle.
+  StorageClass reclaim policy continues to decide the PV lifecycle. Lumen
+  supplies the instance identity that selects its PVCs.
 - Completion evidence: Reconcile tests prove default child deletion leaves
   PVCs, explicit data Delete removes only exact instance PVCs, unrelated PVCs
   remain, failed cleanup retains the finalizer and publishes a condition, and
-  retry succeeds without broad deletion.
+  retry succeeds without broad deletion. On core's instance data retention,
+  Lumen must still prove that its instance identity selects only its own PVCs.
 - Tracking: [Milestone #16](https://github.com/faberline/lumen/milestone/16).
 
 ### Distributed search routing and merge
@@ -726,7 +764,10 @@ release. Search v2 is outside this release, and its activation remains
 - Outcome: Lumen routes distributed search work and merges results through one
   declared failure and ordering contract.
 - Boundary: The contract does not claim partial results as complete and keeps
-  caller source-record ownership outside Lumen.
+  caller source-record ownership outside Lumen. Request forwarding and scatter
+  execution belong to core's `shard-routing` in faberline/core
+  `crates/service-k8s/ROADMAP.md`. Lumen supplies the request classification
+  hook and keeps result merge, ordering, and the failure contract.
 - Completion evidence: Multi-shard tests prove routing, merge order, failure,
   cursor, retry, and resource cleanup behavior.
 - Tracking: [Milestone #11](https://github.com/faberline/lumen/milestone/11).
@@ -758,9 +799,14 @@ release. Search v2 is outside this release, and its activation remains
 - Outcome: Fleet's reusable foundation has a clear library boundary while
   Lumen keeps its own search and Raft policy.
 - Boundary: The extraction does not move Lumen product behavior into a generic
-  Fleet mechanism.
+  Fleet mechanism. This outcome adopts `shared-fleet-controller` in
+  faberline/core `crates/service-k8s/ROADMAP.md`, which owns the reusable Fleet
+  foundation.
+  Lumen supplies its search and Raft policy on top of it.
 - Completion evidence: Compatibility and integration tests prove the extracted
-  API preserves declared Fleet convergence behavior.
+  API preserves declared Fleet convergence behavior. On core's
+  `shared-fleet-controller`, Lumen must still prove that its search and Raft
+  policy stay outside the generic Fleet mechanism.
 - Tracking: [Milestone #3](https://github.com/faberline/lumen/milestone/3).
 
 ## Later outcomes
@@ -801,9 +847,15 @@ release. Search v2 is outside this release, and its activation remains
   sustained load or capacity signals.
 - Boundary: The controller must change Raft membership before it changes the
   StatefulSet. It must keep quorum, honor disruption policy, and roll back or
-  stop on a failed transition.
+  stop on a failed transition. This outcome adopts `membership-controller` in
+  faberline/core `crates/service-k8s/ROADMAP.md`, which owns membership and
+  scaling. An HPA or KEDA scaler targets the `Lumen` scale subresource. With
+  `ReadScaling::Learners`, the voter count stays fixed while scaling adds or
+  removes learners.
 - Completion evidence: A multi-node failure test proves scale-out, scale-in,
-  leader movement, restart recovery, and no acknowledged-write loss.
+  leader movement, restart recovery, and no acknowledged-write loss. On core's
+  `membership-controller`, Lumen must still prove its scale subresource target
+  and the learner-only scaling behavior.
 - Tracking: [Milestone #6](https://github.com/faberline/lumen/milestone/6).
 
 ### High-availability shard expansion
@@ -812,7 +864,15 @@ release. Search v2 is outside this release, and its activation remains
 - Outcome: The automatic shard-split workflow can move data while
   `replicasPerShard` is greater than one.
 - Boundary: Every new shard must establish its Raft group and quorum before
-  routing ownership changes.
+  routing ownership changes. Core's `per-shard-topology` and
+  `bucketed-resharding` outcomes in faberline/core
+  `crates/service-k8s/ROADMAP.md` handle the split and `replicasPerShard`
+  greater than one. Core decides the shard count from each bucket's byte usage,
+  establishes each new shard's quorum before routing ownership changes, and
+  publishes the shard map through a controller-owned ConfigMap instead of
+  `spec.shardMap`. Lumen supplies the bucket hook for usage, export, import, and
+  prune, plus per-bucket byte metering, which is new work named by this
+  boundary.
 - Completion evidence: A replicated-cluster test proves split, restart,
   retry, and rollback behavior while reads and writes continue.
 - Tracking: [Milestone #5](https://github.com/faberline/lumen/milestone/5).
@@ -882,6 +942,9 @@ release. Search v2 is outside this release, and its activation remains
 - ID: `generic-horizontal-pod-autoscaling`
 - Reason: HPA changes pod count. It does not perform Raft membership or shard
   ownership transitions. Lumen needs a domain-aware controller for this work.
+  An HPA aimed directly at a StatefulSet stays out of scope. Core's
+  `membership-controller` in faberline/core provides an HPA or KEDA scaler
+  aimed at the `Lumen` scale subresource.
 
 ### Operator-created Kubernetes clusters
 

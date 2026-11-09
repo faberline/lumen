@@ -1,11 +1,16 @@
 """Lumen test execution plan from the pinned AW selector. No lifecycle writes."""
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
+
+AW_EXECUTION_SOURCE = 'b4660d6bb0ebe65f5d9c0bae536d83ae96994970'
+AW_EXECUTION_SHA256 = '023f387b675076c4293a8d1374b991e24fa6051e6db54e537d554ed7e0e310d9'
+AW_QUALIFICATION_SHA256 = '67412fbcd054c6a14efe1c196059933a6309d657fe8b3e07eeccc6ffb208401d'
 
 
 def api(path):
@@ -28,11 +33,39 @@ def planner(path):
     return module
 
 
+def execution_planner(root):
+    directory = root / 'scripts/issue-ci'
+    for name, expected in (('test_plan.py', AW_EXECUTION_SHA256), ('qualification.py', AW_QUALIFICATION_SHA256)):
+        if hashlib.sha256((directory / name).read_bytes()).hexdigest() != expected:
+            raise ValueError('execution-only planner differs from reviewed AW source ' + AW_EXECUTION_SOURCE)
+    return planner(directory / 'test_plan.py')
+
+
+def workflow_definitions(root, policy, head, base):
+    result = {}
+    for path in policy['qualification']['trusted_workflows']:
+        for ref in (head, base):
+            sha = subprocess.check_output(['git', '-C', str(root), 'rev-parse', f'{ref}:{path}'], text=True).strip()
+            if not re.fullmatch('[0-9a-f]{40}', sha):
+                raise ValueError('workflow blob identity unavailable')
+            result[(path, ref)] = {'sha':sha}
+    return result
+
+
 def pull_identity(pull):
     return dict(number=pull.get('number'),state=pull.get('state'),draft=pull.get('draft'),
                 title=pull.get('title'),body=pull.get('body'),
                 **{side:dict(sha=pull.get(side,{}).get('sha'),ref=pull.get(side,{}).get('ref'),
                             repo=pull.get(side,{}).get('repo',{}).get('full_name')) for side in ('head','base')})
+
+
+def issue_identity(issue):
+    labels = issue.get('labels')
+    if not isinstance(labels, list) or any(not isinstance(row, dict) or not isinstance(row.get('name'), str) for row in labels):
+        raise ValueError('incomplete issue labels')
+    return dict(number=issue.get('number'), state=issue.get('state'), title=issue.get('title'),
+                body=issue.get('body'), url=issue.get('url'), repository_url=issue.get('repository_url'),
+                updated_at=issue.get('updated_at'), labels=sorted(row['name'] for row in labels))
 
 
 def contract_proposal(shared, policy, proposed, pull, issue):
@@ -56,8 +89,10 @@ def contract_proposal(shared, policy, proposed, pull, issue):
     return 'source issue contract proposal requires independent protected review'
 
 
-def build(shared, policy, mode, repo, head, base, pull=None, changed=None, issue=None, proposed=None):
+def build(shared, policy, mode, repo, head, base, pull=None, changed=None, issue=None, proposed=None,
+          fallback=None, definitions=None):
     pending=[]
+    pending_applicability=[]
     if mode=='diff':
         if (not isinstance(pull,dict) or pull.get('state')!='open' or pull.get('draft') is not False
                 or pull.get('head',{}).get('sha')!=head or pull.get('base',{}).get('sha')!=base
@@ -70,11 +105,19 @@ def build(shared, policy, mode, repo, head, base, pull=None, changed=None, issue
         other=[reason for reason in scope['issues'] if reason not in pending]
         rebinding={'linked issue title differs from reviewed contract','linked issue body differs from reviewed contract',
                    'linked issue has no reviewed contract'}
-        if other and set(other)<=rebinding:
+        if other == ['linked issue has no reviewed contract'] and proposed == policy and fallback is not None:
+            execution = fallback.execute_unregistered_issue(policy, repo, head, base, pull=pull,
+                                                              files=changed, issue=issue, definitions=definitions)
+            pending_applicability = execution['unresolved']
+            result = execution['plan']
+            other = []
+        elif other and set(other)<=rebinding:
             pending.append(contract_proposal(shared,policy,proposed,pull,issue))
             other=[]
         if other:raise ValueError('; '.join(other))
-        if pending:
+        if pending_applicability:
+            pass
+        elif pending:
             result=shared.select(policy,'all',repo,head,base)
         else:
             result=shared.select(policy,'diff',repo,head,base,pull=pull,files=changed,issue=issue)
@@ -87,7 +130,8 @@ def build(shared, policy, mode, repo, head, base, pull=None, changed=None, issue
     if set(result['selected'])!=set(policy['qualification']['checks']):
         raise ValueError('Lumen full fallback policy and complete batch roster differ')
     return dict(schema='LUMEN_TEST_SELECTION_V1',requested_mode=mode,test_plan=result,
-                pending_protected_review=pending,qualification='not_evaluated')
+                pending_protected_review=pending,pending_applicability=pending_applicability,
+                qualification='not_evaluated')
 
 
 def bootstrap(shared, baseline, proposed, repo, head, base, pull, changed, issue, development):
@@ -139,6 +183,8 @@ def main(argv=None):
     if event=='pull_request':
         payload=json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
         number=payload['number'];pull=api(f'repos/{repo}/pulls/{number}')
+        if type(number) is not int or pull.get('number') != number:
+            raise ValueError('event and live PR identities differ')
         changed=files(repo,number)
         linked=shared.qualification().linked_issue(pull)
         if linked is None:raise ValueError('canonical source issue required')
@@ -155,11 +201,18 @@ def main(argv=None):
         development=planner(supplied.with_name('development_pipeline.py'))
         result=bootstrap(shared,policy,proposed,repo,args.expected_head,args.expected_base,pull,changed,issue,development)
     else:
-        result=build(shared,policy,mode,repo,args.expected_head,args.expected_base,pull,changed,issue,proposed)
+        scope = shared.qualification().select(policy, pull, changed, issue)
+        needs_fallback = ('linked issue has no reviewed contract' in scope['issues'] and proposed == policy)
+        fallback = execution_planner(args.root) if needs_fallback else None
+        definitions = workflow_definitions(args.root, policy, args.expected_head, args.expected_base) if needs_fallback else None
+        result=build(shared,policy,mode,repo,args.expected_head,args.expected_base,pull,changed,issue,proposed,
+                     fallback=fallback,definitions=definitions)
     if pull is not None:
         fresh=api(f'repos/{repo}/pulls/{pull["number"]}')
         if pull_identity(fresh)!=pull_identity(pull):
             raise ValueError('PR changed during complete selection')
+        if issue_identity(api(f'repos/{repo}/issues/{issue["number"]}')) != issue_identity(issue):
+            raise ValueError('issue changed during complete selection')
     unit.verify_identity(args.root.resolve(),args.expected_head,args.expected_base,args.baseline_root.resolve())
     encoded=json.dumps(result,sort_keys=True)
     args.output.write_text(encoded+'\n')
