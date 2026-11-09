@@ -163,7 +163,7 @@ pub(in crate::index) fn eval_match_topk(
     m: &MatchQuery,
     interner: &Interner,
     k: usize,
-) -> Result<Option<(Vec<(u32, f32)>, u64)>> {
+) -> Result<Option<super::RankedPage>> {
     let fi = coll
         .fields
         .get(&m.field)

@@ -28,7 +28,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use openapi_codegen::{generate, GenOptions, HttpClient, Lang};
+use openapi_codegen::{generate, generate_for_target, GenOptions, HttpClient, Lang, TargetProfile};
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -114,23 +114,120 @@ fn unique_temp_dir(label: &str) -> PathBuf {
     ))
 }
 
-fn write_output(dir: &Path, output: openapi_codegen::GeneratedOutput) {
-    fs::create_dir_all(dir).expect("create generated output dir");
-    for file in output.files {
-        let path = dir.join(file.rel_path);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("create generated parent dir");
-        }
-        fs::write(path, file.contents).expect("write generated file");
+fn write_output(dir: &Path, lang: Lang) {
+    write_output_for_spec(dir, lang, &lumen::spec::openapi_json());
+}
+
+fn write_output_for_spec(dir: &Path, lang: Lang, spec: &str) {
+    let options = opts(lang);
+    let legacy = generate(spec, &options).expect("original generated client");
+    let target = TargetProfile::from_id(match lang {
+        Lang::Py => "python-3.11",
+        Lang::Ts => "typescript-5.0",
+        Lang::Rust => "rust-2021",
+    })
+    .expect("existing legacy generation target");
+    let output = generate_for_target(spec, &options, target)
+        .expect("same client with an explicit requirements manifest");
+    // Continue testing the original untargeted clients. The explicit target
+    // supplies a separately emitted toolchain contract, not replacement code.
+    assert_eq!(
+        legacy
+            .files
+            .iter()
+            .map(|file| &file.rel_path)
+            .collect::<Vec<_>>(),
+        output
+            .files
+            .iter()
+            .map(|file| &file.rel_path)
+            .collect::<Vec<_>>(),
+        "toolchain reference must describe the same generated language files"
+    );
+    legacy
+        .write_to_dir(dir)
+        .expect("write original client bytes");
+    output
+        .write_to_dir(&dir.join(".toolchain"))
+        .expect("write separate explicit target toolchain reference");
+    for file in &legacy.files {
+        assert_eq!(
+            fs::read(dir.join(&file.rel_path)).unwrap(),
+            file.contents.as_bytes(),
+            "toolchain materialization must not overwrite the original client"
+        );
     }
 }
 
-fn command_exists(binary: &str) -> bool {
-    Command::new(binary)
+#[test]
+fn explicit_toolchain_reference_preserves_untargeted_fixture_bytes() {
+    let spec = r#"{"openapi":"3.0.3","info":{"title":"isolated fixture","version":"1.0.0"},"paths":{},"components":{"schemas":{"Entry":{"type":"object","properties":{"name":{"type":"string"}}}}}}"#;
+    for (lang, target) in [
+        (Lang::Py, "python-3.11"),
+        (Lang::Ts, "typescript-5.0"),
+        (Lang::Rust, "rust-2021"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        write_output_for_spec(dir.path(), lang, spec);
+        assert!(
+            !dir.path().join(".openapi-codegen.json").exists(),
+            "legacy output must remain untargeted"
+        );
+        let manifest: serde_json::Value = serde_json::from_slice(
+            &fs::read(dir.path().join(".toolchain/.openapi-codegen.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(manifest["target"], target);
+        let original = generate(spec, &opts(lang)).unwrap();
+        for file in original.files {
+            assert_eq!(
+                fs::read(dir.path().join(file.rel_path)).unwrap(),
+                file.contents.as_bytes()
+            );
+        }
+    }
+}
+
+fn require_command(binary: &str) {
+    let output = Command::new(binary)
         .arg("--version")
         .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false)
+        .unwrap_or_else(|error| panic!("required generated-client tool {binary}: {error}"));
+    assert!(
+        output.status.success(),
+        "required generated-client tool {binary} failed"
+    );
+}
+
+fn client_receipt(language: &str, dir: &Path, output: &std::process::Output) {
+    use sha2::{Digest, Sha256};
+    assert!(output.status.success());
+    let Some(destination) = std::env::var_os("LUMEN_GENERATED_CLIENT_RECEIPTS") else {
+        return;
+    };
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &fs::read(dir.join(".toolchain/.openapi-codegen.json"))
+            .expect("generated toolchain reference manifest"),
+    )
+    .expect("valid generated client manifest");
+    let receipt = serde_json::json!({
+        "schema": "LUMEN_GENERATED_CLIENT_CRUD_V1", "language": language,
+        "manifest": manifest, "exit_code": output.status.code(),
+        "generation_mode": "legacy_untargeted",
+        "requirements_source": "separate_existing_explicit_target_reference",
+        "stdout_sha256": format!("{:x}", Sha256::digest(&output.stdout)),
+        "stderr_sha256": format!("{:x}", Sha256::digest(&output.stderr)),
+        "checks": ["list_empty", "create", "index_three", "search_two_ordered",
+            "stats_three", "delete_one", "search_one", "drop", "list_empty_final"],
+        "result": "pass"
+    });
+    let path = PathBuf::from(destination).join(format!("{language}.json"));
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .expect("one fresh receipt per generated language");
+    serde_json::to_writer(file, &receipt).expect("persist generated client execution receipt");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -143,26 +240,9 @@ async fn generated_python_typescript_and_rust_clients_run_crud_happypath() {
 }
 
 fn generated_python_client_runs_crud_happypath(base_url: &str) {
-    if !command_exists("python3") {
-        eprintln!("skip python generated-client CRUD e2e: python3 not found");
-        return;
-    }
-    let pydantic = Command::new("python3")
-        .arg("-c")
-        .arg("import pydantic")
-        .status()
-        .expect("run python3");
-    if !pydantic.success() {
-        eprintln!("skip python generated-client CRUD e2e: pydantic not installed");
-        return;
-    }
-
     let dir = unique_temp_dir("py");
     let pkg = dir.join("generated_api");
-    write_output(
-        &pkg,
-        generate(&lumen::spec::openapi_json(), &opts(Lang::Py)).unwrap(),
-    );
+    write_output(&pkg, Lang::Py);
     let script = format!(
         r#"
 import sys
@@ -210,31 +290,29 @@ with Client({base_url:?}) as client:
         dir = dir.display().to_string(),
         base_url = base_url,
     );
-    let output = Command::new("python3")
-        .arg("-c")
-        .arg(script)
-        .output()
-        .expect("run generated Python client CRUD e2e");
+    let output = super::spec_gen_e2e::run_generated_python(
+        &pkg.join(".toolchain"),
+        &["-c", &script],
+        None,
+        &[],
+    )
+    .expect("run generated Python client CRUD e2e");
     assert!(
         output.status.success(),
         "generated Python client CRUD e2e failed\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    client_receipt("python", &pkg, &output);
     let _ = fs::remove_dir_all(&dir);
 }
 
 fn generated_typescript_client_runs_crud_happypath(base_url: &str) {
-    if !command_exists("node") || !command_exists("tsc") {
-        eprintln!("skip TypeScript generated-client CRUD e2e: node or tsc not found");
-        return;
-    }
+    require_command("node");
+    require_command("tsc");
 
     let dir = unique_temp_dir("ts");
-    write_output(
-        &dir,
-        generate(&lumen::spec::openapi_json(), &opts(Lang::Ts)).unwrap(),
-    );
+    write_output(&dir, Lang::Ts);
     fs::write(
         dir.join("smoke.ts"),
         format!(
@@ -349,21 +427,16 @@ main().catch((err) => {{
         String::from_utf8_lossy(&node.stdout),
         String::from_utf8_lossy(&node.stderr)
     );
+    client_receipt("typescript", &dir, &node);
     let _ = fs::remove_dir_all(&dir);
 }
 
 fn generated_rust_client_runs_crud_happypath(base_url: &str) {
-    if !command_exists("cargo") {
-        eprintln!("skip Rust generated-client CRUD e2e: cargo not found");
-        return;
-    }
+    require_command("cargo");
 
     let dir = unique_temp_dir("rs");
     let src = dir.join("src");
-    write_output(
-        &src,
-        generate(&lumen::spec::openapi_json(), &opts(Lang::Rust)).unwrap(),
-    );
+    write_output(&src, Lang::Rust);
     fs::write(
         dir.join("Cargo.toml"),
         r#"[package]
@@ -487,6 +560,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    client_receipt("rust", &src, &output);
     let _ = fs::remove_dir_all(&dir);
 }
 // CODEGEN-END

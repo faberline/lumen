@@ -79,6 +79,9 @@ struct OwnerState {
     resident: BTreeMap<u64, usize>,
     current_capture_epoch: u64,
     work_revision: u64,
+    independent_work_revision: u64,
+    capacity_cohort_work: BTreeMap<u64, u64>,
+    relieved_capacity_revision: Option<u64>,
     checkpoint_request_revision: Option<u64>,
     retired: bool,
 }
@@ -106,6 +109,36 @@ fn request_revision(state: &mut State, work_revision: u64) -> u64 {
     state.next_checkpoint_request_revision = revision;
     state.checkpoint_request_revision = Some(revision);
     revision
+}
+
+/// A committed operation that still cannot fit needs another real relief
+/// request after an earlier publication was consumed. Reservations alone do
+/// not qualify: only existing active/frozen work can make a checkpoint useful.
+fn request_waiting_capacity(state: &mut State, owner_id: u64) -> bool {
+    let pending = snapshot(state);
+    if pending.active == 0 && pending.frozen == 0 {
+        return false;
+    }
+    let owner = state.owners.get(&owner_id).expect("waiter owner checked");
+    let own_work = owner.active != 0
+        || !owner.frozen.is_empty()
+        || owner.resident.values().any(|bytes| *bytes != 0);
+    let previous_owner = owner.checkpoint_request_revision;
+    let work = if own_work {
+        owner.work_revision
+    } else {
+        state.next_work_revision
+    };
+    let previous = state.checkpoint_request_revision;
+    let revision = request_revision(state, work);
+    if own_work {
+        state
+            .owners
+            .get_mut(&owner_id)
+            .expect("waiter owner checked")
+            .checkpoint_request_revision = Some(revision);
+    }
+    previous != Some(revision) || (own_work && previous_owner != Some(revision))
 }
 
 pub(in crate::ingest) struct Inner {
@@ -212,18 +245,21 @@ pub struct Reservation {
     lifetime: Arc<OwnerLifetime>,
     bytes: usize,
     committed: bool,
+    capacity_episode: Option<u64>,
     source_retention: Option<Arc<Mutex<Option<SourceRetentionHeld>>>>,
 }
 
 enum SourceRetentionHeld {
-    Reservation(Reservation),
-    Retained(RetainedCharge),
+    Reservation { _reservation: Reservation },
+    Retained { _charge: RetainedCharge },
 }
 
 /// Keeps one source-backed reservation charged while a failed worker still
 /// owns the source but cannot safely resume application.
 #[derive(Clone)]
-pub(crate) struct SourceRetention(Arc<Mutex<Option<SourceRetentionHeld>>>);
+pub(crate) struct SourceRetention {
+    _held: Arc<Mutex<Option<SourceRetentionHeld>>>,
+}
 
 /// A committed charge.  Dropping it deliberately does not release memory.
 pub struct ActiveCharge {
@@ -235,6 +271,7 @@ pub struct ActiveCharge {
 
 /// Pre-apply RAM ownership. Unlike [`ActiveCharge`], this may be released only
 /// by the private durable-stage proof emitted after its payload is destroyed.
+#[cfg(test)]
 pub(crate) struct RamCharge {
     budget: ChangeBudget,
     owner: u64,
@@ -249,7 +286,9 @@ pub(crate) struct RamCharge {
 /// Cloning this handle shares one accounting entry; only the last drop frees
 /// its bytes.
 #[derive(Clone)]
-pub(crate) struct RetainedCharge(Arc<RetainedChargeInner>);
+pub(crate) struct RetainedCharge {
+    _inner: Arc<RetainedChargeInner>,
+}
 
 struct RetainedChargeInner {
     budget: ChangeBudget,

@@ -103,10 +103,9 @@ struct Fixture {
 
 fn fixture() -> Fixture {
     let dir = tempfile::tempdir().expect("fixture directory");
-    let store =
-        Arc::new(SegmentRdbStore::new(&dir.path().join("segments")).expect("segment store"));
+    let store = Arc::new(SegmentRdbStore::new(dir.path().join("segments")).expect("segment store"));
     let aof: SharedAof = Arc::new(Mutex::new(
-        AofWriter::open(&dir.path().join("aof.log")).expect("aof"),
+        AofWriter::open(dir.path().join("aof.log")).expect("aof"),
     ));
     let engine = Arc::new(Engine::new());
     let wal: SharedWal = Arc::new(MemWal::new());

@@ -222,8 +222,8 @@ fn vector_for(code: usize) -> Vec<f32> {
         "fixture vector identity must fit its deterministic binary coordinates",
     );
     let mut vector = vec![0.0; VECTOR_DIM];
-    for bit in 0..VECTOR_CODE_BITS {
-        vector[bit] = ((code >> bit) & 1) as f32;
+    for (bit, value) in vector.iter_mut().enumerate().take(VECTOR_CODE_BITS) {
+        *value = ((code >> bit) & 1) as f32;
     }
     vector
 }
@@ -273,10 +273,12 @@ fn base_record() -> WalRecord {
 /// One valid record exercises both the raw Flat and SQ HNSW backends. The
 /// two Keyword items make the maximum 1,000-item fast Index mixed-field too.
 fn oversized_vector_record() -> WalRecord {
-    assert!(
-        VECTOR_WIRE_BYTES > PENDING_HARD_LIMIT_BYTES,
-        "the many-row Vector fixture must exceed the documented 256 MiB budget",
-    );
+    const {
+        assert!(
+            VECTOR_WIRE_BYTES > PENDING_HARD_LIMIT_BYTES,
+            "the many-row Vector fixture must exceed the documented 256 MiB budget",
+        )
+    };
     let mut items = Vec::with_capacity(MAX_INDEX_BATCH_SIZE);
     for row in 0..FLAT_ROWS {
         items.push(item(

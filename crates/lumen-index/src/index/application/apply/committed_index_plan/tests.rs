@@ -104,7 +104,7 @@ fn planned(bytes: &[u8], view: &View) -> ScalarPlan {
     let PlanResult::Planned(p) = plan(&s, view, now(), |_| Ok(())).unwrap() else {
         panic!("fixture must be scalar")
     };
-    p
+    *p
 }
 
 #[test]
@@ -278,7 +278,7 @@ fn supports_full_ten_thousand_item_limit_with_sparse_and_existing_ids() {
         })
         .collect();
     let p = planned(&encode(items, None), &view);
-    assert_eq!(p.source_items, MAX_INDEX_ITEMS);
+    assert_eq!(p._source_items, MAX_INDEX_ITEMS);
     assert_eq!(p.applied as usize, MAX_INDEX_ITEMS);
     assert_eq!(p.new_external_ids.len(), MAX_INDEX_ITEMS / 2);
     assert_eq!(p.winners.len(), MAX_INDEX_ITEMS / 2 + 1);

@@ -226,6 +226,14 @@ impl RowsProjection<'_> {
         self.rows_examined.get()
     }
 }
+// Adapt the row-owned term lifetime to the shorter projection borrow. An
+// identity iterator does not express this associated-item coercion.
+fn term_for_projection<'rows: 'projection, 'projection>(
+    term: Result<Cow<'rows, str>>,
+) -> Result<Cow<'projection, str>> {
+    term
+}
+
 impl TextStreamView for RowsProjection<'_> {
     fn n_docs(&self) -> u32 {
         self.rows.len() as u32
@@ -243,9 +251,7 @@ impl TextStreamView for RowsProjection<'_> {
     fn terms<'a>(&'a self) -> Result<Terms<'a>> {
         // The cache keeps the row lifetime. Narrow only each yielded Cow to
         // this iterator borrow; RefCell itself is invariant in that lifetime.
-        Ok(Box::new(
-            RowsTerms::new(self)?.map(|term| term.map(|value| -> Cow<'a, str> { value })),
-        ))
+        Ok(Box::new(RowsTerms::new(self)?.map(term_for_projection)))
     }
     fn text_postings(&self, term: &str) -> Result<Option<Arc<(Vec<u32>, Vec<u32>)>>> {
         if let Some(posting) = self

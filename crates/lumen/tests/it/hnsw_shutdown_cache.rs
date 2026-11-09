@@ -4,7 +4,11 @@
 use crate::support::serve_budget_support as support;
 
 use serde_json::{json, Value};
-use std::{path::{Path, PathBuf}, thread, time::{Duration, Instant}};
+use std::{
+    path::{Path, PathBuf},
+    thread,
+    time::{Duration, Instant},
+};
 use support::{LumenProcess, ServeMode};
 
 const SNAPSHOT_SECS: u64 = 3600;
@@ -16,13 +20,20 @@ fn start(root: &Path) -> LumenProcess {
 }
 
 fn seed(process: &LumenProcess) {
-    let created = process.put_json("/collections/graph-cache", &json!({
-        "fields": {"v": {"type": "vector", "dim": 3, "metric": "l2", "backend": "hnsw-cpu"}}
-    }));
+    let created = process.put_json(
+        "/collections/graph-cache",
+        &json!({
+            "fields": {"v": {"type": "vector", "dim": 3, "metric": "l2", "backend": "hnsw-cpu"}}
+        }),
+    );
     assert_eq!(created.status, 200, "{}", created.body);
-    let items: Vec<_> = (0..256).map(|i| json!({
-        "external_id": format!("row-{i}"), "field": "v", "value": [i as f32, 1.0, 2.0]
-    })).collect();
+    let items: Vec<_> = (0..256)
+        .map(|i| {
+            json!({
+                "external_id": format!("row-{i}"), "field": "v", "value": [i as f32, 1.0, 2.0]
+            })
+        })
+        .collect();
     let indexed = process.post_json("/collections/graph-cache/index", &json!({"items": items}));
     assert_eq!(indexed.status, 200, "{}", indexed.body);
     let checkpoint = process.post_json("/admin/checkpoint", &json!({}));
@@ -30,9 +41,12 @@ fn seed(process: &LumenProcess) {
 }
 
 fn query(process: &LumenProcess, x: f32) -> Value {
-    let response = process.post_json("/collections/graph-cache/search", &json!({
-        "query": {"knn": {"field": "v", "vector": [x, 1.0, 2.0], "k": 5}}, "limit": 5
-    }));
+    let response = process.post_json(
+        "/collections/graph-cache/search",
+        &json!({
+            "query": {"knn": {"field": "v", "vector": [x, 1.0, 2.0], "k": 5}}, "limit": 5
+        }),
+    );
     assert_eq!(response.status, 200, "{}", response.body);
     response.body["hits"].clone()
 }
@@ -82,7 +96,10 @@ fn post_without_body(process: &LumenProcess, path: &str) -> (u16, String) {
                 .await
                 .expect("send body-free restart-cache-seal request");
             let status = response.status().as_u16();
-            let body = response.text().await.expect("read restart-cache-seal response");
+            let body = response
+                .text()
+                .await
+                .expect("read restart-cache-seal response");
             (status, body)
         })
 }
@@ -99,7 +116,9 @@ fn admin_restart_cache_seal_writes_a_usable_hnsw_cache_without_a_request_body() 
         .unwrap_or_else(|_| panic!("restart-cache-seal response must be JSON: {raw_body}"));
     assert_eq!(body["sealed"], true, "{body}");
     assert!(
-        body["cache_fields"].as_u64().is_some_and(|fields| fields >= 1),
+        body["cache_fields"]
+            .as_u64()
+            .is_some_and(|fields| fields >= 1),
         "the seal receipt must name at least one HNSW field: {body}"
     );
     assert!(
@@ -133,18 +152,36 @@ fn shutdown_cache_reopens_real_graph_and_replays_a_later_unclean_tail() {
     seed(&live);
     let expected = query(&live, 91.0);
     cache_before_docker_stop_edge(&mut live);
-    assert!(!cache_graphs(root.path()).is_empty(), "a saved event must have graph bytes");
+    assert!(
+        !cache_graphs(root.path()).is_empty(),
+        "a saved event must have graph bytes"
+    );
 
     let mut cold = start(root.path());
-    assert!(cold.logs().contains("HNSW graph cache loaded"), "cold path must use the saved graph, not rebuild it:\n{}", cold.logs());
-    assert_eq!(query(&cold, 91.0), expected, "cache must preserve IDs, order and scores");
-    let appended = cold.post_json("/collections/graph-cache/index", &json!({"items": [{
-        "external_id": "after-cache", "field": "v", "value": [1000.0, 1.0, 2.0]
-    }]}));
+    assert!(
+        cold.logs().contains("HNSW graph cache loaded"),
+        "cold path must use the saved graph, not rebuild it:\n{}",
+        cold.logs()
+    );
+    assert_eq!(
+        query(&cold, 91.0),
+        expected,
+        "cache must preserve IDs, order and scores"
+    );
+    let appended = cold.post_json(
+        "/collections/graph-cache/index",
+        &json!({"items": [{
+            "external_id": "after-cache", "field": "v", "value": [1000.0, 1.0, 2.0]
+        }]}),
+    );
     assert_eq!(appended.status, 200, "{}", appended.body);
     cold.stop_and_logs();
     let recovered = start(root.path());
-    assert_eq!(query(&recovered, 1000.0)[0]["external_id"], "after-cache", "unclean AOF tail must replay over the cached checkpoint graph");
+    assert_eq!(
+        query(&recovered, 1000.0)[0]["external_id"],
+        "after-cache",
+        "unclean AOF tail must replay over the cached checkpoint graph"
+    );
 }
 
 #[test]
@@ -153,19 +190,25 @@ fn shutdown_cache_matches_replayed_tail_without_rewriting_current() {
     let mut live = start(root.path());
     seed(&live);
     let current = std::fs::read(root.path().join("CURRENT")).unwrap();
-    let changed = live.post_json("/collections/graph-cache/index", &json!({"items": [{
-        "external_id": "row-91", "field": "v", "value": [999.0, 1.0, 2.0]
-    }, {
-        "external_id": "shutdown-tail", "field": "v", "value": [1000.0, 1.0, 2.0]
-    }]}));
+    let changed = live.post_json(
+        "/collections/graph-cache/index",
+        &json!({"items": [{
+            "external_id": "row-91", "field": "v", "value": [999.0, 1.0, 2.0]
+        }, {
+            "external_id": "shutdown-tail", "field": "v", "value": [1000.0, 1.0, 2.0]
+        }]}),
+    );
     assert_eq!(changed.status, 200, "{}", changed.body);
     let expected = query(&live, 1000.0);
     cache_before_docker_stop_edge(&mut live);
     assert_eq!(std::fs::read(root.path().join("CURRENT")).unwrap(), current,
         "optional shutdown cache must not spend the stop budget rewriting an authoritative checkpoint");
     let recovered = start(root.path());
-    assert!(recovered.logs().contains("HNSW graph cache loaded"),
-        "cache fingerprint must be checked after authoritative AOF replay:\n{}", recovered.logs());
+    assert!(
+        recovered.logs().contains("HNSW graph cache loaded"),
+        "cache fingerprint must be checked after authoritative AOF replay:\n{}",
+        recovered.logs()
+    );
     assert_eq!(query(&recovered, 1000.0), expected);
     assert_eq!(query(&recovered, 999.0)[0]["external_id"], "row-91");
 }
@@ -183,8 +226,15 @@ fn corrupt_optional_graph_falls_back_to_authoritative_checkpoint() {
         std::fs::write(graph, b"damaged optional cache").unwrap();
     }
     let recovered = start(root.path());
-    assert!(!recovered.logs().contains("HNSW graph cache loaded"), "corrupt bytes cannot be accepted");
-    assert_eq!(query(&recovered, 64.0), expected, "cache damage must not lose durable data");
+    assert!(
+        !recovered.logs().contains("HNSW graph cache loaded"),
+        "corrupt bytes cannot be accepted"
+    );
+    assert_eq!(
+        query(&recovered, 64.0),
+        expected,
+        "cache damage must not lose durable data"
+    );
 }
 
 #[test]
@@ -194,7 +244,10 @@ fn unclean_shutdown_without_a_cache_keeps_old_recovery_path() {
     seed(&live);
     let expected = query(&live, 17.0);
     live.stop_and_logs();
-    assert!(cache_graphs(root.path()).is_empty(), "ordinary checkpoints must not dump graphs in the request interval");
+    assert!(
+        cache_graphs(root.path()).is_empty(),
+        "ordinary checkpoints must not dump graphs in the request interval"
+    );
     let recovered = start(root.path());
     assert_eq!(query(&recovered, 17.0), expected);
 }
@@ -206,15 +259,21 @@ fn stale_graph_cannot_override_a_newer_checkpoint_vector() {
     seed(&live);
     cache_before_docker_stop_edge(&mut live);
     let mut changed = start(root.path());
-    let indexed = changed.post_json("/collections/graph-cache/index", &json!({"items": [{
-        "external_id": "row-91", "field": "v", "value": [999.0, 1.0, 2.0]
-    }]}));
+    let indexed = changed.post_json(
+        "/collections/graph-cache/index",
+        &json!({"items": [{
+            "external_id": "row-91", "field": "v", "value": [999.0, 1.0, 2.0]
+        }]}),
+    );
     assert_eq!(indexed.status, 200, "{}", indexed.body);
     let checkpoint = changed.post_json("/admin/checkpoint", &json!({}));
     assert_eq!(checkpoint.status, 200, "{}", checkpoint.body);
     changed.stop_and_logs();
     let recovered = start(root.path());
-    assert!(!recovered.logs().contains("HNSW graph cache loaded"), "old graph content must not match the new checkpoint");
+    assert!(
+        !recovered.logs().contains("HNSW graph cache loaded"),
+        "old graph content must not match the new checkpoint"
+    );
     assert_eq!(query(&recovered, 999.0)[0]["external_id"], "row-91");
 }
 
@@ -236,7 +295,10 @@ fn invalid_cache_root_is_ignored_without_following_a_symlink() {
         }
         let recovered = start(root.path());
         assert_eq!(query(&recovered, 17.0), expected);
-        assert_eq!(std::fs::read(outside.path().join("sentinel")).unwrap(), b"keep");
+        assert_eq!(
+            std::fs::read(outside.path().join("sentinel")).unwrap(),
+            b"keep"
+        );
         assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 1);
     }
 }

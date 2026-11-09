@@ -174,7 +174,7 @@ pub fn write_keyword_stream(path: &Path, seq: u64, view: &ComposedSegmentReader)
         let dict_start = *at;
         let mut dict = StreamingVarWriter::new();
         let mut terms = view.string_terms(false)?;
-        while let Some(term) = terms.next()? {
+        while let Some(term) = terms.try_next()? {
             if view.keyword_postings(&term).is_some() {
                 dict.push(term.as_bytes(), out, at)?;
             }
@@ -183,7 +183,7 @@ pub fn write_keyword_stream(path: &Path, seq: u64, view: &ComposedSegmentReader)
         let posting_start = *at;
         let mut postings = StreamingVarWriter::new();
         let mut terms = view.string_terms(false)?;
-        while let Some(term) = terms.next()? {
+        while let Some(term) = terms.try_next()? {
             let Some(posting) = view.keyword_postings(&term) else {
                 continue;
             };

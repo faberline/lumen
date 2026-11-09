@@ -81,11 +81,12 @@ pub(super) fn serving_statefulset(
     } else {
         "HTTP"
     };
-    let zone_when_unsatisfiable = if !lumen.spec.placement.zones.is_empty() && lumen.spec.replicas_per_shard > 1 {
-        "DoNotSchedule"
-    } else {
-        "ScheduleAnyway"
-    };
+    let zone_when_unsatisfiable =
+        if !lumen.spec.placement.zones.is_empty() && lumen.spec.replicas_per_shard > 1 {
+            "DoNotSchedule"
+        } else {
+            "ScheduleAnyway"
+        };
     let spread = |key: &str, when_unsatisfiable: &str| {
         json!({
             "maxSkew": 1,
@@ -171,7 +172,8 @@ pub(super) fn serving_statefulset(
         volumes,
         volume_mounts,
         affinity: {
-            let mut aff = crate::domain::capacity::placement::cross_namespace_dedicated_data_node_affinity();
+            let mut aff =
+                crate::domain::capacity::placement::cross_namespace_dedicated_data_node_affinity();
             if !lumen.spec.placement.zones.is_empty() {
                 aff["nodeAffinity"] = json!({
                     "requiredDuringSchedulingIgnoredDuringExecution": {
