@@ -248,4 +248,5 @@ fn builds_rustls_peer_configs_from_pem_material() {
     std::fs::remove_dir_all(cfg.cert.parent().unwrap()).ok();
 }
 
+mod credential_planes;
 mod peer_mtls;

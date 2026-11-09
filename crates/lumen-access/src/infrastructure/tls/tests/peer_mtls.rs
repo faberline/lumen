@@ -21,12 +21,12 @@ use crate::infrastructure::tls::PeerTlsConfig;
 
 /// A throwaway certificate authority. Two of these is what "a different
 /// trust domain" means in these tests.
-struct Authority {
-    cert: Certificate,
-    key: KeyPair,
+pub(super) struct Authority {
+    pub(super) cert: Certificate,
+    pub(super) key: KeyPair,
 }
 
-fn authority(name: &str) -> Authority {
+pub(super) fn authority(name: &str) -> Authority {
     let mut params = CertificateParams::new(Vec::new()).unwrap();
     params.distinguished_name.push(DnType::CommonName, name);
     params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
@@ -38,9 +38,9 @@ fn authority(name: &str) -> Authority {
 /// Peer material laid out exactly as `spec.peerTlsSecret` projects it —
 /// `tls.crt`, `tls.key`, `ca.crt` — so what these tests load is what a pod
 /// mounts.
-struct Material {
+pub(super) struct Material {
     _dir: tempfile::TempDir,
-    config: PeerTlsConfig,
+    pub(super) config: PeerTlsConfig,
 }
 
 /// `identity_ca` signs the leaf; `trust_ca` is who the holder verifies its
@@ -48,7 +48,7 @@ struct Material {
 /// certificate nobody trusts *while* trusting the real CA, which is the
 /// only configuration in which the client-certificate direction is the one
 /// under test.
-fn material(identity_ca: &Authority, trust_ca: &Authority, dns: &[&str]) -> Material {
+pub(super) fn material(identity_ca: &Authority, trust_ca: &Authority, dns: &[&str]) -> Material {
     let mut params =
         CertificateParams::new(dns.iter().map(|n| (*n).to_string()).collect::<Vec<_>>()).unwrap();
     params.distinguished_name.push(DnType::CommonName, dns[0]);
@@ -77,14 +77,14 @@ fn material(identity_ca: &Authority, trust_ca: &Authority, dns: &[&str]) -> Mate
 
 /// A running peer listener plus the one bit that matters: did anything get
 /// past the handshake and reach the router?
-struct PeerListener {
-    port: u16,
+pub(super) struct PeerListener {
+    pub(super) port: u16,
     router_reached: Arc<AtomicBool>,
     shutdown: tokio::sync::oneshot::Sender<()>,
     serve: tokio::task::JoinHandle<anyhow::Result<()>>,
 }
 
-async fn peer_listener(config: &PeerTlsConfig) -> PeerListener {
+pub(super) async fn peer_listener(config: &PeerTlsConfig) -> PeerListener {
     let router_reached = Arc::new(AtomicBool::new(false));
     let flag = router_reached.clone();
     // Stands in for the Raft router: same position in `serve`, and it can
@@ -119,11 +119,11 @@ async fn peer_listener(config: &PeerTlsConfig) -> PeerListener {
 }
 
 impl PeerListener {
-    fn reached(&self) -> bool {
+    pub(super) fn reached(&self) -> bool {
         self.router_reached.load(Ordering::SeqCst)
     }
 
-    async fn stop(self) {
+    pub(super) async fn stop(self) {
         let _ = self.shutdown.send(());
         self.serve.await.unwrap().unwrap();
     }

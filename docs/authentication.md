@@ -84,6 +84,15 @@ lets an operator, backup job, or CA integration call a Google API. These are
 different credentials and different audiences. Neither replaces serving TLS or
 peer TLS.
 
+The four credential planes are the workload KSA token (calls Lumen), the serving
+TLS leaf (the client trusts the server), the peer mTLS identity (raft peers trust
+each other), and the operator's Google identity through Workload Identity Federation
+(calls Google APIs; Lumen never reads it). The offline proof that each plane fails
+closed on the others is in `crates/lumen/tests/it/credential_planes.rs`,
+`crates/lumen-access/src/infrastructure/tls/tests/credential_planes.rs` and
+`crates/lumen-operator/src/application/reconcile/tests/google_credential.rs`. The
+live proof is still owned by the GKE acceptance.
+
 ## Current Managed request flow
 
 **Current.** One protected request follows this path:

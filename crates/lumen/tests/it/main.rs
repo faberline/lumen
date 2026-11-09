@@ -47,6 +47,7 @@ mod committed_staged_text_stage_failure;
 mod control_plane_identity_e2e;
 mod coverage_gaps_e2e;
 mod coverage_pass_e2e;
+mod credential_planes;
 mod current_publication_apply_barrier;
 mod design_trees_stay_retired;
 mod disk_format_bench;
