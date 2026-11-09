@@ -409,3 +409,35 @@ fn collection_names_cannot_escape_the_record_directory() {
     assert_eq!(store.load("../escape").unwrap().unwrap(), op);
     assert!(!temp.path().join("escape.rebuild.json").exists());
 }
+
+#[test]
+fn stale_copy_of_the_same_operation_cannot_undo_a_cancel() {
+    let temp = TempDir::new().expect("tempdir");
+    let store = RebuildOperationStore::new(temp.path());
+    let mut h1 = store.begin("coll_c", "op_a").expect("begin");
+    store.start_streaming(&mut h1).expect("streaming");
+    let mut h2 = h1.clone();
+
+    store
+        .cancel(&mut h1)
+        .expect("cancel through the live handle");
+    let before = h2.clone();
+
+    match store.accept_chunk(&mut h2, 0, 10) {
+        Err(RebuildStoreError::Conflict { .. }) => {}
+        other => panic!("stale copy of the same operation must get Conflict, got {other:?}"),
+    }
+    assert_eq!(
+        h2, before,
+        "a refused transition must leave the handle unchanged"
+    );
+
+    let on_disk = store.load("coll_c").unwrap().unwrap();
+    assert_eq!(on_disk.phase, RebuildPhase::Cancelled);
+    assert!(on_disk.writes_to_active_only);
+    assert_eq!(on_disk.chunks_applied, 0);
+
+    store
+        .begin("coll_c", "op_b")
+        .expect("a later begin is allowed after the cancel");
+}

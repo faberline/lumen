@@ -97,8 +97,19 @@ impl RebuildOperationStore {
     pub fn save(&self, op: &RebuildOperation) -> Result<(), RebuildStoreError> {
         let lock = record_lock(&self.record_path(&op.collection));
         let _held = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        self.ensure_owner(op)?;
-        self.write_record(op)
+        match self.load(&op.collection)? {
+            None => Err(RebuildStoreError::Stale {
+                collection: op.collection.clone(),
+                operation_id: op.operation_id.clone(),
+            }),
+            Some(current) if current.operation_id != op.operation_id => {
+                Err(RebuildStoreError::Conflict {
+                    collection: op.collection.clone(),
+                    active_operation_id: current.operation_id,
+                })
+            }
+            Some(_) => self.write_record(op),
+        }
     }
 
     /// Single-writer arbitration: begin a new rebuild operation for `collection`.
@@ -172,28 +183,36 @@ impl RebuildOperationStore {
         op: &mut RebuildOperation,
         step: impl FnOnce(&mut RebuildOperation) -> Result<(), RebuildError>,
     ) -> Result<(), RebuildStoreError> {
+        let expected = op.clone();
         let mut next = op.clone();
         step(&mut next)?;
-        self.save(&next)?;
+        self.save_if_current(&expected, &next)?;
         *op = next;
         Ok(())
     }
 
-    /// Fails unless the record on disk belongs to `op.operation_id`. Callers
-    /// hold the record lock.
-    fn ensure_owner(&self, op: &RebuildOperation) -> Result<(), RebuildStoreError> {
-        match self.load(&op.collection)? {
+    /// Compare-and-swap: writes `next` only when the record on disk equals
+    /// `expected`, the copy the caller held before the step. A stale copy of
+    /// the same operation, including one taken before a cancel, is refused
+    /// with `Conflict` and cannot overwrite the newer record. Callers hold
+    /// the record lock.
+    fn save_if_current(
+        &self,
+        expected: &RebuildOperation,
+        next: &RebuildOperation,
+    ) -> Result<(), RebuildStoreError> {
+        let lock = record_lock(&self.record_path(&expected.collection));
+        let _held = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        match self.load(&expected.collection)? {
             None => Err(RebuildStoreError::Stale {
-                collection: op.collection.clone(),
-                operation_id: op.operation_id.clone(),
+                collection: expected.collection.clone(),
+                operation_id: expected.operation_id.clone(),
             }),
-            Some(current) if current.operation_id != op.operation_id => {
-                Err(RebuildStoreError::Conflict {
-                    collection: op.collection.clone(),
-                    active_operation_id: current.operation_id,
-                })
-            }
-            Some(_) => Ok(()),
+            Some(current) if current != *expected => Err(RebuildStoreError::Conflict {
+                collection: expected.collection.clone(),
+                active_operation_id: current.operation_id,
+            }),
+            Some(_) => self.write_record(next),
         }
     }
 
