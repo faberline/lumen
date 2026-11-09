@@ -199,3 +199,23 @@ fn periodic_checkpoint_lifecycle_phases_are_ordered_and_share_one_attempt_id() {
     assert_eq!(frozen["frozen_cut_reused"], false);
     assert!(frozen["frozen_cut_bytes"].as_u64().is_some());
 }
+
+#[test]
+fn capacity_trace_records_the_canonical_refusal() {
+    use crate::ingest::application::ports::capacity_trace::CapacityTrace;
+
+    let capture = DiagnosticCapture::new();
+    let trace = capture.token();
+    assert!(trace.enabled());
+    trace.refusal(9, true, 10, 20, 30);
+    assert_eq!(
+        capture.drain(),
+        vec![NumericCanonicalEvent::Refusal {
+            revision: 9,
+            present: true,
+            requested: 10,
+            used: 20,
+            hard_limit: 30,
+        }]
+    );
+}
