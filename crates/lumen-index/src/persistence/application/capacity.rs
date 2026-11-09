@@ -311,6 +311,11 @@ pub struct Fallback {
     owner: Option<Owner>,
     relay: Option<BudgetRelay>,
     endpoint: Option<Arc<Endpoint>>,
+    /// The caller's configured store. Only `with_store` sets it, so it decides
+    /// `configured` for every owner this fallback starts.
+    configured: Option<Arc<SegmentRdbStore>>,
+    /// The store the current owner writes to. A temporary spill store lives
+    /// here and never becomes `configured`.
     _store: Option<Arc<SegmentRdbStore>>,
 }
 
@@ -324,24 +329,34 @@ impl Fallback {
             owner: None,
             relay: None,
             endpoint: None,
-            _store: configured,
+            configured,
+            _store: None,
         }
     }
 
+    /// Slot form used by callers that pass the configured store on each call.
+    /// A slot that is still bound to the live endpoint is kept. Otherwise the
+    /// slot is replaced, as before, so `configured` decides the next owner.
     pub(crate) fn ensure(
         slot: &mut Option<Self>,
         engine: &Arc<Engine>,
         configured: Option<Arc<SegmentRdbStore>>,
     ) -> Result<()> {
         use crate::ingest::application::ports::CapacityOwner;
-        if slot.is_none() {
+        let bound_live = slot
+            .as_ref()
+            .is_some_and(|fallback| fallback.is_bound_to_live(engine));
+        if !bound_live {
             *slot = Some(Self::with_store(configured));
-        } else if let (Some(fallback), Some(store)) = (slot.as_mut(), configured) {
-            if fallback._store.is_none() {
-                fallback._store = Some(store);
-            }
         }
         slot.as_mut().unwrap().ensure(engine)
+    }
+
+    fn is_bound_to_live(&self, engine: &Arc<Engine>) -> bool {
+        self.endpoint
+            .as_ref()
+            .zip(engine.layer_maintenance.owner().as_ref())
+            .is_some_and(|(bound, live)| Arc::ptr_eq(bound, live))
     }
 
     pub fn stop(&mut self) {
@@ -378,8 +393,8 @@ impl crate::ingest::application::ports::CapacityOwner for Fallback {
             self.endpoint = Some(endpoint);
             return Ok(());
         }
-        let is_configured = self._store.is_some();
-        let store = match &self._store {
+        let is_configured = self.configured.is_some();
+        let store = match &self.configured {
             Some(store) => store.clone(),
             None => crate::persistence::infrastructure::spill_directory::temporary_spill_store()?,
         };
