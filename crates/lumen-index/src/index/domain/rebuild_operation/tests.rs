@@ -241,10 +241,29 @@ fn test_serialization_round_trip() {
     let recovered: RebuildOperation = serde_json::from_slice(&json_bytes).expect("deserialize");
 
     assert_eq!(op, recovered);
+    assert_eq!(
+        serde_json::to_vec(&recovered).expect("re-serialize"),
+        json_bytes,
+        "progress must survive the round trip byte for byte"
+    );
     assert_eq!(recovered.collection, "coll_alpha");
     assert_eq!(recovered.operation_id, "op_xyz_99");
     assert_eq!(recovered.phase, RebuildPhase::Sealing);
     assert_eq!(recovered.chunks_applied, 2);
     assert_eq!(recovered.docs_applied, 579);
     assert!(!recovered.writes_to_active_only);
+}
+
+#[test]
+fn accept_chunk_overflow_is_refused_and_keeps_progress() {
+    let mut op = RebuildOperation::new("coll_overflow", "op_overflow");
+    op.start_streaming().expect("streaming");
+    op.docs_applied = u64::MAX - 1;
+    let before = op.clone();
+    assert_eq!(
+        op.accept_chunk(0, 5),
+        Err(RebuildError::ProgressOverflow),
+        "docs_applied + docs must be checked, not wrapped"
+    );
+    assert_eq!(op, before, "a refused chunk must leave progress unchanged");
 }

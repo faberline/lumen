@@ -2,8 +2,13 @@
 //!
 //! Arbitrates single-writer rebuild ownership per collection and persists
 //! state updates atomically through [`storage_durable::atomic_write_strict`].
+//! Every write checks that the record on disk still belongs to the operation
+//! being written, under a per-record lock, so a stale handle cannot overwrite
+//! a newer operation.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::index::domain::rebuild_operation::{RebuildError, RebuildOperation};
 
@@ -17,6 +22,11 @@ pub enum RebuildStoreError {
     Conflict {
         collection: String,
         active_operation_id: String,
+    },
+    #[error("rebuild operation '{operation_id}' for collection '{collection}' has no record and is no longer active")]
+    Stale {
+        collection: String,
+        operation_id: String,
     },
     #[error("corrupt or invalid rebuild record for collection '{collection}': {error}")]
     CorruptRecord { collection: String, error: String },
@@ -49,13 +59,19 @@ impl RebuildOperationStore {
         &self.base_dir
     }
 
-    /// Path to the persisted record for `collection`.
+    /// Path to the persisted record for `collection`. The name is hex-encoded
+    /// so that no separator or `..` in a collection name can leave `base_dir`.
     pub fn record_path(&self, collection: &str) -> PathBuf {
-        self.base_dir.join(format!("{collection}.rebuild.json"))
+        let encoded: String = collection
+            .bytes()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        self.base_dir.join(format!("{encoded}.rebuild.json"))
     }
 
     /// Load the current rebuild operation for `collection`, if one exists.
-    /// Fails closed if the file is corrupted or truncated.
+    /// Fails closed if the file is corrupted or truncated. The error names
+    /// only the decode category and position, never the record bytes.
     pub fn load(&self, collection: &str) -> Result<Option<RebuildOperation>, RebuildStoreError> {
         let path = self.record_path(collection);
         if !path.exists() {
@@ -71,20 +87,18 @@ impl RebuildOperationStore {
         let op: RebuildOperation =
             serde_json::from_slice(&bytes).map_err(|e| RebuildStoreError::CorruptRecord {
                 collection: collection.to_string(),
-                error: e.to_string(),
+                error: describe_decode_error(&e),
             })?;
         Ok(Some(op))
     }
 
-    /// Persist the rebuild operation state atomically to disk.
+    /// Persist `op` atomically, but only while the record on disk still
+    /// belongs to `op.operation_id`.
     pub fn save(&self, op: &RebuildOperation) -> Result<(), RebuildStoreError> {
-        if !self.base_dir.exists() {
-            std::fs::create_dir_all(&self.base_dir)?;
-        }
-        let bytes = serde_json::to_vec_pretty(op)?;
-        let path = self.record_path(&op.collection);
-        storage_durable::atomic_write_strict(&path, &bytes)?;
-        Ok(())
+        let lock = record_lock(&self.record_path(&op.collection));
+        let _held = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ensure_owner(op)?;
+        self.write_record(op)
     }
 
     /// Single-writer arbitration: begin a new rebuild operation for `collection`.
@@ -95,6 +109,8 @@ impl RebuildOperationStore {
         collection: &str,
         operation_id: &str,
     ) -> Result<RebuildOperation, RebuildStoreError> {
+        let lock = record_lock(&self.record_path(collection));
+        let _held = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(existing) = self.load(collection)? {
             if !existing.phase.is_terminal() {
                 return Err(RebuildStoreError::Conflict {
@@ -104,15 +120,13 @@ impl RebuildOperationStore {
             }
         }
         let op = RebuildOperation::new(collection, operation_id);
-        self.save(&op)?;
+        self.write_record(&op)?;
         Ok(op)
     }
 
     /// Transition to `Streaming` and persist atomically.
     pub fn start_streaming(&self, op: &mut RebuildOperation) -> Result<(), RebuildStoreError> {
-        op.start_streaming()?;
-        self.save(op)?;
-        Ok(())
+        self.transition(op, RebuildOperation::start_streaming)
     }
 
     /// Accept a chunk in order and persist atomically.
@@ -122,30 +136,22 @@ impl RebuildOperationStore {
         seq: u64,
         docs: u64,
     ) -> Result<(), RebuildStoreError> {
-        op.accept_chunk(seq, docs)?;
-        self.save(op)?;
-        Ok(())
+        self.transition(op, |next| next.accept_chunk(seq, docs))
     }
 
     /// Transition to `Sealing` and persist atomically.
     pub fn seal(&self, op: &mut RebuildOperation) -> Result<(), RebuildStoreError> {
-        op.seal()?;
-        self.save(op)?;
-        Ok(())
+        self.transition(op, RebuildOperation::seal)
     }
 
     /// Transition to `Done` and persist atomically.
     pub fn complete(&self, op: &mut RebuildOperation) -> Result<(), RebuildStoreError> {
-        op.complete()?;
-        self.save(op)?;
-        Ok(())
+        self.transition(op, RebuildOperation::complete)
     }
 
     /// Cancel the operation and persist atomically.
     pub fn cancel(&self, op: &mut RebuildOperation) -> Result<(), RebuildStoreError> {
-        op.cancel()?;
-        self.save(op)?;
-        Ok(())
+        self.transition(op, RebuildOperation::cancel)
     }
 
     /// Fail the operation and persist atomically.
@@ -154,8 +160,72 @@ impl RebuildOperationStore {
         op: &mut RebuildOperation,
         reason: impl Into<String>,
     ) -> Result<(), RebuildStoreError> {
-        op.fail(reason)?;
-        self.save(op)?;
+        let reason = reason.into();
+        self.transition(op, move |next| next.fail(reason))
+    }
+
+    /// Apply one transition to a copy, save the copy, and assign it to `op`
+    /// only after the save succeeds. A failed save leaves `op` unchanged, so
+    /// the caller can retry the same step.
+    fn transition(
+        &self,
+        op: &mut RebuildOperation,
+        step: impl FnOnce(&mut RebuildOperation) -> Result<(), RebuildError>,
+    ) -> Result<(), RebuildStoreError> {
+        let mut next = op.clone();
+        step(&mut next)?;
+        self.save(&next)?;
+        *op = next;
         Ok(())
     }
+
+    /// Fails unless the record on disk belongs to `op.operation_id`. Callers
+    /// hold the record lock.
+    fn ensure_owner(&self, op: &RebuildOperation) -> Result<(), RebuildStoreError> {
+        match self.load(&op.collection)? {
+            None => Err(RebuildStoreError::Stale {
+                collection: op.collection.clone(),
+                operation_id: op.operation_id.clone(),
+            }),
+            Some(current) if current.operation_id != op.operation_id => {
+                Err(RebuildStoreError::Conflict {
+                    collection: op.collection.clone(),
+                    active_operation_id: current.operation_id,
+                })
+            }
+            Some(_) => Ok(()),
+        }
+    }
+
+    fn write_record(&self, op: &RebuildOperation) -> Result<(), RebuildStoreError> {
+        if !self.base_dir.exists() {
+            std::fs::create_dir_all(&self.base_dir)?;
+        }
+        let bytes = serde_json::to_vec_pretty(op)?;
+        let path = self.record_path(&op.collection);
+        storage_durable::atomic_write_strict(&path, &bytes)?;
+        Ok(())
+    }
+}
+
+/// One lock per record path within this process. Competing `begin` calls and
+/// stale handles check and write the same record under it.
+fn record_lock(path: &Path) -> Arc<Mutex<()>> {
+    static LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+    let locks = LOCKS.get_or_init(Mutex::default);
+    let mut map = locks
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    map.entry(path.to_path_buf()).or_default().clone()
+}
+
+/// Keeps the decode category and position. The message text can quote record
+/// bytes, so it is not kept.
+fn describe_decode_error(error: &serde_json::Error) -> String {
+    format!(
+        "{:?} at line {} column {}",
+        error.classify(),
+        error.line(),
+        error.column()
+    )
 }

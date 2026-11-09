@@ -37,6 +37,8 @@ pub enum RebuildError {
     },
     #[error("out-of-order chunk: expected sequence {expected}, got {actual}")]
     OutOfOrderChunk { expected: u64, actual: u64 },
+    #[error("rebuild progress counter would overflow")]
+    ProgressOverflow,
 }
 
 /// A durable rebuild operation state record.
@@ -93,8 +95,18 @@ impl RebuildOperation {
                 actual: seq,
             });
         }
-        self.chunks_applied += 1;
-        self.docs_applied += docs;
+        // Compute both counters before writing either, so a refused chunk
+        // leaves progress unchanged.
+        let chunks_applied = self
+            .chunks_applied
+            .checked_add(1)
+            .ok_or(RebuildError::ProgressOverflow)?;
+        let docs_applied = self
+            .docs_applied
+            .checked_add(docs)
+            .ok_or(RebuildError::ProgressOverflow)?;
+        self.chunks_applied = chunks_applied;
+        self.docs_applied = docs_applied;
         Ok(())
     }
 

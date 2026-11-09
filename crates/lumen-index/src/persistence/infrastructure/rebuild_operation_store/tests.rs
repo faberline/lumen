@@ -167,6 +167,16 @@ fn test_resume_applies_exactly_chunks_after_chunks_applied() {
     assert_eq!(resumed.docs_applied, 600);
 }
 
+/// Reopens the store and asserts the cancel is durable, not just in memory.
+fn assert_durably_cancelled(base: &std::path::Path, collection: &str) {
+    let reopened = RebuildOperationStore::new(base)
+        .load(collection)
+        .expect("load after cancel")
+        .expect("cancelled record exists");
+    assert_eq!(reopened.phase, RebuildPhase::Cancelled);
+    assert!(reopened.writes_to_active_only);
+}
+
 #[test]
 fn test_cancel_in_each_phase_allows_later_begin() {
     let temp = TempDir::new().expect("tempdir");
@@ -177,6 +187,7 @@ fn test_cancel_in_each_phase_allows_later_begin() {
     store.cancel(&mut op1).expect("cancel in pending");
     assert_eq!(op1.phase, RebuildPhase::Cancelled);
     assert!(op1.writes_to_active_only);
+    assert_durably_cancelled(temp.path(), "coll_d");
 
     // Later begin succeeds
     let mut op2 = store
@@ -185,6 +196,7 @@ fn test_cancel_in_each_phase_allows_later_begin() {
     store.start_streaming(&mut op2).expect("streaming");
     store.cancel(&mut op2).expect("cancel in streaming");
     assert_eq!(op2.phase, RebuildPhase::Cancelled);
+    assert_durably_cancelled(temp.path(), "coll_d");
 
     // Later begin succeeds
     let mut op3 = store.begin("coll_d", "op_cancel_sealing").expect("begin 3");
@@ -192,6 +204,7 @@ fn test_cancel_in_each_phase_allows_later_begin() {
     store.seal(&mut op3).expect("seal");
     store.cancel(&mut op3).expect("cancel in sealing");
     assert_eq!(op3.phase, RebuildPhase::Cancelled);
+    assert_durably_cancelled(temp.path(), "coll_d");
 
     // Later begin succeeds
     let mut op4 = store.begin("coll_d", "op_done").expect("begin 4");
@@ -238,6 +251,11 @@ fn test_corrupt_or_truncated_record_fails_closed() {
         .load("coll_corrupt")
         .expect_err("corrupt file must fail");
     assert!(matches!(load_err, RebuildStoreError::CorruptRecord { .. }));
+    let load_text = load_err.to_string();
+    assert!(
+        !load_text.contains("pend"),
+        "corrupt-record error must not quote record bytes: {load_text}"
+    );
 
     // Begin must also fail closed without overwriting or returning empty/Done
     let begin_err = store
@@ -262,15 +280,132 @@ fn test_no_secret_or_document_content_in_errors() {
         collection: "test_coll".to_string(),
         active_operation_id: "op_active_9".to_string(),
     };
-    let s1 = err1.to_string();
-    assert!(s1.contains("test_coll"));
-    assert!(s1.contains("op_active_9"));
+    assert_eq!(
+        err1.to_string(),
+        "competing rebuild operation for collection 'test_coll' is active: op_active_9"
+    );
 
-    let err2 = RebuildError::OutOfOrderChunk {
+    let err2 = RebuildStoreError::Stale {
+        collection: "test_coll".to_string(),
+        operation_id: "op_gone".to_string(),
+    };
+    assert_eq!(
+        err2.to_string(),
+        "rebuild operation 'op_gone' for collection 'test_coll' has no record and is no longer active"
+    );
+
+    let err3 = RebuildStoreError::CorruptRecord {
+        collection: "test_coll".to_string(),
+        error: "Eof at line 1 column 42".to_string(),
+    };
+    assert_eq!(
+        err3.to_string(),
+        "corrupt or invalid rebuild record for collection 'test_coll': Eof at line 1 column 42"
+    );
+
+    let err4 = RebuildError::OutOfOrderChunk {
         expected: 5,
         actual: 2,
     };
-    let s2 = err2.to_string();
-    assert!(s2.contains('5'));
-    assert!(s2.contains('2'));
+    assert_eq!(
+        err4.to_string(),
+        "out-of-order chunk: expected sequence 5, got 2"
+    );
+
+    let err5 = RebuildError::IllegalTransition {
+        from: RebuildPhase::Pending,
+        to: RebuildPhase::Done,
+    };
+    assert_eq!(
+        err5.to_string(),
+        "illegal rebuild transition from Pending to Done"
+    );
+}
+
+#[test]
+fn failed_save_leaves_the_handle_unchanged_and_the_same_seq_retryable() {
+    let temp = TempDir::new().expect("tempdir");
+    let store = RebuildOperationStore::new(temp.path());
+    let mut op = store.begin("coll_f", "op_f").expect("begin");
+    store.start_streaming(&mut op).expect("streaming");
+
+    // Make the next save fail: the record file is replaced by a directory.
+    let path = store.record_path("coll_f");
+    let saved = std::fs::read(&path).expect("read record");
+    std::fs::remove_file(&path).expect("remove record");
+    std::fs::create_dir(&path).expect("create blocking dir");
+    assert!(store.accept_chunk(&mut op, 0, 10).is_err());
+    assert_eq!(
+        op.chunks_applied, 0,
+        "a failed save must not advance the handle"
+    );
+    assert_eq!(op.docs_applied, 0);
+
+    // Cause removed: the same seq is accepted, not refused as a duplicate.
+    std::fs::remove_dir(&path).expect("remove blocking dir");
+    std::fs::write(&path, &saved).expect("restore record");
+    store
+        .accept_chunk(&mut op, 0, 10)
+        .expect("seq 0 accepted after repair");
+    assert_eq!(op.chunks_applied, 1);
+    assert_eq!(op.docs_applied, 10);
+    assert_eq!(store.load("coll_f").unwrap().unwrap().chunks_applied, 1);
+}
+
+#[test]
+fn stale_handle_cannot_overwrite_a_newer_operation() {
+    let temp = TempDir::new().expect("tempdir");
+    let store = RebuildOperationStore::new(temp.path());
+    let mut op_a = store.begin("coll_s", "op_a").expect("begin a");
+    store.cancel(&mut op_a).expect("cancel a");
+    // A copy of op_a taken before op_b begins.
+    let mut stale_a = op_a.clone();
+    let op_b = store.begin("coll_s", "op_b").expect("begin b");
+    assert_eq!(op_b.phase, RebuildPhase::Pending);
+
+    match store.cancel(&mut stale_a) {
+        Err(RebuildStoreError::Conflict {
+            active_operation_id,
+            ..
+        }) => assert_eq!(active_operation_id, "op_b"),
+        other => panic!("stale handle must get Conflict, got {other:?}"),
+    }
+    let on_disk = store.load("coll_s").unwrap().unwrap();
+    assert_eq!(on_disk.operation_id, "op_b");
+    assert_eq!(on_disk.phase, RebuildPhase::Pending);
+}
+
+#[test]
+fn concurrent_begin_admits_exactly_one_operation() {
+    let temp = TempDir::new().expect("tempdir");
+    let store = RebuildOperationStore::new(temp.path());
+    let handles: Vec<_> = (0..8)
+        .map(|i| {
+            let store = store.clone();
+            std::thread::spawn(move || store.begin("coll_race", &format!("op_{i}")).is_ok())
+        })
+        .collect();
+    let admitted = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .filter(|ok| *ok)
+        .count();
+    assert_eq!(admitted, 1, "exactly one competing begin may succeed");
+}
+
+#[test]
+fn collection_names_cannot_escape_the_record_directory() {
+    let temp = TempDir::new().expect("tempdir");
+    let base = temp.path().join("rebuild");
+    let store = RebuildOperationStore::new(&base);
+    for name in ["../escape", "a/b", "..", "/abs"] {
+        assert_eq!(
+            store.record_path(name).parent(),
+            Some(base.as_path()),
+            "record for {name:?} must stay in base_dir"
+        );
+    }
+    let op = store.begin("../escape", "op_e").expect("begin");
+    assert_eq!(store.load("../escape").unwrap().unwrap(), op);
+    assert!(!temp.path().join("escape.rebuild.json").exists());
 }
