@@ -44,6 +44,8 @@ pub struct ReshardPolicy {
     pub urgent_at_percent: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_shards: Option<u32>,
+    /// Recorded and echoed into status, but not enforced: reshard copies run
+    /// unthrottled. Throttling is reshard policy that core will own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub migration_bytes_per_sec: Option<u64>,
     #[serde(default)]
