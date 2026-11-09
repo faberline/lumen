@@ -143,8 +143,10 @@ pub struct WriteCoordinator {
     /// The last capacity-request revision reported by optional diagnostics.
     /// This is telemetry-only and does not take part in admission or retry.
     diagnostic_refusal_revision: AtomicU64,
+    capacity_trace:
+        Mutex<Option<Arc<dyn crate::ingest::application::ports::capacity_trace::CapacityTrace>>>,
     #[cfg(test)]
-    diagnostic_capture: Mutex<Option<crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCaptureToken>>,
+    diagnostic_capture_enabled: AtomicBool,
     pub(crate) layer_capacity_owner: Mutex<Box<dyn CapacityOwner>>,
     applied: AtomicU64,
     completions: Mutex<CompletionState>,
@@ -232,6 +234,14 @@ impl WriteCoordinator {
         capacity_owner: Box<dyn CapacityOwner>,
     ) -> Arc<Self> {
         Self::start_from_inner(wal, engine, from_seq, aof, capacity_owner)
+    }
+
+    /// Install the diagnostic adapter before accepting writes.
+    pub fn set_capacity_trace(
+        &self,
+        trace: Arc<dyn crate::ingest::application::ports::capacity_trace::CapacityTrace>,
+    ) {
+        *self.capacity_trace.lock().expect("capacity trace poisoned") = Some(trace);
     }
 
     /// Highest sequence this node has applied.

@@ -36,36 +36,24 @@ impl WriteCoordinator {
     ) {
         let capacity_request_present = revision.is_some();
         let revision = revision.unwrap_or_default();
-        #[cfg(test)]
-        let capture = self.diagnostic_capture.lock().ok().and_then(|token| *token);
-        if !(crate::persistence::infrastructure::segment_rdb_store::diagnostic::checkpoint_diagnostic_enabled()
-            || cfg!(test) && {
-                #[cfg(test)]
-                {
-                    capture.is_some()
-                }
-                #[cfg(not(test))]
-                {
-                    false
-                }
-            })
-            || !claim_diagnostic_refusal_revision(&self.diagnostic_refusal_revision, revision)
-        {
+        let trace = self
+            .capacity_trace
+            .lock()
+            .ok()
+            .and_then(|trace| trace.clone());
+        let Some(trace) = trace.filter(|trace| trace.enabled()) else {
+            return;
+        };
+        if !claim_diagnostic_refusal_revision(&self.diagnostic_refusal_revision, revision) {
             return;
         }
-        #[cfg(test)]
-        if let Some(token) = capture {
-            crate::persistence::infrastructure::segment_rdb_store::diagnostic::send_numeric_event(
-                token,
-                crate::persistence::infrastructure::segment_rdb_store::diagnostic::NumericCanonicalEvent::Refusal {
-                    revision,
-                    present: capacity_request_present,
-                    requested: requested_bytes,
-                    used: used_bytes,
-                    hard_limit: hard_limit_bytes,
-                },
-            );
-        }
+        trace.refusal(
+            revision,
+            capacity_request_present,
+            requested_bytes,
+            used_bytes,
+            hard_limit_bytes,
+        );
         tracing::info!(
             event = "segment_capacity_admission_refusal",
             capacity_request_revision = revision,
@@ -80,9 +68,11 @@ impl WriteCoordinator {
     #[cfg(test)]
     pub(crate) fn set_diagnostic_capture(
         &self,
-        token: crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCaptureToken,
+        trace: Arc<dyn crate::ingest::application::ports::capacity_trace::CapacityTrace>,
     ) {
-        *self.diagnostic_capture.lock().unwrap() = Some(token);
+        self.set_capacity_trace(trace);
+        self.diagnostic_capture_enabled
+            .store(true, Ordering::Release);
     }
 
     /// Capacity can be held by later publications or by already applied

@@ -5,4 +5,5 @@
 pub mod capacity_owner;
 pub mod write_backend;
 
+pub mod capacity_trace;
 pub use capacity_owner::{CapacityOwner, NoopCapacityOwner};

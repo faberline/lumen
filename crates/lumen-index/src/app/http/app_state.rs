@@ -67,6 +67,9 @@ impl AppState {
             Box::new(crate::persistence::application::capacity::Fallback::default());
         let writer =
             WriteCoordinator::start_with_capacity_owner(wal, engine.clone(), capacity_owner);
+        writer.set_capacity_trace(Arc::new(
+            crate::persistence::infrastructure::segment_rdb_store::diagnostic::CheckpointCapacityTrace,
+        ));
         Self::with_components(engine, auth, writer)
     }
 

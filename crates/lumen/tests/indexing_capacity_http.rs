@@ -220,6 +220,9 @@ mod capacity_http_contract {
             Some(aof.clone()),
             Box::new(lumen_index::persistence::application::capacity::Fallback::default()),
         );
+        writer.set_capacity_trace(Arc::new(
+            lumen_index::persistence::infrastructure::segment_rdb_store::diagnostic::CheckpointCapacityTrace,
+        ));
         let sink_writer: Arc<dyn WriteSink> = writer.clone();
         let checkpoint = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),
