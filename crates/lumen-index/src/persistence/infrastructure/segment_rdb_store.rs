@@ -155,7 +155,7 @@ pub struct SegmentRdbStore {
     recovery_timings: Arc<Mutex<RecoveryTimings>>,
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub use telemetry::{inspected_file_entries, reset_inspected_file_entries};
 
 impl SegmentRdbStore {

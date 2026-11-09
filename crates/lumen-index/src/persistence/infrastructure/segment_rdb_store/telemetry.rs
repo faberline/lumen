@@ -9,17 +9,17 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 thread_local! {
     static INSPECTED_FILE_ENTRIES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub fn reset_inspected_file_entries() {
     INSPECTED_FILE_ENTRIES.with(|c| c.set(0));
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub fn inspected_file_entries() -> u64 {
     INSPECTED_FILE_ENTRIES.with(std::cell::Cell::get)
 }
@@ -50,7 +50,7 @@ pub(super) fn take_injected_prune_failure(removed: usize) -> bool {
 
 #[inline]
 pub(super) fn note_inspected_file_entry() {
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     INSPECTED_FILE_ENTRIES.with(|c| c.set(c.get().saturating_add(1)));
 }
 
