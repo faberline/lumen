@@ -114,7 +114,6 @@ jobs:
           set -euo pipefail
           npm install --global --ignore-scripts typescript@5.9.3
           tsc --version | grep -Fx 'Version 5.9.3'
-      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test --workspace --all-features --locked
 
   test-features:
@@ -149,6 +148,9 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: lumen-test-features-${{ matrix.package }}
+      - name: Clippy the whole workspace with all features
+        if: matrix.package == 'lumen'
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - name: Test no default features and each single feature
         env:
           PACKAGE: ${{ matrix.package }}
