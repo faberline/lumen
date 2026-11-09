@@ -24,7 +24,7 @@ impl LumenSpec {
             ));
         }
         if let Some(limit) = self.body_limit_bytes {
-            if limit < MIN_BODY_LIMIT_BYTES || limit > MAX_BODY_LIMIT_BYTES {
+            if !(MIN_BODY_LIMIT_BYTES..=MAX_BODY_LIMIT_BYTES).contains(&limit) {
                 return Err(format!(
                     "bodyLimitBytes ({limit}) must be between {MIN_BODY_LIMIT_BYTES} (1 MiB) and {MAX_BODY_LIMIT_BYTES} (64 MiB) inclusive"
                 ));

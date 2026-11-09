@@ -5,6 +5,40 @@
 use crate::app::observability::metrics::Metrics;
 use crate::ingest::domain::change_budget::ChangeBudget;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct ProcessRssSnapshot {
+    pub(super) bytes: u64,
+    pub(super) available: bool,
+}
+
+#[derive(Default)]
+// Linux reports a process-wide peak. Keep the largest actual observation;
+// an unavailable scrape must not erase its history or advertise availability.
+struct RssHighWaterState {
+    bytes: u64,
+}
+
+impl RssHighWaterState {
+    fn observe(&mut self, observed: Option<u64>) -> ProcessRssSnapshot {
+        match observed {
+            Some(bytes) => {
+                self.bytes = self.bytes.max(bytes);
+                ProcessRssSnapshot {
+                    bytes: self.bytes,
+                    available: true,
+                }
+            }
+            None => ProcessRssSnapshot {
+                bytes: 0,
+                available: false,
+            },
+        }
+    }
+}
+
+static PROCESS_RSS_HIGH_WATER: std::sync::Mutex<RssHighWaterState> =
+    std::sync::Mutex::new(RssHighWaterState { bytes: 0 });
+
 #[derive(Clone, Copy)]
 pub(super) struct PendingChangeAccounting {
     pub(super) reserved: u64,
@@ -19,18 +53,19 @@ impl Metrics {
     /// `true` only when the current scrape parsed `VmHWM`; a caller can use
     /// the rendered availability gauge to reject unavailable values.
     pub fn refresh_process_rss_high_water(&self) -> bool {
-        match process_rss_high_water_bytes() {
-            Some(bytes) => {
-                self.process_rss_high_water_bytes.set(bytes);
-                self.process_rss_high_water_available.set(1);
-                true
-            }
-            None => {
-                self.process_rss_high_water_bytes.set(0);
-                self.process_rss_high_water_available.set(0);
-                false
-            }
-        }
+        self.read_process_rss_high_water().available
+    }
+
+    pub(super) fn read_process_rss_high_water(&self) -> ProcessRssSnapshot {
+        let observed = process_rss_high_water_bytes();
+        let mut state = PROCESS_RSS_HIGH_WATER
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let sample = state.observe(observed);
+        self.process_rss_high_water_bytes.set(sample.bytes);
+        self.process_rss_high_water_available
+            .set(u64::from(sample.available));
+        sample
     }
 
     /// Refresh process-wide pending-change accounting from the shared budget.
@@ -69,6 +104,7 @@ impl Metrics {
 /// value in exact `kB` units; any missing row, wrong unit, malformed value,
 /// duplicate fields, or multiplication overflow is unavailable rather than a
 /// fabricated byte count.
+#[cfg(any(target_os = "linux", test))]
 fn parse_linux_vmhwm_bytes(status: &str) -> Option<u64> {
     let mut saw_vmhwm = false;
     let mut bytes = None;

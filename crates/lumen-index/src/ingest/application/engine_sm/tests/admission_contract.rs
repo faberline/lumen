@@ -99,6 +99,20 @@ async fn raft_last_index(host: &RaftHost) -> u64 {
         .unwrap()
 }
 
+// A fresh host starts as a follower. Observe real leadership before starting
+// the post-append cancellation clock. This is setup, bounded by the existing
+// host proposal budget; TEST_LIMIT still bounds the actual apply gate.
+// Only call before submit: is_leader takes the node lock held by gated apply.
+async fn wait_for_raft_leader(host: &RaftHost, limit: Duration) -> bool {
+    tokio::time::timeout(limit, async {
+        while !host.is_leader().await {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .is_ok()
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn raft_full_local_admission_refuses_before_append_or_apply() {
     let budget = ChangeBudget::with_hard_limit(HARD_LIMIT);
@@ -346,6 +360,15 @@ async fn cancelled_raft_submit_keeps_reservation_through_actual_apply() {
     ));
     let sink = Arc::new(RaftWriteSink::new(host.clone(), inner.clone()));
 
+    let ready = wait_for_raft_leader(&host, HostConfig::default().propose_timeout).await;
+    if !ready {
+        host.shutdown().await.unwrap();
+    }
+    assert!(ready, "real host must elect before arming the apply gate");
+    let before_submit_index = raft_last_index(&host).await;
+    let before_submit_applied = inner.applied_index();
+    let before_submit_reserved = budget.snapshot().reserved;
+
     let mut submit = tokio::spawn({
         let sink = sink.clone();
         async move { sink.submit(index_entry("cancelled")).await }
@@ -368,6 +391,18 @@ async fn cancelled_raft_submit_keeps_reservation_through_actual_apply() {
     let reserved_after_apply = budget.snapshot().reserved;
     host.shutdown().await.unwrap();
 
+    assert_eq!(
+        before_submit_index, 0,
+        "readiness must not append a command"
+    );
+    assert_eq!(
+        before_submit_applied, 0,
+        "readiness must not apply a command"
+    );
+    assert_eq!(
+        before_submit_reserved, 0,
+        "readiness must not admit a command"
+    );
     assert!(
         entered,
         "gate proves append reached the real host apply callback"
@@ -396,3 +431,5 @@ async fn cancelled_raft_submit_keeps_reservation_through_actual_apply() {
 // cargo test -p lumen --lib cancelled_raft_submit_keeps_reservation_through_actual_apply
 // cargo test -p lumen --lib
 // cargo test -p lumen
+
+mod readiness;

@@ -2,8 +2,11 @@
 //! the frozen batch a checkpoint publishes.
 
 use crate::ingest::domain::change_budget::{
-    ActiveCharge, AdmissionError, FrozenBatch, RamCharge, RetainedCharge, RetainedChargeInner,
+    ActiveCharge, AdmissionError, FrozenBatch, RetainedCharge, RetainedChargeInner,
 };
+
+#[cfg(test)]
+use crate::ingest::domain::change_budget::RamCharge;
 
 impl ActiveCharge {
     pub fn bytes(&self) -> usize {
@@ -21,6 +24,7 @@ impl Drop for ActiveCharge {
     }
 }
 
+#[cfg(test)]
 impl RamCharge {
     pub(crate) fn bytes(&self) -> usize {
         self.bytes
@@ -42,10 +46,7 @@ impl RamCharge {
             .state
             .lock()
             .expect("change budget lock poisoned");
-        let retired = match state.owners.get_mut(&self.owner) {
-            Some(owner) if !owner.retired => false,
-            _ => true,
-        };
+        let retired = !matches!(state.owners.get_mut(&self.owner), Some(owner) if !owner.retired);
         if retired {
             drop(state);
             return Err((AdmissionError::Retired, self));
@@ -64,6 +65,7 @@ impl RamCharge {
     }
 }
 
+#[cfg(test)]
 impl Drop for RamCharge {
     fn drop(&mut self) {
         let _ = &self.budget;
@@ -71,8 +73,9 @@ impl Drop for RamCharge {
 }
 
 impl RetainedCharge {
+    #[cfg(test)]
     pub(crate) fn bytes(&self) -> usize {
-        self.0.bytes
+        self._inner.bytes
     }
 }
 

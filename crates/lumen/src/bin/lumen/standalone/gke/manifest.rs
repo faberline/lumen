@@ -24,7 +24,7 @@ fn attach_identity(value: &mut Value, c: &Config) {
     value["metadata"]["annotations"]["lumen.axiom.dev/instance-identity"] =
         json!(format!("{}/{}", c.namespace, c.name));
 }
-pub(super) fn build(c: &Config) -> Result<(Vec<(String, Value)>, Vec<(String, Value)>)> {
+pub(super) fn build(c: &Config) -> Result<super::ManifestDocuments> {
     let cx = RenderCtx {
         app: "lumen",
         manager: "lumen-standalone",

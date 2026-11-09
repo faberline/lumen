@@ -61,7 +61,8 @@ const OUTCOME_WINDOW: u64 = 8192;
 /// stall — turning what would otherwise be an infinite hang into a
 /// retryable 5xx.
 const SUBMIT_TIMEOUT_SECS: u64 = 30;
-const SUBMIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(SUBMIT_TIMEOUT_SECS);
+pub(crate) const SUBMIT_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(SUBMIT_TIMEOUT_SECS);
 // Admission must leave time for an already admitted record to publish and
 // apply inside the same 30-second submit deadline.
 const LOCAL_CAPACITY_APPLY_RESERVE: std::time::Duration = std::time::Duration::from_secs(1);
@@ -246,6 +247,12 @@ impl WriteCoordinator {
 pub trait WriteSink: Send + Sync {
     async fn submit(&self, entry: RaftLogEntry) -> Result<ApplyOutcome>;
     fn applied_seq(&self) -> u64;
+    /// Fixed durability boundary for an on-demand checkpoint. The default is
+    /// already applied state. A separately tailed WAL must supply its committed
+    /// head even if capacity currently blocks those records from applying.
+    async fn checkpoint_target_seq(&self) -> Result<u64> {
+        Ok(self.applied_seq())
+    }
     fn restart_required(&self) -> bool {
         false
     }
@@ -261,6 +268,9 @@ impl WriteSink for WriteCoordinator {
     }
     fn applied_seq(&self) -> u64 {
         WriteCoordinator::applied_seq(self)
+    }
+    async fn checkpoint_target_seq(&self) -> Result<u64> {
+        self.wal.latest_seq().await
     }
     fn restart_required(&self) -> bool {
         WriteCoordinator::is_restart_required(self)

@@ -14,6 +14,8 @@
 //! directory and then writes `CURRENT` once. It never falls back from a corrupt
 //! highest legacy directory.
 
+type VerifiedCatalog = Arc<Mutex<Option<(GenerationName, Vec<u8>)>>>;
+
 pub mod catalog;
 pub mod compacted_fields;
 pub mod compaction;
@@ -35,8 +37,7 @@ pub mod records;
 pub mod reopen;
 pub mod save;
 pub mod save_attempt;
-#[path = "segment_save_gate.rs"]
-mod save_gate;
+use crate::persistence::infrastructure::segment_save_gate as save_gate;
 pub mod startup;
 pub mod telemetry;
 
@@ -142,7 +143,7 @@ pub struct SegmentRdbStore {
     bootstrap: StartupBootstrap,
     // Clones share proof of the last verified immutable manifest. Unknown
     // generations require payload validation before the hard-link fast path.
-    pub(in crate::persistence) verified_catalog: Arc<Mutex<Option<(GenerationName, Vec<u8>)>>>,
+    pub(in crate::persistence) verified_catalog: VerifiedCatalog,
     pub(in crate::persistence) pending_frozen: Arc<Mutex<Option<PendingFrozenCheckpoint>>>,
     pub(in crate::persistence) merge_observer: Arc<dyn MergeObserver>,
     pub(in crate::persistence) background: Arc<RootWork>,
@@ -175,17 +176,18 @@ pub(crate) struct SegmentArchivePin {
     background: Arc<RootWork>,
     _root_guard: Option<CheckpointRootGuard>,
     name: String,
-    path: PathBuf,
-    sequence: u64,
+    _path: PathBuf,
+    _sequence: u64,
 }
 
+#[cfg(feature = "raft-wal")]
 impl SegmentArchivePin {
     pub(crate) fn path(&self) -> &Path {
-        &self.path
+        &self._path
     }
 
     pub(crate) fn sequence(&self) -> u64 {
-        self.sequence
+        self._sequence
     }
 }
 

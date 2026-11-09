@@ -1,0 +1,810 @@
+{
+  "version": 1,
+  "repository": "faberline/lumen",
+  "source_product_pr": 119,
+  "source_head": "e91a9402a9b92fbc52d6deeb9d493486f376c190",
+  "captured_at": "2026-10-28",
+  "review_status": "proposal; independent mapping review required",
+  "milestones": [
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/1",
+      "number": 1,
+      "state": "open",
+      "title": "lumen@0.10.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/2",
+      "number": 2,
+      "state": "open",
+      "title": "lumen@0.23.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/3",
+      "number": 3,
+      "state": "open",
+      "title": "lumen@0.32.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/4",
+      "number": 4,
+      "state": "open",
+      "title": "lumen@0.30.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/5",
+      "number": 5,
+      "state": "open",
+      "title": "lumen@0.39.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/6",
+      "number": 6,
+      "state": "open",
+      "title": "lumen@0.38.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/7",
+      "number": 7,
+      "state": "open",
+      "title": "lumen@0.35.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/8",
+      "number": 8,
+      "state": "open",
+      "title": "lumen@0.26.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/9",
+      "number": 9,
+      "state": "open",
+      "title": "lumen@0.28.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/10",
+      "number": 10,
+      "state": "open",
+      "title": "lumen@0.27.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/11",
+      "number": 11,
+      "state": "open",
+      "title": "lumen@0.16.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/12",
+      "number": 12,
+      "state": "open",
+      "title": "lumen@0.21.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/13",
+      "number": 13,
+      "state": "open",
+      "title": "lumen@0.14.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/14",
+      "number": 14,
+      "state": "open",
+      "title": "lumen@0.37.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/15",
+      "number": 15,
+      "state": "open",
+      "title": "lumen@0.31.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/16",
+      "number": 16,
+      "state": "open",
+      "title": "lumen@0.29.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/17",
+      "number": 17,
+      "state": "open",
+      "title": "lumen@0.24.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/18",
+      "number": 18,
+      "state": "open",
+      "title": "lumen@0.22.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/19",
+      "number": 19,
+      "state": "open",
+      "title": "lumen@0.33.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/20",
+      "number": 20,
+      "state": "open",
+      "title": "lumen@0.34.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/21",
+      "number": 21,
+      "state": "open",
+      "title": "lumen@0.25.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/22",
+      "number": 22,
+      "state": "open",
+      "title": "lumen@0.7.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/23",
+      "number": 23,
+      "state": "open",
+      "title": "lumen@0.8.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/24",
+      "number": 24,
+      "state": "open",
+      "title": "lumen@0.9.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/25",
+      "number": 25,
+      "state": "open",
+      "title": "lumen@0.11.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/26",
+      "number": 26,
+      "state": "open",
+      "title": "lumen@0.12.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/27",
+      "number": 27,
+      "state": "open",
+      "title": "lumen@0.13.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/28",
+      "number": 28,
+      "state": "open",
+      "title": "lumen@0.15.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/29",
+      "number": 29,
+      "state": "open",
+      "title": "lumen@0.17.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/30",
+      "number": 30,
+      "state": "open",
+      "title": "lumen@0.18.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/31",
+      "number": 31,
+      "state": "open",
+      "title": "lumen@0.19.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/32",
+      "number": 32,
+      "state": "open",
+      "title": "lumen@0.20.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/33",
+      "number": 33,
+      "state": "open",
+      "title": "lumen@0.36.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/34",
+      "number": 34,
+      "state": "open",
+      "title": "lumen@0.40.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/35",
+      "number": 35,
+      "state": "open",
+      "title": "lumen@0.41.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/36",
+      "number": 36,
+      "state": "closed",
+      "title": "lumen@0.6.1"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/37",
+      "number": 37,
+      "state": "closed",
+      "title": "lumen@0.4.26"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/38",
+      "number": 38,
+      "state": "closed",
+      "title": "lumen@0.4.27"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/39",
+      "number": 39,
+      "state": "closed",
+      "title": "lumen@0.4.28"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/40",
+      "number": 40,
+      "state": "closed",
+      "title": "lumen@0.4.29"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/41",
+      "number": 41,
+      "state": "closed",
+      "title": "lumen@0.4.30"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/42",
+      "number": 42,
+      "state": "closed",
+      "title": "lumen@0.4.31"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/43",
+      "number": 43,
+      "state": "closed",
+      "title": "lumen@0.5.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/44",
+      "number": 44,
+      "state": "closed",
+      "title": "lumen@0.6.0"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/45",
+      "number": 45,
+      "state": "closed",
+      "title": "lumen: per-request client auth and Standalone isolation"
+    },
+    {
+      "html_url": "https://github.com/faberline/lumen/milestone/46",
+      "number": 46,
+      "state": "open",
+      "title": "lumen@0.6.3"
+    }
+  ],
+  "links": [
+    {
+      "file": "ROADMAP.md",
+      "section": "Incremental segment checkpoint",
+      "number": 36,
+      "milestone_title": "lumen@0.6.1"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Durable write contract",
+      "number": 22,
+      "milestone_title": "lumen@0.7.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Idempotent write replay",
+      "number": 23,
+      "milestone_title": "lumen@0.8.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Item-atomic batch writes",
+      "number": 24,
+      "milestone_title": "lumen@0.9.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Versioned deletes and tombstones",
+      "number": 24,
+      "milestone_title": "lumen@0.9.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Shadow rebuild generations",
+      "number": 13,
+      "milestone_title": "lumen@0.14.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Strict search schema types",
+      "number": 27,
+      "milestone_title": "lumen@0.13.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Unified search contract",
+      "number": 28,
+      "milestone_title": "lumen@0.15.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Exact search facets metrics",
+      "number": 29,
+      "milestone_title": "lumen@0.17.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Facet resource governance",
+      "number": 30,
+      "milestone_title": "lumen@0.18.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Distributed facet convergence",
+      "number": 31,
+      "milestone_title": "lumen@0.19.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Generated-client Search v2 parity",
+      "number": 32,
+      "milestone_title": "lumen@0.20.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Search v2 migration",
+      "number": 33,
+      "milestone_title": "lumen@0.36.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Search capability activation",
+      "number": 14,
+      "milestone_title": "lumen@0.37.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Runtime configuration parity",
+      "number": 18,
+      "milestone_title": "lumen@0.22.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Managed runtime KSA access",
+      "number": 20,
+      "milestone_title": "lumen@0.34.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Projected KSA client auth",
+      "number": 21,
+      "milestone_title": "lumen@0.25.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Managed auth unification",
+      "number": 2,
+      "milestone_title": "lumen@0.23.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Protocol contract completeness",
+      "number": 1,
+      "milestone_title": "lumen@0.10.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Generated-client protocol parity",
+      "number": 25,
+      "milestone_title": "lumen@0.11.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Strict generated-client gates",
+      "number": 25,
+      "milestone_title": "lumen@0.11.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Generated-client request resilience",
+      "number": 26,
+      "milestone_title": "lumen@0.12.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Generated-client source-integration helpers",
+      "number": 26,
+      "milestone_title": "lumen@0.12.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Versioned client workload template",
+      "number": 21,
+      "milestone_title": "lumen@0.25.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Fleet production convergence",
+      "number": 19,
+      "milestone_title": "lumen@0.33.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Fleet safe rollout",
+      "number": 7,
+      "milestone_title": "lumen@0.35.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "GKE regional production profile",
+      "number": 9,
+      "milestone_title": "lumen@0.28.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Per-shard failure-domain placement",
+      "number": 8,
+      "milestone_title": "lumen@0.26.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Quorum-safe runtime rollout",
+      "number": 10,
+      "milestone_title": "lumen@0.27.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Kubernetes-native placement",
+      "number": 8,
+      "milestone_title": "lumen@0.26.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Managed runtime certificates",
+      "number": 17,
+      "milestone_title": "lumen@0.24.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Managed client trust",
+      "number": 17,
+      "milestone_title": "lumen@0.24.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Managed data retention",
+      "number": 16,
+      "milestone_title": "lumen@0.29.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Distributed search routing and merge",
+      "number": 11,
+      "milestone_title": "lumen@0.16.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Regional topology migration and backup",
+      "number": 4,
+      "milestone_title": "lumen@0.30.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Regional upgrade rollback and recovery",
+      "number": 15,
+      "milestone_title": "lumen@0.31.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Fleet foundation extraction",
+      "number": 3,
+      "milestone_title": "lumen@0.32.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "GKE Autopilot certification",
+      "number": 34,
+      "milestone_title": "lumen@0.40.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Vector hybrid facets",
+      "number": 35,
+      "milestone_title": "lumen@0.41.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Membership-aware replica autoscaling",
+      "number": 6,
+      "milestone_title": "lumen@0.38.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "High-availability shard expansion",
+      "number": 5,
+      "milestone_title": "lumen@0.39.0"
+    },
+    {
+      "file": "ROADMAP.md",
+      "section": "Protocol compatibility policy",
+      "number": 12,
+      "milestone_title": "lumen@0.21.0"
+    },
+    {
+      "file": "docs/product/fleet-and-runtime-configuration.md",
+      "section": "Runtime configuration parity",
+      "number": 18,
+      "milestone_title": "lumen@0.22.0"
+    },
+    {
+      "file": "docs/product/fleet-and-runtime-configuration.md",
+      "section": "Fleet production convergence",
+      "number": 19,
+      "milestone_title": "lumen@0.33.0"
+    },
+    {
+      "file": "docs/product/fleet-and-runtime-configuration.md",
+      "section": "Fleet safe rollout",
+      "number": 7,
+      "milestone_title": "lumen@0.35.0"
+    },
+    {
+      "file": "docs/product/fleet-and-runtime-configuration.md",
+      "section": "Fleet foundation extraction",
+      "number": 3,
+      "milestone_title": "lumen@0.32.0"
+    },
+    {
+      "file": "docs/product/indexing-and-rebuild.md",
+      "section": "Durable write contract",
+      "number": 22,
+      "milestone_title": "lumen@0.7.0"
+    },
+    {
+      "file": "docs/product/indexing-and-rebuild.md",
+      "section": "Idempotent write replay",
+      "number": 23,
+      "milestone_title": "lumen@0.8.0"
+    },
+    {
+      "file": "docs/product/indexing-and-rebuild.md",
+      "section": "Incremental segment checkpoint",
+      "number": 36,
+      "milestone_title": "lumen@0.6.1"
+    },
+    {
+      "file": "docs/product/indexing-and-rebuild.md",
+      "section": "Item-atomic batch writes",
+      "number": 24,
+      "milestone_title": "lumen@0.9.0"
+    },
+    {
+      "file": "docs/product/indexing-and-rebuild.md",
+      "section": "Shadow rebuild generations",
+      "number": 13,
+      "milestone_title": "lumen@0.14.0"
+    },
+    {
+      "file": "docs/product/indexing-and-rebuild.md",
+      "section": "Strict search schema types",
+      "number": 27,
+      "milestone_title": "lumen@0.13.0"
+    },
+    {
+      "file": "docs/product/managed-access-and-trust.md",
+      "section": "Managed runtime KSA access",
+      "number": 20,
+      "milestone_title": "lumen@0.34.0"
+    },
+    {
+      "file": "docs/product/managed-access-and-trust.md",
+      "section": "Projected KSA client auth",
+      "number": 21,
+      "milestone_title": "lumen@0.25.0"
+    },
+    {
+      "file": "docs/product/managed-access-and-trust.md",
+      "section": "Managed auth unification",
+      "number": 2,
+      "milestone_title": "lumen@0.23.0"
+    },
+    {
+      "file": "docs/product/managed-access-and-trust.md",
+      "section": "Managed runtime certificates",
+      "number": 17,
+      "milestone_title": "lumen@0.24.0"
+    },
+    {
+      "file": "docs/product/managed-access-and-trust.md",
+      "section": "Managed client trust",
+      "number": 17,
+      "milestone_title": "lumen@0.24.0"
+    },
+    {
+      "file": "docs/product/protocol-and-clients.md",
+      "section": "Protocol contract completeness",
+      "number": 1,
+      "milestone_title": "lumen@0.10.0"
+    },
+    {
+      "file": "docs/product/protocol-and-clients.md",
+      "section": "Generated-client protocol parity",
+      "number": 25,
+      "milestone_title": "lumen@0.11.0"
+    },
+    {
+      "file": "docs/product/protocol-and-clients.md",
+      "section": "Strict generated-client gates",
+      "number": 25,
+      "milestone_title": "lumen@0.11.0"
+    },
+    {
+      "file": "docs/product/protocol-and-clients.md",
+      "section": "Generated-client Search v2 parity",
+      "number": 32,
+      "milestone_title": "lumen@0.20.0"
+    },
+    {
+      "file": "docs/product/protocol-and-clients.md",
+      "section": "Generated-client request resilience",
+      "number": 26,
+      "milestone_title": "lumen@0.12.0"
+    },
+    {
+      "file": "docs/product/protocol-and-clients.md",
+      "section": "Generated-client source-integration helpers",
+      "number": 26,
+      "milestone_title": "lumen@0.12.0"
+    },
+    {
+      "file": "docs/product/protocol-and-clients.md",
+      "section": "Versioned client workload template",
+      "number": 21,
+      "milestone_title": "lumen@0.25.0"
+    },
+    {
+      "file": "docs/product/protocol-and-clients.md",
+      "section": "Protocol compatibility policy",
+      "number": 12,
+      "milestone_title": "lumen@0.21.0"
+    },
+    {
+      "file": "docs/product/protocol-and-clients.md",
+      "section": "Search v2 migration",
+      "number": 33,
+      "milestone_title": "lumen@0.36.0"
+    },
+    {
+      "file": "docs/product/querying-and-facets.md",
+      "section": "Unified search contract",
+      "number": 28,
+      "milestone_title": "lumen@0.15.0"
+    },
+    {
+      "file": "docs/product/querying-and-facets.md",
+      "section": "Exact search facets metrics",
+      "number": 29,
+      "milestone_title": "lumen@0.17.0"
+    },
+    {
+      "file": "docs/product/querying-and-facets.md",
+      "section": "Facet resource governance",
+      "number": 30,
+      "milestone_title": "lumen@0.18.0"
+    },
+    {
+      "file": "docs/product/querying-and-facets.md",
+      "section": "Distributed facet convergence",
+      "number": 31,
+      "milestone_title": "lumen@0.19.0"
+    },
+    {
+      "file": "docs/product/querying-and-facets.md",
+      "section": "Vector hybrid facets",
+      "number": 35,
+      "milestone_title": "lumen@0.41.0"
+    },
+    {
+      "file": "docs/product/recovery-and-operations.md",
+      "section": "Versioned deletes and tombstones",
+      "number": 24,
+      "milestone_title": "lumen@0.9.0"
+    },
+    {
+      "file": "docs/product/recovery-and-operations.md",
+      "section": "Managed data retention",
+      "number": 16,
+      "milestone_title": "lumen@0.29.0"
+    },
+    {
+      "file": "docs/product/recovery-and-operations.md",
+      "section": "Regional topology migration and backup",
+      "number": 4,
+      "milestone_title": "lumen@0.30.0"
+    },
+    {
+      "file": "docs/product/recovery-and-operations.md",
+      "section": "Regional upgrade rollback and recovery",
+      "number": 15,
+      "milestone_title": "lumen@0.31.0"
+    },
+    {
+      "file": "docs/product/runtime-and-deployment.md",
+      "section": "GKE regional production profile",
+      "number": 9,
+      "milestone_title": "lumen@0.28.0"
+    },
+    {
+      "file": "docs/product/runtime-and-deployment.md",
+      "section": "GKE Autopilot certification",
+      "number": 34,
+      "milestone_title": "lumen@0.40.0"
+    },
+    {
+      "file": "docs/product/runtime-and-deployment.md",
+      "section": "Managed embedded data durability",
+      "number": 43,
+      "milestone_title": "lumen@0.5.0"
+    },
+    {
+      "file": "docs/product/runtime-and-deployment.md",
+      "section": "Search capability activation",
+      "number": 14,
+      "milestone_title": "lumen@0.37.0"
+    },
+    {
+      "file": "docs/product/topology-and-availability.md",
+      "section": "Per-shard failure-domain placement",
+      "number": 8,
+      "milestone_title": "lumen@0.26.0"
+    },
+    {
+      "file": "docs/product/topology-and-availability.md",
+      "section": "Quorum-safe runtime rollout",
+      "number": 10,
+      "milestone_title": "lumen@0.27.0"
+    },
+    {
+      "file": "docs/product/topology-and-availability.md",
+      "section": "Kubernetes-native placement",
+      "number": 8,
+      "milestone_title": "lumen@0.26.0"
+    },
+    {
+      "file": "docs/product/topology-and-availability.md",
+      "section": "Membership-aware replica autoscaling",
+      "number": 6,
+      "milestone_title": "lumen@0.38.0"
+    },
+    {
+      "file": "docs/product/topology-and-availability.md",
+      "section": "High-availability shard expansion",
+      "number": 5,
+      "milestone_title": "lumen@0.39.0"
+    },
+    {
+      "file": "docs/product/topology-and-availability.md",
+      "section": "Bounded Raft shutdown and failover",
+      "number": 44,
+      "milestone_title": "lumen@0.6.0"
+    },
+    {
+      "file": "docs/product/topology-and-availability.md",
+      "section": "Deterministic consensus conformance",
+      "number": 43,
+      "milestone_title": "lumen@0.5.0"
+    },
+    {
+      "file": "docs/product/topology-and-availability.md",
+      "section": "Distributed search routing and merge",
+      "number": 11,
+      "milestone_title": "lumen@0.16.0"
+    }
+  ]
+}

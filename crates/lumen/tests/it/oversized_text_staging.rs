@@ -121,7 +121,7 @@ fn oversized_unicode_text() -> (String, String) {
         output: &mut Vec<usize>,
     ) {
         if position > order {
-            if order % period == 0 {
+            if order.is_multiple_of(period) {
                 output.extend_from_slice(&work[1..=period]);
             }
             return;

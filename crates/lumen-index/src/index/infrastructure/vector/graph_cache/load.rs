@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::RwLock;
 use std::time::Instant;
 
@@ -37,10 +37,7 @@ pub(in crate::index) fn load_timed(
 
     macro_rules! stage {
         ($field:ident, $body:expr) => {{
-            let started = Instant::now();
-            let result = (|| -> Result<_> { $body })();
-            timing.$field = started.elapsed();
-            result
+            timed_stage(&mut timing.$field, || -> Result<_> { $body })
         }};
     }
 
@@ -183,6 +180,7 @@ pub(in crate::index) fn load_timed(
                 next_id: manifest.next_id,
                 hnsw: HnswBackend::Cached(Box::new(owned)),
                 ef_search: hnsw_search_ef(),
+                graph_inventory_incomplete: AtomicBool::new(false),
             }),
             exact_scan_fallbacks: AtomicU64::new(0),
         }))
@@ -235,4 +233,11 @@ fn validate_points<D: hnsw_rs::anndists::dist::Distance<f32> + Send + Sync>(
         "cached graph lost a live identity"
     );
     Ok(())
+}
+
+fn timed_stage<T>(timing: &mut std::time::Duration, run: impl FnOnce() -> Result<T>) -> Result<T> {
+    let started = Instant::now();
+    let result = run();
+    *timing = started.elapsed();
+    result
 }

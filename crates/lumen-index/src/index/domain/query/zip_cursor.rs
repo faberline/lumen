@@ -5,7 +5,9 @@
 
 use roaring::RoaringBitmap;
 
-use crate::index::domain::query::rank::{bm25_contrib, text_doc_len_at};
+use crate::index::domain::query::rank::{
+    bm25_contrib, bm25_contrib_normalized, bm25_normalization, text_doc_len_at,
+};
 use crate::index::domain::text_index::TextIndex;
 use crate::index::domain::tok_probe::TokProbe;
 
@@ -187,6 +189,48 @@ fn should_use_zipper(posts: &[TokProbe<'_>], drive: usize, drive_len: usize) -> 
     sum_other <= drive_len.saturating_mul(sum_log_other)
 }
 
+/// Identical live document columns need no per-document intersection probes.
+/// Prove that condition first, then score each token's contiguous tf column.
+/// Every document still adds contributions in the original token order, with
+/// the original BM25 arithmetic. Sparse, staged and segment cases keep the
+/// existing precedence-aware paths below.
+fn aligned_live_ranked(
+    input: &AndRankInput<'_>,
+    segment_doc_lens: Option<&[u32]>,
+) -> Option<Vec<(u32, f32)>> {
+    if input.posts.len() < 2 || input.idfs.len() != input.posts.len() {
+        return None;
+    }
+    let driver = input.posts.get(input.drive)?.live?;
+    let ids = &driver.docids;
+    if input.posts.iter().any(|post| {
+        post.seg.is_some()
+            || !post.staged.is_empty()
+            || post.live.is_none_or(|live| {
+                live.docids.as_slice() != ids.as_slice() || live.tfs.len() != ids.len()
+            })
+    }) {
+        return None;
+    }
+    let normalization: Vec<f32> = ids
+        .iter()
+        .map(|&id| {
+            bm25_normalization(
+                text_doc_len_at(input.idx, segment_doc_lens, id) as f32,
+                input.avgdl,
+            )
+        })
+        .collect();
+    let mut scores = vec![0.0f32; ids.len()];
+    for (post, &idf) in input.posts.iter().zip(input.idfs) {
+        let live = post.live.expect("all live columns were validated");
+        for ((score, &norm), &tf) in scores.iter_mut().zip(&normalization).zip(&live.tfs) {
+            *score += bm25_contrib_normalized(idf, tf as f32, norm);
+        }
+    }
+    Some(ids.iter().copied().zip(scores).collect())
+}
+
 /// Streams the driving (rarest) token's active postings (`TokProbe::iter_active`,
 /// no per-token merged-`Vec` materialization — the 500k-hot-doc AND perf fix)
 /// and probes every other token either with a streaming zipper cursor
@@ -198,12 +242,15 @@ fn should_use_zipper(posts: &[TokProbe<'_>], drive: usize, drive_len: usize) -> 
 /// strategies and to the old per-token merged-postings walk. Returns the
 /// UNSORTED scores — see `build_single_token_ranked`'s doc comment on why.
 pub(super) fn build_and_ranked(input: AndRankInput<'_>) -> Vec<(u32, f32)> {
-    let mut ranked = Vec::with_capacity(input.drive_len);
     let segment_doc_lens = input
         .idx
         .segment
         .as_ref()
         .and_then(|seg| seg.text_doc_lens());
+    if let Some(ranked) = aligned_live_ranked(&input, segment_doc_lens) {
+        return ranked;
+    }
+    let mut ranked = Vec::with_capacity(input.drive_len);
     if should_use_zipper(input.posts, input.drive, input.drive_len) {
         let mut cursors: Vec<Option<ZipCursor<'_>>> = input
             .posts

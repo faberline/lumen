@@ -1,0 +1,134 @@
+{
+  "repo": "faberline/lumen",
+  "head": "11165fcc69d666f2796df419baa612f0083f7e04",
+  "source_run": 41024508735,
+  "source_attempt": 1,
+  "source_conclusion": "failure",
+  "definition_only": true,
+  "rows": [
+    {
+      "package": "lumen",
+      "profile": "all-features"
+    },
+    {
+      "package": "lumen",
+      "profile": "default"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:backup"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:delegated-auth"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:issue"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:jieba"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:operator"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:otel"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:raft-wal"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:release"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:report-issue"
+    },
+    {
+      "package": "lumen",
+      "profile": "feature:self-update"
+    },
+    {
+      "package": "lumen",
+      "profile": "no-default"
+    },
+    {
+      "package": "lumen-access",
+      "profile": "all-features"
+    },
+    {
+      "package": "lumen-access",
+      "profile": "default"
+    },
+    {
+      "package": "lumen-access",
+      "profile": "feature:delegated-auth"
+    },
+    {
+      "package": "lumen-access",
+      "profile": "no-default"
+    },
+    {
+      "package": "lumen-index",
+      "profile": "all-features"
+    },
+    {
+      "package": "lumen-index",
+      "profile": "default"
+    },
+    {
+      "package": "lumen-index",
+      "profile": "feature:backup"
+    },
+    {
+      "package": "lumen-index",
+      "profile": "feature:jieba"
+    },
+    {
+      "package": "lumen-index",
+      "profile": "feature:operator"
+    },
+    {
+      "package": "lumen-index",
+      "profile": "feature:raft-wal"
+    },
+    {
+      "package": "lumen-index",
+      "profile": "no-default"
+    },
+    {
+      "package": "lumen-operator",
+      "profile": "default"
+    },
+    {
+      "package": "lumen-replication",
+      "profile": "default"
+    },
+    {
+      "package": "lumen-shared-kernel",
+      "profile": "default"
+    },
+    {
+      "package": "lumen-storage",
+      "profile": "all-features"
+    },
+    {
+      "package": "lumen-storage",
+      "profile": "default"
+    },
+    {
+      "package": "lumen-storage",
+      "profile": "feature:test-support"
+    },
+    {
+      "package": "lumen-storage",
+      "profile": "no-default"
+    }
+  ]
+}
