@@ -215,6 +215,9 @@ mod capacity_http_contract {
         let shared_wal: SharedWal = wal.clone();
         let writer =
             WriteCoordinator::start_from_with_aof(shared_wal, engine.clone(), 0, aof.clone());
+        writer.set_capacity_trace(Arc::new(
+            lumen_index::persistence::infrastructure::segment_rdb_store::diagnostic::CheckpointCapacityTrace,
+        ));
         let sink_writer: Arc<dyn WriteSink> = writer.clone();
         let checkpoint = Arc::new(SegmentCheckpointSink {
             engine: engine.clone(),

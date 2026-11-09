@@ -6,7 +6,34 @@ use lumen::types::{
     SearchRequest, TermQuery,
 };
 
+use crate::cli::serve::WalBackend;
 use crate::serve::bootstrap::apply_bootstrap_seed;
+use crate::serve::bootstrap::{durability_mode, DurabilityMode};
+
+#[test]
+fn durability_mode_embedded_depends_on_data_dir() {
+    assert_eq!(
+        durability_mode(WalBackend::Embedded, None),
+        DurabilityMode::Ephemeral
+    );
+    assert_eq!(
+        durability_mode(WalBackend::Embedded, Some(std::path::Path::new("data"))),
+        DurabilityMode::Persistent
+    );
+}
+
+#[cfg(feature = "raft-wal")]
+#[test]
+fn durability_mode_raft_is_persistent_with_or_without_data_dir() {
+    assert_eq!(
+        durability_mode(WalBackend::Raft, None),
+        DurabilityMode::Persistent
+    );
+    assert_eq!(
+        durability_mode(WalBackend::Raft, Some(std::path::Path::new("data"))),
+        DurabilityMode::Persistent
+    );
+}
 
 #[test]
 fn bootstrap_seed_file_restores_snapshot_before_catchup() {

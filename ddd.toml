@@ -601,14 +601,8 @@ subject = "ingest.domain"
 reason = "The schedule selects and re-arms from the change budget's Snapshot and OwnerCapacityState and compares them against CHECKPOINT_TRIGGER. P2: the schedule takes its own value with the counters it reads and the trigger, which the driver fills from the budget."
 
 # ingest and persistence depend on each other (E16). depends_on declares
-# persistence -> ingest; the coordinator's use of the checkpoint diagnostic, of
-# the AOF writer and of the capacity fallback is the other direction.
-
-[[exceptions]]
-rule = "B4"
-paths = ["crates/lumen-index/src/ingest/application/write_coordinator/capacity.rs"]
-subject = "persistence.infrastructure"
-reason = "The coordinator's capacity refusal records a numeric event in the checkpoint diagnostic trace (checkpoint_diagnostic_enabled, send_numeric_event, DiagnosticCaptureToken) so one trace shows both sides of a capacity wait. P2: ingest defines a capacity-trace port the persistence diagnostic implements, which breaks the cycle."
+# persistence -> ingest; the coordinator uses the AOF writer and the
+# capacity fallback in the other direction.
 
 [[exceptions]]
 rule = "B4"
