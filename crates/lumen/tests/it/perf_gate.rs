@@ -764,6 +764,18 @@ fn median_statistic_and_ignored_inventory() {
                 false,
             ),
             (
+                "request_pump_separates_held_tasks_from_live_requests",
+                false,
+            ),
+            (
+                "semantic_failure_keeps_status_200_and_a_bounded_body",
+                false,
+            ),
+            (
+                "original_request_error_journal_shape_has_124_records_without_overflow",
+                false,
+            ),
+            (
                 "request_pump_capacity_wait_honors_input_window_deadline",
                 false,
             ),
@@ -6719,7 +6731,10 @@ mod durable_workload {
     #[derive(Default, Clone, Copy)]
     struct PumpSecond {
         attempts: u64,
-        in_flight_high_water: usize,
+        /// JoinSet::len(): live tasks plus finished tasks not yet joined.
+        held_tasks_high_water: usize,
+        /// Tasks whose future has started and not yet finished.
+        live_requests_high_water: usize,
         blocked_pushes: u64,
         blocked_push_us: u64,
         blocked_push_max_us: u64,
@@ -6820,9 +6835,10 @@ mod durable_workload {
         fn emit(&self) {
             for ((second, endpoint), sample) in &self.seconds {
                 eprintln!(
-                    "PERF_REQUEST_PUMP second={second} endpoint={endpoint} attempts={} inflight_hwm={} blocked_pushes={} blocked_push_us={} blocked_push_max_us={} task_start_lag_avg_us={} task_start_lag_max_us={} ledger_body_start_lag_avg_us={} ledger_body_start_lag_max_us={} send_call_lag_avg_us={} send_call_lag_max_us={} completed={} send_call_to_response_completion_avg_us={} send_call_to_response_completion_max_us={}",
+                    "PERF_REQUEST_PUMP second={second} endpoint={endpoint} attempts={} held_tasks_hwm={} live_requests_hwm={} blocked_pushes={} blocked_push_us={} blocked_push_max_us={} task_start_lag_avg_us={} task_start_lag_max_us={} ledger_body_start_lag_avg_us={} ledger_body_start_lag_max_us={} send_call_lag_avg_us={} send_call_lag_max_us={} completed={} send_call_to_response_completion_avg_us={} send_call_to_response_completion_max_us={}",
                     sample.attempts,
-                    sample.in_flight_high_water,
+                    sample.held_tasks_high_water,
+                    sample.live_requests_high_water,
                     sample.blocked_pushes,
                     sample.blocked_push_us,
                     sample.blocked_push_max_us,
@@ -6963,6 +6979,7 @@ mod durable_workload {
         max_in_flight: usize,
         clock: Clock,
         trace: Option<Arc<StdMutex<PumpTrace>>>,
+        live: Arc<std::sync::atomic::AtomicUsize>,
     }
 
     impl RequestPump {
@@ -6976,6 +6993,7 @@ mod durable_workload {
                 max_in_flight,
                 clock,
                 trace,
+                live: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             }
         }
 
@@ -7042,6 +7060,7 @@ mod durable_workload {
             if let Some(trace) = &self.trace {
                 let clock = self.clock.clone();
                 let trace = trace.clone();
+                let live = self.live.clone();
                 self.tasks.spawn(async move {
                     let task_started = clock.elapsed();
                     let task_start_lag = task_started.saturating_sub(scheduled_at);
@@ -7050,6 +7069,9 @@ mod durable_workload {
                         let mut trace_guard =
                             trace.lock().expect("request pump trace mutex poisoned");
                         let sample = trace_guard.record(task_started.as_secs(), endpoint);
+                        let live_now = live.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                        sample.live_requests_high_water =
+                            sample.live_requests_high_water.max(live_now);
                         sample.task_start_lag_us += task_start_lag_us;
                         sample.task_start_lag_samples += 1;
                         sample.task_start_lag_max_us =
@@ -7063,6 +7085,7 @@ mod durable_workload {
                         }
                     }
                     future.await;
+                    live.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 });
                 let mut trace = self
                     .trace
@@ -7071,7 +7094,7 @@ mod durable_workload {
                     .lock()
                     .expect("request pump trace mutex poisoned");
                 let sample = trace.record(self.clock.elapsed().as_secs(), endpoint);
-                sample.in_flight_high_water = sample.in_flight_high_water.max(self.tasks.len());
+                sample.held_tasks_high_water = sample.held_tasks_high_water.max(self.tasks.len());
                 if endpoint == "index" {
                     trace.record_early_index(
                         scheduled_at,
@@ -7201,11 +7224,12 @@ mod durable_workload {
 
     /// A 2xx answer whose body does not account for every item. The ledger
     /// already counts it failed; journaling it keeps the response as evidence.
+    /// The record keeps status 200 and the bounded body.
     fn semantic_failure(message: String, response: &Value) -> PostJsonFailure {
         PostJsonFailure {
             error: Box::new(RequestFailure::synthetic(message, false)),
             outcome: Outcome::Failed,
-            status: None,
+            status: Some(200),
             body: Some(truncate_evidence_body(&response.to_string())),
             capacity_retry_after: None,
         }
@@ -11908,6 +11932,111 @@ mod durable_workload {
     }
 
     #[test]
+    fn request_pump_separates_held_tasks_from_live_requests() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build request-pump count unit-test runtime");
+        runtime.block_on(async {
+            let clock = Clock::new();
+            let trace = Arc::new(StdMutex::new(PumpTrace::default()));
+            let mut pump = RequestPump::new(2, clock.clone(), Some(trace.clone()));
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+            pump.push(
+                async {},
+                "index",
+                Duration::ZERO,
+                deadline,
+                Duration::from_secs(1),
+            )
+            .await
+            .expect("the first request fits within capacity");
+            tokio::task::yield_now().await;
+            pump.push(
+                async {},
+                "index",
+                Duration::ZERO,
+                deadline,
+                Duration::from_secs(1),
+            )
+            .await
+            .expect("the second request fits within capacity");
+            pump.drain("count test").await.expect("requests complete");
+
+            let trace = trace.lock().expect("request pump trace mutex poisoned");
+            let held = trace
+                .seconds
+                .values()
+                .map(|sample| sample.held_tasks_high_water)
+                .max()
+                .expect("telemetry sample exists");
+            let live = trace
+                .seconds
+                .values()
+                .map(|sample| sample.live_requests_high_water)
+                .max()
+                .expect("telemetry sample exists");
+            assert_eq!(held, 2);
+            assert_eq!(live, 1);
+            assert_ne!(held, live);
+        });
+    }
+
+    #[test]
+    fn semantic_failure_keeps_status_200_and_a_bounded_body() {
+        let small = json!({"indexed": 1});
+        let failure = semantic_failure("x".to_owned(), &small);
+        assert_eq!(failure.status, Some(200));
+        assert_eq!(failure.body.as_deref(), Some(small.to_string().as_str()));
+        assert_eq!(failure.outcome, Outcome::Failed);
+
+        let large = json!({"errors": vec!["e"; 1000]});
+        let failure = semantic_failure("x".to_owned(), &large);
+        assert_eq!(failure.status, Some(200));
+        let body = failure.body.expect("a semantic failure keeps its body");
+        assert!(body.ends_with("[truncated after 512 bytes]"), "{body}");
+        assert!(
+            body.len() <= REQUEST_ERROR_BODY_MAX_BYTES + "...[truncated after 512 bytes]".len()
+        );
+    }
+
+    #[test]
+    fn original_request_error_journal_shape_has_124_records_without_overflow() {
+        let mut journal = RequestErrorJournal::default();
+        for _ in 0..2 {
+            journal.push(RequestErrorRecord {
+                elapsed_since_clock_start: Duration::ZERO,
+                endpoint: "replace".to_owned(),
+                identifier: "capacity".to_owned(),
+                error: RequestFailure::synthetic("capacity".to_owned(), false),
+                status: Some(429),
+                body: None,
+            });
+        }
+        for _ in 0..122 {
+            journal.push(RequestErrorRecord {
+                elapsed_since_clock_start: Duration::ZERO,
+                endpoint: "replace".to_owned(),
+                identifier: "timeout".to_owned(),
+                error: RequestFailure::synthetic("timeout".to_owned(), true),
+                status: None,
+                body: None,
+            });
+        }
+        assert_eq!(journal.records.len(), 124);
+        assert_eq!(journal.overflow, 0);
+        let counts = journal.interval_failures.values();
+        assert_eq!(counts.clone().map(|c| c.http_429).sum::<u64>(), 2);
+        assert_eq!(counts.clone().map(|c| c.timeout).sum::<u64>(), 122);
+        assert_eq!(
+            counts
+                .map(|c| c.other_http + c.other_transport)
+                .sum::<u64>(),
+            0
+        );
+    }
+
+    #[test]
     fn request_pump_capacity_wait_honors_input_window_deadline() {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -11958,7 +12087,7 @@ mod durable_workload {
                 .next()
                 .expect("attempts are recorded");
             assert_eq!(sample.attempts, 2);
-            assert_eq!(sample.in_flight_high_water, 1);
+            assert_eq!(sample.held_tasks_high_water, 1);
             assert_eq!(sample.blocked_pushes, 1);
             assert!(sample.blocked_push_us > 0);
         });
@@ -12033,7 +12162,7 @@ mod durable_workload {
                 .next()
                 .expect("telemetry sample exists");
             assert_eq!(sample.attempts, 1);
-            assert_eq!(sample.in_flight_high_water, 1);
+            assert_eq!(sample.held_tasks_high_water, 1);
             assert_eq!(sample.task_start_lag_samples, 1);
             assert_eq!(sample.ledger_body_start_lag_samples, 1);
             assert_eq!(sample.send_call_lag_samples, 1);

@@ -310,7 +310,10 @@ pub struct WorkloadReport {
     pub requests_started_in_input: u64,
     pub requests_finished_in_input: u64,
     pub requests_completed_in_input: u64,
+    /// Legacy value: failed requests plus failed items. Use requests_failed and items_failed for counts in one unit.
     pub request_errors: u64,
+    /// Requests whose final outcome was not Succeeded. One per failed HTTP request. Unlike request_errors, it does not add one per failed item.
+    pub requests_failed: u64,
     pub client_cancellations: u64,
     /// Typed `pending_change_capacity` refusals, one per refused attempt.
     pub capacity_refusals: u64,
@@ -412,6 +415,7 @@ pub struct WorkloadLedger {
     requests_completed_in_input: u64,
     client_cancellations: u64,
     request_errors: u64,
+    requests_failed: u64,
     capacity_refusals: u64,
     capacity_refused_requests: u64,
     capacity_refused_requests_failed: u64,
@@ -475,6 +479,7 @@ impl WorkloadLedger {
             requests_completed_in_input: 0,
             client_cancellations: 0,
             request_errors: 0,
+            requests_failed: 0,
             capacity_refusals: 0,
             capacity_refused_requests: 0,
             capacity_refused_requests_failed: 0,
@@ -904,6 +909,7 @@ impl WorkloadLedger {
             }
         } else {
             self.request_errors += 1;
+            self.requests_failed += 1;
         }
 
         for pending in request.items {
@@ -1109,6 +1115,7 @@ impl WorkloadLedger {
             requests_finished_in_input: self.requests_finished_in_input,
             requests_completed_in_input: self.requests_completed_in_input,
             request_errors: self.request_errors,
+            requests_failed: self.requests_failed,
             client_cancellations: self.client_cancellations,
             capacity_refusals: self.capacity_refusals,
             capacity_refused_requests: self.capacity_refused_requests,
@@ -2907,5 +2914,58 @@ mod tests {
             .expect("the matrix primary must not discard update or delete operations");
         assert_eq!(report.docops_offered_in_input, 3);
         assert_eq!(report.docops_completed_in_input, 3);
+    }
+
+    #[test]
+    fn original_journal_shape_reconciles_requests_items_and_legacy_errors() {
+        let mut ledger = ledger(Endpoint::Replace, 1);
+        for request in 0..120u64 {
+            ledger.begin_operation(
+                at(0),
+                DocumentOperation::replace(request, format!("doc-{request}")),
+            );
+            ledger.submit_request(Request::new(
+                request,
+                Endpoint::Replace,
+                at(0),
+                at(0),
+                vec![RequestItem::new(request, REPLACE_ITEM)],
+            ));
+            ledger.record_item_result(request, request, REPLACE_ITEM, Outcome::Failed);
+            ledger.finish_request(request, at(1), Outcome::Failed);
+        }
+        for index in 0..4u64 {
+            let id = 1000 + index;
+            let fields: Vec<String> = (0..1000).map(|f| format!("field-{f}")).collect();
+            ledger.begin_operation(
+                at(0),
+                DocumentOperation::index(id, format!("doc-{id}"), fields.clone()),
+            );
+            ledger.submit_request(Request::new(
+                id,
+                Endpoint::Index,
+                at(0),
+                at(0),
+                fields
+                    .iter()
+                    .map(|field| RequestItem::new(id, field.as_str()))
+                    .collect(),
+            ));
+            for field in &fields {
+                ledger.record_item_result(id, id, field.as_str(), Outcome::Failed);
+            }
+            ledger.finish_request(id, at(1), Outcome::Failed);
+        }
+
+        let report = ledger.report();
+        assert_eq!(report.requests_finished, 124);
+        assert_eq!(report.requests_failed, 124);
+        assert_eq!(report.requests_completed, 0);
+        assert_eq!(report.items_failed, 4120);
+        assert_eq!(report.request_errors, 4244);
+        assert_eq!(
+            report.requests_failed + report.items_failed,
+            report.request_errors
+        );
     }
 }
