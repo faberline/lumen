@@ -20,8 +20,8 @@ use lumen::wal::{MemWal, SharedWal};
 
 use crate::cli::serve::{ServeArgs, WalBackend};
 use crate::serve::bootstrap::{
-    apply_bootstrap_seed, cbor_cold_start, load_search_shard_segment_roots, recovery_phase_start,
-    resolve_wal_backend, use_segment_persistence,
+    apply_bootstrap_seed, cbor_cold_start, durability_mode, load_search_shard_segment_roots,
+    recovery_phase_start, resolve_wal_backend, use_segment_persistence, DurabilityMode,
 };
 use crate::serve::restore::segment_restore_sink;
 use crate::serve::telemetry::init_tracing;
@@ -81,6 +81,13 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
     // StatefulSet runs >1 replica per shard, else embedded — so single-node /
     // local dev needs no flags or cluster env.
     let backend = resolve_wal_backend(args.wal);
+    match durability_mode(backend, args.data_dir.as_deref().map(std::path::Path::new)) {
+        DurabilityMode::Ephemeral => tracing::info!(
+            durability = "ephemeral",
+            "acknowledged writes are lost on restart"
+        ),
+        DurabilityMode::Persistent => tracing::info!(durability = "persistent", "durability mode"),
+    }
     let segment_mode = use_segment_persistence(&args);
     // The segment-checkpoint store — built only in segment mode.
     let segment_store: Option<Arc<lumen::segment_rdb::SegmentRdbStore>> = if segment_mode {
