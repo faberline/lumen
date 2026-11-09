@@ -1,7 +1,8 @@
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
+use crate::ingest::application::ports::capacity_trace::CapacityTrace;
 use crate::ingest::application::write_coordinator::capacity::claim_diagnostic_refusal_revision;
 use crate::ingest::application::write_coordinator::tests::{
     admitted_index_entry, hnsw_schema, keyword_schema,
@@ -85,6 +86,44 @@ async fn full_local_refusal_emits_one_numeric_diagnostic_without_wal_publish() {
     );
     assert!(
         matches!(numeric[0], Event::Refusal { revision: 1.., present: true, requested: 1.., hard_limit, .. } if hard_limit == 1024 * 1024)
+    );
+}
+
+struct OffTrace(AtomicUsize);
+
+impl CapacityTrace for OffTrace {
+    fn enabled(&self) -> bool {
+        false
+    }
+
+    fn refusal(&self, _: u64, _: bool, _: usize, _: usize, _: usize) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[tokio::test]
+async fn refusal_with_disabled_trace_records_nothing() {
+    let budget = ChangeBudget::with_hard_limit(1024 * 1024);
+    let engine = Arc::new(Engine::with_change_budget(budget.clone()));
+    let wal = Arc::new(MemWal::new());
+    let coord = WriteCoordinator::start(wal.clone(), engine);
+    let trace = Arc::new(OffTrace(AtomicUsize::new(0)));
+    coord.set_capacity_trace(trace.clone());
+    let foreign = budget.owner();
+    let _held = foreign.try_reserve(1024 * 1024).unwrap();
+    let error = coord
+        .submit(RaftLogEntry::CreateCollection {
+            collection_id: "new".into(),
+            req: keyword_schema(),
+        })
+        .await
+        .unwrap_err();
+    assert!(error.downcast_ref::<PendingChangeCapacity>().is_some());
+    assert_eq!(wal.latest_seq().await.unwrap(), 0);
+    assert_eq!(
+        trace.0.load(Ordering::SeqCst),
+        0,
+        "a disabled trace must not receive refusals"
     );
 }
 
