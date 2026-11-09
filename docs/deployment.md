@@ -204,7 +204,7 @@ these jobs against the exact commit:
 | `container-smoke` | The Rust suite `e2e::standalone_container::` (`bind` and `durable`) under docker against the candidate root digest. |
 | `container-smoke-arm64` | The same suite on a native arm64 runner, so docker runs the root digest's `linux/arm64` child. |
 | `cloud-free-config` | Terraform and Kustomize static checks; it calls no cloud API. |
-| `perf-coarse` | The release-profile `perf_gate::` cases except the thirty-minute durable workload. It still blocks the release. |
+| `perf-coarse` | The release-profile `perf_gate::` cases except the thirty-minute durable workload, then the index performance gates and the native performance contracts. It still blocks the release. |
 | `verify-candidate` | `scripts/verify-release-candidate.sh`: supply-chain verification only. |
 | `gke-e2e` | `e2e::overlay::` and `e2e::operator::` on the shared GKE test cluster through `gke-test.yml`. |
 | `result` | Writes `final-candidate-manifest.json`, whose `jobs` map binds every job above. |
