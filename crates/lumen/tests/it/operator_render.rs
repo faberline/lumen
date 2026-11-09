@@ -1506,20 +1506,34 @@ fn render_topology_1x1_with_zones() {
     let objs = render(&lumen("search", spec));
     let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
 
-    let node_terms = &pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
-    assert_eq!(node_terms[0]["matchExpressions"][0]["key"], "topology.kubernetes.io/zone");
+    let node_terms = &pod["affinity"]["nodeAffinity"]
+        ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["key"],
+        "topology.kubernetes.io/zone"
+    );
     assert_eq!(node_terms[0]["matchExpressions"][0]["operator"], "In");
-    assert_eq!(node_terms[0]["matchExpressions"][0]["values"], serde_json::json!(["us-central1-a"]));
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["values"],
+        serde_json::json!(["us-central1-a"])
+    );
 
     assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            ["topologyKey"],
         "kubernetes.io/hostname"
     );
 
     let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
-    let zone_spread = spreads.iter().find(|s| s["topologyKey"] == "topology.kubernetes.io/zone").unwrap();
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .unwrap();
     assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
-    let host_spread = spreads.iter().find(|s| s["topologyKey"] == "kubernetes.io/hostname").unwrap();
+    let host_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "kubernetes.io/hostname")
+        .unwrap();
     assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
 }
 
@@ -1535,13 +1549,23 @@ fn render_topology_nx1_with_zones() {
     let objs = render(&lumen("search", spec));
     let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
 
-    let node_terms = &pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
-    assert_eq!(node_terms[0]["matchExpressions"][0]["key"], "topology.kubernetes.io/zone");
+    let node_terms = &pod["affinity"]["nodeAffinity"]
+        ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["key"],
+        "topology.kubernetes.io/zone"
+    );
     assert_eq!(node_terms[0]["matchExpressions"][0]["operator"], "In");
-    assert_eq!(node_terms[0]["matchExpressions"][0]["values"], serde_json::json!(["us-central1-a"]));
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["values"],
+        serde_json::json!(["us-central1-a"])
+    );
 
     let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
-    let zone_spread = spreads.iter().find(|s| s["topologyKey"] == "topology.kubernetes.io/zone").unwrap();
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .unwrap();
     assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
 }
 
@@ -1561,8 +1585,12 @@ fn render_topology_nx3_three_zones() {
     let objs = render(&lumen("search", spec));
     let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
 
-    let node_terms = &pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
-    assert_eq!(node_terms[0]["matchExpressions"][0]["key"], "topology.kubernetes.io/zone");
+    let node_terms = &pod["affinity"]["nodeAffinity"]
+        ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["key"],
+        "topology.kubernetes.io/zone"
+    );
     assert_eq!(node_terms[0]["matchExpressions"][0]["operator"], "In");
     assert_eq!(
         node_terms[0]["matchExpressions"][0]["values"],
@@ -1570,15 +1598,22 @@ fn render_topology_nx3_three_zones() {
     );
 
     assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            ["topologyKey"],
         "kubernetes.io/hostname"
     );
 
     let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
-    let zone_spread = spreads.iter().find(|s| s["topologyKey"] == "topology.kubernetes.io/zone").unwrap();
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .unwrap();
     assert_eq!(zone_spread["whenUnsatisfiable"], "DoNotSchedule");
 
-    let host_spread = spreads.iter().find(|s| s["topologyKey"] == "kubernetes.io/hostname").unwrap();
+    let host_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "kubernetes.io/hostname")
+        .unwrap();
     assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
 }
 
@@ -1595,14 +1630,21 @@ fn render_topology_two_replica_compatibility_zones_unset() {
     assert!(pod["affinity"].get("nodeAffinity").is_none());
 
     assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            ["topologyKey"],
         "kubernetes.io/hostname"
     );
 
     let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
-    let zone_spread = spreads.iter().find(|s| s["topologyKey"] == "topology.kubernetes.io/zone").unwrap();
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .unwrap();
     assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
-    let host_spread = spreads.iter().find(|s| s["topologyKey"] == "kubernetes.io/hostname").unwrap();
+    let host_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "kubernetes.io/hostname")
+        .unwrap();
     assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
 }
 
@@ -1614,7 +1656,9 @@ fn render_topology_nx3_missing_zones_rejected() {
     spec.voter_count = 3;
     spec.placement.zones = vec!["us-central1-a".into(), "us-central1-b".into()];
 
-    let err = spec.validate().expect_err("Nx3 with 2 zones must be rejected");
+    let err = spec
+        .validate()
+        .expect_err("Nx3 with 2 zones must be rejected");
     assert!(err.contains("placement.zones"));
 }
 
@@ -1642,7 +1686,9 @@ fn render_never_creates_cluster_or_node_pool_and_zones_rejects_machine_type() {
         "us-central1-b".into(),
         "us-central1-c".into(),
     ];
-    let err = bad_spec.validate().expect_err("machine type in placement.zones must be rejected");
+    let err = bad_spec
+        .validate()
+        .expect_err("machine type in placement.zones must be rejected");
     assert!(err.contains("placement.zones"));
     assert!(err.contains("machine type"));
 }

@@ -44,9 +44,7 @@ impl LumenSpec {
                     ));
                 }
                 if !seen.insert(zone) {
-                    return Err(format!(
-                        "placement.zones contains duplicate zone: `{zone}`"
-                    ));
+                    return Err(format!("placement.zones contains duplicate zone: `{zone}`"));
                 }
             }
             if self.replicas_per_shard > 1 {

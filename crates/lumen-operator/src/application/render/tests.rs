@@ -103,13 +103,18 @@ fn serving_statefulset_with_zones_renders_node_affinity_and_donotschedule() {
 
     // Hostname anti-affinity stays
     assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]["topologyKey"],
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            ["topologyKey"],
         "kubernetes.io/hostname"
     );
 
     // Node affinity merged
-    let terms = &pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
-    assert_eq!(terms[0]["matchExpressions"][0]["key"], "topology.kubernetes.io/zone");
+    let terms = &pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]
+        ["nodeSelectorTerms"];
+    assert_eq!(
+        terms[0]["matchExpressions"][0]["key"],
+        "topology.kubernetes.io/zone"
+    );
     assert_eq!(terms[0]["matchExpressions"][0]["operator"], "In");
     assert_eq!(
         terms[0]["matchExpressions"][0]["values"],
@@ -117,7 +122,9 @@ fn serving_statefulset_with_zones_renders_node_affinity_and_donotschedule() {
     );
 
     // Topology spread constraints: zone has DoNotSchedule when replicasPerShard > 1, hostname stays ScheduleAnyway
-    let spreads = pod["topologySpreadConstraints"].as_array().expect("spreads");
+    let spreads = pod["topologySpreadConstraints"]
+        .as_array()
+        .expect("spreads");
     let zone_spread = spreads
         .iter()
         .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
@@ -142,7 +149,9 @@ fn serving_statefulset_without_zones_renders_no_node_affinity() {
     let pod = &sts["spec"]["template"]["spec"];
 
     assert!(pod["affinity"].get("nodeAffinity").is_none());
-    let spreads = pod["topologySpreadConstraints"].as_array().expect("spreads");
+    let spreads = pod["topologySpreadConstraints"]
+        .as_array()
+        .expect("spreads");
     let zone_spread = spreads
         .iter()
         .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
