@@ -339,3 +339,189 @@ async fn aof_gap_rejects_every_later_applied_record() {
         "the unresolved head and every later record must stay outside the AOF"
     );
 }
+
+fn index_entry(id: &str, value: &str) -> RaftLogEntry {
+    RaftLogEntry::Index {
+        collection_id: "u".into(),
+        req: IndexRequest {
+            items: vec![IndexItem {
+                external_id: id.into(),
+                field: "email".into(),
+                value: FieldValue::String(value.into()),
+                version: None,
+            }],
+            request_id: None,
+        },
+    }
+}
+
+/// Pins the durable-write rule for the embedded (AOF) backend.
+///
+/// Embedded serving uses `FsyncPolicy::EverySec`, so this guarantee is
+/// process-crash durability (the frame reached the OS), not power-loss
+/// durability. The fsync policy is deliberately unchanged here.
+///
+/// Negative control: moving the AOF append after the waiter `complete(...)`
+/// in `apply_loop.rs`, or skipping the append, must make the AOF sequence
+/// assertion or the cold-restart document count fail.
+#[tokio::test]
+async fn acknowledged_writes_are_in_the_aof_and_survive_a_cold_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let aof_path = dir.path().join("aof.log");
+    let aof = Arc::new(Mutex::new(
+        crate::persistence::infrastructure::aof::aof_writer::AofWriter::open_with_policy(
+            &aof_path,
+            crate::persistence::infrastructure::aof::FsyncPolicy::EverySec,
+        )
+        .unwrap(),
+    ));
+    let engine = Arc::new(Engine::new());
+    let coord = WriteCoordinator::start_from_with_aof(Arc::new(MemWal::new()), engine, 0, aof);
+
+    coord
+        .submit(RaftLogEntry::CreateCollection {
+            collection_id: "u".into(),
+            req: keyword_schema(),
+        })
+        .await
+        .unwrap();
+    coord.submit(index_entry("u1", "one@x.test")).await.unwrap();
+    coord.submit(index_entry("u2", "two@x.test")).await.unwrap();
+    coord
+        .submit(index_entry("u3", "three@x.test"))
+        .await
+        .unwrap();
+
+    // Each acknowledged write is already readable from the AOF: the test does
+    // not flush or sync the writer itself.
+    let mut seqs = Vec::new();
+    crate::persistence::infrastructure::aof::replay::AofReader::replay(&aof_path, 0, |seq, _| {
+        seqs.push(seq)
+    })
+    .unwrap();
+    assert_eq!(seqs, vec![1, 2, 3, 4]);
+
+    // Simulated cold restart: drop the coordinator (and with it the writer),
+    // then rebuild a fresh engine from the AOF alone.
+    drop(coord);
+    let restarted = Arc::new(Engine::new());
+    assert_eq!(
+        crate::persistence::infrastructure::aof::replay::replay_aof_into(&restarted, &aof_path, 0)
+            .unwrap(),
+        4
+    );
+    assert_eq!(restarted.stats("u").unwrap().documents_indexed, 3);
+}
+
+/// Pins the pre-commit failure: when the AOF persist fails, the write is
+/// rejected with `RestartRequired` (not `StorageFullError`), the value never
+/// becomes visible in the live engine, and it is absent after a cold restart.
+#[tokio::test]
+async fn aof_persist_failure_is_rejected_and_absent_after_cold_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let aof_path = dir.path().join("aof.log");
+    let aof = Arc::new(Mutex::new(
+        crate::persistence::infrastructure::aof::aof_writer::AofWriter::open(&aof_path).unwrap(),
+    ));
+    let engine = Arc::new(Engine::new());
+    let coord = WriteCoordinator::start_from_with_aof(
+        Arc::new(MemWal::new()),
+        engine.clone(),
+        0,
+        aof.clone(),
+    );
+
+    coord
+        .submit(RaftLogEntry::CreateCollection {
+            collection_id: "u".into(),
+            req: keyword_schema(),
+        })
+        .await
+        .unwrap();
+    coord
+        .submit(index_entry("u1", "kept@x.test"))
+        .await
+        .unwrap();
+
+    aof.lock()
+        .unwrap()
+        .inject_failure_once(std::io::ErrorKind::PermissionDenied);
+    let error = coord
+        .submit(index_entry("u2", "lost@x.test"))
+        .await
+        .unwrap_err();
+    assert!(error.downcast_ref::<RestartRequired>().is_some(), "{error}");
+    assert!(
+        error.downcast_ref::<StorageFullError>().is_none(),
+        "a non-ENOSPC persist failure must not be classified as storage full: {error}"
+    );
+    assert!(coord.is_restart_required());
+    // The failed value never became visible in the live engine.
+    assert_eq!(engine.stats("u").unwrap().documents_indexed, 1);
+
+    let mut seqs = Vec::new();
+    crate::persistence::infrastructure::aof::replay::AofReader::replay(&aof_path, 0, |seq, _| {
+        seqs.push(seq)
+    })
+    .unwrap();
+    assert_eq!(seqs, vec![1, 2]);
+
+    drop(coord);
+    let restarted = Arc::new(Engine::new());
+    assert_eq!(
+        crate::persistence::infrastructure::aof::replay::replay_aof_into(&restarted, &aof_path, 0)
+            .unwrap(),
+        2
+    );
+    assert_eq!(restarted.stats("u").unwrap().documents_indexed, 1);
+}
+
+/// Pins the window between AOF persist and engine apply: a frame that reached
+/// the AOF is replayed exactly once on cold start, and replaying it again from
+/// the watermark does not duplicate it.
+#[tokio::test]
+async fn frame_written_before_apply_is_replayed_exactly_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let aof_path = dir.path().join("aof.log");
+    {
+        // Stands for: the frame was persisted, then the process stopped before
+        // the engine apply and before the waiter completed.
+        let mut writer =
+            crate::persistence::infrastructure::aof::aof_writer::AofWriter::open(&aof_path)
+                .unwrap();
+        writer
+            .append(
+                1,
+                &WalRecord::new(RaftLogEntry::CreateCollection {
+                    collection_id: "u".into(),
+                    req: keyword_schema(),
+                }),
+            )
+            .unwrap();
+        writer
+            .append(2, &WalRecord::new(index_entry("u1", "one@x.test")))
+            .unwrap();
+        writer.flush().unwrap();
+    }
+
+    let e1 = Arc::new(Engine::new());
+    assert_eq!(
+        crate::persistence::infrastructure::aof::replay::replay_aof_into(&e1, &aof_path, 0)
+            .unwrap(),
+        2
+    );
+    assert_eq!(e1.stats("u").unwrap().documents_indexed, 1);
+
+    // Replaying from the watermark (2) applies no frame: `replay` returns 0
+    // when none is applied, and the document count stays at 1.
+    assert_eq!(
+        crate::persistence::infrastructure::aof::replay::replay_aof_into(&e1, &aof_path, 2)
+            .unwrap(),
+        0
+    );
+    assert_eq!(e1.stats("u").unwrap().documents_indexed, 1);
+
+    let e2 = Arc::new(Engine::new());
+    crate::persistence::infrastructure::aof::replay::replay_aof_into(&e2, &aof_path, 0).unwrap();
+    assert_eq!(e2.stats("u").unwrap().documents_indexed, 1);
+}
