@@ -145,7 +145,7 @@ fn encode_decode_round_trips_every_state() {
     assert_eq!(l.complete("c", b"x".to_vec(), T0), Ok(()));
     assert_eq!(l.begin("e", d("e"), T0).unwrap(), Begin::First);
     assert_eq!(l.complete("e", b"e".to_vec(), T0), Ok(()));
-    // "e" is expired at this point, but nothing has been gc'd yet.
+    // "e" is stored at T0 and becomes expired at T0 + RETENTION. Nothing is gc'd.
 
     let bytes = l.encode();
     let mut decoded = IdempotencyLedger::decode(&bytes).unwrap();
@@ -156,6 +156,11 @@ fn encode_decode_round_trips_every_state() {
     assert_eq!(
         decoded.begin("c", d("c"), later).unwrap(),
         Begin::Replay(b"x".to_vec())
+    );
+    // The expired-but-not-gc'd entry survives decode and is still expired.
+    assert_eq!(
+        decoded.begin("e", d("e"), T0 + RETENTION).unwrap(),
+        Begin::First
     );
 }
 
@@ -180,13 +185,11 @@ fn decode_rejects_bad_input() {
     let valid = l.encode();
 
     for i in 0..valid.len() {
-        assert!(
-            decode_err(&valid[..i]).is_some(),
-            "prefix of {i} bytes must be rejected"
+        assert_eq!(
+            decode_err(&valid[..i]),
+            Some(LedgerError::Truncated),
+            "prefix of {i} bytes must be Truncated"
         );
-    }
-    if valid.len() >= 4 {
-        assert_eq!(decode_err(&valid[..3]), Some(LedgerError::Truncated));
     }
 
     let mut bad_magic = valid.clone();
