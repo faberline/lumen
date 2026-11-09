@@ -203,6 +203,7 @@ spec:
                     minimum: 0.0
                     nullable: true
                   migrationBytesPerSec:
+                    description: 'Recorded and echoed into status, but not enforced: reshard copies run unthrottled. Throttling is reshard policy that core will own.'
                     type: integer
                     minimum: 0.0
                     nullable: true
@@ -512,6 +513,7 @@ spec:
                     default: ''
                     type: string
                   migrationBytesPerSec:
+                    description: 'Echo of `spec.reshardPolicy.migrationBytesPerSec`. The value is recorded but not enforced: reshard copies run unthrottled.'
                     type: integer
                     minimum: 0.0
                     nullable: true
@@ -758,6 +760,7 @@ spec:
                         minimum: 0.0
                         nullable: true
                       migrationBytesPerSec:
+                        description: 'Recorded and echoed into status, but not enforced: reshard copies run unthrottled. Throttling is reshard policy that core will own.'
                         type: integer
                         minimum: 0.0
                         nullable: true
