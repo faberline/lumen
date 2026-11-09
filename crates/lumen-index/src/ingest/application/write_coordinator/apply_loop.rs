@@ -48,8 +48,9 @@ impl WriteCoordinator {
             has_local_aof: aof.is_some(),
             capacity_relief_requested: AtomicBool::new(false),
             diagnostic_refusal_revision: AtomicU64::new(0),
+            capacity_trace: Mutex::new(None),
             #[cfg(test)]
-            diagnostic_capture: Mutex::new(None),
+            diagnostic_capture_enabled: AtomicBool::new(false),
             layer_capacity_owner: Mutex::new(None),
             applied: AtomicU64::new(from_seq),
             completions: Mutex::new(CompletionState {
