@@ -183,11 +183,7 @@ impl WriteCoordinator {
         let mut diagnostic = WritePhase::begin(
             kind,
             #[cfg(test)]
-            self.diagnostic_capture
-                .lock()
-                .ok()
-                .and_then(|token| *token)
-                .is_some(),
+            self.diagnostic_capture_enabled.load(Ordering::Acquire),
         );
         let reservation = self
             .admit_local_record_with_relief(&entry, capacity_deadline)

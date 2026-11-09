@@ -1,7 +1,8 @@
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
+use crate::ingest::application::ports::capacity_trace::CapacityTrace;
 use crate::ingest::application::write_coordinator::capacity::claim_diagnostic_refusal_revision;
 use crate::ingest::application::write_coordinator::tests::{
     admitted_index_entry, hnsw_schema, keyword_schema,
@@ -67,7 +68,7 @@ async fn full_local_refusal_emits_one_numeric_diagnostic_without_wal_publish() {
     engine.create_collection("u", keyword_schema()).unwrap();
     let wal = Arc::new(MemWal::new());
     let coord = WriteCoordinator::start(wal.clone(), engine);
-    coord.set_diagnostic_capture(capture.token());
+    coord.set_diagnostic_capture(Arc::new(capture.token()));
     let filler = budget.owner();
     let _held = filler
         .try_reserve(1024 * 1024 - budget.snapshot().total)
@@ -88,6 +89,44 @@ async fn full_local_refusal_emits_one_numeric_diagnostic_without_wal_publish() {
     );
 }
 
+struct OffTrace(AtomicUsize);
+
+impl CapacityTrace for OffTrace {
+    fn enabled(&self) -> bool {
+        false
+    }
+
+    fn refusal(&self, _: u64, _: bool, _: usize, _: usize, _: usize) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[tokio::test]
+async fn refusal_with_disabled_trace_records_nothing() {
+    let budget = ChangeBudget::with_hard_limit(1024 * 1024);
+    let engine = Arc::new(Engine::with_change_budget(budget.clone()));
+    let wal = Arc::new(MemWal::new());
+    let coord = WriteCoordinator::start(wal.clone(), engine);
+    let trace = Arc::new(OffTrace(AtomicUsize::new(0)));
+    coord.set_capacity_trace(trace.clone());
+    let foreign = budget.owner();
+    let _held = foreign.try_reserve(1024 * 1024).unwrap();
+    let error = coord
+        .submit(RaftLogEntry::CreateCollection {
+            collection_id: "new".into(),
+            req: keyword_schema(),
+        })
+        .await
+        .unwrap_err();
+    assert!(error.downcast_ref::<PendingChangeCapacity>().is_some());
+    assert_eq!(wal.latest_seq().await.unwrap(), 0);
+    assert_eq!(
+        trace.0.load(Ordering::SeqCst),
+        0,
+        "a disabled trace must not receive refusals"
+    );
+}
+
 #[tokio::test]
 async fn foreign_budget_full_without_local_work_has_unlinked_numeric_refusal() {
     use crate::persistence::infrastructure::segment_rdb_store::diagnostic::{
@@ -99,7 +138,7 @@ async fn foreign_budget_full_without_local_work_has_unlinked_numeric_refusal() {
     let engine = Arc::new(Engine::with_change_budget(budget.clone()));
     let wal = Arc::new(MemWal::new());
     let coord = WriteCoordinator::start(wal.clone(), engine);
-    coord.set_diagnostic_capture(capture.token());
+    coord.set_diagnostic_capture(Arc::new(capture.token()));
     let foreign = budget.owner();
     let _held = foreign.try_reserve(1024 * 1024).unwrap();
     let error = coord
@@ -136,7 +175,11 @@ async fn hnsw_capacity_refusal_trace_keeps_applied_source_until_relief() {
     let engine = Arc::new(Engine::with_change_budget(budget.clone()));
     let wal = Arc::new(MemWal::new());
     let _slow = wal.subscribe_admitted(0).await.unwrap();
-    let coord = WriteCoordinator::start(wal.clone(), engine.clone());
+    let coord = WriteCoordinator::start_with_capacity_owner(
+        wal.clone(),
+        engine.clone(),
+        Box::new(crate::persistence::application::capacity::Fallback::default()),
+    );
 
     coord
         .submit(RaftLogEntry::CreateCollection {
@@ -300,7 +343,11 @@ async fn local_capacity_refusal_starts_checkpoint_owner_without_committed_waiter
     let budget = ChangeBudget::with_hard_limit(1024 * 1024);
     let engine = Arc::new(Engine::with_change_budget(budget.clone()));
     engine.create_collection("u", keyword_schema()).unwrap();
-    let coord = WriteCoordinator::start(Arc::new(MemWal::new()), engine);
+    let coord = WriteCoordinator::start_with_capacity_owner(
+        Arc::new(MemWal::new()),
+        engine,
+        Box::new(crate::persistence::application::capacity::Fallback::default()),
+    );
     let filler_owner = budget.owner();
     let _filler = filler_owner
         .try_reserve(1024 * 1024 - budget.snapshot().total)
@@ -319,7 +366,7 @@ async fn local_capacity_refusal_starts_checkpoint_owner_without_committed_waiter
             .layer_capacity_owner
             .lock()
             .expect("capacity owner poisoned")
-            .is_some(),
+            .is_active(),
         "a local refusal must create independent checkpoint maintenance"
     );
 }
@@ -357,7 +404,11 @@ async fn check_http_full_admission(release_after_refusal: bool, body_delay: std:
     let budget = ChangeBudget::new();
     let engine = Arc::new(Engine::with_change_budget(budget.clone()));
     let wal = Arc::new(MemWal::new());
-    let coord = WriteCoordinator::start(wal.clone(), engine.clone());
+    let coord = WriteCoordinator::start_with_capacity_owner(
+        wal.clone(),
+        engine.clone(),
+        Box::new(crate::persistence::application::capacity::Fallback::default()),
+    );
     coord
         .submit(RaftLogEntry::CreateCollection {
             collection_id: "u".into(),
@@ -459,7 +510,7 @@ async fn check_http_full_admission(release_after_refusal: bool, body_delay: std:
         tokio::task::spawn_blocking(move || owner.join()),
     )
     .await;
-    coord.layer_capacity_owner.lock().unwrap().take();
+    coord.layer_capacity_owner.lock().unwrap().stop();
     joined
         .expect("owned checkpoint cleanup deadline")
         .unwrap()
@@ -493,4 +544,65 @@ async fn check_http_full_admission(release_after_refusal: bool, body_delay: std:
         before + u64::from(!release_after_refusal)
     );
     assert!(budget.high_water_bytes() <= HARD_LIMIT);
+}
+
+#[tokio::test]
+async fn committed_record_waiting_on_layer_capacity_completes_when_fallback_checkpoints() {
+    let budget = ChangeBudget::with_hard_limit(1024 * 1024);
+    let engine = Arc::new(Engine::with_change_budget(budget.clone()));
+    engine.create_collection("u", keyword_schema()).unwrap();
+    let wal = Arc::new(MemWal::new());
+
+    // Pre-fill budget so committed apply will wait on layer capacity.
+    let filler_owner = budget.owner();
+    let filler = filler_owner
+        .try_reserve(1024 * 1024 - budget.snapshot().total)
+        .unwrap();
+
+    let record = crate::ingest::domain::wal_record::WalRecord::new(admitted_index_entry());
+    wal.publish(record).await.unwrap();
+
+    let coord = WriteCoordinator::start_with_capacity_owner(
+        wal.clone(),
+        engine.clone(),
+        Box::new(crate::persistence::application::capacity::Fallback::default()),
+    );
+
+    // Give the apply loop time to hit the capacity wait and ensure the fallback worker.
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !coord.layer_capacity_owner.lock().unwrap().is_active() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("coordinator without configured owner must start fallback worker before waiting");
+
+    assert_eq!(coord.applied_seq(), 0, "must wait while capacity is full");
+
+    // Release filler so the waiting committed record can complete.
+    drop(filler);
+
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while coord.applied_seq() < 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("committed record must complete and apply");
+
+    assert_eq!(coord.applied_seq(), 1);
+    assert_eq!(engine.stats("u").unwrap().documents_indexed, 1);
+}
+
+#[test]
+fn noop_capacity_owner_is_inactive_after_ensure() {
+    use crate::ingest::application::ports::{CapacityOwner, NoopCapacityOwner};
+
+    let engine = Arc::new(Engine::with_change_budget(ChangeBudget::with_hard_limit(
+        1024 * 1024,
+    )));
+    let mut owner = NoopCapacityOwner;
+    assert!(!owner.is_active());
+    assert!(owner.ensure(&engine).is_ok());
+    assert!(!owner.is_active());
 }
