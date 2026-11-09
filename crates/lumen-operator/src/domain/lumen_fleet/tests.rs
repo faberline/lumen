@@ -227,3 +227,27 @@ fn a_materialized_instance_carries_no_owner_reference() {
     assert!(seed["metadata"].get("ownerReferences").is_none(), "{seed}");
     assert_eq!(seed["metadata"]["labels"][FLEET_LABEL], json!("search"));
 }
+
+#[test]
+fn a_changed_override_changes_only_its_own_instance_and_plan_has_no_memory() {
+    let before = fleet(vec![instance("team-a", None), instance("team-b", None)]);
+    let after = fleet(vec![
+        instance("team-a", None),
+        instance("team-b", Some(json!({ "serving": { "cpu": "4" } }))),
+    ]);
+
+    let plan_before = plan(&before);
+    let plan_after = plan(&after);
+    assert_eq!(
+        ready(&plan_before[0]),
+        ready(&plan_after[0]),
+        "team-a has no override and must not change"
+    );
+    assert_eq!(ready(&plan_before[1])["serving"]["cpu"], json!("2"));
+    assert_eq!(ready(&plan_after[1])["serving"]["cpu"], json!("4"));
+
+    // Planning keeps no memory of earlier passes: the same input gives the
+    // same plan whether or not another plan ran before it.
+    assert_eq!(ready(&plan(&before)[1]), ready(&plan_before[1]));
+    assert_eq!(ready(&plan(&after)[1]), ready(&plan_after[1]));
+}

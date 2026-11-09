@@ -15,7 +15,7 @@ use crate::domain::lumen_spec::Lumen;
 
 /// Leader-election Lease for the fleet loop, independent of the main
 /// controller's so each can fail over on its own.
-const FLEET_LEASE_NAME: &str = "lumen-fleet";
+pub(crate) const FLEET_LEASE_NAME: &str = "lumen-fleet";
 
 /// How often the fleet re-materializes its instances.
 const FLEET_POLL_INTERVAL: Duration = Duration::from_secs(30);
