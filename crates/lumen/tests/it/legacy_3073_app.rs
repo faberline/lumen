@@ -46,13 +46,10 @@ fn drain(hosts: &mut [Option<DeterministicHost>]) -> Result<()> {
     loop {
         let mut progressed = false;
         for from in 0..hosts.len() {
-            loop {
-                let Some(to) = hosts[from]
-                    .as_ref()
-                    .and_then(|host| host.ready_peers().into_iter().next())
-                else {
-                    break;
-                };
+            while let Some(to) = hosts[from]
+                .as_ref()
+                .and_then(|host| host.ready_peers().into_iter().next())
+            {
                 let envelope = hosts[from]
                     .as_mut()
                     .expect("source host is live")

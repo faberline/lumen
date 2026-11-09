@@ -27,7 +27,7 @@ impl ByteRange {
     /// Parse validates the full record before it returns a scanner. A later
     /// iterator only reproduces that checked layout over the same immutable
     /// bytes, including the rebased slices used by StringList iteration.
-    fn validated_str<'a>(self, bytes: &'a [u8]) -> &'a str {
+    fn validated_str(self, bytes: &[u8]) -> &str {
         // SAFETY: parse validated this record layout and UTF-8 payloads. The
         // scanner retains the same immutable bytes for every iterator pass.
         unsafe { std::str::from_utf8_unchecked(&bytes[self.start..self.end]) }
@@ -239,16 +239,7 @@ pub(crate) enum FastIndexValue<'a> {
     StringList(FastStringList<'a>),
 }
 
-impl<'a> FastIndexValue<'a> {
-    pub(crate) fn wire_bytes(&self) -> usize {
-        match self {
-            Self::String(value) => value.len(),
-            Self::Number(_) => std::mem::size_of::<f64>(),
-            Self::Vector { values, .. } => values.len(),
-            Self::StringList(values) => values.bytes.len(),
-        }
-    }
-}
+impl<'a> FastIndexValue<'a> {}
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct FastStringList<'a> {

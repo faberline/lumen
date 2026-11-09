@@ -4,7 +4,9 @@
 //! Its String placeholders are never persistence input. The caller retains
 //! the original scanner bytes through the same-lease completion callback.
 
-use anyhow::{anyhow, bail, Result};
+#[cfg(test)]
+use anyhow::bail;
+use anyhow::{anyhow, Result};
 
 use crate::index::application::admission::RecordAdmissionError;
 use crate::index::application::engine::raft_dispatch::ApplyOutcome;
@@ -15,6 +17,7 @@ use crate::ingest::infrastructure::wal::fast_index_scanner::FastIndexScanner;
 use crate::shared_kernel::capture_barrier::ApplyLease;
 
 impl Engine {
+    #[cfg(test)]
     pub(crate) fn try_apply_committed_index(
         &self,
         scanner: &FastIndexScanner<'_>,

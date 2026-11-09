@@ -386,7 +386,10 @@ fn case_commands(text: &str) -> Vec<(String, CaseCommand)> {
                 .filter(|t| !t.starts_with('-') && t.contains("::"))
                 .map(|t| t.split("::").next().unwrap().to_string())
                 .collect();
-            out.push((segment.trim().to_string(), CaseCommand { features, modules }));
+            out.push((
+                segment.trim().to_string(),
+                CaseCommand { features, modules },
+            ));
         }
     }
     out
@@ -465,9 +468,14 @@ fn validate_layout(repo: &Repo) -> Result<(), String> {
     // whose name ends in `name`. A directory module is never run by its bare
     // `name::`: each submodule is a suite with its own `name::<suite>::`
     // filter, which tests/it/e2e/mod.rs guards.
-    for a in cases.iter().filter(|a| !repo.dir_cases.iter().any(|d| d == *a)) {
+    for a in cases
+        .iter()
+        .filter(|a| !repo.dir_cases.iter().any(|d| d == *a))
+    {
         if let Some(b) = cases.iter().find(|b| *b != a && b.ends_with(a)) {
-            return Err(format!("case `{a}` is a suffix of case `{b}`; `{a}::` would run both"));
+            return Err(format!(
+                "case `{a}` is a suffix of case `{b}`; `{a}::` would run both"
+            ));
         }
     }
     if !cases.windows(2).all(|w| w[0] < w[1]) {
@@ -490,7 +498,9 @@ fn validate_layout(repo: &Repo) -> Result<(), String> {
             return Err(format!("duplicate [[test]] name in Cargo.toml: {name}"));
         }
         if t.get("path").is_some() {
-            return Err(format!("[[test]] {name} sets a path; tests/<name>.rs is found by name"));
+            return Err(format!(
+                "[[test]] {name} sets a path; tests/<name>.rs is found by name"
+            ));
         }
         if !repo.standalone_files.iter().any(|f| f == name) {
             return Err(format!("[[test]] {name} has no tests/{name}.rs"));
@@ -531,7 +541,10 @@ fn validate_layout(repo: &Repo) -> Result<(), String> {
     }
     for entry in REGISTRY.iter().filter(|r| r.is_case()) {
         if !seen.contains(entry.name()) {
-            return Err(format!("registered case {} is not declared in main.rs", entry.path));
+            return Err(format!(
+                "registered case {} is not declared in main.rs",
+                entry.path
+            ));
         }
     }
 
@@ -559,15 +572,13 @@ fn validate_layout(repo: &Repo) -> Result<(), String> {
     for (file, text) in &repo.commands {
         for (cmd, parsed) in case_commands(text) {
             let direct: Vec<&str> = parsed.features.iter().map(String::as_str).collect();
-            let enabled = feature_closure(&manifest, &direct)
-                .map_err(|e| format!("{file}: `{cmd}`: {e}"))?;
+            let enabled =
+                feature_closure(&manifest, &direct).map_err(|e| format!("{file}: `{cmd}`: {e}"))?;
             for module in &parsed.modules {
                 if !seen.contains(module.as_str()) {
                     return Err(format!("{file}: `{cmd}` names `{module}::`, not a case"));
                 }
-                let Some(entry) = REGISTRY
-                    .iter()
-                    .find(|r| r.is_case() && r.name() == module)
+                let Some(entry) = REGISTRY.iter().find(|r| r.is_case() && r.name() == module)
                 else {
                     continue;
                 };
@@ -825,7 +836,9 @@ fn negative_fixtures_reject_invalid_manifest_or_gate() {
         }
 
         match validate_layout(&repo) {
-            Ok(()) => panic!("negative fixture '{name}' was expected to fail validation, but passed"),
+            Ok(()) => {
+                panic!("negative fixture '{name}' was expected to fail validation, but passed")
+            }
             Err(e) => assert!(
                 e.contains(expected),
                 "negative fixture '{name}' failed for another reason: {e}"
@@ -838,9 +851,17 @@ fn negative_fixtures_reject_invalid_manifest_or_gate() {
 fn case_commands_parse_features_and_filters() {
     let text = "run: |\n  cargo test --locked -p lumen --features \"operator delegated-auth\" \\\n    --test it -- operator_render:: access_render_cli::renders --exact\n  cargo test -p lumen --test it -- --list && cargo test -p lumen --features=raft-wal --test it -- raft_shutdown_failover::\n";
     let parsed = case_commands(text);
-    assert_eq!(parsed.len(), 3, "{:?}", parsed.iter().map(|p| &p.0).collect::<Vec<_>>());
+    assert_eq!(
+        parsed.len(),
+        3,
+        "{:?}",
+        parsed.iter().map(|p| &p.0).collect::<Vec<_>>()
+    );
     assert_eq!(parsed[0].1.features, ["operator", "delegated-auth"]);
-    assert_eq!(parsed[0].1.modules, ["operator_render", "access_render_cli"]);
+    assert_eq!(
+        parsed[0].1.modules,
+        ["operator_render", "access_render_cli"]
+    );
     assert!(parsed[1].1.features.is_empty());
     assert!(parsed[1].1.modules.is_empty());
     assert_eq!(parsed[2].1.features, ["raft-wal"]);

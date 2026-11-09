@@ -224,11 +224,7 @@ async fn namespace_exists(client: &kube::Client, namespace: &str) -> anyhow::Res
     Ok(api.get_opt(namespace).await?.is_some())
 }
 
-pub(in crate) fn entry(
-    instance: &PlannedInstance,
-    state: &str,
-    message: &str,
-) -> FleetEntryStatus {
+pub(crate) fn entry(instance: &PlannedInstance, state: &str, message: &str) -> FleetEntryStatus {
     FleetEntryStatus {
         namespace: instance.namespace.clone(),
         name: instance.name.clone(),

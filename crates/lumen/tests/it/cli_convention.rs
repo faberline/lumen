@@ -300,7 +300,7 @@ fn llm_v2_executes_only_fully_bound_advertised_commands() {
         for step in value["runbook"]["steps"].as_array().unwrap() {
             let inputs = step.get("inputs").and_then(Value::as_array);
             if let Some(command) = step.get("command").and_then(Value::as_str) {
-                assert!(inputs.map_or(true, Vec::is_empty));
+                assert!(inputs.is_none_or(Vec::is_empty));
                 let command_parts: Vec<&str> = command.split_whitespace().collect();
                 assert_eq!(command_parts.first(), Some(&"lumen"));
                 run_lumen(&command_parts[1..]);

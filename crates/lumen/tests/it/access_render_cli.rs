@@ -261,7 +261,10 @@ fn every_admin_endpoint_still_checks_the_admin_role() {
         &mut handlers,
     );
     let index_src = crates.join("lumen-index/src");
-    for context in std::fs::read_dir(&index_src).expect("read lumen-index/src").flatten() {
+    for context in std::fs::read_dir(&index_src)
+        .expect("read lumen-index/src")
+        .flatten()
+    {
         collect_rs(
             &context.path().join("interfaces").join("http"),
             &mut handlers,

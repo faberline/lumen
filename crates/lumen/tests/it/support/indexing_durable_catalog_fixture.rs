@@ -934,7 +934,7 @@ pub(crate) async fn stage1_catalog_root_with_two_keyword_collections(
     (dir, root)
 }
 
-pub(crate) fn stage1_keyword_delta_local_rows<'a>(delta: &'a Value) -> &'a Map<String, Value> {
+pub(crate) fn stage1_keyword_delta_local_rows(delta: &Value) -> &Map<String, Value> {
     let local_rows = delta["local_rows"].as_object();
     assert!(
         local_rows.is_some(),
