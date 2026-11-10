@@ -36,7 +36,8 @@ pub struct Identity {
 
 /// `sha256:<64 lowercase hex>`.
 fn is_digest(s: &str) -> bool {
-    s.strip_prefix("sha256:").is_some_and(|hex| is_lower_hex(hex, 64))
+    s.strip_prefix("sha256:")
+        .is_some_and(|hex| is_lower_hex(hex, 64))
 }
 
 impl Identity {
@@ -50,12 +51,19 @@ impl Identity {
         .unwrap_or_else(|e| panic!("{e}"))
     }
 
-    fn parse(image: &str, runtime_digest: &str, version: &str, git_sha: &str) -> Result<Self, String> {
+    fn parse(
+        image: &str,
+        runtime_digest: &str,
+        version: &str,
+        git_sha: &str,
+    ) -> Result<Self, String> {
         let root_digest = image
             .strip_prefix(IMAGE_REPO)
             .and_then(|rest| rest.strip_prefix('@'))
             .filter(|d| is_digest(d))
-            .ok_or_else(|| format!("invalid E2E_EXPECTED_IMAGE {image}: expected {IMAGE_REPO}@sha256:<64 hex>"))?;
+            .ok_or_else(|| {
+                format!("invalid E2E_EXPECTED_IMAGE {image}: expected {IMAGE_REPO}@sha256:<64 hex>")
+            })?;
         if version != env!("CARGO_PKG_VERSION") {
             return Err(format!(
                 "E2E_EXPECTED_VERSION {version} is not this test binary's version {}",
@@ -63,13 +71,20 @@ impl Identity {
             ));
         }
         if !is_lower_hex(git_sha, 8) {
-            return Err(format!("invalid E2E_EXPECTED_GIT_SHA {git_sha}: expected 8 lowercase hex"));
+            return Err(format!(
+                "invalid E2E_EXPECTED_GIT_SHA {git_sha}: expected 8 lowercase hex"
+            ));
         }
         if !is_digest(runtime_digest) {
-            return Err(format!("invalid E2E_EXPECTED_RUNTIME_DIGEST {runtime_digest}: expected sha256:<64 hex>"));
+            return Err(format!(
+                "invalid E2E_EXPECTED_RUNTIME_DIGEST {runtime_digest}: expected sha256:<64 hex>"
+            ));
         }
         if runtime_digest == root_digest {
-            return Err("E2E_EXPECTED_RUNTIME_DIGEST must be the platform child, not the root index digest".into());
+            return Err(
+                "E2E_EXPECTED_RUNTIME_DIGEST must be the platform child, not the root index digest"
+                    .into(),
+            );
         }
         Ok(Self {
             image: image.to_string(),
@@ -87,7 +102,8 @@ impl Identity {
             "/version ({phase}) did not return string version and git_sha: {version}"
         );
         assert!(
-            version["version"] == self.version.as_str() && version["git_sha"] == self.git_sha.as_str(),
+            version["version"] == self.version.as_str()
+                && version["git_sha"] == self.git_sha.as_str(),
             "/version ({phase}) must report version={} git_sha={}, got {version}",
             self.version,
             self.git_sha
@@ -98,7 +114,10 @@ impl Identity {
     /// container named `container`.
     pub fn assert_template_image(&self, kube: &Kube, what: &str, container: &str) {
         let workload = kube.get(&[what]);
-        let named = named(&workload["spec"]["template"]["spec"]["containers"], container);
+        let named = named(
+            &workload["spec"]["template"]["spec"]["containers"],
+            container,
+        );
         assert!(
             named.len() == 1 && named[0]["image"] == self.image.as_str(),
             "{what} must run one {container} container at {}",
@@ -111,8 +130,15 @@ impl Identity {
     /// on a pool-lumen-server node. Returns the pods.
     pub fn assert_pods(&self, kube: &Kube, label: &str, container: &str, desired: u64) -> Value {
         let pods = kube.pods(label);
-        let items = pods["items"].as_array().unwrap_or_else(|| panic!("{label}: no items: {pods}"));
-        assert_eq!(items.len() as u64, desired, "{label}: want {desired} pod(s), got {}", items.len());
+        let items = pods["items"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{label}: no items: {pods}"));
+        assert_eq!(
+            items.len() as u64,
+            desired,
+            "{label}: want {desired} pod(s), got {}",
+            items.len()
+        );
         for pod in items {
             let name = pod["metadata"]["name"].as_str().unwrap_or("?");
             let specs = named(&pod["spec"]["containers"], container);
@@ -127,8 +153,9 @@ impl Identity {
                 "{label}: pod {name} must have one Ready {container} container"
             );
             let image_id = statuses[0]["imageID"].as_str().unwrap_or_default();
-            let digest = normalize_runtime_image_id(image_id)
-                .unwrap_or_else(|| panic!("unrecognized {container} runtime imageID in pod {name}: {image_id:?}"));
+            let digest = normalize_runtime_image_id(image_id).unwrap_or_else(|| {
+                panic!("unrecognized {container} runtime imageID in pod {name}: {image_id:?}")
+            });
             assert!(
                 digest == self.root_digest || digest == self.runtime_digest,
                 "{container} runtime imageID {image_id} in pod {name} is neither the root digest {} nor the platform child digest {}",
@@ -143,7 +170,9 @@ impl Identity {
 
 /// The containers (or container statuses) named `name`.
 fn named<'a>(list: &'a Value, name: &str) -> Vec<&'a Value> {
-    list.as_array().map(|l| l.iter().filter(|c| c["name"] == name).collect()).unwrap_or_default()
+    list.as_array()
+        .map(|l| l.iter().filter(|c| c["name"] == name).collect())
+        .unwrap_or_default()
 }
 
 /// The pod is bound to a node, and the scheduler could only pick a
@@ -151,7 +180,9 @@ fn named<'a>(list: &'a Value, name: &str) -> Vec<&'a Value> {
 pub fn assert_on_pool(pod: &Value) {
     let name = pod["metadata"]["name"].as_str().unwrap_or("?");
     assert!(
-        pod["spec"]["nodeName"].as_str().is_some_and(|n| !n.is_empty()),
+        pod["spec"]["nodeName"]
+            .as_str()
+            .is_some_and(|n| !n.is_empty()),
         "pod {name} is not scheduled"
     );
     assert!(
@@ -164,9 +195,14 @@ pub fn assert_on_pool(pod: &Value) {
 /// Docker write it.
 pub fn normalize_runtime_image_id(raw: &str) -> Option<&str> {
     let pinned = raw.strip_prefix("docker-pullable://").unwrap_or(raw);
-    let digest = match pinned.strip_prefix(IMAGE_REPO).and_then(|rest| rest.strip_prefix('@')) {
+    let digest = match pinned
+        .strip_prefix(IMAGE_REPO)
+        .and_then(|rest| rest.strip_prefix('@'))
+    {
         Some(digest) => digest,
-        None => ["containerd://", "cri-o://", "docker://"].iter().find_map(|p| raw.strip_prefix(p))?,
+        None => ["containerd://", "cri-o://", "docker://"]
+            .iter()
+            .find_map(|p| raw.strip_prefix(p))?,
     };
     is_digest(digest).then_some(digest)
 }
@@ -177,7 +213,12 @@ pub fn replicas_of(kube: &Kube, what: &str) -> u64 {
     workload["spec"]["replicas"]
         .as_u64()
         .filter(|n| *n > 0)
-        .unwrap_or_else(|| panic!("{what} replicas must be a positive integer, got {}", workload["spec"]["replicas"]))
+        .unwrap_or_else(|| {
+            panic!(
+                "{what} replicas must be a positive integer, got {}",
+                workload["spec"]["replicas"]
+            )
+        })
 }
 
 mod tests {
@@ -190,9 +231,15 @@ mod tests {
     fn runtime_image_ids_normalize_to_their_digest() {
         let pinned = format!("{IMAGE_REPO}@{ROOT}");
         assert_eq!(normalize_runtime_image_id(&pinned), Some(ROOT));
-        assert_eq!(normalize_runtime_image_id(&format!("docker-pullable://{pinned}")), Some(ROOT));
+        assert_eq!(
+            normalize_runtime_image_id(&format!("docker-pullable://{pinned}")),
+            Some(ROOT)
+        );
         for runtime in ["containerd", "cri-o", "docker"] {
-            assert_eq!(normalize_runtime_image_id(&format!("{runtime}://{CHILD}")), Some(CHILD));
+            assert_eq!(
+                normalize_runtime_image_id(&format!("{runtime}://{CHILD}")),
+                Some(CHILD)
+            );
         }
         for bad in [
             "",
@@ -211,8 +258,13 @@ mod tests {
         let image = format!("{IMAGE_REPO}@{ROOT}");
         let version = env!("CARGO_PKG_VERSION");
         assert!(Identity::parse(&image, CHILD, version, "0123abcd").is_ok());
-        assert!(Identity::parse(&format!("{IMAGE_REPO}:0.6.1"), CHILD, version, "0123abcd").is_err());
-        assert!(Identity::parse(&image, ROOT, version, "0123abcd").is_err(), "child must differ from root");
+        assert!(
+            Identity::parse(&format!("{IMAGE_REPO}:0.6.1"), CHILD, version, "0123abcd").is_err()
+        );
+        assert!(
+            Identity::parse(&image, ROOT, version, "0123abcd").is_err(),
+            "child must differ from root"
+        );
         assert!(Identity::parse(&image, CHILD, "0.0.0", "0123abcd").is_err());
         assert!(Identity::parse(&image, CHILD, version, "0123ABCD").is_err());
         assert!(Identity::parse(&image, "sha256:22", version, "0123abcd").is_err());

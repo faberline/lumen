@@ -15,11 +15,13 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::index::domain::vector::distance::normalize_unit_safe;
+#[cfg(test)]
+use crate::index::domain::vector::hnsw_cpu_index::HnswCpuIndex;
 use crate::index::domain::vector::hnsw_cpu_index::{
-    HnswBackend, HnswCpuIndex, HnswCpuInner, HNSW_EF_CONSTRUCTION, HNSW_MAX_LAYER,
-    HNSW_MAX_NB_CONNECTION,
+    HnswBackend, HnswCpuInner, HNSW_EF_CONSTRUCTION, HNSW_MAX_LAYER, HNSW_MAX_NB_CONNECTION,
 };
 use crate::index::domain::vector::quantize::ScalarCodebook;
+#[cfg(test)]
 use crate::index::infrastructure::vector::graph_cache::load::load_timed;
 use crate::shared_kernel::types::schema::VectorSpec;
 
@@ -55,6 +57,7 @@ enum LoadedGraph<'a> {
     Dot(Hnsw<'a, f32, DistDot>),
 }
 
+#[cfg(test)]
 fn load(
     spec: VectorSpec,
     vectors: &[(String, Vec<f32>)],

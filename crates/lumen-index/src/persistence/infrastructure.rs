@@ -11,4 +11,5 @@ pub mod checkpoint_process_state;
 pub mod merge_worker;
 pub mod rdb;
 pub mod segment_rdb_store;
+pub(crate) mod segment_save_gate;
 pub mod spill_directory;

@@ -240,11 +240,9 @@ impl Lumen {
         // from the driver's own live apply attempts, not from spec/usage.
         let namespace = self.namespace().unwrap_or_else(|| "default".to_string());
         let uid = self.uid().unwrap_or_default();
-        if let Some(block) =
-            crate::application::reshard_driver::oversize::oversize_block_condition(
-                &namespace, &name, &uid,
-            )
-        {
+        if let Some(block) = crate::application::reshard_driver::oversize::oversize_block_condition(
+            &namespace, &name, &uid,
+        ) {
             reshard
                 .blocking_conditions
                 .push("reshardOversizedDocument".to_string());

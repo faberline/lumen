@@ -16,6 +16,8 @@
 //! `score` is monotone-decreasing across the top-K — higher = better,
 //! matching the BM25 contract used by the text path.
 
+pub type VectorSnapshot = (Vec<(String, Vec<f32>)>, Option<ScalarCodebook>);
+
 pub(in crate::index) mod distance;
 pub mod flat_cpu_index;
 pub mod hnsw_cpu_index;
@@ -139,7 +141,7 @@ pub trait VectorIndex: Send + Sync {
     /// the scalar codebook when SQ is enabled. Default impl returns
     /// an empty dump — backends that intend to be snapshotted must
     /// override this.
-    fn dump_for_snapshot(&self) -> Result<(Vec<(String, Vec<f32>)>, Option<ScalarCodebook>)> {
+    fn dump_for_snapshot(&self) -> Result<VectorSnapshot> {
         Ok((Vec::new(), None))
     }
 

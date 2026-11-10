@@ -88,6 +88,8 @@ pub struct LumenReshardStatus {
     pub progress_percent: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_shard_count: Option<u32>,
+    /// Echo of `spec.reshardPolicy.migrationBytesPerSec`. The value is recorded
+    /// but not enforced: reshard copies run unthrottled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub migration_bytes_per_sec: Option<u64>,
     /// Highest observed percent of `maxShardBytes` across shards, from the

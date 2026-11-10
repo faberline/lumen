@@ -60,38 +60,40 @@ pub(super) fn prepare_local_record<'a>(
     loop {
         match engine.begin_admitted_record(entry, reservation) {
             Ok(guard) => return Ok(PreparedLocalRecord::Prepared(guard)),
-            Err(RepriceRecord {
-                entry: repriced_entry,
-                reservation: mut repriced_reservation,
-                required: Some(required),
-                error: _,
-            }) => match repriced_reservation.try_grow_to(required) {
-                Ok(()) => {
-                    entry = repriced_entry;
-                    reservation = repriced_reservation;
-                }
-                Err(AdmissionError::Full { .. }) => {
-                    return Ok(PreparedLocalRecord::CapacityBlocked {
-                        entry: repriced_entry,
-                        reservation: repriced_reservation,
-                        required,
-                    });
-                }
-                Err(grow_error) => {
+            Err(reprice) => match *reprice {
+                RepriceRecord {
+                    entry: repriced_entry,
+                    reservation: mut repriced_reservation,
+                    required: Some(required),
+                    error: _,
+                } => match repriced_reservation.try_grow_to(required) {
+                    Ok(()) => {
+                        entry = repriced_entry;
+                        reservation = repriced_reservation;
+                    }
+                    Err(AdmissionError::Full { .. }) => {
+                        return Ok(PreparedLocalRecord::CapacityBlocked {
+                            entry: repriced_entry,
+                            reservation: repriced_reservation,
+                            required,
+                        });
+                    }
+                    Err(grow_error) => {
+                        return Ok(PreparedLocalRecord::Unresolved {
+                            reservation: repriced_reservation,
+                            error: anyhow::Error::new(RecordAdmissionError::Capacity(grow_error)),
+                        });
+                    }
+                },
+                RepriceRecord {
+                    reservation, error, ..
+                } => {
                     return Ok(PreparedLocalRecord::Unresolved {
-                        reservation: repriced_reservation,
-                        error: anyhow::Error::new(RecordAdmissionError::Capacity(grow_error)),
+                        reservation,
+                        error: anyhow::Error::new(error),
                     });
                 }
             },
-            Err(RepriceRecord {
-                reservation, error, ..
-            }) => {
-                return Ok(PreparedLocalRecord::Unresolved {
-                    reservation,
-                    error: anyhow::Error::new(error),
-                });
-            }
         }
     }
 }
@@ -196,17 +198,26 @@ impl WriteCoordinator {
         admission_deadline: tokio::time::Instant,
     ) -> Result<Option<LocalRecordReservation>> {
         let wake = self.engine.checkpoint_wake();
+        let mut capacity_episode = None;
         loop {
             // Observe before admission so a release during this attempt
             // retries even when its checkpoint revision remains pending.
             let observed = wake.epoch();
             let (result, revision) = off_reactor(|| self.try_admit_local_record_once(entry));
             match result {
-                Ok(reservation) => return Ok(reservation),
+                Ok(mut reservation) => {
+                    if let (Some(revision), Some(reservation)) =
+                        (capacity_episode, reservation.as_mut())
+                    {
+                        reservation.apply.set_capacity_episode(revision);
+                    }
+                    return Ok(reservation);
+                }
                 Err(error) => {
                     let Some(revision) = revision else {
                         return Err(self.finalize_prepublication_error(error));
                     };
+                    capacity_episode = Some(revision);
                     if tokio::time::Instant::now() >= admission_deadline {
                         return Err(self.finalize_prepublication_error(error));
                     }

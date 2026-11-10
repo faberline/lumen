@@ -47,13 +47,13 @@ capture = { lumen_pid = "stdout" }
 [[steps]]
 type = "exec"
 name = "warmup_index_round_1"
-cmd = ["python3", "-c", "import json,sys,random,time,urllib.request\nupstream,coll,keyspace=sys.argv[1],sys.argv[2],int(sys.argv[3])\nrng=random.Random(time.time_ns())\nitems=[]\nfor i in range(1000):\n    ext=f'soak-{rng.randrange(keyspace)}'\n    items.append({'external_id':ext,'field':'bio','value':f'engineer {ext}'})\n    items.append({'external_id':ext,'field':'email','value':f'{ext}@example.com'})\nbody=json.dumps({'items':items}).encode()\nreq=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\nwith urllib.request.urlopen(req,timeout=30) as r:\n    sys.exit(0 if r.status<400 else 2)", "{{upstream}}", "{{collection}}", "{{keyspace}}"]
+cmd = ["python3", "-c", "import json,sys,random,time,urllib.request\nupstream,coll,keyspace=sys.argv[1],sys.argv[2],int(sys.argv[3])\nrng=random.Random(time.time_ns())\nitems=[]\nfor i in range(1000):\n    ext=f'soak-{rng.randrange(keyspace)}'\n    items.append({'external_id':ext,'field':'bio','value':f'engineer {ext}'})\n    items.append({'external_id':ext,'field':'email','value':f'{ext}@example.com'})\nfor batch_start in range(0,len(items),1000):\n    body=json.dumps({'items':items[batch_start:batch_start+1000]}).encode()\n    req=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\n    with urllib.request.urlopen(req,timeout=30) as r:\n        if r.status>=400: sys.exit(2)", "{{upstream}}", "{{collection}}", "{{keyspace}}"]
 timeout_secs = 60
 
 [[steps]]
 type = "exec"
 name = "warmup_index_round_2"
-cmd = ["python3", "-c", "import json,sys,random,time,urllib.request\nupstream,coll,keyspace=sys.argv[1],sys.argv[2],int(sys.argv[3])\nrng=random.Random(time.time_ns())\nitems=[]\nfor i in range(1000):\n    ext=f'soak-{rng.randrange(keyspace)}'\n    items.append({'external_id':ext,'field':'bio','value':f'engineer {ext}'})\n    items.append({'external_id':ext,'field':'email','value':f'{ext}@example.com'})\nbody=json.dumps({'items':items}).encode()\nreq=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\nwith urllib.request.urlopen(req,timeout=30) as r:\n    sys.exit(0 if r.status<400 else 2)", "{{upstream}}", "{{collection}}", "{{keyspace}}"]
+cmd = ["python3", "-c", "import json,sys,random,time,urllib.request\nupstream,coll,keyspace=sys.argv[1],sys.argv[2],int(sys.argv[3])\nrng=random.Random(time.time_ns())\nitems=[]\nfor i in range(1000):\n    ext=f'soak-{rng.randrange(keyspace)}'\n    items.append({'external_id':ext,'field':'bio','value':f'engineer {ext}'})\n    items.append({'external_id':ext,'field':'email','value':f'{ext}@example.com'})\nfor batch_start in range(0,len(items),1000):\n    body=json.dumps({'items':items[batch_start:batch_start+1000]}).encode()\n    req=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\n    with urllib.request.urlopen(req,timeout=30) as r:\n        if r.status>=400: sys.exit(2)", "{{upstream}}", "{{collection}}", "{{keyspace}}"]
 timeout_secs = 60
 
 [[steps]]
@@ -83,7 +83,7 @@ expect = { status = 200, timeout_ms = 10000 }
 [[steps]]
 type = "exec"
 name = "window_a_index"
-cmd = ["python3", "-c", "import json,sys,random,time,urllib.request\nupstream,coll,keyspace=sys.argv[1],sys.argv[2],int(sys.argv[3])\nrng=random.Random(time.time_ns())\nitems=[]\nfor i in range(1000):\n    ext=f'soak-{rng.randrange(keyspace)}'\n    items.append({'external_id':ext,'field':'bio','value':f'engineer {ext}'})\n    items.append({'external_id':ext,'field':'email','value':f'{ext}@example.com'})\nbody=json.dumps({'items':items}).encode()\nreq=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\nwith urllib.request.urlopen(req,timeout=30) as r:\n    sys.exit(0 if r.status<400 else 2)", "{{upstream}}", "{{collection}}", "{{keyspace}}"]
+cmd = ["python3", "-c", "import json,sys,random,time,urllib.request\nupstream,coll,keyspace=sys.argv[1],sys.argv[2],int(sys.argv[3])\nrng=random.Random(time.time_ns())\nitems=[]\nfor i in range(1000):\n    ext=f'soak-{rng.randrange(keyspace)}'\n    items.append({'external_id':ext,'field':'bio','value':f'engineer {ext}'})\n    items.append({'external_id':ext,'field':'email','value':f'{ext}@example.com'})\nfor batch_start in range(0,len(items),1000):\n    body=json.dumps({'items':items[batch_start:batch_start+1000]}).encode()\n    req=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\n    with urllib.request.urlopen(req,timeout=30) as r:\n        if r.status>=400: sys.exit(2)", "{{upstream}}", "{{collection}}", "{{keyspace}}"]
 timeout_secs = 60
 
 [[steps]]
@@ -108,7 +108,7 @@ capture = { rss_w1 = "rss_kb" }
 [[steps]]
 type = "exec"
 name = "window_b_index"
-cmd = ["python3", "-c", "import json,sys,random,time,urllib.request\nupstream,coll,keyspace=sys.argv[1],sys.argv[2],int(sys.argv[3])\nrng=random.Random(time.time_ns())\nitems=[]\nfor i in range(1000):\n    ext=f'soak-{rng.randrange(keyspace)}'\n    items.append({'external_id':ext,'field':'bio','value':f'engineer {ext}'})\n    items.append({'external_id':ext,'field':'email','value':f'{ext}@example.com'})\nbody=json.dumps({'items':items}).encode()\nreq=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\nwith urllib.request.urlopen(req,timeout=30) as r:\n    sys.exit(0 if r.status<400 else 2)", "{{upstream}}", "{{collection}}", "{{keyspace}}"]
+cmd = ["python3", "-c", "import json,sys,random,time,urllib.request\nupstream,coll,keyspace=sys.argv[1],sys.argv[2],int(sys.argv[3])\nrng=random.Random(time.time_ns())\nitems=[]\nfor i in range(1000):\n    ext=f'soak-{rng.randrange(keyspace)}'\n    items.append({'external_id':ext,'field':'bio','value':f'engineer {ext}'})\n    items.append({'external_id':ext,'field':'email','value':f'{ext}@example.com'})\nfor batch_start in range(0,len(items),1000):\n    body=json.dumps({'items':items[batch_start:batch_start+1000]}).encode()\n    req=urllib.request.Request(f'http://{upstream}/collections/{coll}/index',data=body,method='POST',headers={'content-type':'application/json'})\n    with urllib.request.urlopen(req,timeout=30) as r:\n        if r.status>=400: sys.exit(2)", "{{upstream}}", "{{collection}}", "{{keyspace}}"]
 timeout_secs = 60
 
 [[steps]]

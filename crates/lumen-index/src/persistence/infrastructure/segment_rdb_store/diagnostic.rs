@@ -88,13 +88,13 @@ impl DiagnosticCapture {
     pub(crate) fn new() -> Self {
         static NEXT_TOKEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let token = DiagnosticCaptureToken(
-            NEXT_TOKEN
-                .fetch_update(
-                    std::sync::atomic::Ordering::Relaxed,
-                    std::sync::atomic::Ordering::Relaxed,
-                    |next| next.checked_add(1),
-                )
-                .expect("diagnostic capture tokens exhausted"),
+            crate::atomic_update::update_u64(
+                &NEXT_TOKEN,
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |next| next.checked_add(1),
+            )
+            .expect("diagnostic capture tokens exhausted"),
         );
         let (sender, receiver) = std::sync::mpsc::sync_channel(64);
         capture_senders().lock().unwrap().insert(token, sender);
@@ -347,4 +347,48 @@ pub(super) fn trace_durable_save_end(
     duration_ns: u64,
 ) {
     let _ = (context, sequence, revision, duration_ns);
+}
+
+/// Adapter from ingest capacity diagnostics to checkpoint diagnostics.
+pub struct CheckpointCapacityTrace;
+
+impl crate::ingest::application::ports::capacity_trace::CapacityTrace for CheckpointCapacityTrace {
+    fn enabled(&self) -> bool {
+        checkpoint_diagnostic_enabled()
+    }
+    fn refusal(
+        &self,
+        _revision: u64,
+        _present: bool,
+        _requested: usize,
+        _used: usize,
+        _hard_limit: usize,
+    ) {
+    }
+}
+
+#[cfg(test)]
+impl crate::ingest::application::ports::capacity_trace::CapacityTrace for DiagnosticCaptureToken {
+    fn enabled(&self) -> bool {
+        true
+    }
+    fn refusal(
+        &self,
+        revision: u64,
+        present: bool,
+        requested: usize,
+        used: usize,
+        hard_limit: usize,
+    ) {
+        send_numeric_event(
+            *self,
+            NumericCanonicalEvent::Refusal {
+                revision,
+                present,
+                requested,
+                used,
+                hard_limit,
+            },
+        );
+    }
 }

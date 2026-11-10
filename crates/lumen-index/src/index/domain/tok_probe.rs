@@ -204,10 +204,7 @@ impl<'a> Iterator for TokProbeIter<'a> {
             let seg_id = self.seg_ids.get(self.seg_pos).copied();
             let live_id = self.live_ids.get(self.live_pos).copied();
             let staged_id = self.staged.get(self.staged_pos).map(|&(id, _)| id);
-            let id = match [seg_id, live_id, staged_id].into_iter().flatten().min() {
-                Some(id) => id,
-                None => return None,
-            };
+            let id = [seg_id, live_id, staged_id].into_iter().flatten().min()?;
             let mut tf = None;
             if staged_id == Some(id) {
                 tf = Some(self.staged[self.staged_pos].1);
