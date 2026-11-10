@@ -145,7 +145,13 @@ fn fixture(root: &Path) -> Fixture {
     );
     let wal = Arc::new(MemWal::new());
     let shared_wal: SharedWal = wal.clone();
-    let writer = WriteCoordinator::start_from_with_aof(shared_wal, engine.clone(), 0, aof.clone());
+    let writer = WriteCoordinator::start_from_with_aof_and_capacity_owner(
+        shared_wal,
+        engine.clone(),
+        0,
+        Some(aof.clone()),
+        Box::new(lumen_index::persistence::application::capacity::Fallback::default()),
+    );
     let sink_writer: Arc<dyn WriteSink> = writer.clone();
     let checkpoint: Arc<dyn CheckpointSink> = Arc::new(SegmentCheckpointSink {
         engine: engine.clone(),

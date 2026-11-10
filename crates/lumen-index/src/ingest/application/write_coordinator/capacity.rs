@@ -24,7 +24,7 @@ impl WriteCoordinator {
             .layer_capacity_owner
             .lock()
             .map_err(|_| anyhow::anyhow!("capacity owner poisoned"))?;
-        crate::persistence::application::capacity::Fallback::ensure(&mut owner, &self.engine, None)
+        owner.ensure(&self.engine)
     }
 
     pub(super) fn trace_admission_refusal(
