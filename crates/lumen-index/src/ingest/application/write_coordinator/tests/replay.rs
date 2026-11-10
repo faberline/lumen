@@ -196,7 +196,13 @@ async fn full_raw_delivery_replays_the_same_head_before_later_records() {
     let aof = Arc::new(Mutex::new(
         crate::persistence::infrastructure::aof::aof_writer::AofWriter::open(&aof_path).unwrap(),
     ));
-    let coord = WriteCoordinator::start_from_with_aof(wal.clone(), engine.clone(), 0, aof);
+    let coord = WriteCoordinator::start_from_with_aof_and_capacity_owner(
+        wal.clone(),
+        engine.clone(),
+        0,
+        Some(aof),
+        Box::new(crate::persistence::application::capacity::Fallback::default()),
+    );
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         while wal.subscriptions.load(Ordering::Acquire) < 2 {
             wal.subscribed.notified().await;
@@ -209,7 +215,7 @@ async fn full_raw_delivery_replays_the_same_head_before_later_records() {
             .layer_capacity_owner
             .lock()
             .expect("capacity owner poisoned")
-            .is_some(),
+            .is_active(),
         "committed native raw admission must start independent capacity maintenance before waiting",
     );
     assert_eq!(wal.publish(record("second")).await.unwrap(), 2);
