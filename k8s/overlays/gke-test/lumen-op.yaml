@@ -31,3 +31,4 @@ spec:
     cpu: 250m
     memory: 512Mi
     raftStorage: 4Gi
+    raftStorageClass: dynamic-rwo

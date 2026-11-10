@@ -63,7 +63,7 @@ impl SearchBackend for EngineShardSearch {
             collection_id,
             req,
             selected_shards.as_slice(),
-            |engine, collection_id, req| Ok(engine.search(collection_id, req)?),
+            |engine, collection_id, req| engine.search(collection_id, req),
             |hit, field| {
                 self.shards.iter().find_map(|engine| {
                     engine

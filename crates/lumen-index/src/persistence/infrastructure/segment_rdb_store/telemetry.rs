@@ -4,10 +4,55 @@
 use crate::persistence::domain::generation_manifest::{CollectionCatalog, SegmentKind};
 use crate::shared_kernel::capture_barrier::CaptureLease;
 use anyhow::{bail, Result};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+
+#[cfg(test)]
+thread_local! {
+    static INSPECTED_FILE_ENTRIES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub fn reset_inspected_file_entries() {
+    INSPECTED_FILE_ENTRIES.with(|c| c.set(0));
+}
+
+#[cfg(test)]
+pub fn inspected_file_entries() -> u64 {
+    INSPECTED_FILE_ENTRIES.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+thread_local! {
+    static PRUNE_FAILURE_AFTER_REMOVALS: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
+/// Makes the next `prune` on this thread fail once `removals` generations are gone.
+#[cfg(test)]
+pub(in crate::persistence) fn inject_prune_failure_after(removals: usize) {
+    PRUNE_FAILURE_AFTER_REMOVALS.with(|c| c.set(Some(removals)));
+}
+
+/// Consumes the injected failure when exactly `removed` generations are gone.
+#[cfg(test)]
+pub(super) fn take_injected_prune_failure(removed: usize) -> bool {
+    PRUNE_FAILURE_AFTER_REMOVALS.with(|c| {
+        if c.get() == Some(removed) {
+            c.set(None);
+            true
+        } else {
+            false
+        }
+    })
+}
+
+#[inline]
+pub(super) fn note_inspected_file_entry() {
+    #[cfg(test)]
+    INSPECTED_FILE_ENTRIES.with(|c| c.set(c.get().saturating_add(1)));
+}
 
 pub(super) struct MeasuredCapture<'a> {
     lease: CaptureLease<'a>,
@@ -32,17 +77,301 @@ impl<'a> std::ops::Deref for MeasuredCapture<'a> {
 impl Drop for MeasuredCapture<'_> {
     fn drop(&mut self) {
         let nanos = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
-        let _ = self
-            .total
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |total| {
-                Some(total.saturating_add(nanos))
-            });
+        let _ = crate::atomic_update::update_u64(
+            self.total,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |total| Some(total.saturating_add(nanos)),
+        );
+    }
+}
+
+/// The changed files of one generation: each collection id with its files as
+/// `(file identity, bytes)`.
+pub(in crate::persistence) type ChangedFiles = BTreeMap<String, Vec<((u64, u64), u64)>>;
+
+#[derive(Debug, Default, Clone)]
+pub(in crate::persistence) struct RetainedInventory {
+    files: BTreeMap<(u64, u64), IdentityEntry>,
+    generations: BTreeMap<String, GenerationFiles>,
+    total_bytes: u64,
+}
+
+#[derive(Debug, Clone)]
+struct IdentityEntry {
+    bytes: u64,
+    generations: BTreeSet<String>,
+}
+
+#[derive(Debug, Default, Clone)]
+struct GenerationFiles {
+    all: BTreeSet<(u64, u64)>,
+    collections: BTreeMap<String, BTreeSet<(u64, u64)>>,
+}
+
+impl RetainedInventory {
+    pub(super) fn total_bytes(&self) -> u64 {
+        self.total_bytes
+    }
+
+    pub(super) fn contains_identity(&self, id: &(u64, u64)) -> bool {
+        self.files.contains_key(id)
+    }
+
+    pub(super) fn remove_generation(&mut self, generation: &str) {
+        if let Some(gen_files) = self.generations.remove(generation) {
+            for id in gen_files.all {
+                if let Some(entry) = self.files.get_mut(&id) {
+                    entry.generations.remove(generation);
+                    if entry.generations.is_empty() {
+                        self.total_bytes = self.total_bytes.saturating_sub(entry.bytes);
+                        self.files.remove(&id);
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    pub(super) fn full_walk(root: &Path) -> Result<Self> {
+        use std::os::unix::fs::MetadataExt;
+
+        let mut files = BTreeMap::new();
+        let mut generations = BTreeMap::new();
+
+        if !root.exists() {
+            return Ok(Self::default());
+        }
+
+        for entry in std::fs::read_dir(root)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name_str = match name.to_str() {
+                Some(s) if s.starts_with("gen-") => s.to_string(),
+                _ => continue,
+            };
+            let gen_path = entry.path();
+            let mut gen_files = GenerationFiles::default();
+
+            for child in std::fs::read_dir(&gen_path)? {
+                let child = child?;
+                let child_path = child.path();
+                let file_name = child.file_name();
+                let file_name_str = file_name.to_string_lossy();
+
+                if file_name_str == super::GENERATION_MANIFEST_FILE {
+                    note_inspected_file_entry();
+                    let meta = std::fs::symlink_metadata(&child_path)?;
+                    if meta.file_type().is_symlink() || !meta.is_file() {
+                        bail!("manifest must be a regular file");
+                    }
+                    let id = (meta.dev(), meta.ino());
+                    gen_files.all.insert(id);
+                    let entry = files.entry(id).or_insert_with(|| IdentityEntry {
+                        bytes: meta.len(),
+                        generations: BTreeSet::new(),
+                    });
+                    entry.generations.insert(name_str.clone());
+                } else if child_path.is_dir() {
+                    let mut coll_files = BTreeSet::new();
+                    scan_directory_identities(&child_path, &mut coll_files, &mut files, &name_str)?;
+                    gen_files.all.extend(coll_files.iter().copied());
+                    // The save path keys a collection by its hex-encoded id, the
+                    // same name that `collection_checkpoint_dir_name` writes. A
+                    // directory with another name still counts in `all` and
+                    // `files`, but it has no key: a save that expects it finds
+                    // no entry and marks the inventory stale.
+                    if let Some(collection_id) =
+                        crate::index::infrastructure::checkpoint_fs::collection_name_from_dir(
+                            &child_path,
+                        )
+                    {
+                        gen_files.collections.insert(collection_id, coll_files);
+                    }
+                }
+            }
+            generations.insert(name_str, gen_files);
+        }
+
+        let total_bytes = files.values().try_fold(0u64, |sum, e| {
+            sum.checked_add(e.bytes)
+                .ok_or_else(|| anyhow::anyhow!("segment byte count overflow"))
+        })?;
+
+        Ok(Self {
+            files,
+            generations,
+            total_bytes,
+        })
+    }
+
+    #[cfg(not(unix))]
+    pub(super) fn full_walk(_root: &Path) -> Result<Self> {
+        bail!("segment file identity measurements require Unix")
+    }
+
+    pub(in crate::persistence) fn record_published_generation(
+        &mut self,
+        generation_name: &str,
+        manifest_id: ((u64, u64), u64),
+        changed_files: ChangedFiles,
+        reused_collections: &BTreeSet<String>,
+        previous_generation: Option<&str>,
+    ) -> bool {
+        let mut gen_files = GenerationFiles::default();
+
+        // 1. Manifest
+        let (m_id, m_bytes) = manifest_id;
+        gen_files.all.insert(m_id);
+        let m_entry = self.files.entry(m_id).or_insert_with(|| {
+            self.total_bytes = self.total_bytes.saturating_add(m_bytes);
+            IdentityEntry {
+                bytes: m_bytes,
+                generations: BTreeSet::new(),
+            }
+        });
+        m_entry.generations.insert(generation_name.to_string());
+
+        // 2. Reused collections (inherit file identities from previous generation)
+        if let Some(prev) = previous_generation {
+            if let Some(prev_gen) = self.generations.get(prev) {
+                for reused_id in reused_collections {
+                    // A reused collection with no recorded files would drop its
+                    // hard links from this generation. Mark the inventory stale.
+                    let Some(prev_coll_files) = prev_gen.collections.get(reused_id) else {
+                        return false;
+                    };
+                    gen_files
+                        .collections
+                        .entry(reused_id.clone())
+                        .or_default()
+                        .extend(prev_coll_files.iter().copied());
+                    for &id in prev_coll_files {
+                        gen_files.all.insert(id);
+                        if let Some(entry) = self.files.get_mut(&id) {
+                            entry.generations.insert(generation_name.to_string());
+                        }
+                    }
+                }
+            } else if !reused_collections.is_empty() {
+                return false;
+            }
+        } else if !reused_collections.is_empty() {
+            return false;
+        }
+
+        // 3. Changed files
+        for (coll_id, files) in changed_files {
+            let coll_set = gen_files.collections.entry(coll_id).or_default();
+            for (id, bytes) in files {
+                coll_set.insert(id);
+                gen_files.all.insert(id);
+                let entry = self.files.entry(id).or_insert_with(|| {
+                    self.total_bytes = self.total_bytes.saturating_add(bytes);
+                    IdentityEntry {
+                        bytes,
+                        generations: BTreeSet::new(),
+                    }
+                });
+                entry.generations.insert(generation_name.to_string());
+            }
+        }
+
+        self.generations
+            .insert(generation_name.to_string(), gen_files);
+        true
     }
 }
 
 #[cfg(unix)]
+fn scan_directory_identities(
+    dir: &Path,
+    coll_files: &mut BTreeSet<(u64, u64)>,
+    files: &mut BTreeMap<(u64, u64), IdentityEntry>,
+    gen_name: &str,
+) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        note_inspected_file_entry();
+        let meta = std::fs::symlink_metadata(&path)?;
+        if meta.file_type().is_symlink() {
+            bail!("segment metric refuses symlink");
+        }
+        if meta.is_dir() {
+            scan_directory_identities(&path, coll_files, files, gen_name)?;
+        } else if meta.is_file() {
+            let id = (meta.dev(), meta.ino());
+            coll_files.insert(id);
+            let entry = files.entry(id).or_insert_with(|| IdentityEntry {
+                bytes: meta.len(),
+                generations: BTreeSet::new(),
+            });
+            entry.generations.insert(gen_name.to_string());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+pub(in crate::persistence) fn collect_staged_changed_files(
+    staging_path: &Path,
+    collections: &[CollectionCatalog],
+    idle: &BTreeSet<String>,
+) -> Result<ChangedFiles> {
+    use crate::persistence::infrastructure::segment_rdb_store::flat_layout::collection_checkpoint_dir_name;
+
+    let mut changed = BTreeMap::new();
+    for coll in collections {
+        if idle.contains(&coll.collection_id) {
+            continue;
+        }
+        let dir = staging_path.join(collection_checkpoint_dir_name(&coll.collection_id));
+        if !dir.exists() {
+            continue;
+        }
+        let mut coll_files = Vec::new();
+        scan_staged_files(&dir, &mut coll_files)?;
+        changed.insert(coll.collection_id.clone(), coll_files);
+    }
+    Ok(changed)
+}
+
+#[cfg(not(unix))]
+pub(super) fn collect_staged_changed_files(
+    _staging_path: &Path,
+    _collections: &[CollectionCatalog],
+    _idle: &BTreeSet<String>,
+) -> Result<ChangedFiles> {
+    bail!("segment file identity measurements require Unix")
+}
+
+#[cfg(unix)]
+fn scan_staged_files(dir: &Path, out: &mut Vec<((u64, u64), u64)>) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        note_inspected_file_entry();
+        let meta = std::fs::symlink_metadata(&path)?;
+        if meta.file_type().is_symlink() {
+            bail!("segment metric refuses symlink");
+        }
+        if meta.is_dir() {
+            scan_staged_files(&path, out)?;
+        } else if meta.is_file() {
+            out.push(((meta.dev(), meta.ino()), meta.len()));
+        }
+    }
+    Ok(())
+}
+
+/// Test oracle: a full walk of every file under a path, one entry per identity.
+#[cfg(all(test, unix))]
 fn inventory(path: &Path, files: &mut BTreeMap<(u64, u64), u64>) -> Result<()> {
     use std::os::unix::fs::MetadataExt;
+    note_inspected_file_entry();
     let metadata = std::fs::symlink_metadata(path)?;
     if metadata.file_type().is_symlink() {
         bail!("segment metric refuses symlink");
@@ -58,10 +387,11 @@ fn inventory(path: &Path, files: &mut BTreeMap<(u64, u64), u64>) -> Result<()> {
     }
     Ok(())
 }
-#[cfg(not(unix))]
+#[cfg(all(test, not(unix)))]
 fn inventory(_path: &Path, _files: &mut BTreeMap<(u64, u64), u64>) -> Result<()> {
     bail!("segment file identity measurements require Unix")
 }
+#[cfg(test)]
 fn sum(mut files: impl Iterator<Item = u64>) -> Result<u64> {
     files.try_fold(0u64, |total, bytes| {
         total
@@ -69,6 +399,7 @@ fn sum(mut files: impl Iterator<Item = u64>) -> Result<u64> {
             .ok_or_else(|| anyhow::anyhow!("segment byte count overflow"))
     })
 }
+#[cfg(test)]
 pub(super) fn new_file_bytes(staging: &Path, previous: Option<&Path>) -> Result<u64> {
     let mut old = BTreeMap::new();
     if let Some(previous) = previous {
@@ -83,14 +414,35 @@ pub(super) fn new_file_bytes(staging: &Path, previous: Option<&Path>) -> Result<
 }
 
 /// `_generation.json` is written after the checkpoint payload snapshot.
+#[cfg(test)]
 pub(super) fn manifest_bytes(staging: &Path) -> Result<u64> {
+    note_inspected_file_entry();
     let metadata = std::fs::symlink_metadata(staging.join(super::GENERATION_MANIFEST_FILE))?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         bail!("segment generation manifest must be a regular file");
     }
     Ok(metadata.len())
 }
-pub(super) fn generation_disk_bytes(root: &Path) -> Result<u64> {
+
+#[cfg(unix)]
+pub(in crate::persistence) fn manifest_identity(staging: &Path) -> Result<((u64, u64), u64)> {
+    use std::os::unix::fs::MetadataExt;
+    note_inspected_file_entry();
+    let metadata = std::fs::symlink_metadata(staging.join(super::GENERATION_MANIFEST_FILE))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        bail!("segment generation manifest must be a regular file");
+    }
+    Ok(((metadata.dev(), metadata.ino()), metadata.len()))
+}
+
+#[cfg(not(unix))]
+pub(super) fn manifest_identity(_staging: &Path) -> Result<((u64, u64), u64)> {
+    bail!("segment file identity measurements require Unix")
+}
+
+/// Test oracle: a fresh walk of every retained generation under `root`.
+#[cfg(test)]
+pub(in crate::persistence) fn generation_disk_bytes(root: &Path) -> Result<u64> {
     let mut files = BTreeMap::new();
     for entry in std::fs::read_dir(root)? {
         let entry = entry?;

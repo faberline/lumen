@@ -43,7 +43,7 @@ impl DictionarySpool {
             let dict_start = at;
             let mut dict = StreamingVarWriter::new();
             let mut terms = view.string_terms(false)?;
-            while let Some(term) = terms.next()? {
+            while let Some(term) = terms.try_next()? {
                 if live(&term) {
                     dict.push(term.as_bytes(), &mut out, &mut at)?;
                 }

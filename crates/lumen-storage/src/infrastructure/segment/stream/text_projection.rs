@@ -10,6 +10,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use crate::infrastructure::composed_segment::ComposedSegmentReader;
 use crate::infrastructure::segment::codecs::encode_posting_block;
 use crate::infrastructure::segment::format::{header_block, present_column_ref};
+use crate::infrastructure::segment::reader_cache::CachedTextPosting;
 use crate::infrastructure::segment::stream::projection_columns::write_raw_dictionary;
 use crate::infrastructure::segment::stream::var_writer::{
     new_stream_temp, pad_to_page, write_counted, write_zeroes, StreamingVarWriter,
@@ -24,7 +25,7 @@ pub trait TextStreamView {
     fn text_is_present(&self, id: u32) -> bool;
     fn text_doc_len(&self, id: u32) -> u32;
     fn terms<'a>(&'a self) -> Result<Box<dyn Iterator<Item = Result<Cow<'a, str>>> + 'a>>;
-    fn text_postings(&self, term: &str) -> Result<Option<std::sync::Arc<(Vec<u32>, Vec<u32>)>>>;
+    fn text_postings(&self, term: &str) -> Result<Option<CachedTextPosting>>;
 }
 
 struct ComposedTerms<'a> {
@@ -108,7 +109,7 @@ pub fn write_text_projection(path: &Path, seq: u64, view: &impl TextStreamView) 
                 word = 0;
             }
         }
-        if n_docs % 64 != 0 {
+        if !n_docs.is_multiple_of(64) {
             write_counted(&mut out, &mut at, &word.to_le_bytes())?;
             words += 1;
         }

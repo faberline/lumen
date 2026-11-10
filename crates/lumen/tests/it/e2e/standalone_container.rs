@@ -32,7 +32,10 @@ const OLD_IMAGE: &str =
     "ghcr.io/chrischeng-c4/lumen@sha256:59a85c96d807428c424ec8889ac830b14e02869da49c4b44ae12dcce3786d03d";
 
 fn docker(args: &[&str]) -> Result<String, String> {
-    let out = Command::new("docker").args(args).output().map_err(|e| format!("docker {args:?}: {e}"))?;
+    let out = Command::new("docker")
+        .args(args)
+        .output()
+        .map_err(|e| format!("docker {args:?}: {e}"))?;
     if !out.status.success() {
         return Err(format!(
             "docker {args:?} failed ({}): {}",
@@ -50,18 +53,27 @@ fn must(args: &[&str]) -> String {
 /// stdout and stderr of the container, as `docker logs c 2>&1` gives them.
 fn logs(container: &str) -> String {
     match Command::new("docker").args(["logs", container]).output() {
-        Ok(out) => format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)),
+        Ok(out) => format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        ),
         Err(e) => format!("docker logs {container}: {e}"),
     }
 }
 
 fn running(container: &str) -> Option<bool> {
-    docker(&["inspect", "--format", "{{.State.Running}}", container]).ok().map(|s| s == "true")
+    docker(&["inspect", "--format", "{{.State.Running}}", container])
+        .ok()
+        .map(|s| s == "true")
 }
 
 /// Unique per run, so parallel runs on one host never share a name.
 fn suffix() -> String {
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).expect("clock").as_nanos();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
     format!("{nanos}-{}", std::process::id())
 }
 
@@ -75,7 +87,11 @@ struct Scratch {
 
 impl Scratch {
     fn new() -> Self {
-        Self { containers: Vec::new(), volumes: Vec::new(), dir: None }
+        Self {
+            containers: Vec::new(),
+            volumes: Vec::new(),
+            dir: None,
+        }
     }
 
     fn volume(&mut self, name: &str) {
@@ -147,7 +163,10 @@ fn port_diagnostics(container: &str) -> String {
         container,
     ])
     .unwrap_or_else(|e| e);
-    format!("published 7373/tcp port unavailable for {container}\n{state}\n{}", logs(container))
+    format!(
+        "published 7373/tcp port unavailable for {container}\n{state}\n{}",
+        logs(container)
+    )
 }
 
 /// The host port docker published for 7373/tcp, or "" when there is none.
@@ -166,7 +185,8 @@ fn is_port(s: &str) -> bool {
 
 async fn wait_published_port(container: &str) -> String {
     for _ in 0..60 {
-        let port = published_port(container).unwrap_or_else(|_| panic!("{}", port_diagnostics(container)));
+        let port =
+            published_port(container).unwrap_or_else(|_| panic!("{}", port_diagnostics(container)));
         if is_port(&port) {
             return port;
         }
@@ -220,7 +240,9 @@ async fn assert_search(api: &Api, value: &str) {
         .await;
     let id = format!("durable-{value}");
     assert!(
-        found["total"] == 1 && found["hits"].as_array().map(Vec::len) == Some(1) && found["hits"][0]["external_id"] == id.as_str(),
+        found["total"] == 1
+            && found["hits"].as_array().map(Vec::len) == Some(1)
+            && found["hits"][0]["external_id"] == id.as_str(),
         "{} must find exactly {id}, got {found}",
         api.base
     );
@@ -239,14 +261,18 @@ async fn index_tag(api: &Api, value: &str) {
 fn has_legacy_generation(dir: &Path) -> bool {
     dir.is_dir()
         && !dir.join("CURRENT").exists()
-        && std::fs::read_dir(dir).into_iter().flatten().flatten().any(|entry| {
-            entry.path().is_dir()
-                && entry
-                    .file_name()
-                    .to_str()
-                    .and_then(|n| n.strip_prefix("gen-"))
-                    .is_some_and(|n| !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit()))
-        })
+        && std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|entry| {
+                entry.path().is_dir()
+                    && entry
+                        .file_name()
+                        .to_str()
+                        .and_then(|n| n.strip_prefix("gen-"))
+                        .is_some_and(|n| !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit()))
+            })
 }
 
 /// `generation:gen-<n>\n`, or with `rev`, `generation:gen-<n>-rev-<m>\n` (m ≥ 1).
@@ -263,14 +289,20 @@ fn is_current(bytes: &[u8], rev: bool) -> bool {
         return digits(body);
     }
     match body.split_once("-rev-") {
-        Some((generation, revision)) => digits(generation) && digits(revision) && !revision.starts_with('0'),
+        Some((generation, revision)) => {
+            digits(generation) && digits(revision) && !revision.starts_with('0')
+        }
         None => false,
     }
 }
 
 fn read_current(scratch: &Scratch, container: &str, name: &str) -> Vec<u8> {
     let dest = scratch.dir.as_ref().expect("scratch dir").join(name);
-    must(&["cp", &format!("{container}:{DATA}/CURRENT"), dest.to_str().expect("utf-8 path")]);
+    must(&[
+        "cp",
+        &format!("{container}:{DATA}/CURRENT"),
+        dest.to_str().expect("utf-8 path"),
+    ]);
     std::fs::read(&dest).unwrap_or_else(|e| panic!("read {}: {e}", dest.display()))
 }
 
@@ -280,8 +312,8 @@ fn assert_startup_decision(container: &str, expected: &str) {
     let log = logs(container);
     let mut matches = 0;
     for line in log.lines().filter(|l| !l.trim().is_empty()) {
-        let entry: Value =
-            serde_json::from_str(line).unwrap_or_else(|_| panic!("invalid structured startup log line: {line}\n{log}"));
+        let entry: Value = serde_json::from_str(line)
+            .unwrap_or_else(|_| panic!("invalid structured startup log line: {line}\n{log}"));
         if entry["schema"] == "axiom.service.log.v1"
             && entry["service"]["name"] == "lumen"
             && entry["message"] == "segment checkpoint startup decision"
@@ -294,7 +326,11 @@ fn assert_startup_decision(container: &str, expected: &str) {
         matches == 1,
         "expected one segment checkpoint startup decision '{expected}' from {container}; found {matches}\n{log}"
     );
-    evidence(SUITE, "startup-decision", json!({"container": container, "decision": expected}));
+    evidence(
+        SUITE,
+        "startup-decision",
+        json!({"container": container, "decision": expected}),
+    );
 }
 
 /// Waits for the container to stop, and it must have failed.
@@ -302,12 +338,19 @@ async fn wait_failed_exit(container: &str) {
     for _ in 0..60 {
         if running(container) == Some(false) {
             let code = must(&["inspect", "--format", "{{.State.ExitCode}}", container]);
-            assert!(code != "0", "rejected container {container} exited successfully\n{}", logs(container));
+            assert!(
+                code != "0",
+                "rejected container {container} exited successfully\n{}",
+                logs(container)
+            );
             return;
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
-    panic!("rejected container {container} did not exit\n{}", logs(container));
+    panic!(
+        "rejected container {container} did not exit\n{}",
+        logs(container)
+    );
 }
 
 fn refused_root(log: &str) -> bool {
@@ -328,15 +371,30 @@ async fn bind() {
     let host_ip = r#"{{(index (index .NetworkSettings.Ports "7373/tcp") 0).HostIp}}"#;
     let host_port = r#"{{(index (index .NetworkSettings.Ports "7373/tcp") 0).HostPort}}"#;
 
-    say(format!(">> [{SUITE}] bind: image default listens on 0.0.0.0 ({positive})"));
+    say(format!(
+        ">> [{SUITE}] bind: image default listens on 0.0.0.0 ({positive})"
+    ));
     scratch.run(&positive, &["-e", "LUMEN_AUTH=off"], &image);
     let ip = must(&["inspect", "--format", host_ip, &positive]);
-    assert!(ip == "127.0.0.1", "expected published HostIp 127.0.0.1, got '{ip}'\n{}", logs(&positive));
+    assert!(
+        ip == "127.0.0.1",
+        "expected published HostIp 127.0.0.1, got '{ip}'\n{}",
+        logs(&positive)
+    );
     let port = must(&["inspect", "--format", host_port, &positive]);
-    assert!(!port.is_empty(), "no published HostPort for the positive container\n{}", logs(&positive));
+    assert!(
+        !port.is_empty(),
+        "no published HostPort for the positive container\n{}",
+        logs(&positive)
+    );
     let api = Api::new(&format!("http://127.0.0.1:{port}"));
     wait_answers(&api, &positive, "/healthz").await;
-    api.put("/collections/containerbind", &json!({"fields": {"tag": {"type": "keyword"}}}), TIMEOUT).await;
+    api.put(
+        "/collections/containerbind",
+        &json!({"fields": {"tag": {"type": "keyword"}}}),
+        TIMEOUT,
+    )
+    .await;
     api.post(
         "/collections/containerbind/index",
         &json!({"items": [{"external_id": "containerbind1", "field": "tag", "value": "ready"}]}),
@@ -344,7 +402,11 @@ async fn bind() {
     )
     .await;
     let found = api
-        .post("/collections/containerbind/search", &json!({"query": {"term": {"field": "tag", "value": "ready"}}}), TIMEOUT)
+        .post(
+            "/collections/containerbind/search",
+            &json!({"query": {"term": {"field": "tag", "value": "ready"}}}),
+            TIMEOUT,
+        )
         .await;
     assert!(
         super::support::hits_for(&found, "containerbind1") >= 1,
@@ -353,10 +415,20 @@ async fn bind() {
     );
     say("   positive container answered through 127.0.0.1 and found containerbind1");
 
-    say(format!(">> [{SUITE}] bind: LUMEN_HOST=127.0.0.1 is unreachable from the host ({negative})"));
-    scratch.run(&negative, &["-e", "LUMEN_HOST=127.0.0.1", "-e", "LUMEN_AUTH=off"], &image);
+    say(format!(
+        ">> [{SUITE}] bind: LUMEN_HOST=127.0.0.1 is unreachable from the host ({negative})"
+    ));
+    scratch.run(
+        &negative,
+        &["-e", "LUMEN_HOST=127.0.0.1", "-e", "LUMEN_AUTH=off"],
+        &image,
+    );
     let ip = must(&["inspect", "--format", host_ip, &negative]);
-    assert!(ip == "127.0.0.1", "negative container HostIp expected 127.0.0.1, got '{ip}'\n{}", logs(&negative));
+    assert!(
+        ip == "127.0.0.1",
+        "negative container HostIp expected 127.0.0.1, got '{ip}'\n{}",
+        logs(&negative)
+    );
     let mut listening = false;
     for _ in 0..60 {
         let log = logs(&negative);
@@ -364,7 +436,10 @@ async fn bind() {
             running(&negative) == Some(true),
             "negative container exited before proving startup\n{log}"
         );
-        if log.lines().any(|l| l.contains("lumen serve listening") && l.contains("127.0.0.1:7373")) {
+        if log
+            .lines()
+            .any(|l| l.contains("lumen serve listening") && l.contains("127.0.0.1:7373"))
+        {
             listening = true;
             break;
         }
@@ -378,7 +453,11 @@ async fn bind() {
     let port = must(&["inspect", "--format", host_port, &negative]);
     let url = format!("http://127.0.0.1:{port}/healthz");
     for _ in 0..10 {
-        assert!(!reachable(&url).await, "negative container host port {url} was reachable\n{}", logs(&negative));
+        assert!(
+            !reachable(&url).await,
+            "negative container host port {url} was reachable\n{}",
+            logs(&negative)
+        );
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
     assert!(
@@ -415,22 +494,35 @@ async fn durable() {
     let mount = format!("type=volume,src={volume},dst={DATA}");
     let reject_mount = format!("type=volume,src={reject_volume},dst={DATA}");
 
-    say(format!(">> [{SUITE}] durable: the 0428 image writes a legacy layout"));
+    say(format!(
+        ">> [{SUITE}] durable: the 0428 image writes a legacy layout"
+    ));
     let api = serve(
         &mut scratch,
         &old,
         &[
-            "--mount", &mount,
-            "-e", "LUMEN_AUTH=off",
-            "-e", &format!("LUMEN_DATA_DIR={DATA}"),
-            "-e", "LUMEN_PERSISTENCE=segment",
-            "-e", "LUMEN_SNAPSHOT_SECS=1",
-            "-e", "LUMEN_GRACE_SECS=1",
+            "--mount",
+            &mount,
+            "-e",
+            "LUMEN_AUTH=off",
+            "-e",
+            &format!("LUMEN_DATA_DIR={DATA}"),
+            "-e",
+            "LUMEN_PERSISTENCE=segment",
+            "-e",
+            "LUMEN_SNAPSHOT_SECS=1",
+            "-e",
+            "LUMEN_GRACE_SECS=1",
         ],
         OLD_IMAGE,
     )
     .await;
-    api.put("/collections/durable", &json!({"fields": {"tag": {"type": "keyword"}}}), TIMEOUT).await;
+    api.put(
+        "/collections/durable",
+        &json!({"fields": {"tag": {"type": "keyword"}}}),
+        TIMEOUT,
+    )
+    .await;
     index_tag(&api, "first").await;
     assert_search(&api, "first").await;
     let old_data = tmp.join("old-data");
@@ -450,57 +542,118 @@ async fn durable() {
     );
     scratch.remove(&old);
 
-    say(format!(">> [{SUITE}] durable: the candidate adopts the legacy layout"));
-    let json_logs = ["--mount", mount.as_str(), "-e", "LUMEN_AUTH=off", "-e", "LUMEN_LOG_FORMAT=json"];
+    say(format!(
+        ">> [{SUITE}] durable: the candidate adopts the legacy layout"
+    ));
+    let json_logs = [
+        "--mount",
+        mount.as_str(),
+        "-e",
+        "LUMEN_AUTH=off",
+        "-e",
+        "LUMEN_LOG_FORMAT=json",
+    ];
     let api = serve(&mut scratch, &candidate, &json_logs, &image).await;
     assert_startup_decision(&candidate, "adopted_legacy_0428");
     let current = read_current(&scratch, &candidate, "current-first");
-    assert!(is_current(&current, false), "adopted CURRENT is not generation:gen-<n>: {:?}", String::from_utf8_lossy(&current));
+    assert!(
+        is_current(&current, false),
+        "adopted CURRENT is not generation:gen-<n>: {:?}",
+        String::from_utf8_lossy(&current)
+    );
     assert_search(&api, "first").await;
     index_tag(&api, "second").await;
     assert_search(&api, "second").await;
     let checkpoint = api.post("/admin/checkpoint", &json!({}), TIMEOUT).await;
-    assert!(checkpoint["persisted"] == true, "checkpoint did not persist: {checkpoint}");
+    assert!(
+        checkpoint["persisted"] == true,
+        "checkpoint did not persist: {checkpoint}"
+    );
     let current = read_current(&scratch, &candidate, "current-rev");
-    assert!(is_current(&current, true), "checkpointed CURRENT is not a revision: {:?}", String::from_utf8_lossy(&current));
+    assert!(
+        is_current(&current, true),
+        "checkpointed CURRENT is not a revision: {:?}",
+        String::from_utf8_lossy(&current)
+    );
     must(&["kill", &candidate]);
     scratch.remove(&candidate);
 
-    say(format!(">> [{SUITE}] durable: a replacement restores the CURRENT revision"));
+    say(format!(
+        ">> [{SUITE}] durable: a replacement restores the CURRENT revision"
+    ));
     let api = serve(&mut scratch, &replacement, &json_logs, &image).await;
     assert_startup_decision(&replacement, "restored_current_generation");
     let current = read_current(&scratch, &replacement, "current-replacement");
-    assert!(is_current(&current, true), "restored CURRENT is not a revision: {:?}", String::from_utf8_lossy(&current));
+    assert!(
+        is_current(&current, true),
+        "restored CURRENT is not a revision: {:?}",
+        String::from_utf8_lossy(&current)
+    );
     assert_search(&api, "first").await;
     assert_search(&api, "second").await;
 
-    say(format!(">> [{SUITE}] durable: an unknown root is refused and left as it was"));
+    say(format!(
+        ">> [{SUITE}] durable: an unknown root is refused and left as it was"
+    ));
     let foreign = tmp.join("foreign-layout");
     std::fs::create_dir(&foreign).expect("create foreign-layout");
-    std::fs::write(foreign.join("sentinel"), b"fail-closed unknown root\n").expect("write sentinel");
+    std::fs::write(foreign.join("sentinel"), b"fail-closed unknown root\n")
+        .expect("write sentinel");
     scratch.containers.push(seed.clone());
     must(&["create", "--name", &seed, "--mount", &reject_mount, &image]);
-    must(&["cp", foreign.to_str().expect("utf-8 path"), &format!("{seed}:{DATA}/foreign-layout")]);
+    must(&[
+        "cp",
+        foreign.to_str().expect("utf-8 path"),
+        &format!("{seed}:{DATA}/foreign-layout"),
+    ]);
     scratch.remove(&seed);
-    scratch.run(&rejected, &["--mount", &reject_mount, "-e", "LUMEN_AUTH=off"], &image);
+    scratch.run(
+        &rejected,
+        &["--mount", &reject_mount, "-e", "LUMEN_AUTH=off"],
+        &image,
+    );
     wait_failed_exit(&rejected).await;
-    let port = published_port(&rejected).unwrap_or_else(|_| panic!("{}", port_diagnostics(&rejected)));
+    let port =
+        published_port(&rejected).unwrap_or_else(|_| panic!("{}", port_diagnostics(&rejected)));
     if !port.is_empty() {
-        assert!(is_port(&port), "rejected container has an invalid published port {port}\n{}", port_diagnostics(&rejected));
+        assert!(
+            is_port(&port),
+            "rejected container has an invalid published port {port}\n{}",
+            port_diagnostics(&rejected)
+        );
         let url = format!("http://127.0.0.1:{port}/readyz");
-        assert!(!Api::new(&format!("http://127.0.0.1:{port}")).answers("/readyz").await, "rejected container served {url}");
+        assert!(
+            !Api::new(&format!("http://127.0.0.1:{port}"))
+                .answers("/readyz")
+                .await,
+            "rejected container served {url}"
+        );
     }
     let log = logs(&rejected);
-    assert!(refused_root(&log), "rejected container did not refuse the unknown root\n{log}");
+    assert!(
+        refused_root(&log),
+        "rejected container did not refuse the unknown root\n{log}"
+    );
     let rejected_data = tmp.join("rejected-data");
-    must(&["cp", &format!("{rejected}:{DATA}"), rejected_data.to_str().expect("utf-8 path")]);
-    assert!(!rejected_data.join("CURRENT").exists(), "the refused volume gained a CURRENT");
+    must(&[
+        "cp",
+        &format!("{rejected}:{DATA}"),
+        rejected_data.to_str().expect("utf-8 path"),
+    ]);
+    assert!(
+        !rejected_data.join("CURRENT").exists(),
+        "the refused volume gained a CURRENT"
+    );
     assert_eq!(
         std::fs::read(rejected_data.join("foreign-layout/sentinel")).ok(),
         Some(b"fail-closed unknown root\n".to_vec()),
         "the refused volume's sentinel changed"
     );
-    evidence(SUITE, "durable", json!({"image": image, "old_image": OLD_IMAGE, "result": "pass"}));
+    evidence(
+        SUITE,
+        "durable",
+        json!({"image": image, "old_image": OLD_IMAGE, "result": "pass"}),
+    );
     say(format!(">> [{SUITE}] durable PASS"));
 }
 
@@ -521,8 +674,12 @@ mod tests {
 
     #[test]
     fn refusal_line() {
-        assert!(refused_root("x invalid segment checkpoint root inventory [foo]: refusing to initialize CURRENT"));
-        assert!(!refused_root("invalid segment checkpoint root inventory\nrefusing to initialize CURRENT"));
+        assert!(refused_root(
+            "x invalid segment checkpoint root inventory [foo]: refusing to initialize CURRENT"
+        ));
+        assert!(!refused_root(
+            "invalid segment checkpoint root inventory\nrefusing to initialize CURRENT"
+        ));
         assert!(is_port("49153") && !is_port("") && !is_port("0") && !is_port("12a"));
     }
 }

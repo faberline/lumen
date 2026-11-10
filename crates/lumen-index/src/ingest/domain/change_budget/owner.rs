@@ -37,6 +37,7 @@ impl Owner {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn request_checkpoint(&self) -> bool {
         self.request_checkpoint_revision().is_some()
     }
@@ -45,15 +46,29 @@ impl Owner {
     /// the accounting lock is held. This is the only revision that a local
     /// admission refusal may report.
     pub(crate) fn request_checkpoint_revision(&self) -> Option<u64> {
+        self.request_checkpoint_revision_after(None)
+    }
+
+    /// A real refusal after an already completed publication is new demand.
+    /// Do not let that demand reuse the revision the owner already served.
+    pub(crate) fn request_checkpoint_revision_after(&self, relieved: Option<u64>) -> Option<u64> {
+        self.request_checkpoint_demand_after(relieved)
+            .map(|(revision, _)| revision)
+    }
+
+    /// Return both clocks under the same accounting lock. A request revision
+    /// can exceed this owner's work revision because other owners share it.
+    pub(crate) fn request_checkpoint_demand_after(
+        &self,
+        relieved: Option<u64>,
+    ) -> Option<(u64, u64)> {
         let mut state = self
             .budget
             .0
             .state
             .lock()
             .expect("change budget lock poisoned");
-        let Some(owner) = state.owners.get(&self.id) else {
-            return None;
-        };
+        let owner = state.owners.get(&self.id)?;
         let resident_active = owner
             .resident
             .get(&owner.current_capture_epoch)
@@ -70,6 +85,11 @@ impl Owner {
         }
         let work_revision = owner.work_revision;
         let previous = owner.checkpoint_request_revision;
+        if relieved.is_some() && state.checkpoint_request_revision == relieved {
+            // Other owners retain their own outstanding revision. Their old
+            // completion cannot consume the new global request below.
+            state.checkpoint_request_revision = None;
+        }
         let revision = request_revision(&mut state, work_revision);
         state
             .owners
@@ -79,7 +99,11 @@ impl Owner {
         if previous != Some(revision) {
             self.budget.0.wake.signal();
         }
-        Some(revision)
+        Some((revision, work_revision))
+    }
+
+    pub(crate) fn notify_checkpoint_progress(&self) {
+        self.budget.0.wake.signal();
     }
 
     pub(crate) fn consume_checkpoint_request(&self, revision: Option<u64>) {
@@ -92,13 +116,22 @@ impl Owner {
             .state
             .lock()
             .expect("change budget lock poisoned");
+        let mut consumed = false;
         if let Some(owner) = state.owners.get_mut(&self.id) {
             if owner.checkpoint_request_revision == Some(revision) {
                 owner.checkpoint_request_revision = None;
+                consumed = true;
             }
         }
         if state.checkpoint_request_revision == Some(revision) {
             state.checkpoint_request_revision = None;
+            consumed = true;
+        }
+        if consumed {
+            // Publication may have released only an older, smaller cut. Wake
+            // blocked reserve/grow predicates so a still-real refusal can
+            // request the remaining work without waiting for the period.
+            self.budget.0.changed.notify_all();
         }
         self.budget.0.wake.signal();
     }
@@ -113,6 +146,7 @@ impl Owner {
         self.budget.reserve(&self.lifetime, bytes, true)
     }
 
+    #[cfg(test)]
     pub(crate) fn work_revision(&self) -> Result<u64, AdmissionError> {
         let state = self
             .budget
@@ -130,6 +164,41 @@ impl Owner {
     /// Read only this owner's publishable work. `ChangeBudget::snapshot` is
     /// process-global and therefore cannot safely select an Engine to save.
     pub(crate) fn capacity_state(&self) -> Result<OwnerCapacityState, AdmissionError> {
+        self.capacity_state_with_scope(false)
+    }
+
+    pub(crate) fn capacity_schedule_state(&self) -> Result<OwnerCapacityState, AdmissionError> {
+        self.capacity_state_with_scope(true)
+    }
+
+    pub(crate) fn record_capacity_relief(&self, revision: Option<u64>) {
+        let Some(revision) = revision else {
+            return;
+        };
+        let mut state = self
+            .budget
+            .0
+            .state
+            .lock()
+            .expect("change budget lock poisoned");
+        let Some(owner) = state.owners.get_mut(&self.id) else {
+            return;
+        };
+        let served = owner
+            .relieved_capacity_revision
+            .map_or(revision, |old| old.max(revision));
+        owner.relieved_capacity_revision = Some(served);
+        owner
+            .capacity_cohort_work
+            .retain(|episode, _| *episode > served);
+        drop(state);
+        self.budget.0.wake.signal();
+    }
+
+    fn capacity_state_with_scope(
+        &self,
+        schedule: bool,
+    ) -> Result<OwnerCapacityState, AdmissionError> {
         let state = self
             .budget
             .0
@@ -163,7 +232,17 @@ impl Owner {
                 .checked_add(resident_active)
                 .expect("active overflow"),
             frozen,
-            work_revision: owner.work_revision,
+            work_revision: if schedule {
+                owner
+                    .capacity_cohort_work
+                    .values()
+                    .copied()
+                    .max()
+                    .unwrap_or_default()
+                    .max(owner.independent_work_revision)
+            } else {
+                owner.work_revision
+            },
             checkpoint_request_revision: owner.checkpoint_request_revision,
         })
     }

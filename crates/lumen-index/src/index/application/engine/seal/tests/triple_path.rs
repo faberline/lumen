@@ -13,6 +13,14 @@
 //! rebuild MUST fail this. The test also asserts the forward payload provably
 //! left RAM after the seal-and-drop.
 
+type SnapshotRow = (
+    String,
+    Option<u64>,
+    Option<String>,
+    Option<Vec<String>>,
+    Option<u64>,
+);
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
@@ -210,15 +218,7 @@ fn driven(extra: QueryNode) -> QueryNode {
 /// docid to (eid, num, kw, tags, sig). Routes through `number_at` /
 /// `keyword_at` / `set_members` / `hash_at`, which after a seal-and-drop must
 /// read the segment, not the (empty) forward map.
-fn retrieve_all(
-    e: &Engine,
-) -> Vec<(
-    String,
-    Option<u64>,
-    Option<String>,
-    Option<Vec<String>>,
-    Option<u64>,
-)> {
+fn retrieve_all(e: &Engine) -> Vec<SnapshotRow> {
     let state = e.state.read().unwrap();
     let coll = state.collections.get("c").unwrap();
     let n = coll.interner.to_eid.len() as u32;
@@ -282,7 +282,7 @@ proptest! {
         let e = Arc::new(Engine::new());
         e.create_collection("c", schema()).unwrap();
         for (i, (num, kw, tags, tok, sig, emb)) in docs.iter().enumerate() {
-            let tagrefs: Vec<&str> = tags.iter().copied().collect();
+            let tagrefs: Vec<&str> = tags.to_vec();
             index_doc(
                 &e,
                 &format!("d{i}"),

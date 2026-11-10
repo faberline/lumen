@@ -8,6 +8,9 @@ use std::sync::Arc;
 
 const MERGE_TOKENS: [&str; 3] = ["shared", "rare", "absent-from-base"];
 
+type TextRow<'a> = Option<Vec<(&'a str, u32)>>;
+type ModelLayer<'a> = (Vec<u32>, Vec<TextRow<'a>>);
+
 fn random_text_rows(rng: &mut impl rand::Rng, n: usize) -> Vec<Option<Vec<(&'static str, u32)>>> {
     (0..n)
         .map(|_| {
@@ -68,7 +71,7 @@ fn model_posting(
     token: &str,
     base_ids: &[u32],
     base_rows: &[Option<Vec<(&str, u32)>>],
-    layers: &[(Vec<u32>, Vec<Option<Vec<(&str, u32)>>>)],
+    layers: &[ModelLayer<'_>],
 ) -> Option<(Vec<u32>, Vec<u32>)> {
     let tf_in = |row: &Option<Vec<(&str, u32)>>| {
         row.as_ref()
@@ -103,7 +106,7 @@ fn coverage_driven_text_merge_matches_the_layered_reference() {
     use rand::seq::SliceRandom;
     use rand::{Rng, SeedableRng};
     let dir = tempfile::tempdir().unwrap();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(0x0424_6);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0x0000_4246);
     for round in 0..60 {
         let round_dir = dir.path().join(format!("r{round}"));
         std::fs::create_dir_all(&round_dir).unwrap();
@@ -127,10 +130,8 @@ fn coverage_driven_text_merge_matches_the_layered_reference() {
         } else {
             ComposedSegmentReader::from_base(base)
         };
-        let mut model_layers: Vec<(Vec<u32>, Vec<Option<Vec<(&str, u32)>>>)> = Vec::new();
-        let check = |view: &ComposedSegmentReader,
-                     model_layers: &[(Vec<u32>, Vec<Option<Vec<(&str, u32)>>>)],
-                     label: &str| {
+        let mut model_layers: Vec<ModelLayer<'_>> = Vec::new();
+        let check = |view: &ComposedSegmentReader, model_layers: &[ModelLayer<'_>], label: &str| {
             assert_merge_matches_reference(view, label);
             for token in MERGE_TOKENS {
                 assert_eq!(

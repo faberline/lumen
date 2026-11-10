@@ -18,24 +18,24 @@ impl Engine {
         &self,
         entry: RaftLogEntry,
         mut reserved: RecordReservation,
-    ) -> Result<RecordApplyGuard<'_>, RepriceRecord> {
+    ) -> Result<RecordApplyGuard<'_>, Box<RepriceRecord>> {
         if reserved.runtime != self.changes.id {
-            return Err(RepriceRecord {
+            return Err(Box::new(RepriceRecord {
                 entry,
                 reservation: reserved,
                 required: None,
                 error: RecordAdmissionError::WrongEngine,
-            });
+            }));
         }
         loop {
             if let Err((required, error)) = self.ensure_ngram_cost_workspace(&entry, &mut reserved)
             {
-                return Err(RepriceRecord {
+                return Err(Box::new(RepriceRecord {
                     entry,
                     reservation: reserved,
                     required,
                     error,
-                });
+                }));
             }
             // Decide representation before taking the apply lease. External WAL
             // delivery starts with only its raw reservation and reaches this path too.
@@ -53,16 +53,16 @@ impl Engine {
                 let minimum = match self.record_memory_bound(&entry, reserved.extra_owned, true) {
                     Ok(bytes) => bytes,
                     Err(error) => {
-                        return Err(RepriceRecord {
+                        return Err(Box::new(RepriceRecord {
                             entry,
                             reservation: reserved,
                             required: None,
                             error,
-                        })
+                        }))
                     }
                 };
                 if reserved.bytes() < minimum {
-                    return Err(RepriceRecord {
+                    return Err(Box::new(RepriceRecord {
                         entry,
                         reservation: reserved,
                         required: Some(minimum),
@@ -71,7 +71,7 @@ impl Engine {
                             used: self.changes.budget.snapshot().total,
                             hard_limit: crate::ingest::domain::change_budget::HARD_LIMIT,
                         }),
-                    });
+                    }));
                 }
                 if reserved.prepared_text.is_none() {
                     match self.prepare_text_rows(&entry, &mut reserved) {
@@ -88,12 +88,12 @@ impl Engine {
                                 .err()
                                 .map(RecordAdmissionError::Capacity)
                                 .unwrap_or(error);
-                            return Err(RepriceRecord {
+                            return Err(Box::new(RepriceRecord {
                                 entry,
                                 reservation: reserved,
                                 required: None,
                                 error,
-                            });
+                            }));
                         }
                     }
                 }
@@ -106,12 +106,12 @@ impl Engine {
             {
                 drop(apply);
                 if let Err(error) = reserved.discard_preparation() {
-                    return Err(RepriceRecord {
+                    return Err(Box::new(RepriceRecord {
                         entry,
                         reservation: reserved,
                         required: None,
                         error: RecordAdmissionError::Capacity(error),
-                    });
+                    }));
                 }
                 continue;
             }
@@ -125,12 +125,12 @@ impl Engine {
                 Ok(required) => required,
                 Err(error) => {
                     drop(apply);
-                    return Err(RepriceRecord {
+                    return Err(Box::new(RepriceRecord {
                         entry,
                         reservation: reserved,
                         required: None,
                         error,
-                    });
+                    }));
                 }
             };
             // Keep room for another exact state recheck when ownership must
@@ -139,12 +139,12 @@ impl Engine {
                 Some(bytes) => bytes,
                 None => {
                     drop(apply);
-                    return Err(RepriceRecord {
+                    return Err(Box::new(RepriceRecord {
                         entry,
                         reservation: reserved,
                         required: None,
                         error: RecordAdmissionError::Overflow,
-                    });
+                    }));
                 }
             };
             if required > reserved.bytes() {
@@ -154,12 +154,12 @@ impl Engine {
                     hard_limit: crate::ingest::domain::change_budget::HARD_LIMIT,
                 });
                 drop(apply);
-                return Err(RepriceRecord {
+                return Err(Box::new(RepriceRecord {
                     entry,
                     reservation: reserved,
                     required: Some(retry_required),
                     error,
-                });
+                }));
             }
             // Exact pricing's fixed table is no longer alive. Remove its
             // workspace and any old normalized overestimate before retention.

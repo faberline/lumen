@@ -38,6 +38,8 @@ use std::sync::{Arc, Mutex, Weak};
 use anyhow::Result;
 use raft_runtime::OutcomeWindow;
 use rustc_hash::FxHashMap;
+
+use crate::ingest::application::ports::capacity_owner::{CapacityOwner, NoopCapacityOwner};
 use tokio::sync::{oneshot, OwnedRwLockReadGuard};
 
 use crate::index::application::admission::record_reservation::{
@@ -59,7 +61,8 @@ const OUTCOME_WINDOW: u64 = 8192;
 /// stall — turning what would otherwise be an infinite hang into a
 /// retryable 5xx.
 const SUBMIT_TIMEOUT_SECS: u64 = 30;
-const SUBMIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(SUBMIT_TIMEOUT_SECS);
+pub(crate) const SUBMIT_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(SUBMIT_TIMEOUT_SECS);
 // Admission must leave time for an already admitted record to publish and
 // apply inside the same 30-second submit deadline.
 const LOCAL_CAPACITY_APPLY_RESERVE: std::time::Duration = std::time::Duration::from_secs(1);
@@ -140,9 +143,11 @@ pub struct WriteCoordinator {
     /// The last capacity-request revision reported by optional diagnostics.
     /// This is telemetry-only and does not take part in admission or retry.
     diagnostic_refusal_revision: AtomicU64,
+    capacity_trace:
+        Mutex<Option<Arc<dyn crate::ingest::application::ports::capacity_trace::CapacityTrace>>>,
     #[cfg(test)]
-    diagnostic_capture: Mutex<Option<crate::persistence::infrastructure::segment_rdb_store::diagnostic::DiagnosticCaptureToken>>,
-    layer_capacity_owner: Mutex<Option<crate::persistence::application::capacity::Fallback>>,
+    diagnostic_capture_enabled: AtomicBool,
+    pub(crate) layer_capacity_owner: Mutex<Box<dyn CapacityOwner>>,
     applied: AtomicU64,
     completions: Mutex<CompletionState>,
     /// A failed committed head can still retain its WAL source. Keep any
@@ -172,16 +177,33 @@ impl WriteCoordinator {
     /// Spawn the apply loop and return the coordinator. The loop tails
     /// the log from the beginning and folds it into `engine`.
     pub fn start(wal: SharedWal, engine: Arc<Engine>) -> Arc<Self> {
-        Self::start_from(wal, engine, 0)
+        Self::start_with_capacity_owner(wal, engine, Box::new(NoopCapacityOwner))
+    }
+
+    /// Like [`start`](Self::start) but attaches a specific capacity owner.
+    pub fn start_with_capacity_owner(
+        wal: SharedWal,
+        engine: Arc<Engine>,
+        capacity_owner: Box<dyn CapacityOwner>,
+    ) -> Arc<Self> {
+        Self::start_from_with_capacity_owner(wal, engine, 0, capacity_owner)
     }
 
     /// Like [`start`](Self::start) but begins applying after `from_seq`
     /// — used when a snapshot (RDB) already seeded the engine up to that
     /// sequence.
     pub fn start_from(wal: SharedWal, engine: Arc<Engine>, from_seq: u64) -> Arc<Self> {
-        // The default / non-AOF path. Delegates with no AOF, so the apply loop is
-        // byte-identical to today.
-        Self::start_from_inner(wal, engine, from_seq, None)
+        Self::start_from_with_capacity_owner(wal, engine, from_seq, Box::new(NoopCapacityOwner))
+    }
+
+    /// Like [`start_from`](Self::start_from) but attaches a specific capacity owner.
+    pub fn start_from_with_capacity_owner(
+        wal: SharedWal,
+        engine: Arc<Engine>,
+        from_seq: u64,
+        capacity_owner: Box<dyn CapacityOwner>,
+    ) -> Arc<Self> {
+        Self::start_from_inner(wal, engine, from_seq, None, capacity_owner)
     }
 
     /// Like [`start_from`](Self::start_from) but also appends every APPLIED
@@ -194,7 +216,32 @@ impl WriteCoordinator {
         from_seq: u64,
         aof: SharedAof,
     ) -> Arc<Self> {
-        Self::start_from_inner(wal, engine, from_seq, Some(aof))
+        Self::start_from_with_aof_and_capacity_owner(
+            wal,
+            engine,
+            from_seq,
+            Some(aof),
+            Box::new(NoopCapacityOwner),
+        )
+    }
+
+    /// Like [`start_from_with_aof`](Self::start_from_with_aof) but attaches a specific capacity owner.
+    pub fn start_from_with_aof_and_capacity_owner(
+        wal: SharedWal,
+        engine: Arc<Engine>,
+        from_seq: u64,
+        aof: Option<SharedAof>,
+        capacity_owner: Box<dyn CapacityOwner>,
+    ) -> Arc<Self> {
+        Self::start_from_inner(wal, engine, from_seq, aof, capacity_owner)
+    }
+
+    /// Install the diagnostic adapter before accepting writes.
+    pub fn set_capacity_trace(
+        &self,
+        trace: Arc<dyn crate::ingest::application::ports::capacity_trace::CapacityTrace>,
+    ) {
+        *self.capacity_trace.lock().expect("capacity trace poisoned") = Some(trace);
     }
 
     /// Highest sequence this node has applied.
@@ -210,6 +257,12 @@ impl WriteCoordinator {
 pub trait WriteSink: Send + Sync {
     async fn submit(&self, entry: RaftLogEntry) -> Result<ApplyOutcome>;
     fn applied_seq(&self) -> u64;
+    /// Fixed durability boundary for an on-demand checkpoint. The default is
+    /// already applied state. A separately tailed WAL must supply its committed
+    /// head even if capacity currently blocks those records from applying.
+    async fn checkpoint_target_seq(&self) -> Result<u64> {
+        Ok(self.applied_seq())
+    }
     fn restart_required(&self) -> bool {
         false
     }
@@ -225,6 +278,9 @@ impl WriteSink for WriteCoordinator {
     }
     fn applied_seq(&self) -> u64 {
         WriteCoordinator::applied_seq(self)
+    }
+    async fn checkpoint_target_seq(&self) -> Result<u64> {
+        self.wal.latest_seq().await
     }
     fn restart_required(&self) -> bool {
         WriteCoordinator::is_restart_required(self)

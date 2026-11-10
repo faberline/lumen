@@ -212,8 +212,8 @@ fn serve_startup(env: &[(&str, &str)]) -> (bool, bool, String) {
         // Stop a server that kept running before reading its stderr, which
         // only reaches EOF when the process exits.
         let _ = child.kill();
-        let _ = child.wait();
     }
+    child.wait().expect("reap owned authentication server");
     let mut stderr = String::new();
     if let Some(err) = child.stderr.take() {
         for line in BufReader::new(err).lines().map_while(Result::ok) {
