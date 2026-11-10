@@ -111,6 +111,37 @@ fn run_lumen_chainable(args: &[&str]) -> String {
     run_chainable_command(&mut command, &format!("lumen {args:?}"))
 }
 
+/// `upgrade --check` calls the live GitHub releases API. A failure whose
+/// stderr names `api.github.com` means that call was unreachable (rate limit
+/// or no network), not a lumen defect, so the caller skips its assertions.
+fn is_github_unreachable(stderr: &str) -> bool {
+    stderr.contains("api.github.com")
+}
+
+/// Run `lumen upgrade --check`. `None` means GitHub was unreachable; any other
+/// failure still panics.
+fn run_lumen_upgrade_check() -> Option<String> {
+    let output = Command::new(env!("CARGO_BIN_EXE_lumen"))
+        .args(["upgrade", "--check"])
+        .output()
+        .unwrap_or_else(|err| panic!("run lumen [\"upgrade\", \"--check\"]: {err}"));
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    if output.status.success() {
+        assert_chainable(&stdout).unwrap_or_else(|err| {
+            panic!(
+                "lumen [\"upgrade\", \"--check\"]: expected chainable stdout, got {err}\n{stdout}"
+            )
+        });
+        return Some(stdout);
+    }
+    if is_github_unreachable(&stderr) {
+        eprintln!("skipping upgrade --check assertions: GitHub API unreachable\n{stderr}");
+        return None;
+    }
+    panic!("lumen [\"upgrade\", \"--check\"] failed\nstdout:\n{stdout}\nstderr:\n{stderr}");
+}
+
 fn outline_llm_topic_commands() -> Vec<String> {
     let output = run_lumen(&["llm", "--topic", "outline", "--format", "json"]);
     let document: Value = serde_json::from_str(&output).expect("LLM outline JSON parses");
@@ -379,7 +410,9 @@ fn issue_create_comment_and_upgrade_check_outputs_are_chainable() {
     assert!(commented.contains("issue: #123"));
     assert!(commented.contains("next: done"));
 
-    let checked = run_lumen_chainable(&["upgrade", "--check"]);
+    let Some(checked) = run_lumen_upgrade_check() else {
+        return;
+    };
     for expected in ["current:", "latest:", "next: done"] {
         assert!(
             checked.contains(expected),
@@ -690,5 +723,23 @@ async fn backup_export_import_outputs_are_chainable() {
         serde_json::from_str(&import_stdout).expect("import output is valid JSON");
     assert_eq!(import_json["status"], "restored");
     assert_eq!(import_json["next"], "done");
+}
+
+#[test]
+fn github_unreachable_classifier_accepts_api_errors() {
+    assert!(is_github_unreachable(
+        "Error: GitHub API error for https://api.github.com/repos/faberline/lumen/releases?per_page=100\n\nCaused by: 403 Forbidden"
+    ));
+    assert!(is_github_unreachable(
+        "GET https://api.github.com/repos/x/releases"
+    ));
+}
+
+#[test]
+fn github_unreachable_classifier_rejects_other_errors() {
+    assert!(!is_github_unreachable(
+        "error: unrecognized subcommand 'upgrade'"
+    ));
+    assert!(!is_github_unreachable(""));
 }
 // HANDWRITE-END
