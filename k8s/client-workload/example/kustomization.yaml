@@ -1,0 +1,11 @@
+# CODEGEN-BEGIN
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+
+components:
+  - ..
+  - ../egress
+# CODEGEN-END

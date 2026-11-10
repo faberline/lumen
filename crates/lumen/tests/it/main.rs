@@ -40,6 +40,7 @@ mod checkpoint_publication_contract;
 mod cli_client_ksa_token;
 mod cli_convention;
 mod cli_credential_paths_retired;
+mod client_workload_template;
 mod collapse_nested;
 mod collection_delete_recreate;
 mod collection_version_never_moves_backwards;

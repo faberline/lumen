@@ -1,0 +1,18 @@
+# Render fixture only: a stub application Deployment for `kustomize build`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-app
+  labels:
+    app: client-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: client-app}
+  template:
+    metadata:
+      labels: {app: client-app}
+    spec:
+      containers:
+        - name: REPLACE_ME__CONTAINER
+          image: registry.invalid/client:0
