@@ -1,8 +1,10 @@
 //! The checkpoint catalog model: the generation manifest a checkpoint
 //! publishes, rebasing a manifest onto a background merge's verified output,
 //! the repository seam RDB snapshots are saved to and loaded from, and the
-//! schedule that decides when the periodic driver starts a checkpoint.
+//! schedule that decides when the periodic driver starts a checkpoint, and the
+//! backup manifest that ties per-shard backup artifacts into one set.
 
+pub mod backup_manifest;
 pub mod checkpoint_schedule;
 pub mod generation_manifest;
 pub mod merge_rebase;
