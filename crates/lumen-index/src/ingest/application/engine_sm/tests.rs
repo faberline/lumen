@@ -191,3 +191,4 @@ fn unindex_control_record_applies_and_survives_a_raft_snapshot() {
 }
 
 mod admission_contract;
+mod durable_ack;
