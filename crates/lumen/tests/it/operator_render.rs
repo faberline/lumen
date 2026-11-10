@@ -608,8 +608,9 @@ fn multi_shard_single_replica_is_fixed_storage_topology_not_hpa() {
     let l = lumen("search", spec);
     let objs = render(&l);
 
-    let sts = find(&objs, "StatefulSet", "search");
-    assert_eq!(sts["spec"]["replicas"], 4);
+    let sts = find(&objs, "StatefulSet", "search-s0");
+    // One StatefulSet per shard, each with replicasPerShard members (#228).
+    assert_eq!(sts["spec"]["replicas"], 1);
     assert!(
         !has(&objs, "HorizontalPodAutoscaler", "search"),
         "HPA must not change multi-shard storage ownership"
@@ -676,7 +677,7 @@ fn prod_wires_auth_and_observability() {
     let objs = render(&l);
 
     // auth=required without registry projection (retired phase 1).
-    let dep = find(&objs, "StatefulSet", "lumen");
+    let dep = find(&objs, "StatefulSet", "lumen-s0");
     let c = &dep["spec"]["template"]["spec"]["containers"][0];
     assert_eq!(c["image"], "registry.example.com/lumen:1.2.3");
     assert_eq!(c["imagePullPolicy"], "Always");
@@ -1142,7 +1143,7 @@ fn shard_map_assignments_are_exposed_to_serving_config() {
     // reference SHARD_MAP_ASSIGNMENTS too (not just the ConfigMap), so a pod
     // started/restarted after this commits actually routes by it via
     // `lumen::config::shard_map_from_env`.
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = find(&objs, "StatefulSet", "search-s0");
     let c = &sts["spec"]["template"]["spec"]["containers"][0];
     let names = env_names(c);
     for required in [
@@ -1183,7 +1184,7 @@ fn raft_ha_renders_serving_statefulset() {
 
     // The serving fleet is now a StatefulSet + headless Service; no Deployment/HPA.
     assert!(
-        has(&objs, "StatefulSet", "search"),
+        has(&objs, "StatefulSet", "search-s0"),
         "got {:?}",
         kinds(&objs)
     );
@@ -1191,10 +1192,10 @@ fn raft_ha_renders_serving_statefulset() {
     assert!(!has(&objs, "Deployment", "search"));
     assert!(!has(&objs, "HorizontalPodAutoscaler", "search"));
 
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = find(&objs, "StatefulSet", "search-s0");
     assert_eq!(sts["spec"]["serviceName"], "search-headless");
     assert_eq!(sts["spec"]["podManagementPolicy"], "Parallel");
-    assert_eq!(sts["spec"]["replicas"], 6); // shard_count(2) × replicasPerShard(3)
+    assert_eq!(sts["spec"]["replicas"], 3); // replicasPerShard(3) in each of shard_count(2) StatefulSets
 
     // Exactly the env `raft_runtime::cluster::ClusterTopology::from_env` reads.
     let env = env_names(&sts["spec"]["template"]["spec"]["containers"][0]);
@@ -1357,7 +1358,7 @@ fn placement_names_a_node_pool_without_replacing_the_anti_affinity() {
         }],
     };
     let objs = render(&lumen("search", spec));
-    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    let pod = &find(&objs, "StatefulSet", "search-s0")["spec"]["template"]["spec"];
 
     assert_eq!(
         pod["nodeSelector"]["cloud.google.com/gke-nodepool"],
@@ -1375,24 +1376,25 @@ fn placement_names_a_node_pool_without_replacing_the_anti_affinity() {
         "kubernetes.io/hostname",
         "naming a node pool must not cost the one-replica-per-host constraint"
     );
-    assert_eq!(
+    assert!(
         pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-            ["namespaceSelector"],
-        serde_json::json!({}),
-        "anti-affinity must match cross-namespace"
+            .get("namespaceSelector")
+            .is_none(),
+        "anti-affinity matches the shard's own pods only"
     );
 }
 
-/// A default CR renders cross-namespace anti-affinity.
+/// A default CR renders one-member-per-host anti-affinity per shard (#228).
 #[test]
-fn default_placement_renders_cross_namespace_anti_affinity() {
+fn default_placement_renders_same_shard_anti_affinity() {
     let objs = render(&lumen("search", prod_spec()));
-    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
-    assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-            ["namespaceSelector"],
-        serde_json::json!({}),
-        "anti-affinity must match cross-namespace"
+    let pod = &find(&objs, "StatefulSet", "search-s0")["spec"]["template"]["spec"];
+    let term =
+        &pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0];
+    assert_eq!(term["labelSelector"]["matchLabels"]["lumen.dev/shard"], "0");
+    assert!(
+        term.get("namespaceSelector").is_none(),
+        "anti-affinity matches the shard's own pods only, not other namespaces"
     );
     assert_eq!(
         pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
@@ -1414,7 +1416,7 @@ fn render_with_profile_sets_capacity_profile_node_selector_and_toleration() {
     };
     let objs =
         lumen::operator::render::render_with_profile(&lumen("search", prod_spec()), &profile);
-    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    let pod = &find(&objs, "StatefulSet", "search-s0")["spec"]["template"]["spec"];
     assert_eq!(
         pod["nodeSelector"]["lumen.axiom.dev/capacity-profile"],
         "e2-standard-2"
@@ -1428,25 +1430,26 @@ fn render_with_profile_sets_capacity_profile_node_selector_and_toleration() {
 }
 
 #[test]
-fn three_namespaces_share_same_pool_selector_and_cross_namespace_anti_affinity() {
+fn three_namespaces_share_same_pool_selector_and_same_shard_anti_affinity() {
     for ns in ["alpha", "beta", "gamma"] {
         let mut l = lumen("search", prod_spec());
         l.metadata.namespace = Some(ns.to_string());
         let objs = render(&l);
-        let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+        let pod = &find(&objs, "StatefulSet", "search-s0")["spec"]["template"]["spec"];
         assert_eq!(
             pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
                 ["labelSelector"]["matchLabels"],
             serde_json::json!({
                 "app.kubernetes.io/name": "lumen",
                 "app.kubernetes.io/component": "server",
+                "app.kubernetes.io/instance": "search",
+                "lumen.dev/shard": "0",
             })
         );
-        assert_eq!(
-            pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-                ["namespaceSelector"],
-            serde_json::json!({})
-        );
+        assert!(pod["affinity"]["podAntiAffinity"]
+            ["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            .get("namespaceSelector")
+            .is_none());
     }
 }
 
@@ -1509,7 +1512,7 @@ fn image_pull_secrets_reach_every_pod_that_pulls_the_image() {
         admin_token_secret: None,
     });
     let objs = render(&lumen("search", spec));
-    let sts = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    let sts = &find(&objs, "StatefulSet", "search-s0")["spec"]["template"]["spec"];
     assert_eq!(
         sts["imagePullSecrets"],
         serde_json::json!([{ "name": "ghcr-pull" }])
@@ -1527,7 +1530,7 @@ fn image_pull_secrets_reach_every_pod_that_pulls_the_image() {
 #[test]
 fn no_image_pull_secrets_renders_no_key() {
     let objs = render(&lumen("search", prod_spec()));
-    let sts = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    let sts = &find(&objs, "StatefulSet", "search-s0")["spec"]["template"]["spec"];
     assert!(sts.get("imagePullSecrets").is_none(), "{sts:#}");
 }
 
@@ -1794,8 +1797,8 @@ fn admission_spec_absent_renders_no_admission_env() {
     for spec in [dev_spec(), prod_spec()] {
         let l = lumen("search", spec);
         let objs = render(&l);
-        let sts = find(&objs, "StatefulSet", "search");
-        let names = env_names(&sts["spec"]["template"]["spec"]["containers"][0]);
+        let sts = pod_spec(&objs);
+        let names = env_names(&sts["containers"][0]);
         for absent in [
             "LUMEN_ADMISSION_READ_CAPACITY",
             "LUMEN_ADMISSION_WRITE_CAPACITY",
@@ -1829,7 +1832,7 @@ fn network_policy_off_prunes_the_policy_render_no_longer_emits() {
         "networkPolicy=true must render the policy"
     );
     assert!(
-        prunes(&on).is_empty(),
+        !prunes(&on).iter().any(|t| t.kind == "NetworkPolicy"),
         "a CR that still wants the policy must never nominate it for deletion"
     );
 
@@ -1839,14 +1842,13 @@ fn network_policy_off_prunes_the_policy_render_no_longer_emits() {
         !has(&render(&off), "NetworkPolicy", "search"),
         "networkPolicy=false must stop rendering the policy"
     );
-    assert_eq!(
-        prunes(&off),
-        vec![PruneTarget {
+    assert!(
+        prunes(&off).contains(&PruneTarget {
             api_version: "networking.k8s.io/v1",
             kind: "NetworkPolicy",
             name: "search".to_string(),
-        }],
-        "networkPolicy=false must nominate exactly the policy for deletion"
+        }),
+        "networkPolicy=false must nominate the policy for deletion"
     );
 }
 
@@ -1870,7 +1872,10 @@ fn pruned_network_policy_name_matches_the_rendered_one() {
             .expect("networkPolicy=true renders one");
 
         spec.network_policy = false;
-        let targets = prunes(&lumen(name, spec));
+        let targets: Vec<PruneTarget> = prunes(&lumen(name, spec))
+            .into_iter()
+            .filter(|t| t.kind == "NetworkPolicy")
+            .collect();
         assert_eq!(targets.len(), 1);
         assert_eq!(
             Value::from(targets[0].name.clone()),
@@ -1906,7 +1911,13 @@ fn replicated_spec(secret: Option<&str>) -> LumenSpec {
 
 /// The pod template of the rendered serving StatefulSet.
 fn pod_spec(objs: &[Value]) -> Value {
-    find(objs, "StatefulSet", "search")["spec"]["template"]["spec"].clone()
+    // One StatefulSet for a single shard, `search-s0` (the first per-shard
+    // StatefulSet) when sharded; the pod template is the same in every shard.
+    let single = objs
+        .iter()
+        .any(|o| o["kind"] == "StatefulSet" && o["metadata"]["name"] == "search");
+    let name = if single { "search" } else { "search-s0" };
+    find(objs, "StatefulSet", name)["spec"]["template"]["spec"].clone()
 }
 
 fn env_value(container: &Value, name: &str) -> Option<String> {
