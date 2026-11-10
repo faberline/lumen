@@ -1,0 +1,29 @@
+//! Lumen shared acceptance runner. Slice 1 of #114: the runner skeleton only.
+//! It adds no real functional or performance phase.
+
+mod cli;
+mod report;
+mod run;
+
+use std::process::ExitCode;
+
+use clap::Parser;
+
+use crate::cli::{Cli, Command};
+use crate::report::Mode;
+
+fn main() -> ExitCode {
+    let cli = Cli::parse();
+    let result = match cli.command {
+        Command::Functional(args) => run::execute(Mode::Functional, args),
+        Command::Performance(args) => run::execute(Mode::Performance, args),
+    };
+    match result {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::FAILURE,
+        Err(err) => {
+            eprintln!("lumen-acceptance: {err:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
