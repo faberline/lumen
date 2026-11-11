@@ -1317,6 +1317,29 @@ fn checked_in_crd_yaml_matches_the_renderer() {
     );
 }
 
+#[test]
+fn crd_says_migration_bytes_per_sec_is_not_enforced() {
+    let rendered = lumen::operator::crd_yaml();
+    let occurrences = rendered.matches("migrationBytesPerSec:").count();
+    assert_eq!(occurrences, 3, "spec, status and LumenFleet copies");
+    // each block is followed by a description naming the limitation
+    for block in rendered.split("migrationBytesPerSec:").skip(1) {
+        let head: String = block.lines().take(8).collect::<Vec<_>>().join("\n");
+        assert!(
+            head.contains("description:"),
+            "missing description in: {head}"
+        );
+        assert!(
+            head.contains("not enforced"),
+            "missing 'not enforced' in: {head}"
+        );
+        assert!(
+            head.contains("unthrottled"),
+            "missing 'unthrottled' in: {head}"
+        );
+    }
+}
+
 /// A stateful search workload wants a dedicated node pool — local SSD, high
 /// memory — and until `spec.placement` existed there was no way to ask for one:
 /// the StatefulSet is operator-rendered, so a `kubectl patch` adding a
