@@ -185,6 +185,7 @@ mod tests {
             log_level: None,
             auth: Default::default(),
             serving: ServingSpec::default(),
+            runtime: None,
             reshard_policy: Default::default(),
             observability: false,
             network_policy: false,

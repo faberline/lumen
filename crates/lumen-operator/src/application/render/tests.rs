@@ -27,6 +27,7 @@ fn single_replica() -> Lumen {
             log_level: None,
             auth: AuthMode::Off,
             serving: ServingSpec::default(),
+            runtime: None,
             reshard_policy: ReshardPolicy::default(),
             observability: false,
             network_policy: false,

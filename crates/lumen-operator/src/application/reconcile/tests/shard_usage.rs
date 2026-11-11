@@ -107,6 +107,7 @@ fn pod_metrics_urls_covers_every_storage_pod_by_headless_dns() {
         log_level: None,
         auth: Default::default(),
         serving: ServingSpec::default(),
+        runtime: None,
         reshard_policy: Default::default(),
         observability: false,
         network_policy: false,

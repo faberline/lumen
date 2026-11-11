@@ -266,6 +266,30 @@ spec:
                         nullable: true
                     type: object
                 type: object
+              runtime:
+                description: Typed per-instance serving settings. A Fleet instance overrides these field by field; unset means the operator default.
+                nullable: true
+                properties:
+                  bootstrapMaxBytesPerSec:
+                    description: Bootstrap transfer cap in bytes per second. Maps to `LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC`.
+                    type: integer
+                    minimum: 0.0
+                    nullable: true
+                  graceSecs:
+                    description: Seconds allowed for a graceful shutdown. Maps to `LUMEN_GRACE_SECS`.
+                    type: integer
+                    minimum: 0.0
+                    nullable: true
+                  otlpEndpoint:
+                    description: OTLP collector endpoint for traces. Maps to `LUMEN_OTLP_ENDPOINT`.
+                    nullable: true
+                    type: string
+                  snapshotSecs:
+                    description: Seconds between snapshots. Maps to the `LUMEN_SNAPSHOT_SECS` env var.
+                    type: integer
+                    minimum: 0.0
+                    nullable: true
+                type: object
               serviceAccountAnnotations:
                 additionalProperties:
                   type: string
@@ -823,6 +847,30 @@ spec:
                             nullable: true
                         type: object
                     type: object
+                  runtime:
+                    description: Typed per-instance serving settings. A Fleet instance overrides these field by field; unset means the operator default.
+                    nullable: true
+                    properties:
+                      bootstrapMaxBytesPerSec:
+                        description: Bootstrap transfer cap in bytes per second. Maps to `LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC`.
+                        type: integer
+                        minimum: 0.0
+                        nullable: true
+                      graceSecs:
+                        description: Seconds allowed for a graceful shutdown. Maps to `LUMEN_GRACE_SECS`.
+                        type: integer
+                        minimum: 0.0
+                        nullable: true
+                      otlpEndpoint:
+                        description: OTLP collector endpoint for traces. Maps to `LUMEN_OTLP_ENDPOINT`.
+                        nullable: true
+                        type: string
+                      snapshotSecs:
+                        description: Seconds between snapshots. Maps to the `LUMEN_SNAPSHOT_SECS` env var.
+                        type: integer
+                        minimum: 0.0
+                        nullable: true
+                    type: object
                   serviceAccountAnnotations:
                     additionalProperties:
                       type: string
@@ -958,6 +1006,30 @@ spec:
                     namespace:
                       description: 'The namespace the `Lumen` is materialized into. The namespace must already exist: creating namespaces from a CR would make the operator''s ClusterRole a namespace-creation privilege, and namespace lifecycle (quotas, labels, Workload Identity bindings) belongs to whatever provisions the cluster.'
                       type: string
+                    runtime:
+                      description: Typed serving settings for this instance. Each set field replaces the same field of [`LumenFleetSpec::defaults`]`.runtime`; an unset field keeps the default.
+                      nullable: true
+                      properties:
+                        bootstrapMaxBytesPerSec:
+                          description: Bootstrap transfer cap in bytes per second. Maps to `LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC`.
+                          type: integer
+                          minimum: 0.0
+                          nullable: true
+                        graceSecs:
+                          description: Seconds allowed for a graceful shutdown. Maps to `LUMEN_GRACE_SECS`.
+                          type: integer
+                          minimum: 0.0
+                          nullable: true
+                        otlpEndpoint:
+                          description: OTLP collector endpoint for traces. Maps to `LUMEN_OTLP_ENDPOINT`.
+                          nullable: true
+                          type: string
+                        snapshotSecs:
+                          description: Seconds between snapshots. Maps to the `LUMEN_SNAPSHOT_SECS` env var.
+                          type: integer
+                          minimum: 0.0
+                          nullable: true
+                      type: object
                     spec:
                       description: |-
                         A JSON Merge Patch (RFC 7386) applied over [`LumenFleetSpec::defaults`] — the app team's knowledge: this tenant's CPU/memory request, its disk size, the name of its credential source. A `null` value removes an inherited field.

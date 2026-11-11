@@ -35,6 +35,7 @@ fn spec(shard_count: u32, replicas_per_shard: u32, max_shard_bytes: Option<u64>)
         log_level: None,
         auth: Default::default(),
         serving: ServingSpec::default(),
+        runtime: None,
         reshard_policy: ReshardPolicy {
             max_shard_bytes,
             ..Default::default()

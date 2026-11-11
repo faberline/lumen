@@ -50,6 +50,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::LumenSpec;
 
 /// Label every `Lumen` a fleet materializes carries, naming the fleet that
@@ -115,6 +116,12 @@ pub struct FleetInstance {
     /// `kubectl get lumen -A` reads as one fleet spread across namespaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+
+    /// Typed serving settings for this instance. Each set field replaces the
+    /// same field of [`LumenFleetSpec::defaults`]`.runtime`; an unset field
+    /// keeps the default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<RuntimeSettings>,
 
     /// A JSON Merge Patch (RFC 7386) applied over
     /// [`LumenFleetSpec::defaults`] — the app team's knowledge: this tenant's

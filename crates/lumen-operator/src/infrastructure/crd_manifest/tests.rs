@@ -27,6 +27,23 @@ fn the_override_survives_structural_schema_pruning() {
     assert!(yaml.contains("shardCount"), "{yaml}");
 }
 
+/// The typed `runtime` settings must reach both CRDs: the Lumen spec and the
+/// fleet (defaults plus per-instance). Without the schema entries the API
+/// server prunes them and each instance silently keeps the defaults.
+#[test]
+fn the_runtime_field_survives_structural_schema_pruning() {
+    let lumen = crate::infrastructure::crd_manifest::lumen_crd_yaml();
+    assert!(lumen.contains("snapshotSecs"), "{lumen}");
+
+    let fleet = fleet_crd_yaml();
+    assert!(fleet.contains("runtime"), "{fleet}");
+    // Once under the fleet defaults and once under `instances[]`.
+    assert!(
+        fleet.matches("snapshotSecs").count() >= 2,
+        "per-instance runtime missing from the fleet CRD: {fleet}"
+    );
+}
+
 /// #2872 AC3. The identity-audience rule was the only CEL rule this CRD
 /// carried, and it guarded a field that no longer exists — so the check
 /// that survives is the one on the *shape* of any rule added later.

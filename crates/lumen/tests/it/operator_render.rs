@@ -94,6 +94,7 @@ fn dev_spec() -> LumenSpec {
         log_level: None,
         auth: AuthMode::Off,
         serving: ServingSpec::default(),
+        runtime: None,
         reshard_policy: ReshardPolicy::default(),
         observability: false,
         network_policy: false,
@@ -125,6 +126,7 @@ fn prod_spec() -> LumenSpec {
             grace_secs: 45,
             ..Default::default()
         },
+        runtime: None,
         reshard_policy: ReshardPolicy::default(),
         observability: true,
         network_policy: true,

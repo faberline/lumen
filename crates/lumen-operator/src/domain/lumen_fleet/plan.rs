@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use crate::domain::lumen_fleet::{
     LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL, FLEET_MANAGER,
 };
+use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::LumenSpec;
 
 /// Spec paths the reshard driver owns at runtime; see the module docs.
@@ -47,6 +48,14 @@ pub fn plan(fleet: &LumenFleet) -> Vec<PlannedInstance> {
         }
 
         let mut merged = defaults.clone();
+        // Typed runtime: each field the instance sets replaces the default's
+        // field; the rest keep the default. Without an instance value the
+        // defaults' `runtime` is already in `merged`.
+        if let Some(entry_runtime) = &entry.runtime {
+            let base: RuntimeSettings = fleet.spec.defaults.runtime.clone().unwrap_or_default();
+            let effective = base.overlay(entry_runtime);
+            merged["runtime"] = serde_json::to_value(&effective).unwrap_or(Value::Null);
+        }
         if let Some(patch) = &entry.spec {
             merge_patch(&mut merged, patch);
         }

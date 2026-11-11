@@ -257,6 +257,7 @@ fn initial_lumen(max_shard_bytes: Option<u64>, blocking_condition: Option<&str>)
         log_level: None,
         auth: Default::default(),
         serving: ServingSpec::default(),
+        runtime: None,
         reshard_policy: ReshardPolicy {
             max_shard_bytes,
             ..Default::default()

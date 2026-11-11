@@ -33,8 +33,33 @@ fn instance(namespace: &str, spec: Option<Value>) -> FleetInstance {
     FleetInstance {
         namespace: namespace.to_string(),
         name: None,
+        runtime: None,
         spec,
     }
+}
+
+fn instance_with_runtime(namespace: &str, runtime: Value) -> FleetInstance {
+    FleetInstance {
+        runtime: Some(serde_json::from_value(runtime).expect("runtime parses")),
+        ..instance(namespace, None)
+    }
+}
+
+/// A fleet whose defaults carry `defaults_runtime` as `runtime`.
+fn fleet_with_runtime_defaults(
+    defaults_runtime: Value,
+    instances: Vec<FleetInstance>,
+) -> LumenFleet {
+    let mut defaults = serde_json::to_value(defaults()).expect("defaults serialize");
+    defaults["runtime"] = defaults_runtime;
+    LumenFleet::new(
+        "search",
+        LumenFleetSpec {
+            defaults: serde_json::from_value(defaults).expect("defaults with runtime parse"),
+            instances,
+            prune_policy: PrunePolicy::default(),
+        },
+    )
 }
 
 fn ready(planned: &PlannedInstance) -> &Value {
@@ -97,6 +122,85 @@ fn a_null_override_clears_an_inherited_field() {
     );
     let planned = plan(&with_log_level);
     assert!(ready(&planned[0]).get("logLevel").is_none());
+}
+
+/// Per-instance `runtime` replaces only the fields it sets; the rest of the
+/// defaults' `runtime` stays.
+#[test]
+fn runtime_replaces_the_default_field_by_field() {
+    let planned = plan(&fleet_with_runtime_defaults(
+        json!({ "snapshotSecs": 300, "graceSecs": 30 }),
+        vec![instance_with_runtime(
+            "team-a",
+            json!({ "snapshotSecs": 60 }),
+        )],
+    ));
+    assert_eq!(
+        ready(&planned[0])["runtime"],
+        json!({ "snapshotSecs": 60, "graceSecs": 30 })
+    );
+}
+
+/// Two namespaces of one fleet get their own runtime, and an entry that
+/// names none gets the defaults. Negative control: with the `overlay` call
+/// in `plan()` removed, `team-a` would get the default 300 and this fails.
+#[test]
+fn two_namespaces_get_different_runtime_and_a_third_gets_the_defaults() {
+    let planned = plan(&fleet_with_runtime_defaults(
+        json!({ "snapshotSecs": 300 }),
+        vec![
+            instance_with_runtime("team-a", json!({ "snapshotSecs": 10 })),
+            instance_with_runtime("team-b", json!({ "snapshotSecs": 20 })),
+            instance("team-c", None),
+        ],
+    ));
+    assert_eq!(ready(&planned[0])["runtime"]["snapshotSecs"], json!(10));
+    assert_eq!(ready(&planned[1])["runtime"]["snapshotSecs"], json!(20));
+    assert_eq!(ready(&planned[2])["runtime"]["snapshotSecs"], json!(300));
+}
+
+/// A manifest written before `runtime` existed has no such key anywhere. It
+/// still deserializes and plans with no `runtime` in the result.
+#[test]
+fn a_manifest_without_runtime_plans_the_same_spec_as_before() {
+    let fleet: LumenFleet = serde_json::from_value(json!({
+        "apiVersion": "lumen.dev/v1alpha1",
+        "kind": "LumenFleet",
+        "metadata": { "name": "search" },
+        "spec": {
+            "defaults": { "image": "ghcr.io/acme/lumen:0.4.27" },
+            "instances": [ { "namespace": "team-a" } ],
+        },
+    }))
+    .expect("an old manifest still deserializes");
+    let planned = plan(&fleet);
+    let spec = ready(&planned[0]);
+    assert_eq!(spec["image"], json!("ghcr.io/acme/lumen:0.4.27"));
+    assert!(spec.get("runtime").is_none());
+}
+
+/// The `instances[].spec` patch keeps its RFC 7386 behavior when `runtime` is
+/// also present: `null` removal still works and an unknown key is still
+/// rejected.
+#[test]
+fn the_spec_patch_still_merges_as_before_with_runtime_present() {
+    let planned = plan(&fleet(vec![FleetInstance {
+        runtime: Some(serde_json::from_value(json!({ "snapshotSecs": 5 })).unwrap()),
+        ..instance(
+            "team-d",
+            Some(json!({ "logLevel": "debug", "serving": null })),
+        )
+    }]));
+    let spec = ready(&planned[0]);
+    assert_eq!(spec["logLevel"], json!("debug"));
+    assert!(spec.get("serving").is_none(), "null clears serving");
+    assert_eq!(spec["runtime"]["snapshotSecs"], json!(5));
+
+    let rejected = plan(&fleet(vec![FleetInstance {
+        runtime: Some(serde_json::from_value(json!({ "snapshotSecs": 5 })).unwrap()),
+        ..instance("team-e", Some(json!({ "nope": 1 })))
+    }]));
+    assert!(rejection(&rejected[0]).contains("nope"));
 }
 
 /// The failure mode a free-form override has to be defended against: a
