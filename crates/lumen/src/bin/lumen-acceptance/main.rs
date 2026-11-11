@@ -2,6 +2,12 @@
 //! It adds no real functional or performance phase.
 
 mod cli;
+#[allow(dead_code)] // used by the performance phase of slice 7 (#264)
+mod dataset;
+mod http;
+mod lifecycle;
+#[allow(dead_code)] // used by the performance phase of slice 7 (#264)
+mod load;
 mod report;
 mod run;
 
