@@ -47,6 +47,8 @@ build-stamp.workspace = true
 [features]
 default = []
 jieba = ["lumen-index/jieba"]
+# acceptance — the HTTP client of the lumen-acceptance runner (#114).
+acceptance = ["dep:reqwest"]
 # raft-wal — lumen owns write ordering + replication via libs/raft-core (HA),
 # instead of an external broker. Peer RPCs use the h2c client. (#515)
 # raft-runtime itself is non-optional (#1002; see the dependency comment above) —
@@ -95,6 +97,11 @@ release = [
     "issue",
     "delegated-auth",
 ]
+
+[[bin]]
+name = "lumen-acceptance"
+path = "src/bin/lumen-acceptance/main.rs"
+required-features = ["acceptance"]
 
 [dev-dependencies]
 async-trait.workspace = true
