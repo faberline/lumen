@@ -132,7 +132,6 @@ impl Engine {
                         }
                     }
                     if coll.data_version == identity.data_version {
-                        coll.checkpoint_origin = coll.checkpoint_lineage.clone();
                         coll.requires_full_checkpoint = false;
                         // Prepared mmap fields describe exactly the captured version.
                         // Never overwrite mutations made while file I/O was running.
@@ -190,8 +189,7 @@ impl Engine {
     pub(crate) fn bind_legacy_checkpoint_origin(&self, root: &std::path::Path) -> Result<()> {
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
         for (name, coll) in &mut state.collections {
-            coll.checkpoint_origin = Some(root.join(collection_dir_name(name)));
-            coll.checkpoint_lineage = coll.checkpoint_origin.clone();
+            coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
             coll.checkpoint_lineage_schema = Some(coll.version);
             coll.journal_complete_since_empty = false;
         }
@@ -212,8 +210,7 @@ impl Engine {
                 .ok_or_else(|| anyhow!("missing reopened collection"))?;
             coll.collection_generation = identity.generation;
             coll.data_version = identity.data_version;
-            coll.checkpoint_origin = Some(root.join(collection_dir_name(name)));
-            coll.checkpoint_lineage = coll.checkpoint_origin.clone();
+            coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
             coll.checkpoint_lineage_schema = Some(coll.version);
             coll.journal_complete_since_empty = false;
         }
