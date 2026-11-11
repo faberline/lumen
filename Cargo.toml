@@ -11,7 +11,7 @@ members = ["crates/*"]
 # workflows read the first column-0 `version = "` line of this file.
 version = "0.6.2"
 edition = "2021"
-authors = ["Chris Cheng <chris.cheng.c4@gmail.com>"]
+authors = ["Faberline contributors"]
 license = "MIT"
 repository = "https://github.com/faberline/lumen"
 
