@@ -59,7 +59,7 @@ const E2E_SUITE_BYTES_SHA256: &[(&str, &str)] = &[
     ),
     (
         "crates/lumen/tests/it/e2e/operator.rs",
-        "cc1063bbc79c203aefe26b4e1e521e8965385b1bdbda9559bcb7610704e805ae",
+        "5d95d8882ef1ff02baafc3d86b494857ac47f9308d669301d23bbc79b71ef698",
     ),
     (
         "crates/lumen/tests/it/e2e/overlay.rs",
