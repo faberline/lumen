@@ -228,3 +228,31 @@ fn replacement_owner_waits_until_current_and_live_binding_permit_releases() {
         "configured replacement crossed an active durable/live publication permit"
     );
 }
+
+#[test]
+fn temporary_spill_owner_is_never_started_as_configured() {
+    use crate::ingest::application::ports::CapacityOwner;
+
+    fn registered_configured(engine: &Arc<crate::index::application::engine::Engine>) -> bool {
+        engine
+            .layer_maintenance
+            .registration
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .configured
+    }
+
+    let engine = engine();
+    let mut fallback = Fallback::default();
+    CapacityOwner::ensure(&mut fallback, &engine).unwrap();
+    assert!(
+        !registered_configured(&engine),
+        "first owner of a store-less fallback uses a temporary spill store and is not configured"
+    );
+    fallback.stop();
+    CapacityOwner::ensure(&mut fallback, &engine).unwrap();
+    assert!(
+        !registered_configured(&engine),
+        "a restarted owner of the same fallback must still use a temporary spill store, not count as configured"
+    );
+}

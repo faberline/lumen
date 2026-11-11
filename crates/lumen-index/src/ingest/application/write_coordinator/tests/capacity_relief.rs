@@ -114,7 +114,7 @@ async fn local_admission_observes_capacity_released_before_wait_at_same_revision
     let wal = Arc::new(MemWal::new());
     let coord = WriteCoordinator::start(wal.clone(), engine.clone());
     let capture = DiagnosticCapture::new();
-    coord.set_diagnostic_capture(capture.token());
+    coord.set_diagnostic_capture(Arc::new(capture.token()));
 
     // Hold the real save after capture. Its owner remains registered and
     // cannot publish or consume the checkpoint request during admission.

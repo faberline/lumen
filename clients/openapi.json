@@ -4,8 +4,7 @@
     "title": "lumen",
     "description": "Standalone search and duplicate-detection index. Generic Collection / Field primitive; the caller owns the source of truth.",
     "contact": {
-      "name": "Chris Cheng",
-      "email": "chris.cheng.c4@gmail.com"
+      "name": "Faberline contributors"
     },
     "license": {
       "name": "MIT"
