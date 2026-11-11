@@ -42,7 +42,7 @@ use crate::ingest::interfaces::http::delete::{
     delete_doc, delete_external_id, truncate_docs, unindex_docs,
 };
 #[allow(deprecated)]
-use crate::ingest::interfaces::http::index::{index, reindex_stream};
+use crate::ingest::interfaces::http::index::{index, merge_docs, reindex_stream};
 use crate::ingest::interfaces::http::replace::{replace_doc, replace_docs};
 use crate::persistence::interfaces::http::backup::{backup, backup_to_local, restore};
 use crate::persistence::interfaces::http::checkpoint::{
@@ -174,6 +174,7 @@ pub fn router_with_admission(
                 .fallback(collection_id_query_dispatch),
         )
         .route("/collections/{collection_id}/index", post(index))
+        .route("/collections/{collection_id}/docs:merge", post(merge_docs))
         .route(
             "/collections/{collection_id}/index/{external_id}",
             delete(delete_external_id),
