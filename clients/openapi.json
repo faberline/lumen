@@ -2802,6 +2802,7 @@
           },
           "routing_key": {
             "type": "string",
+            "description": "Optional caller-owned routing key. Reserved: it does not narrow shard\nfan-out while writes cannot carry it, because writes place every\ndocument by `external_id`; a search with `routing_key` returns the same\nhits and `total` as the same search without it.",
             "nullable": true
           },
           "sort": {
@@ -2895,7 +2896,7 @@
           },
           "routing_key": {
             "type": "string",
-            "description": "Optional caller-owned routing key for sharded deployments. When present,\na sharded router can target the one shard that owns\n`(collection_id, routing_key)` instead of scatter/gathering every shard.\nWrites default to `external_id` as the routing key, so one large\ncollection can still spread across shards without caller help.",
+            "description": "Optional caller-owned routing key. Reserved: it does not narrow shard\nfan-out while writes cannot carry it, because writes place every\ndocument by `external_id`; a search with `routing_key` returns the same\nhits and `total` as the same search without it.",
             "nullable": true
           },
           "sort": {
