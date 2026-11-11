@@ -2,6 +2,8 @@
 //! It adds no real functional or performance phase.
 
 mod cli;
+mod http;
+mod lifecycle;
 mod report;
 mod run;
 

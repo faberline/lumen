@@ -6,6 +6,7 @@ use std::path::Path;
 use anyhow::{bail, Result};
 
 use crate::cli::RunArgs;
+use crate::lifecycle;
 use crate::report::{summary, write_report, Mode, PhaseResult, PhaseStatus, Report};
 
 pub(super) trait Phase {
@@ -111,10 +112,31 @@ impl Cleanup for NoCleanup {
     }
 }
 
-/// The phase list for a run. Only `endpoint_configured` exists in this slice.
-fn phase_list(args: &RunArgs) -> Result<Vec<Box<dyn Phase>>> {
+const SUPPORTED_PHASES: &str = "endpoint_configured,collection_lifecycle";
+
+/// The phases a mode runs when `--phases` is not given, in order.
+fn default_phase_names(mode: Mode) -> &'static [&'static str] {
+    match mode {
+        Mode::Functional => &["endpoint_configured", "collection_lifecycle"],
+        Mode::Performance => &["endpoint_configured"],
+    }
+}
+
+fn phase_by_name(name: &str) -> Option<Box<dyn Phase>> {
+    match name {
+        "endpoint_configured" => Some(Box::new(EndpointConfigured)),
+        "collection_lifecycle" => Some(Box::new(lifecycle::CollectionLifecycle)),
+        _ => None,
+    }
+}
+
+/// The phase list for a run: the mode's default, or the names given by `--phases`.
+fn phase_list(mode: Mode, args: &RunArgs) -> Result<Vec<Box<dyn Phase>>> {
     let names: Vec<String> = match &args.phases {
-        None => vec!["endpoint_configured".to_string()],
+        None => default_phase_names(mode)
+            .iter()
+            .map(|name| name.to_string())
+            .collect(),
         Some(raw) => raw
             .split(',')
             .map(|name| name.trim().to_string())
@@ -122,20 +144,21 @@ fn phase_list(args: &RunArgs) -> Result<Vec<Box<dyn Phase>>> {
             .collect(),
     };
     if names.is_empty() {
-        bail!("--phases names no phase; supported: endpoint_configured");
+        bail!("--phases names no phase; supported: {SUPPORTED_PHASES}");
     }
     names
         .iter()
-        .map(|name| match name.as_str() {
-            "endpoint_configured" => Ok(Box::new(EndpointConfigured) as Box<dyn Phase>),
-            other => bail!("unknown phase `{other}`; supported: endpoint_configured"),
+        .map(|name| {
+            phase_by_name(name).ok_or_else(|| {
+                anyhow::anyhow!("unknown phase `{name}`; supported: {SUPPORTED_PHASES}")
+            })
         })
         .collect()
 }
 
 /// Runs one mode, writes `report.json` and prints the summary. Returns whether the run passed.
 pub(super) fn execute(mode: Mode, args: RunArgs) -> Result<bool> {
-    let phases = phase_list(&args)?;
+    let phases = phase_list(mode, &args)?;
     let outcome = run_phases(mode, &args, &phases, &[], &NoCleanup)?;
     let report_path = write_report(&args.artifact_dir, &outcome.report)?;
     println!("{}", summary(&outcome.report, &report_path));
@@ -145,6 +168,18 @@ pub(super) fn execute(mode: Mode, args: RunArgs) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn functional_default_list_has_both_phases() {
+        assert_eq!(
+            default_phase_names(Mode::Functional),
+            ["endpoint_configured", "collection_lifecycle"]
+        );
+        assert_eq!(
+            default_phase_names(Mode::Performance),
+            ["endpoint_configured"]
+        );
+    }
 
     struct FakePhase {
         name: &'static str,
@@ -294,7 +329,9 @@ mod tests {
     #[test]
     fn execute_writes_report_json_with_all_fields() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let ok = execute(Mode::Functional, args(dir.path())).expect("executes");
+        let mut run_args = args(dir.path());
+        run_args.phases = Some("endpoint_configured".into());
+        let ok = execute(Mode::Functional, run_args).expect("executes");
         assert!(ok);
         let text = std::fs::read_to_string(dir.path().join("report.json")).expect("report.json");
         let value: serde_json::Value = serde_json::from_str(&text).expect("json");

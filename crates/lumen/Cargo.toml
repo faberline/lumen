@@ -86,6 +86,8 @@ delegated-auth = ["service-auth/k8s", "dep:reqwest", "lumen-access/delegated-aut
 # OTLP domain metrics plus service-http's shared trace exporter. Runtime export
 # remains dormant unless LUMEN_OTLP_ENDPOINT is set.
 otel = ["dep:opentelemetry", "dep:opentelemetry-otlp", "dep:opentelemetry_sdk", "service-http/otlp"]
+# acceptance — the HTTP client of the lumen-acceptance runner (#114).
+acceptance = ["dep:reqwest"]
 # Canonical feature set compiled for published binaries and release containers.
 release = [
     "otel",
@@ -95,6 +97,11 @@ release = [
     "issue",
     "delegated-auth",
 ]
+
+[[bin]]
+name = "lumen-acceptance"
+path = "src/bin/lumen-acceptance/main.rs"
+required-features = ["acceptance"]
 
 [dev-dependencies]
 async-trait.workspace = true
