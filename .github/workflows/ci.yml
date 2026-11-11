@@ -103,7 +103,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
-          components: clippy
+          components: clippy, llvm-tools-preview
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -114,8 +114,14 @@ jobs:
           set -euo pipefail
           npm install --global --ignore-scripts typescript@5.9.3
           tsc --version | grep -Fx 'Version 5.9.3'
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-llvm-cov@0.9.1
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-      - run: cargo test --workspace --all-features --locked
+      - run: cargo llvm-cov --workspace --all-features --locked --json --summary-only --output-path target/coverage.json
+      - uses: faberline/aw/.github/actions/coverage@7ca7c1c8d24f0d29263cc43e7c37987bd853f202 # S8
+        with:
+          summary: target/coverage.json
 
   test-features:
     name: "test: single features (${{ matrix.package }})"
