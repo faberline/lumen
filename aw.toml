@@ -23,7 +23,7 @@ command = "cd apps/lumen && ../../target/debug/vat run rig-resilience"
 traits = ["service", "long_running", "cli_facing", "competitive_replacement", "network_exposed", "stateful_storage", "agent_facing", "http2_api", "kubernetes_native", "primary_replicas"]
 
 [standards.coverage]
-line = 0.0     # placeholder; the first CI run measures the real value (COV4 prints it)
+line = 86.83
 target = 100
 
 [[workspaces]]
