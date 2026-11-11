@@ -51,6 +51,7 @@ mod current_publication_apply_barrier;
 mod design_trees_stay_retired;
 mod disk_format_bench;
 mod docker_named_volume;
+mod docs_merge_e2e;
 mod docs_namespace_e2e;
 mod drop_drain_e2e;
 mod drop_field_e2e;

@@ -567,7 +567,14 @@ fn connect_hands_the_child_a_url_and_never_reads_a_secret() {
 
     // AC2: the child's environment gained exactly `LUMEN_URL`, and lost
     // nothing.
-    let child_keys: BTreeSet<String> = child_env.keys().cloned().collect();
+    // `cargo llvm-cov` instruments the `lumen` binary, and the instrumentation
+    // runtime adds `__LLVM_PROFILE_*` variables to the child (faberline/aw#229).
+    // That is the tool's own environment, not something `lumen connect` hands out.
+    let child_keys: BTreeSet<String> = child_env
+        .keys()
+        .filter(|k| !k.starts_with("__LLVM_PROFILE_"))
+        .cloned()
+        .collect();
     let gained: Vec<&String> = child_keys.difference(&baseline_keys).collect();
     assert_eq!(
         gained,
