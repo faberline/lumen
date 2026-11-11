@@ -413,6 +413,25 @@ impl SegmentRdbStore {
                 0,
             );
             capture.collections = identities(&manifest);
+            // Only merged collections changed. Their files are scanned now, while
+            // the staged generation is still private; every other collection is
+            // reused from the latest generation, as the save path does.
+            let merged_collections: BTreeSet<String> = merges
+                .iter()
+                .map(|(selection, _)| selection.collection_id.clone())
+                .collect();
+            let reused_collections: BTreeSet<String> = manifest
+                .collections
+                .iter()
+                .map(|collection| collection.collection_id.clone())
+                .filter(|id| !merged_collections.contains(id))
+                .collect();
+            let changed_files = telemetry::collect_staged_changed_files(
+                &path,
+                &manifest.collections,
+                &reused_collections,
+            )?;
+            let manifest_id = telemetry::manifest_identity(&path)?;
             let mut owner_publication = None;
             let mut capture_publish_elapsed = Duration::ZERO;
             let commit_started = Instant::now();
@@ -442,6 +461,7 @@ impl SegmentRdbStore {
             });
             commit_elapsed = commit_started.elapsed();
             if let Err(error) = commit {
+                self.mark_inventory_stale();
                 if error.class() == storage_durable::CommitFailureClass::CommitUncertain {
                     engine.capture_barrier.apply().mark_uncertain();
                 }
@@ -452,6 +472,19 @@ impl SegmentRdbStore {
                 .lock()
                 .unwrap_or_else(|p| p.into_inner()) =
                 Some((record.name.clone(), serde_json::to_vec(&manifest)?));
+            if let Ok(mut guard) = self.inventory.lock() {
+                if let Some(inventory) = guard.as_mut() {
+                    if !inventory.record_published_generation(
+                        record.name.as_str(),
+                        manifest_id,
+                        changed_files,
+                        &reused_collections,
+                        Some(latest.name.as_str()),
+                    ) {
+                        *guard = None;
+                    }
+                }
+            }
             let binding = engine
                 .capture_barrier
                 .capture(latest.sequence)

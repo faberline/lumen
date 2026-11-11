@@ -705,6 +705,60 @@ jobs:
         run: |
           set -euo pipefail
           cargo test --release --locked -p lumen --test it -- perf_gate:: --ignored --skip durable_workload --test-threads=1 --nocapture
+      - name: Run index performance gates
+        # Moved here from the pull request run: the 500k AND-query 50 ms limit
+        # and the deep-pagination 20x limit are measured on the release candidate.
+        env:
+          CARGO_INCREMENTAL: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --release --locked -p lumen-index --lib -- --ignored --exact index::domain::query::zip_cursor::tests::timing_and_match_500k_all_docs_match index::application::engine::search::tests::pagination::cursors::deep_pagination_depth_invariance
+      - name: Install the toxiproxy server for the native performance contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/lumen-native-tools"
+          mkdir -p "$bin"
+          curl -fsSL -o "$bin/toxiproxy-server" \
+            https://github.com/Shopify/toxiproxy/releases/download/v2.13.0/toxiproxy-server-linux-amd64
+          echo 'bf529e8bb9a05cd293f45a3f1d0aa66ff9469680dcdca7e0ebeae21f1b83de89  '"$bin/toxiproxy-server" | sha256sum --check
+          chmod 0755 "$bin/toxiproxy-server"
+          echo "LUMEN_TOXIPROXY_SERVER=$bin/toxiproxy-server" >> "$GITHUB_ENV"
+      - name: Run native performance contracts
+        # Moved here from the pull request run: the ten native resource and
+        # performance contracts. The scale and competitive contracts run their
+        # own test executables, so their paths come from a --no-run build.
+        env:
+          CARGO_INCREMENTAL: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe() {
+            local found
+            found="$(cargo test --release --locked -p lumen --features release --test "$1" --no-run --message-format=json \
+              | jq -r --arg t "$1" 'select(.reason == "compiler-artifact" and .profile.test == true and .target.name == $t) | .executable')"
+            [ "$(printf '%s\n' "$found" | grep -c .)" -eq 1 ] || { echo "expected one $1 executable, got: $found" >&2; exit 1; }
+            printf '%s\n' "$found"
+          }
+          export LUMEN_CONTRACT_SCALE_TEST_BIN="$(exe disk_scale_proof)"
+          export LUMEN_CONTRACT_COMPETITIVE_TEST_BIN="$(exe perf_gate_vs_db)"
+          cargo test --release --locked -p lumen --features release --test it -- \
+            --exact --include-ignored --test-threads 1 \
+            benchmark_lumen_competitor_performance_competitive::lumen_competitor_performance_competitive \
+            efficiency_lumen_claim_competitor_performance_external_comparison::lumen_claim_competitor_performance_external_comparison \
+            efficiency_lumen_claim_elastic_disk_tier::lumen_claim_elastic_disk_tier \
+            stability_lumen_long_running_stability_latency_drift::lumen_long_running_stability_latency_drift \
+            stability_lumen_long_running_stability_overload_backpressure::lumen_long_running_stability_overload_backpressure \
+            stability_lumen_long_running_stability_query_resilience::lumen_long_running_stability_query_resilience \
+            stability_lumen_long_running_stability_resilience_survival::lumen_long_running_stability_resilience_survival \
+            stability_lumen_long_running_stability_resource_leak::lumen_long_running_stability_resource_leak
+          cargo test --release --locked -p lumen --features release --test disk_scale_proof -- \
+            --exact --include-ignored --test-threads 1 \
+            scale_proof_reopen_rss_is_bounded
+          cargo test --release --locked -p lumen --features release --test perf_gate_vs_db -- \
+            --exact --include-ignored --test-threads 1 \
+            competitive_perf_gate
 
   verify-candidate:
     name: verify candidate supply chain
