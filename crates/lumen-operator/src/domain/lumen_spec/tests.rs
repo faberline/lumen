@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 
+use serde_json::json;
+
+use crate::domain::lumen_spec::access::{AccessSpec, ServiceAccountSubject};
 use crate::domain::lumen_spec::serving::{AuthMode, LogFormat, ServingSpec};
 use crate::domain::lumen_spec::topology::{ReshardPolicy, ShardMapSpec};
 use crate::domain::lumen_spec::{
@@ -29,6 +32,7 @@ fn test_spec() -> LumenSpec {
         peer_tls_secret: None,
         serving_tls_secret: None,
         body_limit_bytes: None,
+        access: None,
     }
 }
 
@@ -91,4 +95,93 @@ fn validate_rejects_out_of_range_body_limit() {
             "error message should name upper bound: {err}"
         );
     }
+}
+
+fn subject(namespace: &str, name: &str) -> ServiceAccountSubject {
+    ServiceAccountSubject {
+        namespace: namespace.into(),
+        name: name.into(),
+    }
+}
+
+#[test]
+fn validate_accepts_exact_service_account_subjects() {
+    let mut spec = test_spec();
+    spec.access = Some(AccessSpec {
+        allowed_service_accounts: vec![subject("apps", "web"), subject("team-a.prod", "svc-1")],
+    });
+    assert!(spec.validate().is_ok());
+}
+
+#[test]
+fn validate_rejects_wildcard_group_raw_username_and_incomplete_subjects() {
+    let invalid = [
+        ("*", "web"),
+        ("apps", "*"),
+        ("apps", ""),
+        ("", "web"),
+        ("system:serviceaccounts", "web"),
+        ("apps", "system:serviceaccount:apps:web"),
+        ("apps", "a/b"),
+        ("Apps", "web"),
+    ];
+    for (namespace, name) in invalid {
+        let mut spec = test_spec();
+        spec.access = Some(AccessSpec {
+            allowed_service_accounts: vec![subject(namespace, name)],
+        });
+        let err = spec.validate().expect_err("expected error");
+        assert!(
+            err.contains("allowedServiceAccounts"),
+            "error message should name allowedServiceAccounts for ({namespace}, {name}): {err}"
+        );
+    }
+}
+
+#[test]
+fn deserialization_rejects_incomplete_group_and_unknown_subject_fields() {
+    for value in [
+        json!({"allowedServiceAccounts": [{"namespace": "apps"}]}),
+        json!({"allowedServiceAccounts": [{"name": "web"}]}),
+        json!({"allowedServiceAccounts": [{"namespace": "a", "name": "b", "group": "g"}]}),
+    ] {
+        assert!(
+            serde_json::from_value::<AccessSpec>(value.clone()).is_err(),
+            "must reject {value}"
+        );
+    }
+}
+
+#[test]
+fn explicit_empty_list_is_deny_all_and_round_trips() {
+    let access: AccessSpec =
+        serde_json::from_value(json!({"allowedServiceAccounts": []})).expect("parse");
+    assert_eq!(
+        access,
+        AccessSpec {
+            allowed_service_accounts: vec![]
+        }
+    );
+    assert_eq!(
+        serde_json::to_value(&access).expect("serialize"),
+        json!({"allowedServiceAccounts": []})
+    );
+
+    let mut spec = test_spec();
+    spec.access = Some(access.clone());
+    let round: LumenSpec =
+        serde_json::from_value(serde_json::to_value(&spec).expect("serialize spec"))
+            .expect("parse spec");
+    assert_eq!(round.access, Some(access));
+}
+
+#[test]
+fn absent_access_deserializes_to_none() {
+    let spec: LumenSpec =
+        serde_json::from_value(json!({"image": "lumen:latest"})).expect("parse spec");
+    assert_eq!(spec.access, None);
+    assert!(serde_json::to_value(&spec)
+        .expect("serialize spec")
+        .get("access")
+        .is_none());
 }

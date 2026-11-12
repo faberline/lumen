@@ -37,6 +37,30 @@ spec:
           spec:
             description: '`lumen.dev/v1alpha1` `Lumen`. Namespaced: every child object the operator renders lands in this object''s namespace, so multiple independent lumen deployments can coexist by name.'
             properties:
+              access:
+                description: 'Exact ServiceAccounts allowed to call the data plane. Absent keeps the current behavior; `allowedServiceAccounts: []` denies all.'
+                nullable: true
+                properties:
+                  allowedServiceAccounts:
+                    description: ServiceAccounts, each named by its exact namespace and name.
+                    items:
+                      additionalProperties: false
+                      description: One ServiceAccount, named exactly. Wildcards, groups and raw usernames are not representable here.
+                      properties:
+                        name:
+                          description: Name of the ServiceAccount, an exact DNS-1123 subdomain.
+                          type: string
+                        namespace:
+                          description: Namespace of the ServiceAccount, an exact DNS-1123 label.
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      type: object
+                    type: array
+                required:
+                - allowedServiceAccounts
+                type: object
               admission:
                 description: Optional in-process request admission (bounded token-bucket rate limiting per endpoint class), mirroring the `LUMEN_ADMISSION_*` env grammar `libs/service-http::AdmissionConfig` already parses (see `bin/lumen.rs`'s `serve` wiring). Absent means admission stays disabled — the pre-existing default; no new semantics, only a declarative surface for the existing env-driven behavior.
                 nullable: true
@@ -594,6 +618,30 @@ spec:
               defaults:
                 description: 'The complete `Lumen` spec every instance starts from — the platform team''s knowledge: which image, which node pool, which StorageClass, which auth mode. Required and fully schema-validated, because a fleet that cannot produce one valid instance is not a fleet.'
                 properties:
+                  access:
+                    description: 'Exact ServiceAccounts allowed to call the data plane. Absent keeps the current behavior; `allowedServiceAccounts: []` denies all.'
+                    nullable: true
+                    properties:
+                      allowedServiceAccounts:
+                        description: ServiceAccounts, each named by its exact namespace and name.
+                        items:
+                          additionalProperties: false
+                          description: One ServiceAccount, named exactly. Wildcards, groups and raw usernames are not representable here.
+                          properties:
+                            name:
+                              description: Name of the ServiceAccount, an exact DNS-1123 subdomain.
+                              type: string
+                            namespace:
+                              description: Namespace of the ServiceAccount, an exact DNS-1123 label.
+                              type: string
+                          required:
+                          - name
+                          - namespace
+                          type: object
+                        type: array
+                    required:
+                    - allowedServiceAccounts
+                    type: object
                   admission:
                     description: Optional in-process request admission (bounded token-bucket rate limiting per endpoint class), mirroring the `LUMEN_ADMISSION_*` env grammar `libs/service-http::AdmissionConfig` already parses (see `bin/lumen.rs`'s `serve` wiring). Absent means admission stays disabled — the pre-existing default; no new semantics, only a declarative surface for the existing env-driven behavior.
                     nullable: true
