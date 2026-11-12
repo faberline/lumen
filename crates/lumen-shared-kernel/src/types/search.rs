@@ -25,11 +25,10 @@ pub struct SearchRequest {
     pub offset: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
-    /// Optional caller-owned routing key for sharded deployments. When present,
-    /// a sharded router can target the one shard that owns
-    /// `(collection_id, routing_key)` instead of scatter/gathering every shard.
-    /// Writes default to `external_id` as the routing key, so one large
-    /// collection can still spread across shards without caller help.
+    /// Optional caller-owned routing key. Reserved: it does not narrow shard
+    /// fan-out while writes cannot carry it, because writes place every
+    /// document by `external_id`; a search with `routing_key` returns the same
+    /// hits and `total` as the same search without it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub routing_key: Option<String>,
     /// Sort results by one or more fields instead of by relevance score.
@@ -98,6 +97,10 @@ pub struct SearchResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchAllRequest {
     pub query: QueryNode,
+    /// Optional caller-owned routing key. Reserved: it does not narrow shard
+    /// fan-out while writes cannot carry it, because writes place every
+    /// document by `external_id`; a search with `routing_key` returns the same
+    /// hits and `total` as the same search without it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub routing_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
