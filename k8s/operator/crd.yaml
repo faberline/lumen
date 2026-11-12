@@ -44,7 +44,6 @@ spec:
                   allowedServiceAccounts:
                     description: ServiceAccounts, each named by its exact namespace and name.
                     items:
-                      additionalProperties: false
                       description: One ServiceAccount, named exactly. Wildcards, groups and raw usernames are not representable here.
                       properties:
                         name:
@@ -625,7 +624,6 @@ spec:
                       allowedServiceAccounts:
                         description: ServiceAccounts, each named by its exact namespace and name.
                         items:
-                          additionalProperties: false
                           description: One ServiceAccount, named exactly. Wildcards, groups and raw usernames are not representable here.
                           properties:
                             name:

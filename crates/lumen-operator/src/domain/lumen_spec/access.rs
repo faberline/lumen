@@ -9,7 +9,28 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct AccessSpec {
     /// ServiceAccounts, each named by its exact namespace and name.
+    #[schemars(schema_with = "subject_list_schema")]
     pub allowed_service_accounts: Vec<ServiceAccountSubject>,
+}
+
+/// Schema of the subject list, derived from a mirror that does not deny unknown
+/// fields. `deny_unknown_fields` on the subject makes schemars emit
+/// `additionalProperties: false` next to `properties`, which the API server
+/// rejects in a structural CRD schema. Deserialization still denies unknown
+/// fields through the real subject type.
+fn subject_list_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    /// One ServiceAccount, named exactly. Wildcards, groups and raw usernames are
+    /// not representable here.
+    #[derive(JsonSchema)]
+    struct SubjectSchema {
+        /// Namespace of the ServiceAccount, an exact DNS-1123 label.
+        #[allow(dead_code)]
+        namespace: String,
+        /// Name of the ServiceAccount, an exact DNS-1123 subdomain.
+        #[allow(dead_code)]
+        name: String,
+    }
+    <Vec<SubjectSchema>>::json_schema(gen)
 }
 
 /// One ServiceAccount, named exactly. Wildcards, groups and raw usernames are
