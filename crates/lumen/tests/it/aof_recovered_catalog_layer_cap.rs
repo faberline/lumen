@@ -181,6 +181,7 @@ fn keyword_spec() -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 

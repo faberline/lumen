@@ -24,6 +24,7 @@ fn kw() -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 fn num() -> FieldSpec {
