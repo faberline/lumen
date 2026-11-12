@@ -1823,4 +1823,42 @@ fn operator_tls_ownership_is_consistently_documented_across_surfaces() {
         }
     }
 }
+
+#[test]
+fn dx_field_catalog_lists_float64_as_a_number_alias() {
+    let catalog = dx::field_catalog();
+    let fields = catalog["field_types"]
+        .as_array()
+        .expect("field catalogue is an array");
+    assert_eq!(fields.len(), FieldType::ALL.len());
+    let number = fields
+        .iter()
+        .find(|f| f["type"] == "number")
+        .expect("number entry");
+    assert_eq!(number["aliases"], json!(["float64"]));
+    for f in fields.iter().filter(|f| f["type"] != "number") {
+        assert!(
+            f.get("aliases").is_none(),
+            "unexpected aliases on {}",
+            f["type"]
+        );
+    }
+}
+
+#[test]
+fn openapi_field_type_schema_names_the_float64_alias() {
+    let v: Value = serde_json::from_str(&openapi_json()).unwrap();
+    let schema = &v["components"]["schemas"]["FieldType"];
+    assert!(
+        schema["description"]
+            .as_str()
+            .unwrap_or("")
+            .contains("float64"),
+        "FieldType description must name the float64 alias: {schema}"
+    );
+    assert_eq!(
+        schema["enum"],
+        json!(["text", "keyword", "number", "set", "vector", "hash"])
+    );
+}
 // CODEGEN-END

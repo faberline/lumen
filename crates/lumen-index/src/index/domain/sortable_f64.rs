@@ -17,6 +17,14 @@ pub struct SortableF64(u64);
 pub(in crate::index) const MISSING_SORTABLE_F64_BITS: u64 = 0xfff8_0000_0000_0000;
 
 impl SortableF64 {
+    /// Key for a value written to a number field: `new` plus a refusal of infinity.
+    pub fn for_value(x: f64) -> Result<Self> {
+        if x.is_infinite() {
+            bail!("infinity is not a valid number value");
+        }
+        Self::new(x)
+    }
+
     pub fn new(x: f64) -> Result<Self> {
         if x.is_nan() {
             bail!("NaN is not a valid number value");
