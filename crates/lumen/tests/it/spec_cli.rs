@@ -1827,40 +1827,6 @@ fn operator_tls_ownership_is_consistently_documented_across_surfaces() {
 // CODEGEN-END
 
 #[test]
-fn dx_field_catalog_lists_float64_as_a_number_alias() {
-    let catalog = dx::field_catalog();
-    let fields = catalog["field_types"]
-        .as_array()
-        .expect("field catalogue is an array");
-    assert_eq!(fields.len(), FieldType::ALL.len());
-    let number = fields
-        .iter()
-        .find(|entry| entry["type"] == "number")
-        .expect("catalogue omits number");
-    assert_eq!(number["aliases"], json!(["float64"]));
-    for entry in fields.iter().filter(|entry| entry["type"] != "number") {
-        assert!(
-            entry.get("aliases").is_none(),
-            "only number has an alias: {entry}"
-        );
-    }
-}
-
-#[test]
-fn openapi_field_type_schema_names_the_float64_alias() {
-    let v: Value = serde_json::from_str(&openapi_json()).expect("openapi is valid JSON");
-    let schema = &v["components"]["schemas"]["FieldType"];
-    let description = schema["description"]
-        .as_str()
-        .expect("FieldType schema has a description");
-    assert!(description.contains("float64"), "{description}");
-    assert_eq!(
-        schema["enum"],
-        json!(["text", "keyword", "number", "int64", "set", "vector", "hash"])
-    );
-}
-
-#[test]
 fn dx_field_catalog_lists_int64_exact_range_and_sort() {
     let catalog = dx::field_catalog();
     let fields = catalog["field_types"]

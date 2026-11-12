@@ -33,14 +33,6 @@ impl SortableF64 {
         Ok(SortableF64(key))
     }
 
-    /// Key for a value written to a number field: `new` plus a refusal of infinity.
-    pub fn for_value(x: f64) -> Result<Self> {
-        if x.is_infinite() {
-            bail!("infinity is not a valid number value");
-        }
-        Self::new(x)
-    }
-
     pub fn to_f64(self) -> f64 {
         let bits = if self.0 & (1u64 << 63) != 0 {
             // Top bit set → originally non-negative.

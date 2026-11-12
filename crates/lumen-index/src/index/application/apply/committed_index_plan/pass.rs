@@ -302,7 +302,7 @@ fn borrowed_apply_cost(
         // before attachment.
         (FieldType::Text, FastIndexValue::String(_)) => Ok(0),
         (FieldType::Keyword, FastIndexValue::String(value)) => Ok((value.len() + eid.len()) as u64),
-        (FieldType::Number, FastIndexValue::Number(value)) => SortableF64::for_value(*value)
+        (FieldType::Number, FastIndexValue::Number(value)) => SortableF64::new(*value)
             .map(|_| (8 + eid.len()) as u64)
             .map_err(|e| BusinessError::InvalidNumber(e.to_string())),
         (FieldType::Set, FastIndexValue::StringList(values)) => set_bytes(*values, eid.len()),

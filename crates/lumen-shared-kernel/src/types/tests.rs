@@ -125,28 +125,6 @@ fn field_value_polymorphic() {
 }
 
 #[test]
-fn float64_parses_as_number() {
-    let s: FieldSpec = serde_json::from_str(r#"{"type":"float64"}"#).unwrap();
-    assert_eq!(s.field_type, FieldType::Number);
-    let v = serde_json::to_value(&s).unwrap();
-    assert_eq!(v["type"], "number");
-    let caps = FieldType::Number.capabilities();
-    assert!(caps.exact && caps.range && caps.sort);
-    assert!(!caps.set_membership && !caps.prefix && !caps.bm25);
-}
-
-#[test]
-fn number_type_still_parses() {
-    let s: FieldSpec = serde_json::from_str(r#"{"type":"number"}"#).unwrap();
-    assert_eq!(s.field_type, FieldType::Number);
-}
-
-#[test]
-fn float65_is_refused() {
-    assert!(serde_json::from_str::<FieldSpec>(r#"{"type":"float65"}"#).is_err());
-}
-
-#[test]
 fn int64_field_type_parses_and_has_capabilities() {
     assert_eq!(
         serde_json::from_str::<FieldType>("\"int64\"").expect("int64 parses"),

@@ -2063,7 +2063,6 @@
       },
       "FieldType": {
         "type": "string",
-        "description": "Field type name. `float64` is accepted as an alias of `number`.",
         "enum": [
           "text",
           "keyword",

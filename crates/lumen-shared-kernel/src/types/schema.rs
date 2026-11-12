@@ -67,13 +67,11 @@ fn is_false(v: &bool) -> bool {
     !*v
 }
 
-/// Field type name. `float64` is accepted as an alias of `number`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum FieldType {
     Text,
     Keyword,
-    #[serde(alias = "float64")]
     Number,
     /// 64-bit signed integer, exact. Its index is not built yet: a schema that
     /// declares an `int64` field is refused at index build (see #299).

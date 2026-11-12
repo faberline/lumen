@@ -41,7 +41,7 @@ pub(super) fn validate_borrowed(
                 None,
             ))
         }
-        (FieldType::Number, FastIndexValue::Number(value)) => SortableF64::for_value(*value)
+        (FieldType::Number, FastIndexValue::Number(value)) => SortableF64::new(*value)
             .map_err(|e| ValidationError::Domain(ReplaceItemError::InvalidNumber(e.to_string())))
             .and_then(|_| {
                 u64::try_from(eid_len)

@@ -14,7 +14,6 @@ fn score_of(hits: &[SearchHit], eid: &str) -> f32 {
 
 mod eval;
 mod exists_duplicated;
-mod float64;
 mod has_child_sort;
 mod offset_sort_guard;
 mod pagination;
