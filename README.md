@@ -89,7 +89,7 @@ Writing the same `(external_id, field)` replaces that field. Other fields stay
 unchanged. `POST /collections/{id}/index` is the wire-compatible alias of `docs:merge`.
 
 Use `PUT /collections/{id}/docs:replace` when the caller owns the complete
-IndexedDocument. Fields omitted from a replacement are deleted from that row.
+IndexedDocument. Fields omitted from a replacement are deleted from that IndexedDocument.
 
 Use `POST /collections/{id}/docs:truncate` to clear every IndexedDocument while
 keeping the collection schema. The request has no body.
