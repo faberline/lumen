@@ -58,6 +58,7 @@ fn spill_keyword_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     CreateCollectionRequest { fields }

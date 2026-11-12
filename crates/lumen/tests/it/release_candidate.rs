@@ -50,7 +50,7 @@ const WORKFLOW_BYTES_SHA256: &str =
     "4753502b6f146a34fdc9e8e8b36f63facd852208aeaf320183bf6250900de38f";
 /// .github/workflows/gke-test.yml, which the gke-e2e job calls: deploy only.
 const GKE_TEST_WORKFLOW_BYTES_SHA256: &str =
-    "a219a49317c426e76e5ca70dd5e6f37033802c5cd5336d889b401658c9240033";
+    "950f4cac2ddd7156d4d10c152d61c97fa01c995ca27c833512b97238922c0614";
 /// The Rust suites the GKE test Job runs, which decide pass or fail.
 const E2E_SUITE_BYTES_SHA256: &[(&str, &str)] = &[
     (
@@ -639,8 +639,8 @@ fn validate_e2e_semantics(sources: &E2eSources) -> Result<(), Finding> {
         r#"echo "E2E_EXPECTED_GIT_SHA=${git_sha}""#,
         "fail-fast: false",
         "suite: ${{ fromJSON(needs.resolve.outputs.suites) }}",
-        "uses: faberline/aw/.github/workflows/gke-test.yml@6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb",
-        "aw-ref: 6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb",
+        "uses: faberline/aw/.github/workflows/gke-test.yml@efe1a96e54617e60f6e2b7d154aea67fca8c96f8",
+        "aw-ref: efe1a96e54617e60f6e2b7d154aea67fca8c96f8",
         "image: ${{ needs.resolve.outputs.image }}",
         "test-job: k8s/gke-test-job/${{ matrix.suite }}",
         "test-env: ${{ needs.resolve.outputs.test-env }}",
@@ -3324,7 +3324,7 @@ fn gke_deploy_mutations_fail_without_hash_oracle() {
         ),
         (
             "deploy workflow moved",
-            "uses: faberline/aw/.github/workflows/gke-test.yml@6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb",
+            "uses: faberline/aw/.github/workflows/gke-test.yml@efe1a96e54617e60f6e2b7d154aea67fca8c96f8",
             "uses: faberline/aw/.github/workflows/gke-test.yml@dev",
         ),
     ] {
@@ -3337,8 +3337,8 @@ fn gke_deploy_mutations_fail_without_hash_oracle() {
     }
     let comment_only = with_workflow(replace_once(
         &sources.workflow,
-        "    # One call at a time: the repository's concurrency group in aw keeps only\n",
-        "    # One call at a time; the repository's concurrency group in aw keeps only\n",
+        "    # One call at a time: a call that waits for the repository's Lease in aw\n",
+        "    # One call at a time; a call that waits for the repository's Lease in aw\n",
     ));
     validate_e2e_semantics(&comment_only).expect("comment-only edit keeps the semantics");
     assert_eq!(
