@@ -727,6 +727,56 @@ async fn routing_key_less_search_merges_across_both_shards() {
     assert_eq!(eids, expected);
 }
 
+// A `routing_key` that differs from every `external_id` must not narrow the
+// search: writes place documents by `external_id`, so both shards hold a hit
+// and a keyed search through either pod must return both of them.
+#[tokio::test]
+async fn search_with_routing_key_differing_from_external_id_returns_both_shards() {
+    let (shard0, shard1) = spin_up_routed_pair();
+    create_users_collection(&shard0.server).await;
+    create_users_collection(&shard1.server).await;
+
+    let id_shard0 = external_id_for_shard("users", 0);
+    let id_shard1 = external_id_for_shard("users", 1);
+
+    shard0
+        .server
+        .post("/collections/users/index")
+        .json(&json!({
+            "items": [
+                { "external_id": id_shard0, "field": "email", "value": "keyed@x.com" },
+                { "external_id": id_shard1, "field": "email", "value": "keyed@x.com" }
+            ]
+        }))
+        .await
+        .assert_status_ok();
+
+    let mut expected = vec![id_shard0, id_shard1];
+    expected.sort();
+    for pod in [&shard0, &shard1] {
+        let resp = pod
+            .server
+            .post("/collections/users/search")
+            .json(&json!({
+                "query": { "term": { "field": "email", "value": "keyed@x.com" } },
+                "routing_key": "unrelated-key",
+                "limit": 10
+            }))
+            .await;
+        resp.assert_status_ok();
+        let body: Value = resp.json();
+        assert_eq!(body["total"], 2, "body = {body}");
+        let mut eids: Vec<String> = body["hits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|h| h["external_id"].as_str().unwrap().to_string())
+            .collect();
+        eids.sort();
+        assert_eq!(eids, expected);
+    }
+}
+
 // #1398 R3: cross-pod forwarding depth is bounded to one hop — a request
 // that already carries the internal forwarded marker header and is legally
 // owned by the receiving pod's shard (matching map version, matching
@@ -768,13 +818,12 @@ async fn already_forwarded_request_never_forwards_again() {
     assert_eq!(resp.json::<Value>()["total"], 1);
 }
 
-// #1442 R1: a spoofed `x-lumen-forwarded` marker — set directly by an
-// external caller, not produced by `RoutedRouter` itself — must never force
-// a wrong-shard local answer. Sending it straight to the NON-owning pod for
-// a keyed request must be rejected (`shard_forward_misrouted`), not silently
-// answered from the wrong pod's local (empty-or-stale) engine.
+// A forwarded search that carries a `routing_key` is a scatter sub-request:
+// `RoutedRouter::search` clears the key, so the receiving pod answers from its
+// own local engine instead of rejecting it as misrouted. The document lives
+// only on shard 1, so shard 0's local answer is empty, not an error.
 #[tokio::test]
-async fn spoofed_forwarded_header_on_wrong_shard_is_rejected_not_answered_locally() {
+async fn forwarded_search_with_routing_key_is_answered_locally_as_a_scatter_sub_request() {
     let (shard0, shard1) = spin_up_routed_pair();
     create_users_collection(&shard0.server).await;
     create_users_collection(&shard1.server).await;
@@ -794,10 +843,10 @@ async fn spoofed_forwarded_header_on_wrong_shard_is_rejected_not_answered_locall
         .await
         .assert_status_ok();
 
-    // Spoof the internal forwarded-marker header straight to shard0 (the
-    // NON-owning pod) with a correct map version but a routing key that
-    // belongs to shard1. Pre-#1442 this forced a silent wrong-shard local
-    // answer (empty result, masking the miss); it must now be rejected.
+    // Send the forwarded-marker header straight to shard0 (the pod that does
+    // not hold the document) with a correct map version and a routing key
+    // that belongs to shard1. Keyless scatter sub-requests answer from the
+    // local engine, so this is 200 with shard0's (empty) local result.
     let resp = shard0
         .server
         .post("/collections/users/search")
@@ -809,9 +858,8 @@ async fn spoofed_forwarded_header_on_wrong_shard_is_rejected_not_answered_locall
             "limit": 10
         }))
         .await;
-    resp.assert_status(axum::http::StatusCode::SERVICE_UNAVAILABLE);
-    let body: Value = resp.json();
-    assert_eq!(body["error"], "shard_forward_misrouted", "body = {body}");
+    resp.assert_status_ok();
+    assert_eq!(resp.json::<Value>()["total"], 0);
 }
 
 // #1442 R1: a spoofed forwarded marker on a WRITE to a wrong-shard bucket
