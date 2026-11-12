@@ -2000,6 +2000,10 @@
             "nullable": true,
             "minimum": 0
           },
+          "facetable": {
+            "type": "boolean",
+            "description": "Whether the field may be used for facets. Default false. Turning it on\nfor a field that already has documents needs a shadow rebuild."
+          },
           "metric": {
             "allOf": [
               {

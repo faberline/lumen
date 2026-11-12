@@ -13,6 +13,7 @@ fn fs(t: FieldType) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 
@@ -143,4 +144,22 @@ fn number_type_still_parses() {
 #[test]
 fn float65_is_refused() {
     assert!(serde_json::from_str::<FieldSpec>(r#"{"type":"float65"}"#).is_err());
+}
+
+#[test]
+fn facetable_defaults_to_false_and_is_omitted_on_the_wire() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"keyword"}"#).unwrap();
+    assert!(!spec.facetable);
+    let wire = serde_json::to_string(&spec).unwrap();
+    assert!(!wire.contains("facetable"), "wire form changed: {wire}");
+}
+
+#[test]
+fn facetable_true_round_trips() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"keyword","facetable":true}"#).unwrap();
+    assert!(spec.facetable);
+    let value = serde_json::to_value(&spec).unwrap();
+    assert_eq!(value["facetable"], serde_json::json!(true));
+    let back: FieldSpec = serde_json::from_value(value).unwrap();
+    assert_eq!(back, spec);
 }
