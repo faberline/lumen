@@ -120,8 +120,8 @@ fn apply_value(
             Ok(bytes)
         }
         (FieldIndex::Number(n), FieldValue::Number(x)) => {
-            let key =
-                SortableF64::new(*x).map_err(|e| StorageError::InvalidNumber(e.to_string()))?;
+            let key = SortableF64::for_value(*x)
+                .map_err(|e| StorageError::InvalidNumber(e.to_string()))?;
             let bytes = (8 + eid.len()) as u64;
             let posting = n.values.entry(key).or_default();
             posting.insert(id);

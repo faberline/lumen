@@ -59,11 +59,13 @@ pub struct FieldSpec {
     pub quantize: Option<VectorQuantize>,
 }
 
+/// Field type name. `float64` is accepted as an alias of `number`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum FieldType {
     Text,
     Keyword,
+    #[serde(alias = "float64")]
     Number,
     Set,
     Vector,
