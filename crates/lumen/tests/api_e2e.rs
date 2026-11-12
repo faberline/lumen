@@ -654,6 +654,7 @@ fn test_search_shard<const N: usize>(docs: [(&str, &str, i32); N]) -> Arc<lumen:
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -666,6 +667,7 @@ fn test_search_shard<const N: usize>(docs: [(&str, &str, i32); N]) -> Arc<lumen:
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     engine
@@ -2352,6 +2354,7 @@ async fn first_write_after_checkpoint_restore_completes_and_is_searchable() {
                     metric: None,
                     backend: None,
                     quantize: None,
+                    facetable: false,
                 },
             )]),
         },

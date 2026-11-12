@@ -19,6 +19,7 @@ fn text_field(analyzer: Analyzer) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 
