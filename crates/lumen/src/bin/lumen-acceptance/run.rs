@@ -8,6 +8,7 @@ use anyhow::{bail, Result};
 use crate::cli::RunArgs;
 use crate::lifecycle::CollectionLifecycle;
 use crate::report::{summary, write_report, Mode, PhaseResult, PhaseStatus, Report};
+use crate::writes::WritesAndMasking;
 
 pub(super) trait Phase {
     fn name(&self) -> &str;
@@ -115,7 +116,11 @@ impl Cleanup for NoCleanup {
 /// The default phase names of a mode.
 fn default_phase_names(mode: Mode) -> Vec<&'static str> {
     match mode {
-        Mode::Functional => vec!["endpoint_configured", "collection_lifecycle"],
+        Mode::Functional => vec![
+            "endpoint_configured",
+            "collection_lifecycle",
+            "writes_and_masking",
+        ],
         Mode::Performance => vec!["endpoint_configured"],
     }
 }
@@ -134,15 +139,16 @@ fn phase_list(mode: Mode, args: &RunArgs) -> Result<Vec<Box<dyn Phase>>> {
             .collect(),
     };
     if names.is_empty() {
-        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle");
+        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking");
     }
     names
         .iter()
         .map(|name| match name.as_str() {
             "endpoint_configured" => Ok(Box::new(EndpointConfigured) as Box<dyn Phase>),
             "collection_lifecycle" => Ok(Box::new(CollectionLifecycle) as Box<dyn Phase>),
+            "writes_and_masking" => Ok(Box::new(WritesAndMasking) as Box<dyn Phase>),
             other => bail!(
-                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle"
+                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking"
             ),
         })
         .collect()
@@ -307,11 +313,24 @@ mod tests {
     }
 
     #[test]
-    fn functional_default_list_has_both_phases() {
+    fn functional_default_list_has_all_phases() {
         assert_eq!(
             default_phase_names(Mode::Functional),
-            ["endpoint_configured", "collection_lifecycle"]
+            [
+                "endpoint_configured",
+                "collection_lifecycle",
+                "writes_and_masking"
+            ]
         );
+    }
+
+    #[test]
+    fn unknown_phase_error_lists_writes_and_masking() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut run_args = args(dir.path());
+        run_args.phases = Some("nope".into());
+        let err = execute(Mode::Functional, run_args).expect_err("unknown phase");
+        assert!(format!("{err:#}").contains("writes_and_masking"));
     }
 
     #[test]
