@@ -67,7 +67,7 @@ pub(super) fn assert_hit(response: &Value, id: &str, what: &str) -> Result<()> {
     Ok(())
 }
 
-fn search(api: &HttpApi, base: &str, query: Value) -> Result<Value> {
+pub(super) fn search(api: &HttpApi, base: &str, query: Value) -> Result<Value> {
     api.expect(
         "search",
         &[200],
@@ -77,7 +77,7 @@ fn search(api: &HttpApi, base: &str, query: Value) -> Result<Value> {
     )
 }
 
-fn documents_indexed(api: &HttpApi, base: &str) -> Result<u64> {
+pub(super) fn documents_indexed(api: &HttpApi, base: &str) -> Result<u64> {
     let stats = api.expect("stats", &[200], "GET", &format!("{base}/stats"), None)?;
     stats["documents_indexed"]
         .as_u64()
