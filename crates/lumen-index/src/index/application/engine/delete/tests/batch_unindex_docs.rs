@@ -25,6 +25,7 @@ fn batch_unindex_removes_a_known_document() {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     engine
@@ -70,6 +71,7 @@ fn batch_unindex_clears_lww_and_replace_side_state_before_rewrite() {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     engine

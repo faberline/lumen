@@ -25,6 +25,7 @@ fn create_entry(coll: &str) -> RaftLogEntry {
                         metric: None,
                         backend: None,
                         quantize: None,
+                        facetable: false,
                     },
                 );
                 f
