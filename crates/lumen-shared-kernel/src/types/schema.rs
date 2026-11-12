@@ -57,6 +57,14 @@ pub struct FieldSpec {
     /// `pq` is reserved for a future product-quantization landing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quantize: Option<VectorQuantize>,
+    /// Whether the field may be used for facets. Default false. Turning it on
+    /// for a field that already has documents needs a shadow rebuild.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub facetable: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]

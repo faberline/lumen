@@ -34,6 +34,7 @@ fn spec(ft: FieldType) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 

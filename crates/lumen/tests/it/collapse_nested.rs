@@ -41,6 +41,7 @@ fn spec(t: FieldType, analyzer: Option<Analyzer>) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 

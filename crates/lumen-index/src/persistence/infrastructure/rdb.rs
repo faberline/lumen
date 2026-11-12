@@ -141,6 +141,7 @@ mod tests {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         );
         e.create_collection("u", CreateCollectionRequest { fields })
