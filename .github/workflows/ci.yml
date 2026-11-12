@@ -430,8 +430,8 @@ jobs:
   e2e-gke:
     name: "e2e: GKE (${{ matrix.suite }})"
     needs: [e2e-resolve, e2e-client]
-    # One call at a time: the repository's concurrency group in aw keeps only
-    # one waiting run. fail-fast off runs the other suites when one fails.
+    # One call at a time: a call that waits for the repository's Lease in aw
+    # uses runner minutes. fail-fast off runs the other suites when one fails.
     strategy:
       max-parallel: 1
       fail-fast: false
@@ -441,9 +441,9 @@ jobs:
       id-token: write
       contents: read
       packages: read
-    uses: faberline/aw/.github/workflows/gke-test.yml@6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb
+    uses: faberline/aw/.github/workflows/gke-test.yml@efe1a96e54617e60f6e2b7d154aea67fca8c96f8
     with:
-      aw-ref: 6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb
+      aw-ref: efe1a96e54617e60f6e2b7d154aea67fca8c96f8
       image: ${{ needs.e2e-resolve.outputs.image }}
       image-name: ghcr.io/faberline/lumen
       namespace: lumen
