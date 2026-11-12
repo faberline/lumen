@@ -151,23 +151,8 @@ pub(super) fn serving_env(lumen: &Lumen) -> Vec<Value> {
     if let Some(limit) = lumen.spec.body_limit_bytes {
         env.push(json!({ "name": "LUMEN_BODY_LIMIT_BYTES", "value": limit.to_string() }));
     }
-    // User entries come last. A Secret or ConfigMap reaches the pod only as a
-    // `valueFrom` reference: the operator never reads or copies its value.
-    for entry in &lumen.spec.extra_env {
-        if let Some(value) = &entry.value {
-            env.push(json!({ "name": entry.name, "value": value }));
-        } else if let Some(r) = &entry.secret_key_ref {
-            env.push(json!({
-                "name": entry.name,
-                "valueFrom": { "secretKeyRef": { "name": r.name, "key": r.key } },
-            }));
-        } else if let Some(r) = &entry.config_map_key_ref {
-            env.push(json!({
-                "name": entry.name,
-                "valueFrom": { "configMapKeyRef": { "name": r.name, "key": r.key } },
-            }));
-        }
-    }
+    // User entries come last (#41); their rendering lives in `serving_extra_env`.
+    env.extend(crate::application::render::serving_extra_env::extra_env_entries(lumen));
     env
 }
 
