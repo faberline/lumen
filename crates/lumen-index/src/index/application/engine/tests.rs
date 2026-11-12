@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 use crate::index::application::engine::collections::DropOutcome;
 use crate::index::application::engine::Engine;
+use crate::index::domain::storage_error::StorageError;
 use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
 use crate::shared_kernel::types::document::{
     FieldValue, IndexRequest, ReplaceDocItem, ReplaceDocsRequest,
@@ -27,6 +28,7 @@ pub(in crate::index) fn build_users_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -39,6 +41,7 @@ pub(in crate::index) fn build_users_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -51,6 +54,7 @@ pub(in crate::index) fn build_users_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -63,6 +67,7 @@ pub(in crate::index) fn build_users_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     CreateCollectionRequest { fields }
@@ -95,6 +100,7 @@ pub(super) fn record_cost_schema(
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -107,6 +113,7 @@ pub(super) fn record_cost_schema(
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     if let Some(backend) = vector_backend {
@@ -120,6 +127,7 @@ pub(super) fn record_cost_schema(
                 metric: Some(crate::shared_kernel::types::schema::VectorMetric::Cosine),
                 backend: Some(backend),
                 quantize: None,
+                facetable: false,
             },
         );
     }
@@ -138,6 +146,7 @@ pub(super) fn kw_only_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     CreateCollectionRequest { fields }
@@ -335,4 +344,105 @@ fn stats_publishes_engine_wide_byte_total() {
         "gauge must equal the sum across both collections after a \
              single-collection stats() call"
     );
+}
+
+/// The `email` keyword field of `kw_only_schema`, with `facetable` set.
+fn kw_schema_facetable(facetable: bool) -> CreateCollectionRequest {
+    let mut fields = BTreeMap::new();
+    fields.insert(
+        "email".into(),
+        FieldSpec {
+            facetable,
+            ..kw_only_schema().fields.remove("email").unwrap()
+        },
+    );
+    CreateCollectionRequest { fields }
+}
+
+/// The stored `facetable` flag of one field, read from the engine state.
+fn stored_facetable(e: &Engine, collection_id: &str, field: &str) -> bool {
+    let state = e.state.read().unwrap();
+    state.collections.get(collection_id).unwrap().schema[field].facetable
+}
+
+fn stored_version(e: &Engine, collection_id: &str) -> u32 {
+    let state = e.state.read().unwrap();
+    state.collections.get(collection_id).unwrap().version
+}
+
+#[test]
+fn facetable_new_field_is_accepted_online() {
+    let e = Engine::new();
+    e.create_collection("a", kw_only_schema()).unwrap();
+    let mut fields = kw_only_schema().fields;
+    fields.insert(
+        "tag".into(),
+        FieldSpec {
+            facetable: true,
+            ..kw_only_schema().fields.remove("email").unwrap()
+        },
+    );
+    let resp = e
+        .create_collection("a", CreateCollectionRequest { fields })
+        .unwrap();
+    assert_eq!(resp.version, 2);
+    assert!(stored_facetable(&e, "a", "tag"));
+}
+
+#[test]
+fn facetable_enable_on_field_with_documents_is_refused() {
+    let e = Engine::new();
+    e.create_collection("a", kw_only_schema()).unwrap();
+    index_kw(&e, "a", "u1");
+    let Err(err) = e.create_collection("a", kw_schema_facetable(true)) else {
+        panic!("enabling facetable on a field with documents must be refused");
+    };
+    match err.downcast_ref::<StorageError>() {
+        Some(StorageError::ShadowRebuildRequired { field, .. }) => {
+            assert_eq!(field, "email");
+        }
+        other => panic!("expected ShadowRebuildRequired, got {other:?}"),
+    }
+    assert!(err.to_string().contains("shadow rebuild"));
+    assert!(!stored_facetable(&e, "a", "email"));
+    assert_eq!(stored_version(&e, "a"), 1);
+}
+
+#[test]
+fn facetable_enable_on_field_without_documents_is_accepted() {
+    let e = Engine::new();
+    e.create_collection("a", kw_only_schema()).unwrap();
+    let resp = e.create_collection("a", kw_schema_facetable(true)).unwrap();
+    assert_eq!(resp.version, 2);
+    assert!(stored_facetable(&e, "a", "email"));
+}
+
+#[test]
+fn facetable_refusal_changes_nothing() {
+    let e = Engine::new();
+    e.create_collection("a", kw_only_schema()).unwrap();
+    index_kw(&e, "a", "u1");
+    let mut fields = kw_schema_facetable(true).fields;
+    fields.insert(
+        "tag".into(),
+        kw_only_schema().fields.remove("email").unwrap(),
+    );
+    assert!(e
+        .create_collection("a", CreateCollectionRequest { fields })
+        .is_err());
+    let state = e.state.read().unwrap();
+    let coll = state.collections.get("a").unwrap();
+    assert!(!coll.schema.contains_key("tag"));
+    assert!(!coll.schema["email"].facetable);
+    assert_eq!(coll.version, 1);
+}
+
+#[test]
+fn facetable_disable_is_still_refused() {
+    let e = Engine::new();
+    e.create_collection("a", kw_schema_facetable(true)).unwrap();
+    let Err(err) = e.create_collection("a", kw_schema_facetable(false)) else {
+        panic!("disabling facetable must stay refused");
+    };
+    assert!(err.downcast_ref::<StorageError>().is_none());
 }
