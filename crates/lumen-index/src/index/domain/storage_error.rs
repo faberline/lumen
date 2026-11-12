@@ -16,6 +16,8 @@ pub enum StorageError {
     InvalidCollectionName(String),
     #[error("unknown field `{field}` in collection `{collection}`")]
     UnknownField { collection: String, field: String },
+    #[error("field `{field}` in collection `{collection}` already has documents: changing `facetable` from false to true needs a shadow rebuild (see #83 and #84)")]
+    ShadowRebuildRequired { collection: String, field: String },
     #[error("type mismatch on field `{field}`: expected {expected:?}, got {got}")]
     TypeMismatch {
         field: String,
