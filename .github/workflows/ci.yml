@@ -1,0 +1,562 @@
+# CI stages: lint -> test -> e2e -> gate.
+# See https://github.com/faberline/aw/blob/main/docs/standards/ci.md
+# The ruleset requires only the "gate" job. Keep its name fixed.
+# Measured performance does not run here; it runs in lumen-release-candidate.yml.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_INCREMENTAL: "0"
+  # On a pull request github.sha is the merge commit; the images and their
+  # identity are built and checked at the head commit.
+  HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  lint:
+    name: "lint: fmt, clippy"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: lumen-lint
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test-workspace:
+    name: "test: workspace (default features)"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reclaim runner disk before the test build
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: lumen-test-workspace
+      - name: Install the TypeScript compiler for the generated-client tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts typescript@5.9.3
+          tsc --version | grep -Fx 'Version 5.9.3'
+      - run: cargo test --workspace --locked
+
+  test-all-features:
+    name: "test: workspace (all features)"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reclaim runner disk before the test build
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+          components: clippy, llvm-tools-preview
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: lumen-test-all-features
+      - name: Install the TypeScript compiler for the generated-client tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts typescript@5.9.3
+          tsc --version | grep -Fx 'Version 5.9.3'
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-llvm-cov@0.9.1
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo llvm-cov --workspace --all-features --locked --json --summary-only --output-path target/coverage.json
+      - uses: faberline/aw/.github/actions/coverage@7ca7c1c8d24f0d29263cc43e7c37987bd853f202 # S8
+        with:
+          summary: target/coverage.json
+
+  test-features:
+    name: "test: single features (${{ matrix.package }})"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [lumen, lumen-index]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reclaim runner disk before the test builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: lumen-test-features-${{ matrix.package }}
+      - name: Test no default features and each single feature
+        env:
+          PACKAGE: ${{ matrix.package }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          features="$(cargo metadata --format-version 1 --no-deps --locked \
+            | jq -r --arg p "$PACKAGE" '.packages[] | select(.name == $p) | .features | keys[] | select(. != "default")')"
+          failed=()
+          profiles=("")
+          for f in $features; do profiles+=("$f"); done
+          for f in "${profiles[@]}"; do
+            args=(--locked -p "$PACKAGE" --no-default-features)
+            label="${PACKAGE} --no-default-features"
+            if [ -n "$f" ]; then
+              args+=(--features "$f")
+              label="${label} --features ${f}"
+            fi
+            echo "::group::cargo test ${label}"
+            if ! cargo test "${args[@]}" --lib --bins; then
+              failed+=("$label")
+            fi
+            echo "::endgroup::"
+          done
+          if [ "${#failed[@]}" -ne 0 ]; then
+            printf '::error::failed profile: %s\n' "${failed[@]}"
+            exit 1
+          fi
+
+  e2e-image:
+    name: "e2e: test image"
+    needs: [test-workspace, test-all-features, test-features]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/lumen-test-image.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+  e2e-resolve:
+    name: "e2e: resolve image identity"
+    needs: e2e-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      image: ${{ steps.identity.outputs.image }}
+      test-env: ${{ steps.identity.outputs.test_env }}
+      suites: ${{ steps.identity.outputs.suites }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          persist-credentials: false
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Pin the image and its expected identity
+        id: identity
+        shell: bash
+        env:
+          RAW_IMAGE: ${{ needs.e2e-image.outputs.image }}
+        run: |
+          set -euo pipefail
+          die() { echo "::error::$*" >&2; exit 1; }
+          [[ "$RAW_IMAGE" =~ ^ghcr\.io/faberline/lumen(:([A-Za-z0-9_][A-Za-z0-9_.-]{0,127}))?@(sha256:[0-9a-f]{64})$ ]] \
+            || die "image must be ghcr.io/faberline/lumen[:tag]@sha256:<64 hex>, got: $RAW_IMAGE"
+          root_digest="${BASH_REMATCH[3]}"
+          image="ghcr.io/faberline/lumen@${root_digest}"
+
+          version="$(grep '^version = ' Cargo.toml | head -n1 | cut -d'"' -f2)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] || die "invalid expected version: $version"
+
+          git_sha="${HEAD_SHA:0:8}"
+          [[ "$git_sha" =~ ^[0-9a-f]{8}$ ]] || die "expected git sha must be 8 lowercase hex, got: ${git_sha:-<empty>}"
+
+          runtime_digest="$(docker buildx imagetools inspect --raw "$image" | jq -r '
+            [.manifests[]? | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest] |
+            if length == 1 then .[0] else empty end')"
+          [[ "$runtime_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "no single linux/amd64 child digest for $image"
+          [[ "$runtime_digest" != "$root_digest" ]] || die "runtime child digest must differ from the root index digest"
+
+          # A pull request has no inputs, so it runs all suites.
+          suites='["overlay","operator"]'
+
+          # KEY=VALUE lines for aw's gke-test-env ConfigMap. They land in the
+          # evidence, so only public identity goes here.
+          delim="test_env_$(openssl rand -hex 16)"
+          {
+            echo "image=${image}"
+            echo "suites=${suites}"
+            echo "test_env<<${delim}"
+            echo "E2E_EXPECTED_IMAGE=${image}"
+            echo "E2E_EXPECTED_RUNTIME_DIGEST=${runtime_digest}"
+            echo "E2E_EXPECTED_VERSION=${version}"
+            echo "E2E_EXPECTED_GIT_SHA=${git_sha}"
+            echo "${delim}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### lumen gke-test identity"
+            echo
+            echo '```text'
+            echo "image:          ${image}"
+            echo "version:        ${version}"
+            echo "git_sha:        ${git_sha}"
+            echo "runtime_digest: ${runtime_digest}"
+            echo "suites:         ${suites}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  e2e-client:
+    name: "e2e: test client image"
+    # The client does not use the test image, so it builds in parallel with it.
+    needs: [test-workspace, test-all-features, test-features]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+    steps:
+      - name: Refuse Cargo profile overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          overrides="$(env | cut -d= -f1 | grep '^CARGO_PROFILE_' || true)"
+          [ -z "$overrides" ] || { echo "CARGO_PROFILE_* overrides are not allowed: $overrides" >&2; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          persist-credentials: false
+      - name: Reclaim runner disk before the release test build
+        # The release `it` binary is a full LTO test build; keep the `df -h`
+        # lines as direct free-space evidence.
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-musl
+      - name: Install musl toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: lumen-e2e-x86_64-unknown-linux-musl
+      - name: Build the static it binary
+        # rust-tests.md: the one `it` executable cargo reports.
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="$(cargo test --release --locked -p lumen --target x86_64-unknown-linux-musl --test it --no-run --message-format=json \
+            | jq -r 'select(.profile.test == true and .target.name == "it") | .executable')"
+          [ "$(printf '%s\n' "$exe" | grep -c .)" -eq 1 ] || { echo "expected one it executable, got: $exe" >&2; exit 1; }
+          mkdir -p dist/linux/amd64
+          cp "$exe" dist/linux/amd64/lumen-it
+      - name: Stage kubectl
+        # kubectl v1.37.0, checked by digest.
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl -o dist/linux/amd64/kubectl
+          echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  dist/linux/amd64/kubectl' | sha256sum -c -
+          chmod 0755 dist/linux/amd64/lumen-it dist/linux/amd64/kubectl
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Name the test client image
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'tag=ghcr.io/faberline/lumen-test-client:sha-%s\n' "${HEAD_SHA::12}" >>"$GITHUB_OUTPUT"
+      - name: Build and push the test client image
+        id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: Dockerfile.test
+          target: test-client
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.HEAD_SHA }}
+      - name: Pin the test client image by digest
+        id: ref
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'test client image digest is missing' >&2; exit 1; }
+          printf 'image=%s@%s\n' "$TAG" "$DIGEST" >>"$GITHUB_OUTPUT"
+          printf 'TEST CLIENT %s@%s\n' "$TAG" "$DIGEST"
+
+  e2e-standalone:
+    # The image-targeted suite e2e::standalone_container:: (bind, durable) on
+    # the same pinned root, under docker on the runner instead of the cluster.
+    # The release candidate's container-smoke job runs the same filter on the
+    # candidate root; e2e::standalone_filter_matches_module pins both.
+    name: "e2e: standalone container"
+    needs: e2e-resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          persist-credentials: false
+      - name: Reclaim runner disk before the cargo test build
+        # The debug `it` test binary is large; keep the `df -h` lines as
+        # direct free-space evidence.
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: lumen-e2e-standalone
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Run the standalone container suite
+        env:
+          E2E_STANDALONE_IMAGE: ${{ needs.e2e-resolve.outputs.image }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p lumen --test it -- e2e::standalone_container:: --ignored --test-threads=1
+
+  e2e-gke:
+    name: "e2e: GKE (${{ matrix.suite }})"
+    needs: [e2e-resolve, e2e-client]
+    # One call at a time: a call that waits for the repository's Lease in aw
+    # uses runner minutes. fail-fast off runs the other suites when one fails.
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.e2e-resolve.outputs.suites) }}
+    permissions:
+      id-token: write
+      contents: read
+      packages: read
+    uses: faberline/aw/.github/workflows/gke-test.yml@efe1a96e54617e60f6e2b7d154aea67fca8c96f8
+    with:
+      aw-ref: efe1a96e54617e60f6e2b7d154aea67fca8c96f8
+      image: ${{ needs.e2e-resolve.outputs.image }}
+      image-name: ghcr.io/faberline/lumen
+      namespace: lumen
+      test-job: k8s/gke-test-job/${{ matrix.suite }}
+      test-image: ${{ needs.e2e-client.outputs.image }}
+      test-image-name: lumen-test-client
+      test-env: ${{ needs.e2e-resolve.outputs.test-env }}
+      evidence-suffix: ${{ matrix.suite }}
+
+  e2e-native:
+    name: "e2e: native contracts"
+    needs: [test-workspace, test-all-features, test-features, e2e-resolve]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    env:
+      LUMEN_DOCKER_CANDIDATE_IMAGE: ${{ needs.e2e-resolve.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          persist-credentials: false
+      - name: Reclaim runner disk before the release test build
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: lumen-e2e-native
+      - name: Install the contract tools (kustomize, toxiproxy-server, tsc)
+        # Each download is checked against a pinned sha256.
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/lumen-native-tools"
+          mkdir -p "$bin"
+          curl -fsSL -o "$RUNNER_TEMP/kustomize.tar.gz" \
+            https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz
+          echo 'cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61  '"$RUNNER_TEMP/kustomize.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/kustomize.tar.gz" -C "$bin" kustomize
+          curl -fsSL -o "$bin/toxiproxy-server" \
+            https://github.com/Shopify/toxiproxy/releases/download/v2.13.0/toxiproxy-server-linux-amd64
+          echo 'bf529e8bb9a05cd293f45a3f1d0aa66ff9469680dcdca7e0ebeae21f1b83de89  '"$bin/toxiproxy-server" | sha256sum --check
+          chmod 0755 "$bin/kustomize" "$bin/toxiproxy-server"
+          kustomize version
+          echo "$bin" >> "$GITHUB_PATH"
+          echo "LUMEN_TOXIPROXY_SERVER=$bin/toxiproxy-server" >> "$GITHUB_ENV"
+          npm install --global --ignore-scripts typescript@5.9.3
+          tsc --version | grep -Fx 'Version 5.9.3'
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Point the CLI contract at the release lumen test binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="$(cargo test --release --locked -p lumen --features release --bin lumen --no-run --message-format=json \
+            | jq -r 'select(.reason == "compiler-artifact" and .profile.test == true and .target.name == "lumen") | .executable')"
+          [ "$(printf '%s\n' "$exe" | grep -c .)" -eq 1 ] || { echo "expected one lumen test executable, got: $exe" >&2; exit 1; }
+          echo "LUMEN_CONTRACT_CLI_TEST_BIN=$exe" >> "$GITHUB_ENV"
+      - name: Run the native functional contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --release --locked -p lumen --features release --test it -- \
+            --exact --include-ignored --test-threads 1 \
+            behavior_lumen_claim_cli_connect_query_workflow::lumen_claim_cli_connect_query_workflow \
+            behavior_lumen_claim_developer_interactive_tooling::lumen_claim_developer_interactive_tooling \
+            behavior_lumen_claim_k8s_kustomize_base::lumen_claim_k8s_kustomize_base \
+            behavior_lumen_claim_long_running_kustomize_base::lumen_claim_long_running_kustomize_base \
+            behavior_lumen_claim_observability_servicemonitor_rule::lumen_claim_observability_servicemonitor_rule \
+            docker_named_volume::digest_bound_compose_down_keeps_volume_and_down_v_deletes_it \
+            docker_named_volume::digest_bound_volume_survives_replacement_and_hard_kill_but_anonymous_volume_does_not \
+            spec_gen_e2e::generated_client_live_h2c_public_api_journey
+
+  gate:
+    name: gate
+    if: always()
+    needs:
+      - lint
+      - test-workspace
+      - test-all-features
+      - test-features
+      - e2e-image
+      - e2e-resolve
+      - e2e-client
+      - e2e-standalone
+      - e2e-gke
+      - e2e-native
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check every stage
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e '.lint.result == "success"' > /dev/null
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' > /dev/null

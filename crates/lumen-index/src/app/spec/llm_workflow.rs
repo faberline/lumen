@@ -106,7 +106,7 @@ PUT /collections/{id}/docs:replace
 - **Own the complete row for a doc?** Use `docs:replace` — replaying the same
   request converges to the same state (PUT semantics). **Own only some
   fields and want to add/update those without touching the rest?** Use
-  `POST /collections/{id}/index` instead; `/index` is a merge, `docs:replace`
+  `POST /collections/{id}/docs:merge` instead (`/index` is the same merge under its older name); `/index` is a merge, `docs:replace`
   is a full replacement.
 - `version` is optional **doc-level** last-write-wins over the caller's own
   source-row version — distinct from `IndexItem.version`'s per-`(external_id,
