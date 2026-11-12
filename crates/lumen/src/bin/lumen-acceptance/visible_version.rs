@@ -301,9 +301,7 @@ pub(super) fn run_visible_version(api: &HttpApi, collection: &str) -> Result<()>
         .as_array()
         .ok_or_else(|| anyhow!("replace batch: no results array"))?
     {
-        if result["status"] != "ok" {
-            bail!("replace batch: an item was not ok: {result}");
-        }
+        check_status_ok(result, "replace batch item")?;
     }
     expect_view(&read_view(api, collection, probe)?, &view_v1(), "version 1")?;
 
@@ -318,9 +316,7 @@ pub(super) fn run_visible_version(api: &HttpApi, collection: &str) -> Result<()>
             "vec_flat": [9.0, 9.0], "vec_hnsw": [9.0, 9.0]}}),
         ),
     )?;
-    if update["status"] != "ok" {
-        bail!("update d1: not ok: {update}");
-    }
+    check_status_ok(&update, "update d1")?;
     expect_view(&read_view(api, collection, probe)?, &view_v2(), "update d1")?;
 
     // Step 5: d3 is deleted.
@@ -356,9 +352,7 @@ pub(super) fn run_visible_version(api: &HttpApi, collection: &str) -> Result<()>
         Some(&json!({"fields": {"kw": "red", "num": 3.0, "body": "zeta",
             "vec_flat": [1.0, 0.0], "vec_hnsw": [1.0, 0.0]}})),
     )?;
-    if readd["status"] != "ok" {
-        bail!("re-add d3: not ok: {readd}");
-    }
+    check_status_ok(&readd, "re-add d3")?;
     expect_view(&read_view(api, collection, probe)?, &view_v5(), "re-add d3")?;
 
     // Step 8: cleanup.
@@ -369,6 +363,14 @@ pub(super) fn run_visible_version(api: &HttpApi, collection: &str) -> Result<()>
         &format!("{path}?force=true"),
         None,
     )?;
+    Ok(())
+}
+
+/// Fails unless a write reply has `status == "ok"`. `what` names the step.
+fn check_status_ok(reply: &Value, what: &str) -> Result<()> {
+    if reply["status"] != "ok" {
+        bail!("{what}: not ok: {reply}");
+    }
     Ok(())
 }
 
@@ -511,5 +513,269 @@ mod tests {
         // The helper's own labels must match the paths the check reports.
         let names: Vec<&str> = stale_variants(&v2()).iter().map(|(p, _)| *p).collect();
         assert!(names.contains(&"ordering") && names.contains(&"hnsw_knn"));
+    }
+
+    /// One canned reply: method, path prefix, status, body.
+    type Route = (&'static str, &'static str, u16, &'static str);
+
+    /// A canned HTTP server for the error paths. The first route whose method matches and
+    /// whose path starts with its prefix answers with its status and body; others get 404.
+    fn serve_canned(routes: Vec<Route>) -> String {
+        use std::io::{BufRead, BufReader, Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("address");
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut reader = BufReader::new(stream.try_clone().expect("clone"));
+                let mut request_line = String::new();
+                reader.read_line(&mut request_line).expect("request line");
+                let mut parts = request_line.split_whitespace();
+                let method = parts.next().unwrap_or_default().to_string();
+                let path = parts.next().unwrap_or_default().to_string();
+                let mut length: usize = 0;
+                loop {
+                    let mut header = String::new();
+                    reader.read_line(&mut header).expect("header");
+                    if header.trim().is_empty() {
+                        break;
+                    }
+                    if let Some(value) = header.to_ascii_lowercase().strip_prefix("content-length:")
+                    {
+                        length = value.trim().parse().unwrap_or(0);
+                    }
+                }
+                let mut body = vec![0u8; length];
+                reader.read_exact(&mut body).expect("body");
+                let (status, reply) = routes
+                    .iter()
+                    .find(|(m, prefix, _, _)| *m == method && path.starts_with(*prefix))
+                    .map_or((404, ""), |(_, _, status, reply)| (*status, *reply));
+                let response = format!(
+                    "HTTP/1.1 {status} Canned\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}",
+                    reply.len()
+                );
+                let _ = stream.write_all(response.as_bytes());
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    /// Replies that let `read_view` finish on collection `c`, after the `first` overrides.
+    fn read_routes(first: Vec<Route>) -> Vec<Route> {
+        let mut routes = first;
+        routes.push((
+            "POST",
+            "/collections/c/search",
+            200,
+            r#"{"hits":[{"external_id":"d1"}]}"#,
+        ));
+        routes.push(("POST", "/collections/c/duplicates", 200, r#"{"groups":[]}"#));
+        routes.push((
+            "GET",
+            "/collections/c/stats",
+            200,
+            r#"{"fields":{"body":{"avg_doc_len":2.0}},"documents_indexed":3}"#,
+        ));
+        routes
+    }
+
+    fn read_ok(first: Vec<Route>) -> ReadView {
+        let api = HttpApi::new(&serve_canned(read_routes(first))).expect("client");
+        read_view(&api, "c", [1.0, 0.0]).expect("the read must finish")
+    }
+
+    fn read_err(first: Vec<Route>) -> String {
+        let api = HttpApi::new(&serve_canned(read_routes(first))).expect("client");
+        let err = read_view(&api, "c", [1.0, 0.0]).expect_err("the read must fail");
+        format!("{err:#}")
+    }
+
+    /// Runs the phase on collection `c`; the replace batch answers with `status` and `reply`.
+    fn run_err(replace_status: u16, replace_reply: &'static str) -> String {
+        run_err_with(vec![(
+            "PUT",
+            "/collections/c/docs:replace",
+            replace_status,
+            replace_reply,
+        )])
+    }
+
+    /// Runs the phase on collection `c` with `first` replies before the defaults, which are
+    /// a dropped leftover, a created collection and a replace batch that is not used.
+    fn run_err_with(first: Vec<Route>) -> String {
+        let mut routes = first;
+        routes.push(("DELETE", "/collections/c", 204, ""));
+        routes.push(("PUT", "/collections/c", 200, "{}"));
+        let api = HttpApi::new(&serve_canned(routes)).expect("client");
+        let err = run_visible_version(&api, "c").expect_err("the phase must stop");
+        format!("{err:#}")
+    }
+
+    #[test]
+    fn visible_version_has_its_name() {
+        assert_eq!(VisibleVersion.name(), "visible_version");
+    }
+
+    #[test]
+    fn run_visible_version_stops_when_the_collection_cannot_be_created() {
+        let mut routes = vec![("PUT", "/collections/c", 500, "{}")];
+        routes.insert(0, ("DELETE", "/collections/c", 204, ""));
+        let api = HttpApi::new(&serve_canned(routes)).expect("client");
+        let err = run_visible_version(&api, "c").expect_err("the create must fail");
+        assert!(format!("{err:#}").contains("create collection"), "{err:#}");
+    }
+
+    #[test]
+    fn run_visible_version_stops_when_the_batch_is_refused() {
+        let err = run_err(500, "{}");
+        assert!(
+            err.contains("replace batch: PUT /collections/c/docs:replace returned 500"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn run_visible_version_stops_when_the_first_read_is_refused() {
+        let err = run_err_with(vec![
+            (
+                "PUT",
+                "/collections/c/docs:replace",
+                200,
+                r#"{"results":[{"status":"ok"}]}"#,
+            ),
+            ("POST", "/collections/c/search", 500, "{}"),
+        ]);
+        assert!(
+            err.contains("filter_red") && err.contains("returned 500"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn check_status_ok_accepts_only_ok() {
+        check_status_ok(&json!({"status": "ok"}), "step").expect("ok passes");
+        let err = check_status_ok(&json!({"status": "error"}), "step").expect_err("not ok fails");
+        assert!(format!("{err:#}").contains("step: not ok"), "{err:#}");
+    }
+
+    #[test]
+    fn read_view_reads_a_complete_canned_view() {
+        let view = read_ok(vec![]);
+        assert_eq!(view.red, vec!["d1".to_string()]);
+        assert_eq!(view.flat_knn, vec!["d1".to_string()]);
+        assert_eq!(view.documents, 3);
+        assert!((view.avg_doc_len - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn read_view_fails_when_a_search_has_no_hits() {
+        let err = read_err(vec![("POST", "/collections/c/search", 200, "{}")]);
+        assert!(err.contains("filter_red: no hits array"), "{err}");
+    }
+
+    #[test]
+    fn read_view_fails_when_a_hit_has_no_external_id() {
+        let err = read_err(vec![(
+            "POST",
+            "/collections/c/search",
+            200,
+            r#"{"hits":[{"score":1.0}]}"#,
+        )]);
+        assert!(err.contains("a hit has no external_id"), "{err}");
+    }
+
+    #[test]
+    fn read_view_fails_when_a_search_is_refused() {
+        let err = read_err(vec![("POST", "/collections/c/search", 500, "{}")]);
+        assert!(
+            err.contains("filter_red") && err.contains("returned 500"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn read_view_fails_when_duplicates_has_no_groups() {
+        let err = read_err(vec![("POST", "/collections/c/duplicates", 200, "{}")]);
+        assert!(err.contains("duplicates: no groups array"), "{err}");
+    }
+
+    #[test]
+    fn read_view_names_a_numeric_duplicate_value_by_its_json() {
+        let view = read_ok(vec![(
+            "POST",
+            "/collections/c/duplicates",
+            200,
+            r#"{"groups":[{"value":7,"external_ids":["d2","d1"]}]}"#,
+        )]);
+        assert_eq!(
+            view.dup_groups,
+            vec![("7".to_string(), vec!["d1".to_string(), "d2".to_string()])]
+        );
+    }
+
+    #[test]
+    fn read_view_fails_when_a_duplicate_id_is_not_a_string() {
+        let err = read_err(vec![(
+            "POST",
+            "/collections/c/duplicates",
+            200,
+            r#"{"groups":[{"value":"red","external_ids":[1]}]}"#,
+        )]);
+        assert!(err.contains("duplicates: an id is not a string"), "{err}");
+    }
+
+    #[test]
+    fn read_view_fails_when_duplicate_ids_are_not_a_list() {
+        let err = read_err(vec![(
+            "POST",
+            "/collections/c/duplicates",
+            200,
+            r#"{"groups":[{"value":"red","external_ids":"d1"}]}"#,
+        )]);
+        assert!(
+            err.contains("duplicates: expected an array of ids"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn read_view_fails_when_stats_have_no_average_length() {
+        let err = read_err(vec![(
+            "GET",
+            "/collections/c/stats",
+            200,
+            r#"{"documents_indexed":3}"#,
+        )]);
+        assert!(
+            err.contains("bm25_doc_length: no fields.body.avg_doc_len"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn read_view_fails_when_stats_have_no_document_count() {
+        let err = read_err(vec![(
+            "GET",
+            "/collections/c/stats",
+            200,
+            r#"{"fields":{"body":{"avg_doc_len":2.0}}}"#,
+        )]);
+        assert!(
+            err.contains("document_count: no documents_indexed"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn run_visible_version_stops_when_the_batch_has_no_results() {
+        let err = run_err(200, "{}");
+        assert!(err.contains("replace batch: no results array"), "{err}");
+    }
+
+    #[test]
+    fn run_visible_version_stops_when_a_batch_item_is_not_ok() {
+        let err = run_err(200, r#"{"results":[{"status":"error"}]}"#);
+        assert!(err.contains("replace batch item: not ok"), "{err}");
     }
 }
