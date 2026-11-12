@@ -750,6 +750,23 @@ fn test_leaf(ca: &TestCa, dns: &str) -> (String, String) {
     (cert.pem(), key.serialize_pem())
 }
 
+/// A serving leaf for `dns` that is valid now and expires `lifetime_secs` from
+/// now, so it can be loaded and then go stale while the server runs.
+fn test_leaf_expiring_in(ca: &TestCa, dns: &str, lifetime_secs: i64) -> (String, String) {
+    let mut params = rcgen::CertificateParams::new(vec![dns.to_string()]).expect("leaf params");
+    params
+        .distinguished_name
+        .push(rcgen::DnType::CommonName, dns);
+    params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth];
+    params.not_before = time::OffsetDateTime::now_utc() - time::Duration::hours(1);
+    params.not_after = time::OffsetDateTime::now_utc() + time::Duration::seconds(lifetime_secs);
+    let key = rcgen::KeyPair::generate().expect("leaf key");
+    let cert = params
+        .signed_by(&key, &ca.cert, &ca.key)
+        .expect("sign leaf");
+    (cert.pem(), key.serialize_pem())
+}
+
 /// One request the TLS upstream answered.
 #[derive(Debug, Clone)]
 struct TlsSeen {
@@ -1114,6 +1131,102 @@ fn a_certificate_for_another_service_is_refused_by_name() {
         !stderr.contains("localhost") && !stderr.contains("127.0.0.1 certificate"),
         "#3113 R7: a localhost certificate is not a remediation path:\n{stderr}"
     );
+}
+
+/// Run `lumen connect --ca-file` against a deployment that should accept it,
+/// and return the stderr. Used as the negative control: the same fixture with
+/// a valid leaf must pass, so a refusal elsewhere is not the fixture's doing.
+fn connect_succeeds(ca_pem: &str, upstream_port: u16) -> String {
+    let fixture = Fixture::new();
+    let apiserver = FakeApiserver::start(Grant::Issue {
+        service_account: CLIENT_SA,
+    });
+    let ca_file = fixture.tmp.path().join("ca.crt");
+    std::fs::write(&ca_file, ca_pem).expect("write trust bundle");
+
+    let out = fixture.run(
+        &apiserver,
+        upstream_port,
+        &[
+            "connect",
+            "--namespace",
+            NAMESPACE,
+            "--cr",
+            "search",
+            "--client-sa",
+            CLIENT_SA,
+            "--ca-file",
+            ca_file.to_str().unwrap(),
+            "--",
+            "true",
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        out.status.success(),
+        "#3113 negative control: a valid leaf must be accepted:\n{stderr}"
+    );
+    stderr
+}
+
+/// R7: a leaf that is valid when the server loads it and expires while the
+/// server runs. The verifying client must say expiry, not a generic handshake
+/// failure, and the diagnostic must not leak key material.
+#[test]
+fn a_leaf_that_expires_after_start_is_refused_naming_expiry() {
+    let _connect_test = connect_test_lock();
+    let ca = test_ca("the-fleets-ca");
+    let (cert, key) = test_leaf_expiring_in(&ca, SERVICE_DNS, 3);
+    let upstream = TlsUpstream::start(SERVICE_DNS, &cert, &key, &ca.cert.pem());
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    let stderr = refused_connect(&ca.cert.pem(), upstream.port());
+    assert!(
+        stderr.to_ascii_lowercase().contains("expired"),
+        "#3113 R7: an expired leaf must be diagnosed as expiry, not a generic handshake failure:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("did not complete a TLS handshake"),
+        "#3113 R7: an expired leaf fell through to the generic handshake message:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("PRIVATE KEY") && !stderr.contains(&key),
+        "#3113 R7: the diagnostic leaked key material:\n{stderr}"
+    );
+    let _ = upstream.seen();
+
+    // Negative control: the same CA and Service with a valid leaf is accepted,
+    // so the refusal above is caused by the expiry and not by the fixture.
+    let (valid_cert, valid_key) = test_leaf(&ca, SERVICE_DNS);
+    let control = TlsUpstream::start(SERVICE_DNS, &valid_cert, &valid_key, &ca.cert.pem());
+    connect_succeeds(&ca.cert.pem(), control.port());
+}
+
+/// #3113: the server is addressed by the Service DNS name on the successful
+/// path. Every request the upstream records carries that name as its
+/// authority, and never `localhost` or `127.0.0.1`.
+#[test]
+fn the_server_is_addressed_by_the_service_dns_name_and_a_valid_leaf_is_accepted() {
+    let _connect_test = connect_test_lock();
+    let ca = test_ca("lumen-private-ca");
+    let (cert, key) = test_leaf(&ca, SERVICE_DNS);
+    let upstream = TlsUpstream::start(SERVICE_DNS, &cert, &key, &ca.cert.pem());
+    connect_succeeds(&ca.cert.pem(), upstream.port());
+
+    let seen = upstream.seen();
+    assert!(
+        !seen.is_empty(),
+        "#3113: the TLS preflight must reach the server, which recorded nothing"
+    );
+    for record in &seen {
+        assert_eq!(
+            record.host, SERVICE_DNS,
+            "#3113: a request was addressed to something other than the Service DNS name: {record:?}"
+        );
+        assert!(
+            record.host != "localhost" && record.host != "127.0.0.1",
+            "#3113: a request was addressed to a loopback name: {record:?}"
+        );
+    }
 }
 
 /// R7: a fleet still serving cleartext is a deployment fact, and reads as one
