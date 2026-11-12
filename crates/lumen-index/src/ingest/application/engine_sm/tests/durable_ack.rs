@@ -34,6 +34,7 @@ fn create_entry() -> RaftLogEntry {
                     metric: None,
                     backend: None,
                     quantize: None,
+                    facetable: false,
                 },
             )]),
         },

@@ -3081,6 +3081,7 @@ fn scale_collection_fields() -> std::collections::BTreeMap<String, lumen::types:
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     };
     let mut fields = std::collections::BTreeMap::new();
     fields.insert("bio".to_string(), spec(FieldType::Text));

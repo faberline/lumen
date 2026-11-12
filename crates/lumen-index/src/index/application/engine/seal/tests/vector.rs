@@ -26,6 +26,7 @@ fn vec_fieldspec(metric: VectorMetric) -> FieldSpec {
         // The slice is FlatCpu/exact only — HNSW is untouched.
         backend: Some(VectorBackend::FlatCpu),
         quantize: None,
+        facetable: false,
     }
 }
 

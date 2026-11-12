@@ -27,6 +27,7 @@ fn capacity_schema() -> CreateCollectionRequest {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         );
     }
@@ -116,6 +117,7 @@ fn keyword_schema(fields: &[&str]) -> CreateCollectionRequest {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         );
     }

@@ -77,6 +77,7 @@ async fn search_already_forwarded_ignores_map_version_mismatch_with_or_without_r
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     router
@@ -133,6 +134,7 @@ async fn search_already_forwarded_keyless_mismatch_increments_scatter_metric() {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     router

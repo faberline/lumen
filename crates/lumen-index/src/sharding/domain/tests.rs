@@ -281,6 +281,7 @@ fn field(field_type: FieldType) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 

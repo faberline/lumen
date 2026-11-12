@@ -128,6 +128,7 @@ fn create_collection_supersede_does_not_inherit_deleted_schema() {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     wide_fields.insert(
@@ -140,6 +141,7 @@ fn create_collection_supersede_does_not_inherit_deleted_schema() {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     e.create_collection(

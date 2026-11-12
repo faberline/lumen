@@ -161,6 +161,7 @@ fn field_spec(field_type: FieldType) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 
@@ -173,6 +174,7 @@ fn vector_spec(backend: VectorBackend, quantize: Option<VectorQuantize>) -> Fiel
         metric: Some(VectorMetric::L2),
         backend: Some(backend),
         quantize,
+        facetable: false,
     }
 }
 

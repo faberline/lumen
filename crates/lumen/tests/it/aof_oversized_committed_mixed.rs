@@ -119,6 +119,7 @@ fn field_spec(field_type: FieldType, analyzer: Option<Analyzer>) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 

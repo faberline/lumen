@@ -24,6 +24,7 @@ fn fieldspec(t: FieldType) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 
