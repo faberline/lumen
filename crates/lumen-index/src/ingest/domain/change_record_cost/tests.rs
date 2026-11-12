@@ -28,6 +28,7 @@ impl TestContext {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         );
     }
@@ -43,6 +44,7 @@ impl TestContext {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         );
     }

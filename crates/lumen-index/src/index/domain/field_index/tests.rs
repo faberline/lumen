@@ -136,6 +136,7 @@ fn int64_spec_is_refused_with_not_indexed_yet() {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     };
     let Err(err) = super::FieldIndex::from_spec(&spec) else {
         panic!("int64 must be refused until #299");

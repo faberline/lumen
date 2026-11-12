@@ -181,6 +181,7 @@ fn durable_schema() -> CreateCollectionRequest {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         )]),
     }
