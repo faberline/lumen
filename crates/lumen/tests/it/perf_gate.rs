@@ -278,6 +278,8 @@ fn number_range_request(start: usize) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 
@@ -301,6 +303,8 @@ fn sorted_number_request(cursor: Option<String>, lower_bound: usize) -> SearchRe
         }]),
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 
@@ -439,6 +443,8 @@ fn match_query_latency_floor() {
                     sort: None,
                     track_total: true,
                     collapse: None,
+                    scoring: None,
+                    filter: None,
                 },
             )
             .unwrap();
@@ -471,6 +477,8 @@ fn term_query_latency_floor() {
                     sort: None,
                     track_total: true,
                     collapse: None,
+                    scoring: None,
+                    filter: None,
                 },
             )
             .unwrap();

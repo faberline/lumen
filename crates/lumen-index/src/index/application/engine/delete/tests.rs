@@ -45,6 +45,8 @@ fn delete_external_id_removes_all_fields() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -112,6 +114,8 @@ fn truncate_docs_preserves_schema_version_and_never_walks_documents() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();

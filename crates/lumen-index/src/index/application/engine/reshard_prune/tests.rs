@@ -63,6 +63,8 @@ fn prune_has_doc(e: &Engine, collection: &str, eid: &str) -> bool {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();

@@ -232,6 +232,8 @@ fn term_query(value: &str) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

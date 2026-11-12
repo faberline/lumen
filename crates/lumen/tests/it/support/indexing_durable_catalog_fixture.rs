@@ -279,6 +279,8 @@ pub(crate) fn assert_keyword_total(engine: &Arc<Engine>, value: &str, expected: 
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("keyword count query");
@@ -304,6 +306,8 @@ pub(crate) fn assert_queries(engine: &Arc<Engine>) {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("keyword term query");
@@ -329,6 +333,8 @@ pub(crate) fn assert_queries(engine: &Arc<Engine>) {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("keyword terms query");
@@ -350,6 +356,8 @@ pub(crate) fn assert_queries(engine: &Arc<Engine>) {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("number term query");
@@ -374,6 +382,8 @@ pub(crate) fn assert_queries(engine: &Arc<Engine>) {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("number range query");
@@ -396,6 +406,8 @@ pub(crate) fn assert_queries(engine: &Arc<Engine>) {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("text query");
@@ -423,6 +435,8 @@ pub(crate) fn assert_queries(engine: &Arc<Engine>) {
                     sort: None,
                     track_total: true,
                     collapse: None,
+                    scoring: None,
+                    filter: None,
                 },
             )
             .expect("UTF-8 text query");

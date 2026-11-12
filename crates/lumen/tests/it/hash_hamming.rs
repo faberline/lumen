@@ -80,6 +80,8 @@ fn run(e: &Engine, query: QueryNode) -> Vec<(String, f32)> {
             sort: None,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()

@@ -211,6 +211,8 @@ fn search_req(sort: Option<Vec<crate::shared_kernel::types::query::SortSpec>>) -
         sort,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

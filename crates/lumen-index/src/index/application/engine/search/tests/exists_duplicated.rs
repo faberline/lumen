@@ -20,6 +20,8 @@ fn search_ids(e: &Engine, coll: &str, query: QueryNode) -> (u64, Vec<String>) {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -264,6 +266,8 @@ fn exists_on_text_field_rejected() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap_err();

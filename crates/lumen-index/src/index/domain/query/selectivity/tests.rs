@@ -125,6 +125,8 @@ fn run(e: &Engine, query: QueryNode) -> BTreeMap<String, u32> {
             sort: None,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()

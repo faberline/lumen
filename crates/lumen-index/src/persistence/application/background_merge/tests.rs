@@ -94,6 +94,8 @@ fn has_capacity_value(engine: &Engine, value: &str) -> bool {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()

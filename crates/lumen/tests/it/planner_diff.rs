@@ -79,6 +79,8 @@ fn req(query: QueryNode, sort: Option<Vec<SortSpec>>) -> SearchRequest {
         sort,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

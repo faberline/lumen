@@ -366,6 +366,8 @@ fn search_request(text: String) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

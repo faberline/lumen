@@ -39,6 +39,8 @@ fn duplicate_field_in_one_index_request_is_replacement() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -58,6 +60,8 @@ fn duplicate_field_in_one_index_request_is_replacement() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -103,6 +107,8 @@ fn reindex_replaces_field_value() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -122,6 +128,8 @@ fn reindex_replaces_field_value() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();

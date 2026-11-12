@@ -278,6 +278,8 @@ fn exact_ids(engine: &Engine, value: &str) -> Vec<String> {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("run exact Keyword query")

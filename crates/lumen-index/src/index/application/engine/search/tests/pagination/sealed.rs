@@ -64,6 +64,8 @@ fn keyword_sort_paginates_over_sealed_segment_plus_live_tail() {
         }]),
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     };
     assert_eq!(
         walk_pages(&e, &base),
@@ -135,6 +137,8 @@ fn sorted_keyset_pagination_over_sealed_segment_plus_tail() {
             }]),
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         };
         let mut oracle_req = base.clone();
         oracle_req.limit = 1000;

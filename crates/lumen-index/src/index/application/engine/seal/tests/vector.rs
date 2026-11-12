@@ -65,6 +65,8 @@ fn knn(query: Vec<f32>, k: u32) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

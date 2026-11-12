@@ -100,6 +100,8 @@ fn run_bool_filter(args: &RunArgs) -> Result<BenchReport> {
                     sort: None,
                     track_total: false,
                     collapse: None,
+                    scoring: None,
+                    filter: None,
                 },
             )
             .context("bool_filter search")?;
@@ -131,6 +133,8 @@ fn sorted_page_request(limit: u32) -> SearchRequest {
         }]),
         track_total: false,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

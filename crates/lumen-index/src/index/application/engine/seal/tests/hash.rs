@@ -62,6 +62,8 @@ fn hamming(hash: u64, max: u32) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 
