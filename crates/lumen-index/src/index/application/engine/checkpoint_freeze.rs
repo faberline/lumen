@@ -37,7 +37,6 @@ impl Engine {
                 let generation = state.allocate_collection_generation()?;
                 let coll = state.collections.get_mut(&name).unwrap();
                 coll.collection_generation = generation;
-                coll.checkpoint_origin = None;
                 coll.checkpoint_lineage = None;
                 coll.checkpoint_lineage_schema = None;
             }
@@ -145,9 +144,6 @@ impl Engine {
             }
             coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
             coll.checkpoint_lineage_schema = Some(coll.version);
-            if coll.data_version == identity.data_version && !coll.requires_full_checkpoint {
-                coll.checkpoint_origin = coll.checkpoint_lineage.clone();
-            }
             if let Some(compactions) = capture.prepared_compactions.remove(name) {
                 for compacted in compactions {
                     replace_live_checkpoint_deltas(coll, compacted)?;

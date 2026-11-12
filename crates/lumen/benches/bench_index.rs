@@ -137,6 +137,7 @@ fn fresh_engine(field: &str, ftype: FieldType, analyzer: Option<Analyzer>) -> En
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     engine

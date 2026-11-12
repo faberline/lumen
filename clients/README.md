@@ -55,6 +55,9 @@ All three generated clients support Lumen's dedicated `QUERY` operations and a
 runtime POST fallback. They generate ordinary JSON operations. The current
 operation model ignores non-JSON request and response content.
 
+Generated clients expose `merge_docs` (Python and Rust) and `mergeDocs`
+(TypeScript) and still expose `index`.
+
 ## Connect
 
 Standalone in-cluster clients use `http://lumen.lumen.svc.cluster.local:7373`
