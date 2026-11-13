@@ -13,6 +13,7 @@
 
 pub mod access;
 pub mod reshard_status;
+pub mod runtime;
 pub mod serving;
 pub mod status;
 pub mod topology;
@@ -25,6 +26,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::lumen_spec::access::AccessSpec;
+use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::serving::{AuthMode, LogFormat, ServingSpec};
 use crate::domain::lumen_spec::status::LumenStatus;
 use crate::domain::lumen_spec::topology::{ReshardPolicy, ShardMapSpec};
@@ -169,6 +171,10 @@ pub struct LumenSpec {
     /// Stateless serving-fleet shape.
     #[serde(default)]
     pub serving: ServingSpec,
+
+    /// Typed runtime settings. A field that is not set keeps its default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<RuntimeSettings>,
 
     /// Which nodes the serving pods may run on.
     #[serde(default)]

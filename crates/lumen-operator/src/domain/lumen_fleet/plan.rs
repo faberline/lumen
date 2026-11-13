@@ -47,6 +47,11 @@ pub fn plan(fleet: &LumenFleet) -> Vec<PlannedInstance> {
         }
 
         let mut merged = defaults.clone();
+        if let Some(instance_runtime) = &entry.runtime {
+            let base = fleet.spec.defaults.runtime.clone().unwrap_or_default();
+            let effective = base.overlay(instance_runtime);
+            merged["runtime"] = serde_json::to_value(&effective).unwrap_or(Value::Null);
+        }
         if let Some(patch) = &entry.spec {
             merge_patch(&mut merged, patch);
         }

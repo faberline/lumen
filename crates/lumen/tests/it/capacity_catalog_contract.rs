@@ -77,6 +77,7 @@ fn sample_catalog_json() -> &'static str {
 
 fn test_lumen(name: &str, ns: &str, machine_type: &str) -> Lumen {
     let spec = LumenSpec {
+        runtime: None,
         image: "lumen:latest".into(),
         image_pull_policy: None,
         image_pull_secrets: Vec::new(),

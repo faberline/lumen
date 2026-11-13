@@ -26,6 +26,7 @@ fn fixture(replicas_per_shard: u32) -> Lumen {
         replicas_per_shard
     };
     let spec = LumenSpec {
+        runtime: None,
         image: "registry.example.invalid/lumen:test".into(),
         image_pull_policy: None,
         image_pull_secrets: Vec::new(),

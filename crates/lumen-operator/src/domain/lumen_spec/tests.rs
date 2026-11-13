@@ -33,6 +33,7 @@ fn test_spec() -> LumenSpec {
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        runtime: None,
     }
 }
 
@@ -184,4 +185,60 @@ fn absent_access_deserializes_to_none() {
         .expect("serialize spec")
         .get("access")
         .is_none());
+}
+
+/// Every `env = "..."` option of `lumen serve` has a classification, and every
+/// classified name exists in the source. Negative control: removing one entry
+/// from `SERVE_OPTION_INVENTORY` fails this test.
+#[test]
+fn serve_option_inventory_classifies_every_serve_option() {
+    use crate::domain::lumen_spec::runtime::SERVE_OPTION_INVENTORY;
+    let source = include_str!("../../../../lumen/src/bin/lumen/cli/serve.rs");
+    let found: Vec<&str> = source
+        .split("env = \"")
+        .skip(1)
+        .map(|rest| rest.split('"').next().expect("closing quote"))
+        .collect();
+    assert!(!found.is_empty(), "serve.rs names no env option");
+    for name in &found {
+        assert!(
+            SERVE_OPTION_INVENTORY.iter().any(|(n, _)| n == name),
+            "serve option {name} has no classification in SERVE_OPTION_INVENTORY"
+        );
+    }
+    for (name, _) in SERVE_OPTION_INVENTORY {
+        assert!(
+            found.contains(name),
+            "inventory names {name}, which serve.rs does not define"
+        );
+    }
+    assert_eq!(found.len(), SERVE_OPTION_INVENTORY.len());
+}
+
+#[test]
+fn every_typed_runtime_option_has_a_field() {
+    use crate::domain::lumen_spec::runtime::RuntimeSettings;
+    let settings = RuntimeSettings {
+        snapshot_secs: Some(1),
+        grace_secs: Some(2),
+        otlp_endpoint: Some("http://collector:4317".into()),
+        bootstrap_max_bytes_per_sec: Some(3),
+    };
+    let value = serde_json::to_value(&settings).expect("serialize runtime");
+    let mut keys: Vec<&str> = value
+        .as_object()
+        .expect("object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "bootstrapMaxBytesPerSec",
+            "graceSecs",
+            "otlpEndpoint",
+            "snapshotSecs"
+        ]
+    );
 }
