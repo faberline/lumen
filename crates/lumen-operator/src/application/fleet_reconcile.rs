@@ -4,6 +4,8 @@
 use std::collections::BTreeSet;
 use std::time::Duration;
 
+use futures::StreamExt;
+use kube::runtime::{watcher, WatchStreamExt};
 use serde_json::json;
 
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
@@ -13,20 +15,26 @@ use crate::domain::lumen_fleet::{
 };
 use crate::domain::lumen_spec::Lumen;
 
+pub mod schedule;
+use schedule::{FleetEvent, Scheduler, FLEET_REPAIR_INTERVAL};
+#[cfg(test)]
+mod tests;
+
 /// Leader-election Lease for the fleet loop, independent of the main
 /// controller's so each can fail over on its own.
 const FLEET_LEASE_NAME: &str = "lumen-fleet";
 
-/// How often the fleet re-materializes its instances.
-const FLEET_POLL_INTERVAL: Duration = Duration::from_secs(30);
+/// How often the loop wakes to check leadership and the repair schedule.
+/// Each wake does no cluster read unless work is due.
+const FLEET_TICK: Duration = Duration::from_secs(1);
 
 /// Run the fleet materialization loop alongside the main controller.
 ///
-/// A poll loop rather than a `kube` `Controller`: the fleet is one
-/// cluster-scoped object edited by a human, its children are `Lumen` CRs that
-/// have their own controller, and a 30s convergence pass is far below the
-/// latency anyone can perceive on a deploy. Leader-gated on its own Lease so a
-/// failover of the main controller does not stall it and vice versa.
+/// Driven by watch events on `LumenFleet` and on the `Lumen` children that
+/// carry the fleet label, with one low-frequency full repair pass to catch a
+/// missed event. The decisions live in [`schedule::Scheduler`]. Leader-gated on
+/// its own Lease so a failover of the main controller does not stall it and
+/// vice versa.
 pub fn spawn_fleet_loop(client: kube::Client) {
     // Same identity/namespace resolution as every other independently
     // leader-gated loop in this operator.
@@ -44,29 +52,114 @@ pub fn spawn_fleet_loop(client: kube::Client) {
     );
     tokio::spawn(async move {
         let fleets: kube::Api<LumenFleet> = kube::Api::all(client.clone());
+        let lumens: kube::Api<Lumen> = kube::Api::all(client.clone());
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<FleetEvent>();
+
+        let fleet_watch = fleets.clone();
+        let fleet_tx = tx.clone();
+        tokio::spawn(async move {
+            use kube::ResourceExt;
+            let stream =
+                kube::runtime::watcher(fleet_watch, watcher::Config::default()).default_backoff();
+            let mut stream = std::pin::pin!(stream);
+            while let Some(event) = stream.next().await {
+                let mapped = match event {
+                    Ok(watcher::Event::Apply(o)) | Ok(watcher::Event::InitApply(o)) => {
+                        FleetEvent::FleetChanged(o.name_any())
+                    }
+                    Ok(watcher::Event::Delete(o)) => FleetEvent::FleetDeleted(o.name_any()),
+                    Ok(watcher::Event::Init) | Ok(watcher::Event::InitDone) => continue,
+                    Err(err) => {
+                        tracing::warn!(error = %err, "fleet watch error");
+                        continue;
+                    }
+                };
+                if fleet_tx.send(mapped).is_err() {
+                    break;
+                }
+            }
+        });
+
+        let child_watch = lumens.clone();
+        let child_tx = tx.clone();
+        tokio::spawn(async move {
+            use kube::ResourceExt;
+            let config = watcher::Config::default().labels(FLEET_LABEL);
+            let stream = kube::runtime::watcher(child_watch, config).default_backoff();
+            let mut stream = std::pin::pin!(stream);
+            while let Some(event) = stream.next().await {
+                let mapped = match event {
+                    Ok(watcher::Event::Apply(o)) | Ok(watcher::Event::InitApply(o)) => {
+                        FleetEvent::ChildChanged(o.labels().get(FLEET_LABEL).cloned())
+                    }
+                    Ok(watcher::Event::Delete(o)) => {
+                        FleetEvent::ChildDeleted(o.labels().get(FLEET_LABEL).cloned())
+                    }
+                    Ok(watcher::Event::Init) | Ok(watcher::Event::InitDone) => continue,
+                    Err(err) => {
+                        tracing::warn!(error = %err, "fleet child watch error");
+                        continue;
+                    }
+                };
+                if child_tx.send(mapped).is_err() {
+                    break;
+                }
+            }
+        });
+
+        let start = std::time::Instant::now();
+        let mut sched = Scheduler::new(Some(FLEET_REPAIR_INTERVAL));
+        let mut tick = tokio::time::interval(FLEET_TICK);
         loop {
-            if election
+            let leader = election
                 .is_leader
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+                .load(std::sync::atomic::Ordering::Relaxed);
+            sched.set_leader(leader, start.elapsed());
+            tokio::select! {
+                Some(event) = rx.recv() => sched.observe(event),
+                _ = tick.tick() => {}
+            }
+            let batch = sched.poll(start.elapsed());
+            if batch.is_empty() {
+                continue;
+            }
+            if batch.full_repair {
                 match fleets.list(&Default::default()).await {
                     Ok(list) => {
-                        for fleet in list.items {
-                            if let Err(err) = converge(&client, &fleets, &fleet).await {
-                                tracing::warn!(
-                                    fleet = %fleet.metadata.name.clone().unwrap_or_default(),
-                                    error = %err,
-                                    "fleet convergence pass failed"
-                                );
-                            }
+                        for fleet in &list.items {
+                            converge_logged(&client, &fleets, fleet).await;
                         }
                     }
                     Err(err) => tracing::warn!(error = %err, "fleet: list LumenFleet failed"),
                 }
+            } else {
+                for name in &batch.fleets {
+                    match fleets.get_opt(name).await {
+                        Ok(Some(fleet)) => converge_logged(&client, &fleets, &fleet).await,
+                        // The fleet is gone; its children stay (prune is per pass).
+                        Ok(None) => {}
+                        Err(err) => {
+                            tracing::warn!(fleet = %name, error = %err, "fleet: get LumenFleet failed")
+                        }
+                    }
+                }
             }
-            tokio::time::sleep(FLEET_POLL_INTERVAL).await;
         }
     });
+}
+
+async fn converge_logged(
+    client: &kube::Client,
+    fleets: &kube::Api<LumenFleet>,
+    fleet: &LumenFleet,
+) {
+    if let Err(err) = converge(client, fleets, fleet).await {
+        tracing::warn!(
+            fleet = %fleet.metadata.name.clone().unwrap_or_default(),
+            error = %err,
+            "fleet convergence pass failed"
+        );
+    }
 }
 
 /// One convergence pass over a single fleet.
