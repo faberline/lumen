@@ -13,4 +13,4 @@ pub mod snapshot_subset;
 pub mod virtual_bucket_shard_map;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
