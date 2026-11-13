@@ -269,6 +269,7 @@ fn initial_lumen(max_shard_bytes: Option<u64>, blocking_condition: Option<&str>)
         peer_tls_secret: None,
         serving_tls_secret: None,
         body_limit_bytes: None,
+        access: None,
     };
     let mut lumen = Lumen::new(NAME, spec);
     lumen.metadata.namespace = Some(NAMESPACE.to_string());

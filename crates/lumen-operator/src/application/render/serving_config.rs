@@ -49,6 +49,7 @@ pub(super) fn serving_env(lumen: &Lumen) -> Vec<Value> {
         json!({ "name": "LUMEN_WAL", "value": "auto" }),
         json!({ "name": "LUMEN_GRACE_SECS", "value": lumen.spec.serving.grace_secs.to_string() }),
         from_cfg("LUMEN_PORT"),
+        from_cfg("LUMEN_RAFT_PORT"),
         from_cfg("LUMEN_LOG_FORMAT"),
         from_cfg("LUMEN_AUTH"),
         // #1384: mirror `serving_configmap`'s shard-map keys onto the
@@ -157,7 +158,6 @@ pub(super) fn serving_env(lumen: &Lumen) -> Vec<Value> {
 pub(super) fn serving_configmap(lumen: &Lumen, cx: &RenderCtx<'_>) -> Value {
     let name = format!("{}-config", cx.name);
     let mut data = json!({
-        "SHARD_COUNT": lumen.spec.shard_count.to_string(),
         "SHARD_MAP_VERSION": lumen.spec.shard_map.version.to_string(),
         "VIRTUAL_BUCKET_COUNT": lumen.spec.shard_map.virtual_bucket_count.to_string(),
         "LUMEN_LOG_FORMAT": lumen.spec.log_format.as_env(),
