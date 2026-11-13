@@ -1022,6 +1022,22 @@ spec:
                 - Retain
                 - Delete
                 type: string
+              rolloutPolicy:
+                default:
+                  maxConcurrent: 1
+                  paused: false
+                description: How fast one pass may change instances, and a manual freeze.
+                properties:
+                  maxConcurrent:
+                    default: 1
+                    description: Most instances one pass may create or apply. Default 1, minimum 1.
+                    type: integer
+                    minimum: 1.0
+                  paused:
+                    default: false
+                    description: When true no instance is created, applied or pruned. Default false.
+                    type: boolean
+                type: object
             required:
             - defaults
             type: object
@@ -1051,7 +1067,7 @@ spec:
                     namespace:
                       type: string
                     state:
-                      description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `Orphaned` | `Pruned`.'
+                      description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `Orphaned` | `Pruned` | `Held`.'
                       type: string
                   required:
                   - name

@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
 use crate::domain::lumen_fleet::{
     FleetInstance, LumenFleet, LumenFleetSpec, PlanOutcome, PlannedInstance, PrunePolicy,
-    FLEET_LABEL,
+    RolloutPolicy, FLEET_LABEL,
 };
 use crate::domain::lumen_spec::LumenSpec;
 
@@ -23,6 +23,7 @@ fn fleet(instances: Vec<FleetInstance>) -> LumenFleet {
             defaults: defaults(),
             instances,
             prune_policy: PrunePolicy::default(),
+            rollout_policy: RolloutPolicy::default(),
         },
     );
     fleet.metadata.generation = Some(1);
@@ -93,6 +94,7 @@ fn a_null_override_clears_an_inherited_field() {
             .unwrap(),
             instances: vec![instance("team-c", Some(json!({ "logLevel": null })))],
             prune_policy: PrunePolicy::default(),
+            rollout_policy: RolloutPolicy::default(),
         },
     );
     let planned = plan(&with_log_level);
@@ -226,4 +228,117 @@ fn a_materialized_instance_carries_no_owner_reference() {
     let seed = seed_object("search", &planned[0], ready(&planned[0]));
     assert!(seed["metadata"].get("ownerReferences").is_none(), "{seed}");
     assert_eq!(seed["metadata"]["labels"][FLEET_LABEL], json!("search"));
+}
+
+/// Plan the given namespaces (each with the default spec) under one policy.
+fn planned_under(policy: RolloutPolicy, namespaces: &[&str]) -> Vec<PlannedInstance> {
+    let mut f = fleet(namespaces.iter().map(|ns| instance(ns, None)).collect());
+    f.spec.rollout_policy = policy;
+    plan(&f)
+}
+
+fn policy(max_concurrent: u32, paused: bool) -> RolloutPolicy {
+    RolloutPolicy {
+        max_concurrent,
+        paused,
+    }
+}
+
+#[test]
+fn rollout_policy_defaults_when_absent() {
+    let spec: LumenFleetSpec =
+        serde_json::from_value(json!({ "defaults": { "image": "i" } })).expect("spec parses");
+    assert_eq!(spec.rollout_policy, policy(1, false));
+}
+
+#[test]
+fn explicit_max_concurrent_two_over_four_entries() {
+    use crate::domain::lumen_fleet::rollout::{decide, RolloutDecision::*};
+    let planned = planned_under(policy(2, false), &["ns-a", "ns-b", "ns-c", "ns-d"]);
+    assert_eq!(
+        decide(&policy(2, false), &planned),
+        vec![Proceed, Proceed, Held, Held]
+    );
+}
+
+#[test]
+fn default_policy_lets_one_instance_proceed() {
+    use crate::domain::lumen_fleet::rollout::{decide, RolloutDecision::*};
+    let planned = planned_under(RolloutPolicy::default(), &["ns-a", "ns-b", "ns-c"]);
+    assert_eq!(
+        decide(&RolloutPolicy::default(), &planned),
+        vec![Proceed, Held, Held]
+    );
+}
+
+/// Declared order, not namespace order: `ns-z` is declared first and must win
+/// the only slot. Fails if the decision sorts by namespace.
+#[test]
+fn order_follows_declared_order_not_namespace_order() {
+    use crate::domain::lumen_fleet::rollout::{decide, RolloutDecision::*};
+    let planned = planned_under(policy(1, false), &["ns-z", "ns-a", "ns-m"]);
+    let first = decide(&policy(1, false), &planned);
+    assert_eq!(first, vec![Proceed, Held, Held]);
+    assert_eq!(first, decide(&policy(1, false), &planned), "stable");
+}
+
+/// A rejected entry is `Held` and never takes a slot.
+#[test]
+fn rejected_entry_does_not_use_a_slot() {
+    use crate::domain::lumen_fleet::rollout::{decide, RolloutDecision::*};
+    let f = fleet(vec![
+        instance("ns-bad", Some(json!({ "nope": 1 }))),
+        instance("ns-a", None),
+        instance("ns-b", None),
+    ]);
+    let mut f = f;
+    f.spec.rollout_policy = policy(1, false);
+    let planned = plan(&f);
+    assert!(matches!(planned[0].outcome, PlanOutcome::Rejected(_)));
+    assert_eq!(
+        decide(&policy(1, false), &planned),
+        vec![Held, Proceed, Held]
+    );
+}
+
+#[test]
+fn paused_holds_every_instance() {
+    use crate::domain::lumen_fleet::rollout::{decide, held_message, RolloutDecision::*};
+    let paused = policy(5, true);
+    let planned = planned_under(paused.clone(), &["ns-a", "ns-b", "ns-c"]);
+    assert_eq!(decide(&paused, &planned), vec![Held, Held, Held]);
+    assert!(held_message(&paused).contains("paused"));
+}
+
+#[test]
+fn held_message_names_the_slot_when_not_paused() {
+    use crate::domain::lumen_fleet::rollout::held_message;
+    assert!(held_message(&policy(1, false)).contains("rollout slot"));
+}
+
+#[test]
+fn zero_max_concurrent_is_safe() {
+    use crate::domain::lumen_fleet::rollout::{decide, RolloutDecision::*};
+    let zero = policy(0, false);
+    let planned = planned_under(zero.clone(), &["ns-a", "ns-b"]);
+    let decisions = decide(&zero, &planned);
+    assert_eq!(decisions.iter().filter(|d| **d == Proceed).count(), 1);
+    assert_eq!(decisions, vec![Proceed, Held]);
+}
+
+#[test]
+fn proceed_never_exceeds_max_concurrent() {
+    use crate::domain::lumen_fleet::rollout::{decide, RolloutDecision::*};
+    let namespaces = [
+        "ns-1", "ns-2", "ns-3", "ns-4", "ns-5", "ns-6", "ns-7", "ns-8",
+    ];
+    for n in 1..=5u32 {
+        let p = policy(n, false);
+        let planned = planned_under(p.clone(), &namespaces);
+        let proceeds = decide(&p, &planned)
+            .iter()
+            .filter(|d| **d == Proceed)
+            .count();
+        assert_eq!(proceeds, n as usize, "maxConcurrent {n}");
+    }
 }

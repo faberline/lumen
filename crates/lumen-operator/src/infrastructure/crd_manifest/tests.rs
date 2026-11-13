@@ -113,3 +113,16 @@ fn auth_defaults_to_required() {
     assert_eq!(AuthMode::default(), AuthMode::Required);
     assert_eq!(AuthMode::default().as_env(), "required");
 }
+
+/// `maxConcurrent` is the rollout's only speed control: the CRD must state its
+/// minimum and its default, so a manifest without it means one instance per
+/// pass and a zero is refused by the API server, not only in code.
+#[test]
+fn the_fleet_crd_declares_the_rollout_policy() {
+    let yaml = fleet_crd_yaml();
+    assert!(yaml.contains("rolloutPolicy"), "{yaml}");
+    assert!(yaml.contains("maxConcurrent"), "{yaml}");
+    assert!(yaml.contains("minimum: 1"), "{yaml}");
+    assert!(yaml.contains("paused"), "{yaml}");
+    assert!(yaml.contains("default: 1"), "{yaml}");
+}
