@@ -552,6 +552,7 @@ jobs:
       - e2e-gke
       - e2e-native
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check every stage
         env:
