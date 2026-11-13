@@ -33,6 +33,7 @@ fn keyword_field() -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 

@@ -87,6 +87,7 @@ mod tests {
                             metric: None,
                             backend: None,
                             quantize: None,
+                            facetable: false,
                         },
                     )]
                     .into_iter()

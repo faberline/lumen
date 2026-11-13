@@ -21,6 +21,7 @@ fn field_dirty_rows_are_per_field_latest_and_revision_safe() {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         );
     }
@@ -34,6 +35,7 @@ fn field_dirty_rows_are_per_field_latest_and_revision_safe() {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     let mut collection = Collection::new(schema).unwrap();
