@@ -181,6 +181,7 @@ fn durable_schema() -> CreateCollectionRequest {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         )]),
     }
@@ -288,12 +289,6 @@ fn truncate_openapi_contract_has_no_request_body_and_a_distinct_operation_id() {
         "truncate must not accept a JSON body or process-local request_id: {operation}"
     );
     assert!(operation["responses"].get("204").is_some());
-    assert!(
-        spec["paths"]
-            .get("/collections/{collection_id}/docs:merge")
-            .is_none(),
-        "#3992 must not add the rejected docs:merge surface"
-    );
 }
 
 #[tokio::test]

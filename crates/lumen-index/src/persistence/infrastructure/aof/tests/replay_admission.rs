@@ -253,6 +253,7 @@ fn replay_reprice_error_keeps_failed_frame_and_watermark() {
                         metric: None,
                         backend: None,
                         quantize: None,
+                        facetable: false,
                     },
                 )]),
             },
