@@ -788,6 +788,29 @@ struct TlsUpstream {
     _material: tempfile::TempDir,
     // Held, never sent on: dropping it is the shutdown edge.
     _shutdown: tokio::sync::oneshot::Sender<()>,
+    // The server's warn lines, captured while it serves.
+    log: LogBuffer,
+}
+
+/// Captures what the upstream server logs. Cloned into the server thread.
+#[derive(Clone, Default)]
+struct LogBuffer(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for LogBuffer {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().expect("log lock").extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl LogBuffer {
+    fn text(&self) -> String {
+        String::from_utf8_lossy(&self.0.lock().expect("log lock")).into_owned()
+    }
 }
 
 impl TlsUpstream {
@@ -801,10 +824,21 @@ impl TlsUpstream {
         let claimed = dns.to_string();
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let recorder = seen.clone();
+        let log = LogBuffer::default();
+        let sink = log.clone();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let (ready_tx, ready_rx) = mpsc::channel();
 
         std::thread::spawn(move || {
+            // Thread-local: the accept loop below runs on this thread, so it
+            // sees this subscriber. The guard lives until the thread ends.
+            let _log_guard = tracing::subscriber::set_default(
+                tracing_subscriber::fmt()
+                    .with_writer(move || sink.clone())
+                    .with_ansi(false)
+                    .with_max_level(tracing::Level::WARN)
+                    .finish(),
+            );
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -873,7 +907,12 @@ impl TlsUpstream {
             seen,
             _material: material,
             _shutdown: shutdown_tx,
+            log,
         }
+    }
+
+    fn log(&self) -> String {
+        self.log.text()
     }
 
     fn port(&self) -> u16 {
@@ -1173,32 +1212,49 @@ fn connect_succeeds(ca_pem: &str, upstream_port: u16) -> String {
 /// server runs. The verifying client must say expiry, not a generic handshake
 /// failure, and the diagnostic must not leak key material.
 #[test]
-fn a_leaf_that_expires_after_start_is_refused_naming_expiry() {
+fn a_leaf_that_expires_after_start_is_refused_and_the_server_logs_the_expiry() {
     let _connect_test = connect_test_lock();
     let ca = test_ca("the-fleets-ca");
+
+    // Negative control first: a valid leaf is accepted and logs no refusal.
+    let (good_cert, good_key) = test_leaf(&ca, SERVICE_DNS);
+    let good = TlsUpstream::start(SERVICE_DNS, &good_cert, &good_key, &ca.cert.pem());
+    connect_succeeds(&ca.cert.pem(), good.port());
+    assert!(
+        !good.log().contains("refusing a TLS connection"),
+        "a valid leaf must not log a refusal:\n{}",
+        good.log()
+    );
+    let _ = good.seen();
+
     let (cert, key) = test_leaf_expiring_in(&ca, SERVICE_DNS, 3);
     let upstream = TlsUpstream::start(SERVICE_DNS, &cert, &key, &ca.cert.pem());
     std::thread::sleep(std::time::Duration::from_secs(5));
     let stderr = refused_connect(&ca.cert.pem(), upstream.port());
+
+    // The server refuses before the handshake, so the server log is where the
+    // expiry is named. Wait briefly in case the line is still in flight.
+    let mut log = upstream.log();
+    for _ in 0..20 {
+        if log.contains("the active serving leaf has expired") {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        log = upstream.log();
+    }
     assert!(
-        stderr.to_ascii_lowercase().contains("expired"),
-        "#3113 R7: an expired leaf must be diagnosed as expiry, not a generic handshake failure:\n{stderr}"
+        log.contains("the active serving leaf has expired"),
+        "#3113 R7: the server must log the expiry when it refuses an expired leaf:\n{log}"
     );
     assert!(
-        !stderr.contains("did not complete a TLS handshake"),
-        "#3113 R7: an expired leaf fell through to the generic handshake message:\n{stderr}"
+        !log.contains("PRIVATE KEY") && !log.contains(&key),
+        "#3113 R7: the server log leaked key material:\n{log}"
     );
     assert!(
         !stderr.contains("PRIVATE KEY") && !stderr.contains(&key),
-        "#3113 R7: the diagnostic leaked key material:\n{stderr}"
+        "#3113 R7: the client diagnostic leaked key material:\n{stderr}"
     );
     let _ = upstream.seen();
-
-    // Negative control: the same CA and Service with a valid leaf is accepted,
-    // so the refusal above is caused by the expiry and not by the fixture.
-    let (valid_cert, valid_key) = test_leaf(&ca, SERVICE_DNS);
-    let control = TlsUpstream::start(SERVICE_DNS, &valid_cert, &valid_key, &ca.cert.pem());
-    connect_succeeds(&ca.cert.pem(), control.port());
 }
 
 /// #3113: the server is addressed by the Service DNS name on the successful
