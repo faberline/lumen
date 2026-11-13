@@ -45,6 +45,7 @@ fn lumen_with_backup() -> Lumen {
         peer_tls_secret: None,
         serving_tls_secret: None,
         body_limit_bytes: None,
+        access: None,
     };
     spec.serving.backup = Some(ServingBackupSpec {
         policy: service_backup::ScheduledBackupPolicy {

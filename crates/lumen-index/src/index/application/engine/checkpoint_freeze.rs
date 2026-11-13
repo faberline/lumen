@@ -37,9 +37,10 @@ impl Engine {
                 let generation = state.allocate_collection_generation()?;
                 let coll = state.collections.get_mut(&name).unwrap();
                 coll.collection_generation = generation;
-                coll.checkpoint_lineage = None;
+                coll.checkpoint_bound = false;
                 coll.checkpoint_lineage_schema = None;
             }
+            state.checkpoint_lineage_root = None;
             state.checkpoint_namespace = Some(root.to_path_buf());
         }
         Ok(())
@@ -128,10 +129,14 @@ impl Engine {
         &self,
         root: &std::path::Path,
         capture: &mut CheckpointCapture,
+        from_root: &std::path::Path,
     ) -> Result<()> {
         let mut hold = StateHoldTrace::begin("bind_background_merge", "", "write");
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
         hold.acquired();
+        // The merge generation links every collection of the generation it rebased on.
+        // Only a collection that was bound to that same root may stay bound to the new one.
+        let rebased = state.checkpoint_lineage_root.as_deref() == Some(from_root);
         for (name, identity) in &capture.collections {
             let Some(coll) = state.collections.get_mut(name) else {
                 continue;
@@ -142,13 +147,18 @@ impl Engine {
             {
                 continue;
             }
-            coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
-            coll.checkpoint_lineage_schema = Some(coll.version);
+            if rebased {
+                coll.checkpoint_bound = true;
+                coll.checkpoint_lineage_schema = Some(coll.version);
+            }
             if let Some(compactions) = capture.prepared_compactions.remove(name) {
                 for compacted in compactions {
                     replace_live_checkpoint_deltas(coll, compacted)?;
                 }
             }
+        }
+        if rebased {
+            state.checkpoint_lineage_root = Some(root.to_path_buf());
         }
         self.publish_storage_bytes(&state);
         Ok(())
@@ -162,12 +172,12 @@ impl Engine {
         Ok(state
             .collections
             .iter()
-            .filter(|(name, coll)| {
+            .filter(|(_, coll)| {
                 coll.deleted_at.is_none()
                     && !coll.requires_full_checkpoint
+                    && coll.checkpoint_bound
+                    && state.checkpoint_lineage_root.as_deref() == Some(root)
                     && coll.checkpoint_lineage_schema == Some(coll.version)
-                    && coll.checkpoint_lineage.as_ref()
-                        == Some(&root.join(collection_dir_name(name)))
             })
             .map(|(name, coll)| {
                 (
@@ -244,12 +254,15 @@ impl Engine {
                 );
             }
             capture.scalar_cuts.insert(name.clone(), cuts);
-            let reusable = reuse_root.map(|root| root.join(collection_dir_name(name)));
-            let origin = coll.checkpoint_lineage.as_ref().filter(|origin| {
-                Some(*origin) == reusable.as_ref()
-                    && coll.checkpoint_lineage_schema == Some(coll.version)
-                    && !coll.requires_full_checkpoint
-            });
+            let origin = reuse_root
+                .filter(|root| {
+                    coll.checkpoint_bound
+                        && coll.deleted_at.is_none()
+                        && state.checkpoint_lineage_root.as_deref() == Some(*root)
+                        && coll.checkpoint_lineage_schema == Some(coll.version)
+                        && !coll.requires_full_checkpoint
+                })
+                .map(|root| root.join(collection_dir_name(name)));
             let work = if let Some(origin) = origin {
                 capture.live_base_inputs.insert(
                     name.clone(),
