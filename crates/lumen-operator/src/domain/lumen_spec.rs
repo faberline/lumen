@@ -11,6 +11,7 @@
 //!
 //! [`super::reconcile`]: crate::application::reconcile
 
+pub mod access;
 pub mod reshard_status;
 pub mod serving;
 pub mod status;
@@ -23,6 +24,7 @@ use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::lumen_spec::access::AccessSpec;
 use crate::domain::lumen_spec::serving::{AuthMode, LogFormat, ServingSpec};
 use crate::domain::lumen_spec::status::LumenStatus;
 use crate::domain::lumen_spec::topology::{ReshardPolicy, ShardMapSpec};
@@ -212,6 +214,11 @@ pub struct LumenSpec {
     /// default (#2584). Accepted range: 1 MiB (1048576) to 64 MiB (67108864).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_limit_bytes: Option<u64>,
+
+    /// Exact ServiceAccounts allowed to call the data plane. Absent keeps the
+    /// current behavior; `allowedServiceAccounts: []` denies all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<AccessSpec>,
 }
 
 /// Minimum accepted request body limit: 1 MiB (1048576 bytes).
