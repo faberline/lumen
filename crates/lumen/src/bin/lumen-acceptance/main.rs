@@ -11,6 +11,7 @@ mod load;
 mod perf_gate;
 mod report;
 mod run;
+mod visible_version;
 mod writes;
 
 use std::process::ExitCode;
