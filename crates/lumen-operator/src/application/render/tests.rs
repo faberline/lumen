@@ -37,6 +37,7 @@ fn single_replica() -> Lumen {
             peer_tls_secret: None,
             serving_tls_secret: None,
             body_limit_bytes: None,
+            access: None,
         },
     );
     lumen.metadata = ObjectMeta {
