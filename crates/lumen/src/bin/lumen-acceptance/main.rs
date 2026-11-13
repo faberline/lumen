@@ -10,6 +10,7 @@ mod lifecycle;
 mod load;
 mod report;
 mod run;
+mod visible_version;
 mod writes;
 
 use std::process::ExitCode;
