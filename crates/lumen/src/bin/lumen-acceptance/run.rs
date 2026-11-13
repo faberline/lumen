@@ -8,6 +8,7 @@ use anyhow::{bail, Result};
 use crate::cli::RunArgs;
 use crate::lifecycle::CollectionLifecycle;
 use crate::report::{summary, write_report, Mode, PhaseResult, PhaseStatus, Report};
+use crate::visible_version::VisibleVersion;
 use crate::writes::WritesAndMasking;
 
 pub(super) trait Phase {
@@ -120,6 +121,7 @@ fn default_phase_names(mode: Mode) -> Vec<&'static str> {
             "endpoint_configured",
             "collection_lifecycle",
             "writes_and_masking",
+            "visible_version",
         ],
         Mode::Performance => vec!["endpoint_configured"],
     }
@@ -139,7 +141,7 @@ fn phase_list(mode: Mode, args: &RunArgs) -> Result<Vec<Box<dyn Phase>>> {
             .collect(),
     };
     if names.is_empty() {
-        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking");
+        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version");
     }
     names
         .iter()
@@ -147,8 +149,9 @@ fn phase_list(mode: Mode, args: &RunArgs) -> Result<Vec<Box<dyn Phase>>> {
             "endpoint_configured" => Ok(Box::new(EndpointConfigured) as Box<dyn Phase>),
             "collection_lifecycle" => Ok(Box::new(CollectionLifecycle) as Box<dyn Phase>),
             "writes_and_masking" => Ok(Box::new(WritesAndMasking) as Box<dyn Phase>),
+            "visible_version" => Ok(Box::new(VisibleVersion) as Box<dyn Phase>),
             other => bail!(
-                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking"
+                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version"
             ),
         })
         .collect()
@@ -319,7 +322,8 @@ mod tests {
             [
                 "endpoint_configured",
                 "collection_lifecycle",
-                "writes_and_masking"
+                "writes_and_masking",
+                "visible_version"
             ]
         );
     }
