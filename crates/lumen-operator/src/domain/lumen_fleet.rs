@@ -44,6 +44,7 @@
 //! [`super::reshard_driver`]: crate::application::reshard_driver
 
 pub mod plan;
+pub mod rollout;
 
 use kube::CustomResource;
 use schemars::JsonSchema;
@@ -98,6 +99,10 @@ pub struct LumenFleetSpec {
     /// [`Self::instances`].
     #[serde(default)]
     pub prune_policy: PrunePolicy,
+
+    /// How fast one pass may change instances, and a manual freeze.
+    #[serde(default)]
+    pub rollout_policy: RolloutPolicy,
 }
 
 /// One data plane the fleet declares.
@@ -129,6 +134,32 @@ pub struct FleetInstance {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(schema_with = "free_form_object")]
     pub spec: Option<Value>,
+}
+
+/// How fast one convergence pass may change instances, and a manual freeze.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RolloutPolicy {
+    /// Most instances one pass may create or apply. Default 1, minimum 1.
+    #[serde(default = "default_max_concurrent")]
+    #[schemars(range(min = 1))]
+    pub max_concurrent: u32,
+    /// When true no instance is created, applied or pruned. Default false.
+    #[serde(default)]
+    pub paused: bool,
+}
+
+impl Default for RolloutPolicy {
+    fn default() -> Self {
+        Self {
+            max_concurrent: default_max_concurrent(),
+            paused: false,
+        }
+    }
+}
+
+fn default_max_concurrent() -> u32 {
+    1
 }
 
 /// What happens to a materialized `Lumen` whose entry leaves the fleet.
@@ -174,7 +205,7 @@ pub struct FleetEntryStatus {
     pub namespace: String,
     pub name: String,
     /// `Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted`
-    /// | `ApplyFailed` | `Orphaned` | `Pruned`.
+    /// | `ApplyFailed` | `Orphaned` | `Pruned` | `Held`.
     pub state: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub message: String,

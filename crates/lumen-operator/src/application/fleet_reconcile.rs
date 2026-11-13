@@ -7,6 +7,7 @@ use std::time::Duration;
 use serde_json::json;
 
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
+use crate::domain::lumen_fleet::rollout::{decide, held_message, RolloutDecision};
 use crate::domain::lumen_fleet::{
     FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, PrunePolicy, FLEET_LABEL,
     FLEET_MANAGER, FLEET_SEED_MANAGER,
@@ -79,11 +80,12 @@ async fn converge(
 
     let fleet_name = fleet.name_any();
     let planned = plan(fleet);
+    let decisions = decide(&fleet.spec.rollout_policy, &planned);
     let mut entries = Vec::new();
     let mut applied = 0;
     let mut declared: BTreeSet<(String, String)> = BTreeSet::new();
 
-    for instance in &planned {
+    for (instance, decision) in planned.iter().zip(decisions) {
         let spec = match &instance.outcome {
             PlanOutcome::Ready(spec) => spec,
             PlanOutcome::Rejected(reason) => {
@@ -92,6 +94,17 @@ async fn converge(
             }
         };
         declared.insert((instance.namespace.clone(), instance.name.clone()));
+
+        // A held instance is declared (so it is never reported as orphaned) but
+        // gets no API call at all: no namespace read, no create, no patch.
+        if decision == RolloutDecision::Held {
+            entries.push(entry(
+                instance,
+                "Held",
+                held_message(&fleet.spec.rollout_policy),
+            ));
+            continue;
+        }
 
         if !namespace_exists(client, &instance.namespace).await? {
             entries.push(entry(
@@ -201,11 +214,18 @@ async fn prune(
             name: name.clone(),
             outcome: PlanOutcome::Rejected(String::new()),
         };
+        let paused = fleet.spec.rollout_policy.paused;
         match fleet.spec.prune_policy {
             PrunePolicy::Retain => out.push(entry(
                 &orphan,
                 "Orphaned",
                 "no longer declared by this fleet; retained (set prunePolicy: Delete to remove)",
+            )),
+            // A paused rollout freezes deletion too: report the orphan, remove nothing.
+            PrunePolicy::Delete if paused => out.push(entry(
+                &orphan,
+                "Orphaned",
+                "no longer declared by this fleet; rollout is paused, not deleted",
             )),
             PrunePolicy::Delete => {
                 let scoped: kube::Api<Lumen> = kube::Api::namespaced(client.clone(), &namespace);
