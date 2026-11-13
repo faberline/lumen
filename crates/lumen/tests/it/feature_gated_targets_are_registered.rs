@@ -63,6 +63,11 @@ const REGISTRY: &[GatedTarget] = &[
         required_features: &[],
     },
     GatedTarget {
+        path: "tests/it/acceptance_spawn_restart.rs",
+        gate: r#"#![cfg(feature = "acceptance")]"#,
+        required_features: &[],
+    },
+    GatedTarget {
         path: "tests/it/access_render_cli.rs",
         gate: r#"#![cfg(feature = "operator")]"#,
         required_features: &["operator"],

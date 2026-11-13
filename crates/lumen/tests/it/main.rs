@@ -4,6 +4,7 @@
 
 mod support;
 
+mod acceptance_spawn_restart;
 mod access_log_subject;
 mod access_render_cli;
 mod admission_e2e;
