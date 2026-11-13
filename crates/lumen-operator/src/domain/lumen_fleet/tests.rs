@@ -1,9 +1,10 @@
 use serde_json::{json, Value};
 
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
+use crate::domain::lumen_fleet::status::{canonical_json, project_status, spec_hash};
 use crate::domain::lumen_fleet::{
-    FleetInstance, LumenFleet, LumenFleetSpec, PlanOutcome, PlannedInstance, PrunePolicy,
-    FLEET_LABEL,
+    FleetEntryStatus, FleetInstance, LumenFleet, LumenFleetSpec, LumenFleetStatus, PlanOutcome,
+    PlannedInstance, PrunePolicy, FLEET_LABEL,
 };
 use crate::domain::lumen_spec::LumenSpec;
 
@@ -226,4 +227,165 @@ fn a_materialized_instance_carries_no_owner_reference() {
     let seed = seed_object("search", &planned[0], ready(&planned[0]));
     assert!(seed["metadata"].get("ownerReferences").is_none(), "{seed}");
     assert_eq!(seed["metadata"]["labels"][FLEET_LABEL], json!("search"));
+}
+
+/// An entry for `team-x`/`search` in the given state, as one pass writes it.
+fn status_entry(state: &str, message: &str) -> FleetEntryStatus {
+    FleetEntryStatus {
+        namespace: "team-x".to_string(),
+        name: "search".to_string(),
+        state: state.to_string(),
+        message: message.to_string(),
+        spec_hash: String::new(),
+    }
+}
+
+/// The counts and the summary come from the entry list, not from a
+/// `desired - applied` shortcut: one of each state, each counted once.
+#[test]
+fn counts_match_a_mixed_entry_list() {
+    let planned = plan(&fleet(vec![
+        instance("team-a", None),
+        instance("team-b", None),
+        instance("team-c", None),
+        instance("team-d", None),
+    ]));
+    let entries = vec![
+        status_entry("Created", ""),
+        status_entry("Applied", ""),
+        status_entry("Rejected", "bad field"),
+        status_entry("Orphaned", "retained"),
+        status_entry("Pruned", ""),
+        status_entry("NamespaceMissing", "no namespace"),
+    ];
+    let status = project_status(&planned, entries, 3);
+    assert_eq!(status.desired_instances, 4);
+    assert_eq!(status.materialized_instances, 2);
+    assert_eq!(status.applied_instances, 2);
+    assert_eq!(status.rejected_instances, 1);
+    assert_eq!(status.orphaned_instances, 1);
+    assert_eq!(status.pruned_instances, 1);
+    assert_eq!(status.observed_generation, 3);
+    assert_eq!(
+        status.message,
+        "2/4 instances converged, 1 rejected, 1 orphaned, 1 pruned"
+    );
+}
+
+/// A zero count is left out of the summary rather than printed as `0 rejected`.
+#[test]
+fn a_zero_part_is_left_out_of_the_message() {
+    let planned = plan(&fleet(vec![instance("team-x", None)]));
+    let status = project_status(&planned, vec![status_entry("Applied", "")], 1);
+    assert_eq!(status.message, "1/1 instances converged");
+}
+
+#[test]
+fn spec_hash_is_stable_for_equal_specs() {
+    let a = json!({"image": "img", "serving": {"cpu": "2"}});
+    let b = json!({"image": "img", "serving": {"cpu": "2"}});
+    let hash = spec_hash(&a);
+    assert_eq!(hash, spec_hash(&b));
+    assert_eq!(hash.len(), 64);
+    assert!(hash.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')));
+    assert_eq!(
+        spec_hash(&json!({})),
+        "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "SHA-256 of the two bytes {{}}"
+    );
+}
+
+#[test]
+fn spec_hash_changes_with_an_override() {
+    let plain = plan(&fleet(vec![instance("team-a", None)]));
+    let overridden = plan(&fleet(vec![instance(
+        "team-a",
+        Some(json!({ "serving": { "cpu": "4" } })),
+    )]));
+    assert_ne!(
+        spec_hash(ready(&plain[0])),
+        spec_hash(ready(&overridden[0]))
+    );
+}
+
+#[test]
+fn spec_hash_ignores_json_key_order() {
+    let a: Value = serde_json::from_str(r#"{"a":1,"b":{"x":1,"y":2}}"#).unwrap();
+    let b: Value = serde_json::from_str(r#"{"b":{"y":2,"x":1},"a":1}"#).unwrap();
+    assert_eq!(spec_hash(&a), spec_hash(&b));
+    assert_eq!(canonical_json(&a), r#"{"a":1,"b":{"x":1,"y":2}}"#);
+    assert_eq!(canonical_json(&b), r#"{"a":1,"b":{"x":1,"y":2}}"#);
+}
+
+/// A status written before these fields existed must still deserialize.
+#[test]
+fn an_old_status_without_the_new_fields_reads_as_zero() {
+    let old: LumenFleetStatus = serde_json::from_value(json!({
+        "observedGeneration": 1,
+        "desiredInstances": 2,
+        "appliedInstances": 1,
+        "message": "x",
+    }))
+    .expect("old status parses");
+    assert_eq!(old.materialized_instances, 0);
+    assert_eq!(old.rejected_instances, 0);
+    assert_eq!(old.orphaned_instances, 0);
+    assert_eq!(old.pruned_instances, 0);
+
+    let entry: FleetEntryStatus = serde_json::from_value(json!({
+        "namespace": "team-a",
+        "name": "search",
+        "state": "Applied",
+    }))
+    .expect("old entry parses");
+    assert_eq!(entry.spec_hash, "");
+}
+
+#[test]
+fn spec_hash_is_omitted_for_states_without_one() {
+    let entry = status_entry("Rejected", "bad");
+    let json = serde_json::to_value(&entry).unwrap();
+    assert!(json.get("specHash").is_none(), "{json}");
+}
+
+/// Pass 1 fails the entry; pass 2 repairs it. The second status must not
+/// carry the old failure anywhere in its serialized patch.
+#[test]
+fn a_repaired_entry_leaves_no_stale_failure() {
+    let planned = plan(&fleet(vec![instance("team-x", None)]));
+
+    let pass1 = project_status(&planned, vec![status_entry("ApplyFailed", "boom")], 1);
+    assert_eq!(pass1.materialized_instances, 0);
+    assert_eq!(pass1.message, "0/1 instances converged");
+
+    let repaired = FleetEntryStatus {
+        spec_hash: spec_hash(ready(&planned[0])),
+        ..status_entry("Applied", "")
+    };
+    let pass2 = project_status(&planned, vec![repaired], 2);
+    assert_eq!(pass2.materialized_instances, 1);
+    assert_eq!(pass2.message, "1/1 instances converged");
+
+    let patch = json!({ "status": serde_json::to_value(&pass2).unwrap() });
+    let text = serde_json::to_string(&patch).unwrap();
+    assert!(!text.contains("boom"), "stale failure in the patch: {text}");
+    assert_eq!(patch["status"]["entries"][0]["state"], json!("Applied"));
+    assert!(patch["status"]["entries"][0]["specHash"].is_string());
+}
+
+/// Negative control: a rejected entry is not a materialized one.
+#[test]
+fn a_rejected_entry_alone_is_not_materialized() {
+    let planned = plan(&fleet(vec![instance(
+        "team-r",
+        Some(json!({ "serving": { "cpuu": "8" } })),
+    )]));
+    assert!(matches!(planned[0].outcome, PlanOutcome::Rejected(_)));
+    let entry = FleetEntryStatus {
+        namespace: "team-r".to_string(),
+        ..status_entry("Rejected", "bad field")
+    };
+    let status = project_status(&planned, vec![entry], 1);
+    assert_eq!(status.materialized_instances, 0);
+    assert_eq!(status.rejected_instances, 1);
 }

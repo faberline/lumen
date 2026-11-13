@@ -1004,6 +1004,9 @@ spec:
                       type: string
                     namespace:
                       type: string
+                    specHash:
+                      description: Lowercase hex SHA-256 of the canonical JSON of the merged spec the fleet wrote for this entry. Set for `Created` and `Applied` only, so a reader can tell whether the live `Lumen` still matches the last write.
+                      type: string
                     state:
                       description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `Orphaned` | `Pruned`.'
                       type: string
@@ -1013,6 +1016,11 @@ spec:
                   - state
                   type: object
                 type: array
+              materializedInstances:
+                default: 0
+                description: 'Entries in state `Created` or `Applied`: the `Lumen` exists and the fleet last wrote its spec.'
+                format: int32
+                type: integer
               message:
                 default: ''
                 description: Human-readable summary of the last pass.
@@ -1021,6 +1029,21 @@ spec:
                 default: 0
                 description: The `.metadata.generation` this status reflects.
                 format: int64
+                type: integer
+              orphanedInstances:
+                default: 0
+                description: 'Entries in state `Orphaned`: the `Lumen` is no longer declared and is retained under `PrunePolicy::Retain`.'
+                format: int32
+                type: integer
+              prunedInstances:
+                default: 0
+                description: 'Entries in state `Pruned`: the `Lumen` was removed under `PrunePolicy::Delete` this pass.'
+                format: int32
+                type: integer
+              rejectedInstances:
+                default: 0
+                description: 'Entries in state `Rejected`: the merged spec failed validation.'
+                format: int32
                 type: integer
             type: object
         required:

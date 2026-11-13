@@ -44,6 +44,7 @@
 //! [`super::reshard_driver`]: crate::application::reshard_driver
 
 pub mod plan;
+pub mod status;
 
 use kube::CustomResource;
 use schemars::JsonSchema;
@@ -158,6 +159,21 @@ pub struct LumenFleetStatus {
     /// How many were successfully created or applied this pass.
     #[serde(default)]
     pub applied_instances: i32,
+    /// Entries in state `Created` or `Applied`: the `Lumen` exists and the
+    /// fleet last wrote its spec.
+    #[serde(default)]
+    pub materialized_instances: i32,
+    /// Entries in state `Rejected`: the merged spec failed validation.
+    #[serde(default)]
+    pub rejected_instances: i32,
+    /// Entries in state `Orphaned`: the `Lumen` is no longer declared and is
+    /// retained under `PrunePolicy::Retain`.
+    #[serde(default)]
+    pub orphaned_instances: i32,
+    /// Entries in state `Pruned`: the `Lumen` was removed under
+    /// `PrunePolicy::Delete` this pass.
+    #[serde(default)]
+    pub pruned_instances: i32,
     /// Per-entry outcome, so one bad entry is diagnosable without reading
     /// operator logs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -178,6 +194,11 @@ pub struct FleetEntryStatus {
     pub state: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub message: String,
+    /// Lowercase hex SHA-256 of the canonical JSON of the merged spec the
+    /// fleet wrote for this entry. Set for `Created` and `Applied` only, so a
+    /// reader can tell whether the live `Lumen` still matches the last write.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub spec_hash: String,
 }
 
 /// A `Lumen` the fleet wants to exist, or the reason one entry cannot produce
