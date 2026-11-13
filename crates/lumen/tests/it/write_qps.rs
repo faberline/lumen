@@ -123,6 +123,7 @@ fn docs_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -135,6 +136,7 @@ fn docs_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -147,6 +149,7 @@ fn docs_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     CreateCollectionRequest { fields }

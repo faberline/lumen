@@ -170,6 +170,61 @@ fn transient_dip_below_trigger_does_not_rearm_high_work() {
 }
 
 #[test]
+fn failed_attempt_defers_the_next_trigger_to_the_period_but_a_request_or_a_drain_starts_it_earlier()
+{
+    let now = Instant::now();
+    let trigger = crate::ingest::domain::change_budget::CHECKPOINT_TRIGGER;
+    let s = Duration::from_secs;
+
+    // Part A: a failed attempt with high pending work keeps the period backoff.
+    // The first attempt is a capacity request, so it leaves early_attempted false.
+    let mut schedule = CheckpointSchedule::new(s(30), now);
+    assert_eq!(
+        schedule.select_attempt(now, snapshot(trigger, 1, Some(1)), None),
+        Some(CheckpointSelectionReason::CapacityRequest),
+    );
+    schedule.completed(now + s(1), snapshot(trigger, 1, Some(1)));
+    // High work alone does not retry before the new deadline (now + 31s).
+    assert_eq!(
+        schedule.select_attempt(now + s(2), snapshot(trigger, 2, None), None),
+        None,
+    );
+    assert_eq!(
+        schedule.select_attempt(now + s(30), snapshot(trigger, 2, None), None),
+        None,
+    );
+    assert_eq!(
+        schedule.select_attempt(now + s(31), snapshot(trigger, 2, None), None),
+        Some(CheckpointSelectionReason::Deadline),
+    );
+    // A newer capacity request starts a checkpoint before the next deadline.
+    assert_eq!(
+        schedule.select_attempt(now + s(31), snapshot(trigger, 3, Some(2)), None),
+        Some(CheckpointSelectionReason::CapacityRequest),
+    );
+
+    // Part B: a real drain below the rearm threshold starts a checkpoint early.
+    let mut drained = CheckpointSchedule::new(s(30), now);
+    assert_eq!(
+        drained.select_attempt(now, snapshot(trigger, 1, Some(1)), None),
+        Some(CheckpointSelectionReason::CapacityRequest),
+    );
+    drained.completed(now + s(1), snapshot(trigger, 1, Some(1)));
+    assert_eq!(
+        drained.select_attempt(
+            now + s(2),
+            snapshot(CHECKPOINT_REARM_THRESHOLD - 1, 4, None),
+            None,
+        ),
+        None,
+    );
+    assert_eq!(
+        drained.select_attempt(now + s(3), snapshot(trigger, 5, None), None),
+        Some(CheckpointSelectionReason::Threshold),
+    );
+}
+
+#[test]
 fn newer_request_revision_bypasses_high_water_period_once() {
     let now = Instant::now();
     let mut schedule = CheckpointSchedule::new(Duration::from_secs(30), now);

@@ -345,7 +345,7 @@ fn routing_key_for_bucket(
 }
 
 #[tokio::test]
-async fn search_routes_by_shard_map_from_env_assignments() {
+async fn search_with_routing_key_returns_every_shard_even_with_env_assignments() {
     let _g = SHARD_MAP_ENV_LOCK.lock().await;
     clear_shard_map_env();
     // Reversed 2-bucket map: bucket 0 -> shard 1, bucket 1 -> shard 0 (the
@@ -380,11 +380,118 @@ async fn search_routes_by_shard_map_from_env_assignments() {
         .await;
     resp.assert_status_ok();
     let body: Value = resp.json();
-    // bucket 0 is assigned to shard 1 by this map, so only shard1's document
-    // must come back — proving the query honored SHARD_MAP_ASSIGNMENTS
-    // rather than the balanced default (which would have targeted shard 0).
-    assert_eq!(body["total"], 1);
-    assert_eq!(body["hits"][0]["external_id"], "shard1_only");
+    // Writes place each document by `external_id`, not by `routing_key`, so a
+    // search that carries a `routing_key` must still fan out to every shard.
+    // Narrowing to the map's owner would silently omit `shard0_only`.
+    assert_eq!(body["total"], 2);
+    let mut eids: Vec<&str> = body["hits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|h| h["external_id"].as_str().unwrap())
+        .collect();
+    eids.sort_unstable();
+    assert_eq!(eids, vec!["shard0_only", "shard1_only"]);
+}
+
+/// Builds the reversed 2-shard routed server that the routing-key tests share:
+/// shard 0 holds `shard0_only` and shard 1 holds `shard1_only`, both matching
+/// `a@x.com`. The caller must hold `SHARD_MAP_ENV_LOCK`.
+fn reversed_two_shard_server() -> (TestServer, lumen::routing::VirtualBucketShardMap) {
+    clear_shard_map_env();
+    unsafe {
+        std::env::set_var("SHARD_MAP_VERSION", "7");
+        std::env::set_var("VIRTUAL_BUCKET_COUNT", "2");
+        std::env::set_var("SHARD_MAP_ASSIGNMENTS", "1,0");
+    }
+    let shard_map = lumen::config::shard_map_from_env(2).expect("shard map from env");
+    clear_shard_map_env();
+
+    let shard0 = test_search_shard([("shard0_only", "a@x.com", 1)]);
+    let shard1 = test_search_shard([("shard1_only", "a@x.com", 1)]);
+    let state = lumen::api::AppState::open(Arc::new(lumen::storage::Engine::new()))
+        .with_search_backend(Arc::new(EngineShardSearch::new_with_shard_map(
+            vec![shard0, shard1],
+            shard_map.clone(),
+        )));
+    let s = TestServer::new(lumen::api::router(state)).expect("test server");
+    (s, shard_map)
+}
+
+// Routing keys are a caller hint only: `search:all` with a `routing_key` must
+// materialize the same complete id set and `total` as the same request without
+// it, because documents are placed by `external_id` across every shard.
+#[tokio::test]
+async fn search_all_with_routing_key_matches_the_keyless_request() {
+    let _g = SHARD_MAP_ENV_LOCK.lock().await;
+    let (s, shard_map) = reversed_two_shard_server();
+    let key = routing_key_for_bucket(&shard_map, "users", 0);
+    let query = json!({ "term": { "field": "email", "value": "a@x.com" } });
+
+    let keyed: Value = s
+        .post("/collections/users/search:all")
+        .json(&json!({ "query": query, "routing_key": key }))
+        .await
+        .json();
+    let keyless: Value = s
+        .post("/collections/users/search:all")
+        .json(&json!({ "query": query }))
+        .await
+        .json();
+
+    assert_eq!(keyless["total"], 2);
+    assert_eq!(keyed["total"], keyless["total"]);
+    let sorted_ids = |v: &Value| {
+        let mut ids: Vec<String> = v["external_ids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|id| id.as_str().unwrap().to_string())
+            .collect();
+        ids.sort_unstable();
+        ids
+    };
+    assert_eq!(sorted_ids(&keyless), vec!["shard0_only", "shard1_only"]);
+    assert_eq!(sorted_ids(&keyed), sorted_ids(&keyless));
+}
+
+// Same contract as `search_all_with_routing_key_matches_the_keyless_request`,
+// for the batch `POST /collections:search` path: an item that carries a
+// `routing_key` must return the same hits and `total` as its keyless twin.
+#[tokio::test]
+async fn batch_search_with_routing_key_matches_the_keyless_request() {
+    let _g = SHARD_MAP_ENV_LOCK.lock().await;
+    let (s, shard_map) = reversed_two_shard_server();
+    let key = routing_key_for_bucket(&shard_map, "users", 0);
+    let query = json!({ "term": { "field": "email", "value": "a@x.com" } });
+
+    let resp = s
+        .post("/collections:search")
+        .json(&json!({ "searches": [
+            { "collection": "users", "query": query, "routing_key": key, "limit": 10 },
+            { "collection": "users", "query": query, "limit": 10 }
+        ]}))
+        .await;
+    resp.assert_status_ok();
+    let body: Value = resp.json();
+    let results = body["results"].as_array().expect("results array");
+    assert_eq!(results.len(), 2);
+    let ids_and_total = |item: &Value| {
+        assert_eq!(item["status"], "ok", "batch item failed: {item}");
+        let mut ids: Vec<String> = item["response"]["hits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|h| h["external_id"].as_str().unwrap().to_string())
+            .collect();
+        ids.sort_unstable();
+        (item["response"]["total"].clone(), ids)
+    };
+    let keyed = ids_and_total(&results[0]);
+    let keyless = ids_and_total(&results[1]);
+    assert_eq!(keyless.0, json!(2));
+    assert_eq!(keyed, keyless);
+    assert_eq!(keyless.1, vec!["shard0_only", "shard1_only"]);
 }
 
 #[tokio::test]
@@ -439,7 +546,7 @@ async fn search_shard_map_from_env_falls_back_to_balanced_when_unset() {
 // can't be exercised in-process (it binds a real listener), matching this
 // file's existing `search_routes_by_shard_map_from_env_assignments` pattern.
 #[tokio::test]
-async fn search_shard_segment_dirs_routes_across_all_loaded_dirs_without_shard_count() {
+async fn search_shard_segment_dirs_with_routing_key_returns_all_loaded_dirs() {
     let _g = SHARD_MAP_ENV_LOCK.lock().await;
     clear_shard_map_env();
 
@@ -481,10 +588,21 @@ async fn search_shard_segment_dirs_routes_across_all_loaded_dirs_without_shard_c
         resp.assert_status_ok();
         let body: Value = resp.json();
         assert_eq!(
-            body["total"], 1,
-            "bucket {bucket} should hit exactly one shard"
+            body["total"], 3,
+            "bucket {bucket} must still fan out to every loaded dir"
         );
-        assert_eq!(body["hits"][0]["external_id"], expected_eid);
+        let mut eids: Vec<&str> = body["hits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|h| h["external_id"].as_str().unwrap())
+            .collect();
+        eids.sort_unstable();
+        assert_eq!(
+            eids,
+            vec!["shard0_only", "shard1_only", "shard2_only"],
+            "bucket {bucket} must return every shard's document (expected owner of this bucket: {expected_eid})"
+        );
     }
 }
 
@@ -536,6 +654,7 @@ fn test_search_shard<const N: usize>(docs: [(&str, &str, i32); N]) -> Arc<lumen:
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -548,6 +667,7 @@ fn test_search_shard<const N: usize>(docs: [(&str, &str, i32); N]) -> Arc<lumen:
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     engine
@@ -2234,6 +2354,7 @@ async fn first_write_after_checkpoint_restore_completes_and_is_searchable() {
                     metric: None,
                     backend: None,
                     quantize: None,
+                    facetable: false,
                 },
             )]),
         },

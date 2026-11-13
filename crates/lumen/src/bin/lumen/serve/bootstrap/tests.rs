@@ -49,6 +49,7 @@ fn bootstrap_seed_file_restores_snapshot_before_catchup() {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     source
