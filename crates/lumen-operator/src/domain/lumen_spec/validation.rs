@@ -30,6 +30,11 @@ impl LumenSpec {
                 ));
             }
         }
+        if let Some(access) = &self.access {
+            for subject in &access.allowed_service_accounts {
+                crate::domain::lumen_spec::access::validate_subject(subject)?;
+            }
+        }
         Ok(())
     }
 
