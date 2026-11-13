@@ -18,7 +18,6 @@ use crate::index::application::live_delta::{
 };
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::sortable_f64::MISSING_SORTABLE_F64_BITS;
-use crate::index::infrastructure::checkpoint_fs::collection_dir_name;
 
 impl Engine {
     pub(crate) fn bind_checkpoint_origins(
@@ -35,7 +34,7 @@ impl Engine {
                     && coll.version == identity.schema_version
                     && coll.deleted_at.is_none()
                 {
-                    coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
+                    coll.checkpoint_bound = true;
                     coll.checkpoint_lineage_schema = Some(coll.version);
                     // A durable base with this schema is reusable even when newer
                     // row mutations remain above its captured data version.
@@ -182,18 +181,20 @@ impl Engine {
                 }
             }
         }
+        state.checkpoint_lineage_root = Some(root.to_path_buf());
         self.publish_storage_bytes(&state);
         Ok(())
     }
 
     pub(crate) fn bind_legacy_checkpoint_origin(&self, root: &std::path::Path) -> Result<()> {
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
-        for (name, coll) in &mut state.collections {
-            coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
+        for coll in state.collections.values_mut() {
+            coll.checkpoint_bound = true;
             coll.checkpoint_lineage_schema = Some(coll.version);
             coll.journal_complete_since_empty = false;
         }
         state.checkpoint_namespace = root.parent().map(std::path::Path::to_path_buf);
+        state.checkpoint_lineage_root = Some(root.to_path_buf());
         Ok(())
     }
 
@@ -210,12 +211,13 @@ impl Engine {
                 .ok_or_else(|| anyhow!("missing reopened collection"))?;
             coll.collection_generation = identity.generation;
             coll.data_version = identity.data_version;
-            coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
+            coll.checkpoint_bound = true;
             coll.checkpoint_lineage_schema = Some(coll.version);
             coll.journal_complete_since_empty = false;
         }
         state.next_collection_generation = capture.next_generation;
         state.checkpoint_namespace = root.parent().map(std::path::Path::to_path_buf);
+        state.checkpoint_lineage_root = Some(root.to_path_buf());
         Ok(())
     }
 }
