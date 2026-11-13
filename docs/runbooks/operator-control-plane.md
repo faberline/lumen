@@ -159,15 +159,17 @@ Read each entry state literally:
 | `NamespaceMissing` | The target namespace does not exist. Fleet will not create it. |
 | `NotAdopted` | A child with that name exists without this Fleet's ownership label. It was left untouched. |
 | `ApplyFailed` | The Kubernetes create, apply, or prune call failed. |
+| `ObserveFailed` | A read call for this entry failed (namespace check or reading the child). Fleet changed nothing for it and still treats it as declared, so `prunePolicy: Delete` never deletes it. |
 | `Orphaned` | The child is no longer declared and `prunePolicy: Retain` kept it. |
 | `Pruned` | `prunePolicy: Delete` requested deletion of the child object. This is not proof that its PVCs were deleted. |
 
 An entry can say `Applied` while its child has `Ready=False`. Always continue
 to the child-status checks below.
 
-Some Kubernetes API errors can end one Fleet status pass before later entries
-are refreshed. If status is stale, check the operator log and the Fleet Lease.
-The next leader pass retries after 30 seconds.
+One failing entry no longer stops the status of the others. If the prune list
+call fails, no child is pruned in that pass and `status.message` says so. If
+status is stale, check the operator log and the Fleet Lease. The next leader
+pass retries after 30 seconds.
 
 ## Managed authentication
 

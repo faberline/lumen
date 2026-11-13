@@ -174,7 +174,7 @@ pub struct FleetEntryStatus {
     pub namespace: String,
     pub name: String,
     /// `Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted`
-    /// | `ApplyFailed` | `Orphaned` | `Pruned`.
+    /// | `ApplyFailed` | `ObserveFailed` | `Orphaned` | `Pruned`.
     pub state: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub message: String,

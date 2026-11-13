@@ -1005,7 +1005,7 @@ spec:
                     namespace:
                       type: string
                     state:
-                      description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `Orphaned` | `Pruned`.'
+                      description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `ObserveFailed` | `Orphaned` | `Pruned`.'
                       type: string
                   required:
                   - name

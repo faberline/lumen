@@ -217,6 +217,7 @@ paths = [
   "crates/lumen-operator/src/infrastructure/kube_hpa_control.rs",
   "crates/lumen-operator/src/infrastructure/kube_auth_delegator_control.rs",
   "crates/lumen-operator/src/infrastructure/kube_cluster_control.rs",
+  "crates/lumen-operator/src/infrastructure/kube_fleet_control.rs",
 ]
 subject = "infrastructure->application"
 reason = "Each Kube*Control adapter implements a control trait the application layer defines next to its only caller (HpaControl, AuthDelegatorControl, ClusterControl); kube_cluster_control also reuses reconcile's Prometheus text parser. P2: the traits move to the operator domain and the parser to the adapter."
