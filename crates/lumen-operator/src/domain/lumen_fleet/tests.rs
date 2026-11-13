@@ -1,4 +1,11 @@
+use std::collections::BTreeSet;
+
 use serde_json::{json, Value};
+
+use crate::domain::lumen_fleet::children::{
+    adoption, child_key, desired_hash, ownership, prune_decision, Adoption, ChildKey, Ownership,
+    PruneDecision,
+};
 
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
 use crate::domain::lumen_fleet::{
@@ -226,4 +233,145 @@ fn a_materialized_instance_carries_no_owner_reference() {
     let seed = seed_object("search", &planned[0], ready(&planned[0]));
     assert!(seed["metadata"].get("ownerReferences").is_none(), "{seed}");
     assert_eq!(seed["metadata"]["labels"][FLEET_LABEL], json!("search"));
+}
+
+// --- children: the pure decisions for a fleet's children (#43) ---
+
+#[test]
+fn child_key_is_namespace_and_name() {
+    assert_eq!(child_key("a", "b"), ("a".to_string(), "b".to_string()));
+}
+
+#[test]
+fn duplicate_targets_collapse_to_one_declared_key() {
+    let mut second = instance("team-j", None);
+    second.name = Some("search".to_string());
+    let planned = plan(&fleet(vec![instance("team-j", None), second]));
+    let keys: BTreeSet<ChildKey> = planned
+        .iter()
+        .map(|p| child_key(&p.namespace, &p.name))
+        .collect();
+    assert_eq!(keys.len(), 1, "{keys:?}");
+}
+
+#[test]
+fn a_foreign_owner_label_is_not_adopted() {
+    assert_eq!(
+        adoption(Some(Some("other")), "search"),
+        Adoption::NotAdopted {
+            message: "a Lumen already exists here and is not labelled lumen.dev/fleet=search \
+                      (found other); left untouched"
+                .to_string(),
+        }
+    );
+}
+
+#[test]
+fn a_missing_label_is_not_adopted() {
+    match adoption(Some(None), "search") {
+        Adoption::NotAdopted { message } => {
+            assert!(message.contains("found no label"), "{message}")
+        }
+        other => panic!("expected NotAdopted, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_owned_child_is_applied_and_an_absent_one_is_created() {
+    assert_eq!(adoption(Some(Some("search")), "search"), Adoption::Apply);
+    assert_eq!(adoption(None, "search"), Adoption::Create);
+}
+
+#[test]
+fn ownership_distinguishes_owned_and_foreign() {
+    assert_eq!(ownership(Some("search"), "search"), Ownership::Owned);
+    assert_eq!(
+        ownership(Some("x"), "search"),
+        Ownership::Foreign {
+            found: Some("x".to_string())
+        }
+    );
+    assert_eq!(
+        ownership(None, "search"),
+        Ownership::Foreign { found: None }
+    );
+}
+
+#[test]
+fn a_retained_orphan_is_reported_not_deleted() {
+    let declared: BTreeSet<ChildKey> = [child_key("a", "x")].into_iter().collect();
+    assert_eq!(
+        prune_decision(&child_key("a", "y"), &declared, PrunePolicy::Retain),
+        PruneDecision::Orphaned
+    );
+}
+
+#[test]
+fn a_deleted_orphan_under_delete_policy() {
+    let declared: BTreeSet<ChildKey> = [child_key("a", "x")].into_iter().collect();
+    assert_eq!(
+        prune_decision(&child_key("a", "y"), &declared, PrunePolicy::Delete),
+        PruneDecision::Pruned
+    );
+}
+
+#[test]
+fn a_declared_child_is_kept_under_either_policy() {
+    let declared: BTreeSet<ChildKey> = [child_key("a", "x")].into_iter().collect();
+    for policy in [PrunePolicy::Retain, PrunePolicy::Delete] {
+        assert_eq!(
+            prune_decision(&child_key("a", "x"), &declared, policy),
+            PruneDecision::Keep,
+            "{policy:?}"
+        );
+    }
+}
+
+#[test]
+fn the_desired_hash_ignores_key_order_and_sees_value_changes() {
+    let base = desired_hash(&json!({"a": 1, "b": {"c": 2, "d": 3}}));
+    assert_eq!(base, desired_hash(&json!({"b": {"d": 3, "c": 2}, "a": 1})));
+    assert_ne!(base, desired_hash(&json!({"a": 1, "b": {"c": 2, "d": 4}})));
+    assert_ne!(desired_hash(&json!([1, 2])), desired_hash(&json!([2, 1])));
+    assert_eq!(base.len(), 16, "{base}");
+    assert!(base.chars().all(|c| c.is_ascii_hexdigit()), "{base}");
+    // FNV-1a 64 of the bytes of `{}`, computed independently of the code.
+    assert_eq!(desired_hash(&json!({})), "08f44b07b5901a25");
+}
+
+/// Negative control: a child whose live label is not this fleet's is never
+/// adopted (applied) and never created over. If `ownership` is changed to
+/// report every object as `Owned`, this test fails.
+#[test]
+fn a_foreign_labelled_child_is_never_applicable_or_prunable() {
+    for label in [Some(Some("other")), Some(None)] {
+        let decision = adoption(label, "search");
+        assert!(
+            !matches!(decision, Adoption::Apply | Adoption::Create),
+            "{label:?} -> {decision:?}"
+        );
+    }
+}
+
+/// A new leader that reaches the same live state must decide the same way as
+/// the old one: nothing here reads process memory.
+#[test]
+fn decisions_depend_only_on_live_state_not_process_memory() {
+    let decide = || {
+        let declared: BTreeSet<ChildKey> =
+            [child_key("team-j", "search"), child_key("team-k", "search")]
+                .into_iter()
+                .collect();
+        (
+            adoption(Some(Some("search")), "search"),
+            adoption(Some(Some("other")), "search"),
+            prune_decision(
+                &child_key("team-x", "search"),
+                &declared,
+                PrunePolicy::Retain,
+            ),
+            desired_hash(&json!({"image": "ghcr.io/acme/lumen:0.4.27", "serving": {"cpu": "2"}})),
+        )
+    };
+    assert_eq!(decide(), decide());
 }
