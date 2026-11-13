@@ -890,7 +890,7 @@ impl TlsUpstream {
                 service_http::serve_tls(
                     listener,
                     app,
-                    service_http::config_source(move || tls.server_config()),
+                    service_http::config_source(move || lumen::tls::serving_server_config(&tls)),
                     async move {
                         let _ = shutdown_rx.await;
                     },
