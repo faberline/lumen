@@ -30,6 +30,9 @@ impl LumenSpec {
                 ));
             }
         }
+        if let Some(access) = &self.access {
+            access.validate()?;
+        }
         Ok(())
     }
 

@@ -1,5 +1,7 @@
 use crate::domain::lumen_spec::serving::AuthMode;
-use crate::infrastructure::crd_manifest::{crd_yaml, fleet_crd_yaml, FORBIDDEN_CEL_OPERATOR};
+use crate::infrastructure::crd_manifest::{
+    crd_yaml, fleet_crd_yaml, lumen_crd_yaml, FORBIDDEN_CEL_OPERATOR,
+};
 
 /// A namespaced fleet could not legally own objects in other namespaces:
 /// Kubernetes rejects cross-namespace owner references and its garbage
@@ -75,4 +77,13 @@ fn one_apply_installs_both_custom_resources() {
 fn auth_defaults_to_required() {
     assert_eq!(AuthMode::default(), AuthMode::Required);
     assert_eq!(AuthMode::default().as_env(), "required");
+}
+
+/// `Lumen.spec.access` is typed with exact names; the schema must say so.
+#[test]
+fn the_lumen_crd_offers_typed_whole_runtime_access() {
+    let yaml = lumen_crd_yaml();
+    assert!(yaml.contains("allowedServiceAccounts"), "{yaml}");
+    assert!(yaml.contains("namespace"), "{yaml}");
+    assert!(yaml.contains("name"), "{yaml}");
 }
