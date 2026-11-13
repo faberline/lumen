@@ -1,6 +1,7 @@
 use service_k8s::{ManagedService, ReadyFacts};
 
 use crate::application::reconcile::tests::hpa::hpa_test_lumen;
+use crate::domain::lumen_spec::status::LumenStatus;
 use crate::domain::lumen_spec::Lumen;
 
 // ---- #1444 R2: oversized-doc blocking condition in status.reshard -----
@@ -302,4 +303,24 @@ fn status_patch_never_reports_awaiting_convergence_for_a_manually_authored_map_v
         "a shardMap.version with no matching lastCutoverShardMapVersion must not report \
              awaitingTopologyConvergence, got: {reshard}"
     );
+}
+
+#[test]
+fn status_patch_for_a_stale_status_equals_the_patch_for_no_status() {
+    // The patch is a function of the spec, the generation and the facts only,
+    // never of the previous status or of process-local state.
+    let fresh = hpa_test_lumen("search", "acme-catchup", 2, 1);
+    let mut stale = fresh.clone();
+    stale.status = Some(LumenStatus {
+        phase: "Degraded".into(),
+        observed_generation: -7,
+        serving_ready_replicas: 99,
+        ..Default::default()
+    });
+    let ready = ReadyFacts {
+        ready: std::collections::HashMap::new(),
+    };
+
+    assert_eq!(stale.status_patch(&ready), fresh.status_patch(&ready));
+    assert_eq!(fresh.status_patch(&ready), fresh.status_patch(&ready));
 }

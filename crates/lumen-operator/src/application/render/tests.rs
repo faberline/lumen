@@ -84,3 +84,78 @@ fn embedded_data_is_an_exact_child_of_the_raft_pvc_mount() {
         ]
     );
 }
+
+fn serving_statefulset_of(lumen: &Lumen) -> Value {
+    render(lumen)
+        .into_iter()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet")
+}
+
+fn assert_operator_independent(objects: &[Value]) {
+    // `POD_NAMESPACE` alone is the serving pod's own namespace (downward API),
+    // so only an operator name or namespace counts as a reference.
+    const FORBIDDEN: [&str; 1] = ["lumen-operator"];
+    for object in objects {
+        let runtime = format!(
+            "{}{}",
+            object["spec"]["template"]["spec"], object["spec"]["selector"]
+        );
+        for word in FORBIDDEN {
+            assert!(
+                !runtime.contains(word),
+                "{} runtime names the operator: {word}",
+                object["kind"]
+            );
+        }
+    }
+}
+
+#[test]
+fn render_is_a_pure_function_of_the_cr() {
+    let lumen = single_replica();
+    assert_eq!(
+        render(&lumen),
+        render(&lumen),
+        "a restarted operator re-applies identical desired state"
+    );
+
+    let sts = serving_statefulset_of(&lumen);
+    assert!(sts["spec"]["template"]["metadata"]
+        .get("ownerReferences")
+        .is_none());
+    assert!(sts["spec"]["template"]["metadata"]
+        .get("finalizers")
+        .is_none());
+}
+
+#[test]
+fn rendered_objects_never_name_the_operator() {
+    assert_operator_independent(&render(&single_replica()));
+}
+
+#[test]
+fn injecting_an_operator_env_var_fails_the_independence_check() {
+    // Negative control: the independence helper must reject an operator
+    // reference injected into the serving pod's environment.
+    let mut objects = render(&single_replica());
+    let sts = objects
+        .iter_mut()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet");
+    let container = &mut sts["spec"]["template"]["spec"]["containers"][0];
+    if container["env"].is_null() {
+        container["env"] = json!([]);
+    }
+    container["env"]
+        .as_array_mut()
+        .expect("serving env")
+        .push(json!({ "name": "POD_NAMESPACE", "value": "lumen-operator-system" }));
+
+    let result = std::panic::catch_unwind(|| assert_operator_independent(&objects));
+    let message = result
+        .err()
+        .and_then(|payload| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_default();
+    assert!(message.contains("names the operator"), "got: {message:?}");
+}

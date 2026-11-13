@@ -228,7 +228,7 @@ const DRIVER_POLL_INTERVAL: Duration = Duration::from_secs(20);
 ///
 /// [`spawn_reshard_driver_loop`]:
 ///   crate::application::reshard_driver::driver_loop::spawn_reshard_driver_loop
-const DRIVER_LEASE_NAME: &str = "lumen-reshard-driver";
+pub(crate) const DRIVER_LEASE_NAME: &str = "lumen-reshard-driver";
 
 /// Upper bound on external_ids carried per `POST /admin/reshard:apply` call,
 /// matching the batching contract [`snapshot_reshard_batches`]
