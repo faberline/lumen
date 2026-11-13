@@ -79,6 +79,7 @@ fn ordinary_field(field_type: FieldType) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 
@@ -91,6 +92,7 @@ fn vector_field(backend: VectorBackend) -> FieldSpec {
         metric: Some(VectorMetric::L2),
         backend: Some(backend),
         quantize: None,
+        facetable: false,
     }
 }
 
@@ -107,6 +109,7 @@ fn schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(FLAT_FIELD.to_owned(), vector_field(VectorBackend::FlatCpu));
