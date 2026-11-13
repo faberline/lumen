@@ -43,6 +43,7 @@
 //!
 //! [`super::reshard_driver`]: crate::application::reshard_driver
 
+pub mod children;
 pub mod plan;
 
 use kube::CustomResource;

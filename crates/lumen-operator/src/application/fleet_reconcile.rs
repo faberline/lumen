@@ -6,10 +6,13 @@ use std::time::Duration;
 
 use serde_json::json;
 
+use crate::domain::lumen_fleet::children::{
+    adoption, child_key, prune_decision, Adoption, ChildKey, PruneDecision, ORPHAN_RETAINED_MESSAGE,
+};
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
 use crate::domain::lumen_fleet::{
-    FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, PrunePolicy, FLEET_LABEL,
-    FLEET_MANAGER, FLEET_SEED_MANAGER,
+    FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL, FLEET_MANAGER,
+    FLEET_SEED_MANAGER,
 };
 use crate::domain::lumen_spec::Lumen;
 
@@ -81,7 +84,7 @@ async fn converge(
     let planned = plan(fleet);
     let mut entries = Vec::new();
     let mut applied = 0;
-    let mut declared: BTreeSet<(String, String)> = BTreeSet::new();
+    let mut declared: BTreeSet<ChildKey> = BTreeSet::new();
 
     for instance in &planned {
         let spec = match &instance.outcome {
@@ -91,7 +94,7 @@ async fn converge(
                 continue;
             }
         };
-        declared.insert((instance.namespace.clone(), instance.name.clone()));
+        declared.insert(child_key(&instance.namespace, &instance.name));
 
         if !namespace_exists(client, &instance.namespace).await? {
             entries.push(entry(
@@ -103,8 +106,12 @@ async fn converge(
         }
 
         let lumens: kube::Api<Lumen> = kube::Api::namespaced(client.clone(), &instance.namespace);
-        match lumens.get_opt(&instance.name).await? {
-            None => {
+        let live = lumens.get_opt(&instance.name).await?;
+        let owner = live
+            .as_ref()
+            .map(|object| object.labels().get(FLEET_LABEL).map(String::as_str));
+        match adoption(owner, &fleet_name) {
+            Adoption::Create => {
                 let body: Lumen = serde_json::from_value(seed_object(&fleet_name, instance, spec))?;
                 let params = kube::api::PostParams {
                     field_manager: Some(FLEET_SEED_MANAGER.to_string()),
@@ -120,23 +127,14 @@ async fn converge(
                     }
                 }
             }
-            Some(live) => {
-                // A `Lumen` this fleet did not create is not this fleet's to
-                // overwrite: a hand-authored instance at the same name would
-                // otherwise be silently replaced by the fleet's defaults.
-                let owner = live.labels().get(FLEET_LABEL).map(String::as_str);
-                if owner != Some(fleet_name.as_str()) {
-                    entries.push(entry(
-                        instance,
-                        "NotAdopted",
-                        &format!(
-                            "a Lumen already exists here and is not labelled {FLEET_LABEL}={fleet_name} \
-                             (found {}); left untouched",
-                            owner.unwrap_or("no label")
-                        ),
-                    ));
-                    continue;
-                }
+            // A `Lumen` this fleet did not create is not this fleet's to
+            // overwrite: a hand-authored instance at the same name would
+            // otherwise be silently replaced by the fleet's defaults.
+            Adoption::NotAdopted { message } => {
+                entries.push(entry(instance, "NotAdopted", &message));
+                continue;
+            }
+            Adoption::Apply => {
                 let body = apply_object(&fleet_name, instance, spec);
                 match lumens
                     .patch(
@@ -177,12 +175,12 @@ async fn converge(
     Ok(())
 }
 
-/// Report — and, only under [`PrunePolicy::Delete`], remove — instances this
+/// Report — and, only under [`crate::domain::lumen_fleet::PrunePolicy::Delete`], remove — instances this
 /// fleet created that its spec no longer declares.
 async fn prune(
     client: &kube::Client,
     fleet: &LumenFleet,
-    declared: &BTreeSet<(String, String)>,
+    declared: &BTreeSet<ChildKey>,
 ) -> anyhow::Result<Vec<FleetEntryStatus>> {
     use kube::ResourceExt;
 
@@ -193,21 +191,21 @@ async fn prune(
     for live in lumens.list(&params).await?.items {
         let namespace = live.namespace().unwrap_or_default();
         let name = live.name_any();
-        if declared.contains(&(namespace.clone(), name.clone())) {
-            continue;
-        }
         let orphan = PlannedInstance {
             namespace: namespace.clone(),
             name: name.clone(),
             outcome: PlanOutcome::Rejected(String::new()),
         };
-        match fleet.spec.prune_policy {
-            PrunePolicy::Retain => out.push(entry(
-                &orphan,
-                "Orphaned",
-                "no longer declared by this fleet; retained (set prunePolicy: Delete to remove)",
-            )),
-            PrunePolicy::Delete => {
+        match prune_decision(
+            &child_key(&namespace, &name),
+            declared,
+            fleet.spec.prune_policy,
+        ) {
+            PruneDecision::Keep => continue,
+            PruneDecision::Orphaned => {
+                out.push(entry(&orphan, "Orphaned", ORPHAN_RETAINED_MESSAGE));
+            }
+            PruneDecision::Pruned => {
                 let scoped: kube::Api<Lumen> = kube::Api::namespaced(client.clone(), &namespace);
                 match scoped.delete(&name, &Default::default()).await {
                     Ok(_) => out.push(entry(&orphan, "Pruned", "")),
