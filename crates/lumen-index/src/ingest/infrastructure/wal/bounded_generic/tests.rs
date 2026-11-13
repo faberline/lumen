@@ -55,6 +55,7 @@ fn generic_cbor_and_legacy_json_preserve_every_entry_shape_and_defaults() {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     };
     let records = vec![
         WalRecord {

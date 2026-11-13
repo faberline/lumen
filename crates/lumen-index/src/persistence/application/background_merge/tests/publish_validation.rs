@@ -49,6 +49,7 @@ fn mixed_schema(backend: VectorBackend) -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -61,6 +62,7 @@ fn mixed_schema(backend: VectorBackend) -> CreateCollectionRequest {
             metric: Some(VectorMetric::L2),
             backend: Some(backend),
             quantize: None,
+            facetable: false,
         },
     );
     CreateCollectionRequest { fields }

@@ -348,3 +348,47 @@ pub(super) fn trace_durable_save_end(
 ) {
     let _ = (context, sequence, revision, duration_ns);
 }
+
+/// Adapter from ingest capacity diagnostics to checkpoint diagnostics.
+pub struct CheckpointCapacityTrace;
+
+impl crate::ingest::application::ports::capacity_trace::CapacityTrace for CheckpointCapacityTrace {
+    fn enabled(&self) -> bool {
+        checkpoint_diagnostic_enabled()
+    }
+    fn refusal(
+        &self,
+        _revision: u64,
+        _present: bool,
+        _requested: usize,
+        _used: usize,
+        _hard_limit: usize,
+    ) {
+    }
+}
+
+#[cfg(test)]
+impl crate::ingest::application::ports::capacity_trace::CapacityTrace for DiagnosticCaptureToken {
+    fn enabled(&self) -> bool {
+        true
+    }
+    fn refusal(
+        &self,
+        revision: u64,
+        present: bool,
+        requested: usize,
+        used: usize,
+        hard_limit: usize,
+    ) {
+        send_numeric_event(
+            *self,
+            NumericCanonicalEvent::Refusal {
+                revision,
+                present,
+                requested,
+                used,
+                hard_limit,
+            },
+        );
+    }
+}

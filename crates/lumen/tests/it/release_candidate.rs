@@ -47,10 +47,10 @@ const ACTIONS: &[&str] = &[
     "anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610",
 ];
 const WORKFLOW_BYTES_SHA256: &str =
-    "f30ae02b3db5d81326f582a55e439e9bdab91dfe7182cfc0045603c2f77829ce";
+    "4753502b6f146a34fdc9e8e8b36f63facd852208aeaf320183bf6250900de38f";
 /// .github/workflows/gke-test.yml, which the gke-e2e job calls: deploy only.
 const GKE_TEST_WORKFLOW_BYTES_SHA256: &str =
-    "a219a49317c426e76e5ca70dd5e6f37033802c5cd5336d889b401658c9240033";
+    "950f4cac2ddd7156d4d10c152d61c97fa01c995ca27c833512b97238922c0614";
 /// The Rust suites the GKE test Job runs, which decide pass or fail.
 const E2E_SUITE_BYTES_SHA256: &[(&str, &str)] = &[
     (
@@ -59,7 +59,7 @@ const E2E_SUITE_BYTES_SHA256: &[(&str, &str)] = &[
     ),
     (
         "crates/lumen/tests/it/e2e/operator.rs",
-        "cc1063bbc79c203aefe26b4e1e521e8965385b1bdbda9559bcb7610704e805ae",
+        "5d95d8882ef1ff02baafc3d86b494857ac47f9308d669301d23bbc79b71ef698",
     ),
     (
         "crates/lumen/tests/it/e2e/overlay.rs",
@@ -639,8 +639,8 @@ fn validate_e2e_semantics(sources: &E2eSources) -> Result<(), Finding> {
         r#"echo "E2E_EXPECTED_GIT_SHA=${git_sha}""#,
         "fail-fast: false",
         "suite: ${{ fromJSON(needs.resolve.outputs.suites) }}",
-        "uses: faberline/aw/.github/workflows/gke-test.yml@6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb",
-        "aw-ref: 6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb",
+        "uses: faberline/aw/.github/workflows/gke-test.yml@efe1a96e54617e60f6e2b7d154aea67fca8c96f8",
+        "aw-ref: efe1a96e54617e60f6e2b7d154aea67fca8c96f8",
         "image: ${{ needs.resolve.outputs.image }}",
         "test-job: k8s/gke-test-job/${{ matrix.suite }}",
         "test-env: ${{ needs.resolve.outputs.test-env }}",
@@ -1149,6 +1149,9 @@ fn validate_gate_step_inventory(workflow: &Yaml) -> Result<(), Finding> {
                 "uses:actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
                 "Reclaim runner disk before the cargo gate",
                 "Run coarse performance gates",
+                "Run index performance gates",
+                "Install the toxiproxy server for the native performance contracts",
+                "Run native performance contracts",
             ][..],
         ),
         (
@@ -2197,8 +2200,51 @@ fn validate_durable_perf_workflow(source: &str) -> Result<(), Finding> {
     require(
         exact_shell_lines(run, &["set -euo pipefail", RELEASE_PERF_GATE]),
         PERF_WORKFLOW,
-    )
+    )?;
+    // The measured performance that left the pull request run (the `ci`
+    // workflow) is measured here: the two index limits and the ten native
+    // resource and performance contracts.
+    for (step_name, needles) in [
+        ("Run index performance gates", INDEX_PERF_TESTS),
+        ("Run native performance contracts", NATIVE_PERF_TESTS),
+    ] {
+        let step = step_named(steps, step_name)?;
+        let run = field(step, "run")
+            .and_then(Yaml::as_str)
+            .ok_or(Finding(PERF_WORKFLOW))?;
+        require(
+            field(step, "shell").and_then(Yaml::as_str) == Some("bash")
+                && needles.iter().all(|needle| run.contains(needle)),
+            PERF_WORKFLOW,
+        )?;
+    }
+    Ok(())
 }
+
+/// The two lumen-index measured limits: the 500k AND-query 50 ms limit and the
+/// deep-pagination 20x limit.
+const INDEX_PERF_TESTS: &[&str] = &[
+    "index::domain::query::zip_cursor::tests::timing_and_match_500k_all_docs_match",
+    "index::application::engine::search::tests::pagination::cursors::deep_pagination_depth_invariance",
+];
+/// The ten native resource and performance contracts.
+const NATIVE_PERF_TESTS: &[&str] = &[
+    "LUMEN_CONTRACT_SCALE_TEST_BIN",
+    "LUMEN_CONTRACT_COMPETITIVE_TEST_BIN",
+    "--include-ignored",
+    "benchmark_lumen_competitor_performance_competitive::lumen_competitor_performance_competitive",
+    "efficiency_lumen_claim_competitor_performance_external_comparison::lumen_claim_competitor_performance_external_comparison",
+    "efficiency_lumen_claim_elastic_disk_tier::lumen_claim_elastic_disk_tier",
+    "stability_lumen_long_running_stability_latency_drift::lumen_long_running_stability_latency_drift",
+    "stability_lumen_long_running_stability_overload_backpressure::lumen_long_running_stability_overload_backpressure",
+    "stability_lumen_long_running_stability_query_resilience::lumen_long_running_stability_query_resilience",
+    "stability_lumen_long_running_stability_resilience_survival::lumen_long_running_stability_resilience_survival",
+    "stability_lumen_long_running_stability_resource_leak::lumen_long_running_stability_resource_leak",
+    "--test disk_scale_proof",
+    "scale_proof_reopen_rss_is_bounded",
+    "--test perf_gate_vs_db",
+    "competitive_perf_gate",
+];
 
 /// From lumen@0.6.1 the candidate receipt carries no performance block; the
 /// promotion verifier binds the local durable evidence to the candidate.
@@ -2723,6 +2769,14 @@ fn coarse_performance_release_workflow_is_fail_closed() {
                 RELEASE_PERF_GATE,
                 &format!("{RELEASE_PERF_GATE}\n          {RELEASE_PERF_GATE}"),
             ),
+        ),
+        (
+            "index limit dropped",
+            replace_once(&source, "deep_pagination_depth_invariance", "removed"),
+        ),
+        (
+            "native contract dropped",
+            replace_once(&source, "stability_lumen_long_running_stability_resource_leak::lumen_long_running_stability_resource_leak", "removed"),
         ),
         (
             "durable summary uploaded",
@@ -3270,7 +3324,7 @@ fn gke_deploy_mutations_fail_without_hash_oracle() {
         ),
         (
             "deploy workflow moved",
-            "uses: faberline/aw/.github/workflows/gke-test.yml@6eb7ebcdf38343e0d4c77f8674b6bc30976d86bb",
+            "uses: faberline/aw/.github/workflows/gke-test.yml@efe1a96e54617e60f6e2b7d154aea67fca8c96f8",
             "uses: faberline/aw/.github/workflows/gke-test.yml@dev",
         ),
     ] {
@@ -3283,8 +3337,8 @@ fn gke_deploy_mutations_fail_without_hash_oracle() {
     }
     let comment_only = with_workflow(replace_once(
         &sources.workflow,
-        "    # One call at a time: the repository's concurrency group in aw keeps only\n",
-        "    # One call at a time; the repository's concurrency group in aw keeps only\n",
+        "    # One call at a time: a call that waits for the repository's Lease in aw\n",
+        "    # One call at a time; a call that waits for the repository's Lease in aw\n",
     ));
     validate_e2e_semantics(&comment_only).expect("comment-only edit keeps the semantics");
     assert_eq!(
@@ -4981,4 +5035,123 @@ fn local_final_receipt_and_negative_fixtures_are_executable() {
         |dir| replace_host_archive(dir, "version-stage", true, 0o755, "0.4.26"),
         "candidate binary version mismatch",
     );
+}
+
+fn ci_workflow() -> String {
+    fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap()
+}
+
+/// The aw CI standard: workflow `ci` with the stages `lint`, `test-*`, `e2e-*`
+/// and one `gate` that needs every other job. CI reads no issue, pull request
+/// body or label, and runs no deleted gate script.
+fn validate_ci_workflow(source: &str) -> Result<(), Finding> {
+    const CI: &str = "CI_STAGES";
+    let workflow: Yaml = serde_yaml::from_str(source).map_err(|_| Finding(CI))?;
+    require(
+        field(&workflow, "name").and_then(Yaml::as_str) == Some("ci"),
+        CI,
+    )?;
+    let jobs = field(&workflow, "jobs")
+        .and_then(Yaml::as_mapping)
+        .ok_or(Finding(CI))?;
+    let ids = jobs
+        .keys()
+        .map(|id| id.as_str().ok_or(Finding(CI)))
+        .collect::<Result<Vec<_>, _>>()?;
+    require(
+        ids.iter().all(|id| {
+            matches!(*id, "lint" | "gate") || id.starts_with("test-") || id.starts_with("e2e-")
+        }),
+        CI,
+    )?;
+    require(ids.contains(&"lint") && ids.contains(&"gate"), CI)?;
+    for id in ids.iter().filter(|id| id.starts_with("test-")) {
+        require(
+            strings(field(job(&workflow, id).ok_or(Finding(CI))?, "needs")).contains(&"lint"),
+            CI,
+        )?;
+    }
+    let gate = job(&workflow, "gate").ok_or(Finding(CI))?;
+    require(
+        field(gate, "if").and_then(Yaml::as_str) == Some("always()"),
+        CI,
+    )?;
+    let mut gate_needs = strings(field(gate, "needs"));
+    gate_needs.sort_unstable();
+    let mut others = ids
+        .iter()
+        .copied()
+        .filter(|id| *id != "gate")
+        .collect::<Vec<_>>();
+    others.sort_unstable();
+    require(gate_needs == others, CI)?;
+    for forbidden in [
+        "scripts/pr-gates",
+        "scripts/issue-ci",
+        "github.event.issue",
+        "pull_request.labels",
+        "pull_request.body",
+    ] {
+        require(!source.contains(forbidden), CI)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn ci_workflow_follows_stage_standard() {
+    let source = ci_workflow();
+    validate_ci_workflow(&source).expect("ci.yml follows the aw CI stages");
+
+    for (name, changed) in [
+        (
+            "workflow renamed",
+            replace_once(&source, "\nname: ci\n", "\nname: Lumen development CI\n"),
+        ),
+        (
+            "test job skips lint",
+            replace_once(
+                &source,
+                "  test-workspace:\n    name: \"test: workspace (default features)\"\n    needs: lint\n",
+                "  test-workspace:\n    name: \"test: workspace (default features)\"\n",
+            ),
+        ),
+        (
+            "job outside the stages",
+            replace_once(
+                &source,
+                "  e2e-native:\n",
+                "  measured-performance:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n\n  e2e-native:\n",
+            ),
+        ),
+        (
+            "gate not always",
+            replace_once(&source, "    if: always()\n", "    if: success()\n"),
+        ),
+        (
+            "gate misses a job",
+            replace_once(&source, "      - e2e-native\n", ""),
+        ),
+        (
+            "reads the pull request body",
+            replace_once(
+                &source,
+                "      - run: cargo fmt --all -- --check\n",
+                "      - run: echo '${{ github.event.pull_request.body }}'\n      - run: cargo fmt --all -- --check\n",
+            ),
+        ),
+        (
+            "runs a deleted gate script",
+            replace_once(
+                &source,
+                "      - run: cargo fmt --all -- --check\n",
+                "      - run: python3 scripts/pr-gates/plan.py\n      - run: cargo fmt --all -- --check\n",
+            ),
+        ),
+    ] {
+        assert_eq!(
+            validate_ci_workflow(&changed),
+            Err(Finding("CI_STAGES")),
+            "{name} mutation passed"
+        );
+    }
 }

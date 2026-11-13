@@ -420,10 +420,27 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
         rw
     } else {
         let wal = wal.expect("non-raft backend yields a WAL");
-        match aof_writer.clone() {
-            Some(aof) => WriteCoordinator::start_from_with_aof(wal, engine.clone(), start_seq, aof),
-            None => WriteCoordinator::start_from(wal, engine.clone(), start_seq),
-        }
+        let capacity_owner =
+            Box::new(lumen_index::persistence::application::capacity::Fallback::default());
+        let coordinator = match aof_writer.clone() {
+            Some(aof) => WriteCoordinator::start_from_with_aof_and_capacity_owner(
+                wal,
+                engine.clone(),
+                start_seq,
+                Some(aof),
+                capacity_owner,
+            ),
+            None => WriteCoordinator::start_from_with_capacity_owner(
+                wal,
+                engine.clone(),
+                start_seq,
+                capacity_owner,
+            ),
+        };
+        coordinator.set_capacity_trace(Arc::new(
+            lumen_index::persistence::infrastructure::segment_rdb_store::diagnostic::CheckpointCapacityTrace,
+        ));
+        coordinator
     };
 
     // `LUMEN_AUTH=required|in-cluster` delegates both halves of the decision to the

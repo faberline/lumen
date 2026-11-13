@@ -4,8 +4,7 @@
     "title": "lumen",
     "description": "Standalone search and duplicate-detection index. Generic Collection / Field primitive; the caller owns the source of truth.",
     "contact": {
-      "name": "Chris Cheng",
-      "email": "chris.cheng.c4@gmail.com"
+      "name": "Faberline contributors"
     },
     "license": {
       "name": "MIT"
@@ -813,6 +812,89 @@
         }
       }
     },
+    "/collections/{collection_id}/docs:merge": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "summary": "Merge indexed fields: each item sets one (external_id, field) value; omitted fields stay unchanged.",
+        "description": "At most [`MAX_INDEX_BATCH_SIZE`] items per request; a longer batch is\nrejected with 400 before any item runs.",
+        "operationId": "merge_docs",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "description": "Collection namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Items indexed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Batch size over the limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown collection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Type mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Node in ENOSPC degraded read-only mode (#2516)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/collections/{collection_id}/docs:replace": {
       "put": {
         "tags": [
@@ -1084,8 +1166,8 @@
         "tags": [
           "Index"
         ],
-        "summary": "At most [`MAX_INDEX_BATCH_SIZE`] items per request; a longer batch is",
-        "description": "rejected with 400 before any item runs.",
+        "summary": "Legacy alias of `POST /collections/{collection_id}/docs:merge`: the same",
+        "description": "merge under its older name, kept wire-compatible.",
         "operationId": "index",
         "parameters": [
           {
@@ -1920,6 +2002,10 @@
             "nullable": true,
             "minimum": 0
           },
+          "facetable": {
+            "type": "boolean",
+            "description": "Whether the field may be used for facets. Default false. Turning it on\nfor a field that already has documents needs a shadow rebuild."
+          },
           "metric": {
             "allOf": [
               {
@@ -2722,6 +2808,7 @@
           },
           "routing_key": {
             "type": "string",
+            "description": "Optional caller-owned routing key. Reserved: it does not narrow shard\nfan-out while writes cannot carry it, because writes place every\ndocument by `external_id`; a search with `routing_key` returns the same\nhits and `total` as the same search without it.",
             "nullable": true
           },
           "sort": {
@@ -2815,7 +2902,7 @@
           },
           "routing_key": {
             "type": "string",
-            "description": "Optional caller-owned routing key for sharded deployments. When present,\na sharded router can target the one shard that owns\n`(collection_id, routing_key)` instead of scatter/gathering every shard.\nWrites default to `external_id` as the routing key, so one large\ncollection can still spread across shards without caller help.",
+            "description": "Optional caller-owned routing key. Reserved: it does not narrow shard\nfan-out while writes cannot carry it, because writes place every\ndocument by `external_id`; a search with `routing_key` returns the same\nhits and `total` as the same search without it.",
             "nullable": true
           },
           "sort": {

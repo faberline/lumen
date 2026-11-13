@@ -324,7 +324,11 @@ fn fixture(configured_owner: bool) -> Fixture {
     );
     let wal = Arc::new(MemWal::new());
     let shared_wal: SharedWal = wal.clone();
-    let writer = WriteCoordinator::start(shared_wal, engine.clone());
+    let writer = WriteCoordinator::start_with_capacity_owner(
+        shared_wal,
+        engine.clone(),
+        Box::new(lumen_index::persistence::application::capacity::Fallback::default()),
+    );
     let sink_writer: Arc<dyn WriteSink> = writer.clone();
     let checkpoint: Arc<dyn CheckpointSink> = Arc::new(SegmentCheckpointSink {
         engine: engine.clone(),
@@ -371,6 +375,7 @@ fn keyword_schema() -> CreateCollectionRequest {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         )]),
     }
