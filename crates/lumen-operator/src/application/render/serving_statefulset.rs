@@ -250,3 +250,70 @@ pub(super) fn serving_statefulset(
     }
     sts
 }
+
+/// The serving StatefulSets: one for a single shard, one per shard when
+/// `shardCount > 1` (#228). Each per-shard StatefulSet is named `<name>-s<k>`
+/// and holds only that shard's members, so the shard's own pods are the only
+/// ones that must not share a node.
+pub(super) fn serving_statefulsets(
+    lumen: &Lumen,
+    cx: &RenderCtx<'_>,
+    headless: &str,
+    profile: Option<&crate::domain::capacity::preflight::ResolvedProfile>,
+) -> Vec<Value> {
+    let base = serving_statefulset(lumen, cx, headless, profile);
+    if lumen.spec.shard_count <= 1 {
+        return vec![base];
+    }
+    (0..lumen.spec.shard_count)
+        .map(|shard| shard_statefulset(base.clone(), lumen, cx, shard))
+        .collect()
+}
+
+/// Turns the shared serving StatefulSet into the StatefulSet of one shard.
+/// Panics when a path it edits is missing: the shared renderer always emits
+/// these, so a missing one is a render bug, not a case to skip.
+fn shard_statefulset(mut sts: Value, lumen: &Lumen, cx: &RenderCtx<'_>, shard: u32) -> Value {
+    let shard_label = shard.to_string();
+    sts["metadata"]["name"] = json!(format!("{}-s{}", cx.name, shard));
+    sts["metadata"]["labels"]
+        .as_object_mut()
+        .expect("StatefulSet metadata.labels")
+        .insert("lumen.dev/shard".into(), json!(shard_label));
+    sts["spec"]["selector"]["matchLabels"]
+        .as_object_mut()
+        .expect("StatefulSet selector.matchLabels")
+        .insert("lumen.dev/shard".into(), json!(shard_label));
+    sts["spec"]["template"]["metadata"]["labels"]
+        .as_object_mut()
+        .expect("pod template labels")
+        .insert("lumen.dev/shard".into(), json!(shard_label));
+    sts["spec"]["replicas"] = json!(lumen.spec.replicas_per_shard.max(1));
+
+    let pod = &mut sts["spec"]["template"]["spec"];
+    let container_env = pod["containers"][0]["env"]
+        .as_array_mut()
+        .expect("container 0 env");
+    container_env.push(json!({
+        "name": "LUMEN_SHARD_INDEX",
+        "valueFrom": { "fieldRef": { "fieldPath": "metadata.labels['lumen.dev/shard']" } },
+    }));
+    pod["affinity"] = crate::domain::capacity::placement::shard_data_node_affinity(cx.name, shard);
+
+    // The two runtime-wide spreads stay soft (a packing hint). Three voters
+    // in one shard also get a hard zone spread, scoped to that shard only.
+    if lumen.spec.replicas_per_shard >= 3 && lumen.spec.voter_count >= 3 {
+        let mut shard_selector = cx.selector(COMPONENT);
+        shard_selector["lumen.dev/shard"] = json!(shard_label);
+        pod["topologySpreadConstraints"]
+            .as_array_mut()
+            .expect("topologySpreadConstraints")
+            .push(json!({
+                "maxSkew": 1,
+                "topologyKey": "topology.kubernetes.io/zone",
+                "whenUnsatisfiable": "DoNotSchedule",
+                "labelSelector": { "matchLabels": shard_selector },
+            }));
+    }
+    sts
+}

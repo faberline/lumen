@@ -195,6 +195,28 @@ pub fn project_capacity_status(
     }
 }
 
+/// Render one-member-per-node anti-affinity for a single shard of one runtime.
+///
+/// Only pods of the same shard (same `instance` and `lumen.dev/shard`) must
+/// not share a node. Pods of other shards or other runtimes may.
+pub fn shard_data_node_affinity(instance: &str, shard: u32) -> serde_json::Value {
+    serde_json::json!({
+        "podAntiAffinity": {
+            "requiredDuringSchedulingIgnoredDuringExecution": [{
+                "labelSelector": {
+                    "matchLabels": {
+                        "app.kubernetes.io/name": "lumen",
+                        "app.kubernetes.io/component": "server",
+                        "app.kubernetes.io/instance": instance,
+                        "lumen.dev/shard": shard.to_string(),
+                    }
+                },
+                "topologyKey": "kubernetes.io/hostname",
+            }]
+        }
+    })
+}
+
 /// Render cluster-wide one-member-per-node anti-affinity matching across all namespaces.
 pub fn cross_namespace_dedicated_data_node_affinity() -> serde_json::Value {
     serde_json::json!({
