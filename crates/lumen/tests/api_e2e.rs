@@ -167,7 +167,7 @@ async fn version_reports_compatibility_capabilities() {
     assert_eq!(body["active_capabilities"], body["binary_capabilities"]);
     assert_eq!(
         body["effective_compatibility_version"].as_str(),
-        Some(env!("CARGO_PKG_VERSION"))
+        Some("0.1")
     );
 }
 

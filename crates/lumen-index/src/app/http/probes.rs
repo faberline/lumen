@@ -13,7 +13,9 @@ use crate::index::domain::capability_report::{binary_capabilities, CapabilityRep
 use crate::shared_kernel::types::cluster_state_view::ClusterStateView;
 use crate::shared_kernel::types::raft_role::RaftRole;
 
-pub const EFFECTIVE_COMPATIBILITY_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The compatibility version this binary speaks. It is not the crate version
+/// and does not change with a release.
+pub const EFFECTIVE_COMPATIBILITY_VERSION: &str = "0.1";
 
 /// Effective compatibility version.
 pub fn effective_compatibility_version() -> &'static str {
@@ -142,6 +144,6 @@ mod tests {
 
     #[test]
     fn test_effective_compatibility_version() {
-        assert_eq!(effective_compatibility_version(), env!("CARGO_PKG_VERSION"));
+        assert_eq!(effective_compatibility_version(), "0.1");
     }
 }
