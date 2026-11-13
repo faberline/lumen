@@ -1,13 +1,13 @@
 //! The serving StatefulSet, layered on the shared workload primitive.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use service_k8s::render::{self, RenderCtx, ServiceStatefulSet, WorkloadVolumeClaim};
 
 use crate::application::render::serving_config::serving_env;
 use crate::application::render::{
-    serving_service_account_name, CLIENT_PORT, COMPONENT, EMBEDDED_DATA_DIR, HEADLESS_ENV_KEY,
-    PEER_TLS_KEYS, PEER_TLS_MOUNT_PATH, PEER_TLS_VOLUME, RAFT_PORT, SERVING_TLS_KEYS,
-    SERVING_TLS_MOUNT_PATH, SERVING_TLS_VOLUME,
+    CLIENT_PORT, COMPONENT, EMBEDDED_DATA_DIR, HEADLESS_ENV_KEY, PEER_TLS_KEYS,
+    PEER_TLS_MOUNT_PATH, PEER_TLS_VOLUME, RAFT_PORT, SERVING_TLS_KEYS, SERVING_TLS_MOUNT_PATH,
+    SERVING_TLS_VOLUME, serving_service_account_name,
 };
 use crate::domain::lumen_spec::Lumen;
 
@@ -202,7 +202,16 @@ pub(super) fn serving_statefulset(
             spread("kubernetes.io/hostname"),
         ],
         revision_history_limit: Some(5),
-        update_strategy: Some(json!({ "type": "RollingUpdate" })),
+        update_strategy: Some(if lumen.spec.replicas_per_shard > 1 {
+            json!({
+                "type": "RollingUpdate",
+                "rollingUpdate": {
+                    "partition": 0
+                }
+            })
+        } else {
+            json!({ "type": "RollingUpdate" })
+        }),
         volume_claim: Some(WorkloadVolumeClaim {
             name: "raft".into(),
             template: pvc_template,
