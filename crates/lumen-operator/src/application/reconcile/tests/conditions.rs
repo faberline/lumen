@@ -189,3 +189,40 @@ fn observed_conditions_round_trip_through_the_projection() {
         "observedGeneration tracks every reconcile, unlike lastTransitionTime"
     );
 }
+
+#[test]
+fn one_pod_runtime_reports_ready_true_without_an_ha_claim() {
+    let lumen = hpa_test_lumen("search", "acme-cond-one-pod-ready", 1, 1);
+    let facts = lumen.conditions(&ready_facts("search", 1), &serde_json::Value::Null);
+
+    let ready = condition(&facts, "Ready");
+    assert_eq!(ready.status, ConditionStatus::True, "got: {facts:?}");
+    assert_eq!(ready.reason, "AllReplicasReady");
+
+    for fact in &facts {
+        let text = format!("{} {} {}", fact.type_, fact.reason, fact.message).to_lowercase();
+        assert!(!text.contains("highly available"), "got: {fact:?}");
+        assert!(!text.contains("high availability"), "got: {fact:?}");
+        assert!(!text.contains("quorum"), "got: {fact:?}");
+        assert!(
+            !text
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .any(|word| word == "ha"),
+            "got: {fact:?}"
+        );
+    }
+}
+
+#[test]
+fn one_pod_runtime_with_no_ready_pod_reports_ready_false() {
+    let lumen = hpa_test_lumen("search", "acme-cond-one-pod-short", 1, 1);
+    let facts = lumen.conditions(&ready_facts("search", 0), &serde_json::Value::Null);
+
+    let ready = condition(&facts, "Ready");
+    assert_eq!(ready.status, ConditionStatus::False, "got: {facts:?}");
+    assert_eq!(ready.reason, "ReplicasNotReady");
+    assert!(
+        ready.message.contains("0/1"),
+        "the message must name the counts, got: {ready:?}"
+    );
+}
