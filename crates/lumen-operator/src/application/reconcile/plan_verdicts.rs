@@ -51,6 +51,20 @@ pub(super) fn peer_identity_error(context: &serde_json::Value) -> Option<String>
         .map(str::to_string)
 }
 
+/// The same channel for the capacity verdict (#2601 conditions). Public so the
+/// condition tests project through the key the reconcile loop writes, not a
+/// string literal.
+pub const CAPACITY_CONTEXT_KEY: &str = "capacityError";
+
+/// Read the capacity refusal back out. Absent key = the capacity profile
+/// resolved.
+pub(super) fn capacity_error(context: &serde_json::Value) -> Option<String> {
+    context
+        .get(CAPACITY_CONTEXT_KEY)?
+        .as_str()
+        .map(str::to_string)
+}
+
 /// Read that verdict back out. Absent key = the binding applied.
 pub(super) fn auth_delegation_error(context: &serde_json::Value) -> Option<String> {
     context
