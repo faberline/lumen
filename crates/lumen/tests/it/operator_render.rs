@@ -591,13 +591,15 @@ fn configmap_tracks_serving_spec() {
     let l = lumen("search", dev_spec());
     let objs = render(&l);
     let cm = find(&objs, "ConfigMap", "search-config");
-    assert_eq!(cm["data"]["SHARD_COUNT"], "1");
+    // #issue-221: the container's SHARD_COUNT is core's literal, not a ConfigMap key.
+    assert!(cm["data"]["SHARD_COUNT"].is_null());
     assert_eq!(cm["data"]["SHARD_MAP_VERSION"], "0");
     assert_eq!(cm["data"]["VIRTUAL_BUCKET_COUNT"], "4096");
     assert!(cm["data"]["SHARD_MAP_ASSIGNMENTS"].is_null());
     assert_eq!(cm["data"]["LUMEN_LOG_FORMAT"], "pretty");
     assert_eq!(cm["data"]["LUMEN_AUTH"], "off");
     assert_eq!(cm["data"]["LUMEN_PORT"], "7373");
+    assert_eq!(cm["data"]["LUMEN_RAFT_PORT"], "7374");
     // No log level set → key omitted.
     assert!(cm["data"]["LUMEN_LOG_LEVEL"].is_null());
 }
@@ -687,7 +689,19 @@ fn prod_wires_auth_and_observability() {
 
     // ConfigMap reflects 6 shards + json + required auth.
     let cm = find(&objs, "ConfigMap", "lumen-config");
-    assert_eq!(cm["data"]["SHARD_COUNT"], "6");
+    assert!(cm["data"]["SHARD_COUNT"].is_null());
+    let shard_env: Vec<&Value> = c["env"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["name"] == "SHARD_COUNT")
+        .collect();
+    assert_eq!(
+        shard_env.len(),
+        1,
+        "exactly one SHARD_COUNT in the container"
+    );
+    assert_eq!(shard_env[0]["value"], "6");
     assert_eq!(cm["data"]["SHARD_MAP_VERSION"], "0");
     assert_eq!(cm["data"]["VIRTUAL_BUCKET_COUNT"], "4096");
     assert!(cm["data"]["SHARD_MAP_ASSIGNMENTS"].is_null());
@@ -2639,6 +2653,68 @@ fn instance_profiles_document_external_serving_and_peer_secrets_without_issuer_f
         assert!(
             !yaml.contains("LUMEN_CA_POOL"),
             "{profile} carries CA pool env"
+        );
+    }
+}
+
+#[test]
+fn every_configmap_key_is_consumed_by_the_serving_container() {
+    let mut with_log = dev_spec();
+    with_log.log_level = Some("info".into());
+    let mut with_assignments = dev_spec();
+    with_assignments.shard_map.assignments = vec![0];
+    let cases = [
+        ("search", dev_spec()),
+        ("lumen", prod_spec()),
+        ("search", with_log),
+        ("search", with_assignments),
+    ];
+    for (name, spec) in cases {
+        let l = lumen(name, spec);
+        let objs = render(&l);
+        let cm = find(&objs, "ConfigMap", &format!("{name}-config"));
+        let sts = find(&objs, "StatefulSet", name);
+        let c = &sts["spec"]["template"]["spec"]["containers"][0];
+
+        let mut written: Vec<String> = cm["data"].as_object().unwrap().keys().cloned().collect();
+        let mut consumed: Vec<String> = Vec::new();
+        for e in c["env"].as_array().unwrap() {
+            if let Some(r) = e["valueFrom"]["configMapKeyRef"].as_object() {
+                assert_eq!(
+                    r["name"],
+                    format!("{name}-config"),
+                    "env {} reads a foreign ConfigMap",
+                    e["name"]
+                );
+                consumed.push(r["key"].as_str().unwrap().to_string());
+            }
+        }
+        written.sort();
+        consumed.sort();
+        assert_eq!(
+            consumed, written,
+            "{name}: ConfigMap keys must equal the keys the container consumes; \
+             written={written:?} consumed={consumed:?}"
+        );
+    }
+}
+
+#[test]
+fn serving_container_env_names_are_unique() {
+    let mut routed = dev_spec();
+    routed.shard_count = 4;
+    for spec in [dev_spec(), prod_spec(), routed] {
+        let l = lumen("search", spec);
+        let objs = render(&l);
+        let sts = find(&objs, "StatefulSet", "search");
+        let c = &sts["spec"]["template"]["spec"]["containers"][0];
+        let names = env_names(c);
+        let unique: std::collections::BTreeSet<&String> = names.iter().collect();
+        assert_eq!(unique.len(), names.len(), "duplicate env names: {names:?}");
+        assert_eq!(
+            names.iter().filter(|n| n.as_str() == "SHARD_COUNT").count(),
+            1,
+            "exactly one SHARD_COUNT; have {names:?}"
         );
     }
 }
