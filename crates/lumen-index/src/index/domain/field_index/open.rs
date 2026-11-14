@@ -240,6 +240,7 @@ impl FieldIndex {
                     bytes,
                 })
             }
+            FieldType::Date => Err(anyhow!("field type `date` is not indexed yet")),
         }
     }
 }

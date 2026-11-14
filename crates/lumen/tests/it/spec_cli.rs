@@ -310,7 +310,7 @@ fn field_catalog_matches_the_real_enums() {
     // Exactly the FieldType enum variants (lowercase wire form), in order.
     assert_eq!(
         types,
-        ["text", "keyword", "number", "set", "vector", "hash"],
+        ["text", "keyword", "number", "set", "vector", "hash", "date"],
         "field types track the FieldType enum"
     );
 
@@ -1215,6 +1215,7 @@ fn dx_field_catalog_matches_runtime_field_capabilities() {
             FieldType::Set => "set",
             FieldType::Vector => "vector",
             FieldType::Hash => "hash",
+            FieldType::Date => "date",
         };
         let entry = fields
             .iter()
@@ -1824,3 +1825,25 @@ fn operator_tls_ownership_is_consistently_documented_across_surfaces() {
     }
 }
 // CODEGEN-END
+
+#[test]
+fn dx_field_catalog_lists_date_exact_range_and_sort() {
+    let catalog = dx::field_catalog();
+    let fields = catalog["field_types"]
+        .as_array()
+        .expect("field catalogue is an array");
+    let date = fields
+        .iter()
+        .find(|entry| entry["type"] == "date")
+        .expect("catalogue omits date");
+    let operations = &date["operations"];
+    assert_eq!(operations["exact"], true);
+    assert_eq!(operations["range"], true);
+    assert_eq!(operations["sort"], true);
+    assert_eq!(operations["bm25"], false);
+    assert_eq!(operations["prefix"], false);
+    assert_eq!(operations["set_membership"], false);
+    assert_eq!(operations["vector_search"], false);
+    assert_eq!(operations["hamming"], false);
+    assert_eq!(date["queries"], json!(["term", "range", "sort"]));
+}

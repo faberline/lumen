@@ -125,3 +125,49 @@ fn sparse_high_delta_does_not_hide_middle_live_scalar_overlays() {
     hash.forward.insert(2, 2);
     assert_eq!(hash.hash_at(2), Some(2));
 }
+
+fn date_field(
+    analyzer: Option<crate::shared_kernel::types::schema::Analyzer>,
+) -> crate::shared_kernel::types::schema::FieldSpec {
+    crate::shared_kernel::types::schema::FieldSpec {
+        field_type: crate::shared_kernel::types::schema::FieldType::Date,
+        analyzer,
+        multi: None,
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    }
+}
+
+#[test]
+fn date_schema_is_accepted_by_validate_schema() {
+    let mut schema = BTreeMap::new();
+    schema.insert("when".to_string(), date_field(None));
+    assert!(crate::index::domain::schema_validation::validate_schema(&schema).is_ok());
+
+    schema.insert(
+        "bad".to_string(),
+        date_field(Some(
+            crate::shared_kernel::types::schema::Analyzer::WhitespaceLower,
+        )),
+    );
+    let err = crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect_err("a date field must refuse an analyzer");
+    assert!(
+        err.to_string().contains("does not accept an analyzer"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn date_spec_is_refused_with_not_indexed_yet() {
+    let Err(err) = super::FieldIndex::from_spec(&date_field(None)) else {
+        panic!("a date field must not build an index yet");
+    };
+    assert!(
+        err.to_string().contains("not indexed yet"),
+        "unexpected error: {err}"
+    );
+}

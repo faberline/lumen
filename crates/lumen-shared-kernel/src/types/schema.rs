@@ -79,6 +79,9 @@ pub enum FieldType {
     /// MinHash). The caller computes the hash; lumen indexes the bits and
     /// answers Hamming-distance queries. Wire value is a hex string.
     Hash,
+    /// Calendar date, exact, range and sort. Its index is not built yet: a
+    /// schema that declares a `date` field is refused at index build (see #411).
+    Date,
 }
 
 /// Operations a field type can truthfully expose to clients. This is shared by
@@ -97,13 +100,14 @@ pub struct FieldCapabilities {
 }
 
 impl FieldType {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Text,
         Self::Keyword,
         Self::Number,
         Self::Set,
         Self::Vector,
         Self::Hash,
+        Self::Date,
     ];
 
     pub const fn capabilities(self) -> FieldCapabilities {
@@ -167,6 +171,16 @@ impl FieldType {
                 set_membership: false,
                 vector_search: false,
                 hamming: true,
+            },
+            Self::Date => FieldCapabilities {
+                bm25: false,
+                exact: true,
+                prefix: false,
+                range: true,
+                sort: true,
+                set_membership: false,
+                vector_search: false,
+                hamming: false,
             },
         }
     }

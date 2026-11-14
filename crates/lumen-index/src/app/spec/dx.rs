@@ -51,6 +51,10 @@ fn field_entry(field_type: FieldType) -> Value {
         FieldType::Set => ("set", "multi-valued keyword membership"),
         FieldType::Vector => ("vector", "semantic kNN over a caller-supplied embedding"),
         FieldType::Hash => ("hash", "perceptual/structural near-duplicate search"),
+        FieldType::Date => (
+            "date",
+            "calendar date YYYY-MM-DD; exact, range and sort (not indexed yet)",
+        ),
     };
     let mut entry = json!({
         "type": name,
@@ -100,6 +104,9 @@ fn field_entry(field_type: FieldType) -> Value {
             );
             object.insert("queries".into(), json!(["hamming"]));
             object.insert("schema".into(), json!({ "type": "hash" }));
+        }
+        FieldType::Date => {
+            object.insert("queries".into(), json!(["term", "range", "sort"]));
         }
     }
     entry

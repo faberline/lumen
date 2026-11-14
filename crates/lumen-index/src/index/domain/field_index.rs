@@ -80,6 +80,7 @@ impl FieldIndex {
                 }
             }
             FieldType::Hash => FieldIndex::Hash(HashIndex::default()),
+            FieldType::Date => return Err(anyhow!("field type `date` is not indexed yet")),
         })
     }
 

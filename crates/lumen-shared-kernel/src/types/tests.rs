@@ -1,7 +1,7 @@
 use crate::types::document::FieldValue;
 use crate::types::query::{MatchOp, MatchQuery, QueryNode};
 use crate::types::schema::{
-    Analyzer, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
+    Analyzer, FieldCapabilities, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
 };
 
 fn fs(t: FieldType) -> FieldSpec {
@@ -140,4 +140,33 @@ fn facetable_true_round_trips() {
     assert_eq!(value["facetable"], serde_json::json!(true));
     let back: FieldSpec = serde_json::from_value(value).unwrap();
     assert_eq!(back, spec);
+}
+
+#[test]
+fn date_field_type_parses_with_exact_range_and_sort() {
+    assert_eq!(
+        serde_json::from_str::<FieldType>("\"date\"").expect("date parses"),
+        FieldType::Date
+    );
+    assert!(FieldType::ALL.contains(&FieldType::Date));
+    assert_eq!(
+        FieldType::Date.capabilities(),
+        FieldCapabilities {
+            bm25: false,
+            exact: true,
+            prefix: false,
+            range: true,
+            sort: true,
+            set_membership: false,
+            vector_search: false,
+            hamming: false,
+        }
+    );
+    assert_eq!(FieldType::ALL.len(), 7);
+}
+
+#[test]
+fn unknown_field_type_name_is_still_refused_next_to_date() {
+    assert!(serde_json::from_str::<FieldType>("\"dates\"").is_err());
+    assert!(serde_json::from_str::<FieldType>("\"datetime\"").is_err());
 }
