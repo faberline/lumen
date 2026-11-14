@@ -125,3 +125,48 @@ fn sparse_high_delta_does_not_hide_middle_live_scalar_overlays() {
     hash.forward.insert(2, 2);
     assert_eq!(hash.hash_at(2), Some(2));
 }
+
+fn boolean_field_spec() -> crate::shared_kernel::types::schema::FieldSpec {
+    use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
+    FieldSpec {
+        field_type: FieldType::Boolean,
+        analyzer: None,
+        multi: None,
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    }
+}
+
+#[test]
+fn boolean_schema_is_accepted_by_validate_schema() {
+    use crate::shared_kernel::types::schema::Analyzer;
+    let mut schema = BTreeMap::new();
+    schema.insert("flag".to_string(), boolean_field_spec());
+    crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect("a boolean field is a declared type");
+
+    let mut bad = boolean_field_spec();
+    bad.analyzer = Some(Analyzer::WhitespaceLower);
+    schema.insert("bad".to_string(), bad);
+    let err = crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect_err("a boolean field takes no analyzer");
+    assert!(
+        format!("{err:#}").contains("does not accept an analyzer"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[test]
+fn boolean_spec_is_refused_with_not_indexed_yet() {
+    let err = match super::FieldIndex::from_spec(&boolean_field_spec()) {
+        Ok(_) => panic!("a boolean field has no index yet"),
+        Err(err) => err,
+    };
+    assert!(
+        format!("{err:#}").contains("not indexed yet"),
+        "unexpected error: {err:#}"
+    );
+}

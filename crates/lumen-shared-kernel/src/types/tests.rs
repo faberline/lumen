@@ -1,7 +1,7 @@
 use crate::types::document::FieldValue;
 use crate::types::query::{MatchOp, MatchQuery, QueryNode};
 use crate::types::schema::{
-    Analyzer, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
+    Analyzer, FieldCapabilities, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
 };
 
 fn fs(t: FieldType) -> FieldSpec {
@@ -140,4 +140,33 @@ fn facetable_true_round_trips() {
     assert_eq!(value["facetable"], serde_json::json!(true));
     let back: FieldSpec = serde_json::from_value(value).unwrap();
     assert_eq!(back, spec);
+}
+
+#[test]
+fn boolean_field_type_parses_and_is_exact_only() {
+    assert_eq!(
+        serde_json::from_str::<FieldType>("\"boolean\"").unwrap(),
+        FieldType::Boolean
+    );
+    assert!(FieldType::ALL.contains(&FieldType::Boolean));
+    assert_eq!(FieldType::ALL.len(), 7);
+    assert_eq!(
+        FieldType::Boolean.capabilities(),
+        FieldCapabilities {
+            bm25: false,
+            exact: true,
+            prefix: false,
+            range: false,
+            sort: false,
+            set_membership: false,
+            vector_search: false,
+            hamming: false,
+        }
+    );
+}
+
+#[test]
+fn unknown_field_type_name_is_still_refused_next_to_boolean() {
+    assert!(serde_json::from_str::<FieldType>("\"booleans\"").is_err());
+    assert!(serde_json::from_str::<FieldType>("\"bool\"").is_err());
 }

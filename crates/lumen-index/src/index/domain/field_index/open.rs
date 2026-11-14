@@ -95,6 +95,7 @@ impl FieldIndex {
                     tombstones: RoaringBitmap::new(),
                 }))
             }
+            FieldType::Boolean => Err(anyhow!("field type `boolean` is not indexed yet")),
             FieldType::Hash => Ok(FieldIndex::Hash(HashIndex {
                 tombstones: RoaringBitmap::new(),
                 forward: FastHashMap::default(),

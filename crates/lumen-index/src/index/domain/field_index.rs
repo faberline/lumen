@@ -80,6 +80,7 @@ impl FieldIndex {
                 }
             }
             FieldType::Hash => FieldIndex::Hash(HashIndex::default()),
+            FieldType::Boolean => return Err(anyhow!("field type `boolean` is not indexed yet")),
         })
     }
 

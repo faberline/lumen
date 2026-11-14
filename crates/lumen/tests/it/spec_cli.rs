@@ -310,7 +310,7 @@ fn field_catalog_matches_the_real_enums() {
     // Exactly the FieldType enum variants (lowercase wire form), in order.
     assert_eq!(
         types,
-        ["text", "keyword", "number", "set", "vector", "hash"],
+        ["text", "keyword", "number", "set", "vector", "hash", "boolean"],
         "field types track the FieldType enum"
     );
 
@@ -1215,6 +1215,7 @@ fn dx_field_catalog_matches_runtime_field_capabilities() {
             FieldType::Set => "set",
             FieldType::Vector => "vector",
             FieldType::Hash => "hash",
+            FieldType::Boolean => "boolean",
         };
         let entry = fields
             .iter()
@@ -1824,3 +1825,28 @@ fn operator_tls_ownership_is_consistently_documented_across_surfaces() {
     }
 }
 // CODEGEN-END
+
+#[test]
+fn dx_field_catalog_lists_boolean_exact_only() {
+    let catalog = dx::field_catalog();
+    let entry = catalog["field_types"]
+        .as_array()
+        .expect("field catalogue is an array")
+        .iter()
+        .find(|entry| entry["type"] == "boolean")
+        .expect("catalogue lists boolean");
+    let operations = &entry["operations"];
+    assert_eq!(operations["exact"], true);
+    for op in [
+        "bm25",
+        "prefix",
+        "range",
+        "sort",
+        "set_membership",
+        "vector_search",
+        "hamming",
+    ] {
+        assert_eq!(operations[op], false, "boolean must not allow {op}");
+    }
+    assert_eq!(entry["queries"], serde_json::json!(["term"]));
+}

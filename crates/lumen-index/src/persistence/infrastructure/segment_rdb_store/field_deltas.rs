@@ -259,6 +259,9 @@ pub(super) fn write_field_deltas(
                         .collect::<Result<_>>()?;
                     write_number_segment(&root.join(&segment_path), sequence, &values)?;
                 }
+                crate::shared_kernel::types::schema::FieldType::Boolean => {
+                    return Err(anyhow!("field type `boolean` is not indexed yet"));
+                }
                 crate::shared_kernel::types::schema::FieldType::Hash => {
                     let values: Vec<_> = rows
                         .iter()
