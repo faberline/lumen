@@ -2,12 +2,14 @@
 //! writes the report.
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 
 use crate::cli::RunArgs;
 use crate::lifecycle::CollectionLifecycle;
 use crate::report::{summary, write_report, Mode, PhaseResult, PhaseStatus, Report};
+use crate::spawn::{LumenChild, SharedChild, SpawnCleanup};
 use crate::visible_version::VisibleVersion;
 use crate::writes::WritesAndMasking;
 
@@ -114,8 +116,8 @@ impl Cleanup for NoCleanup {
     }
 }
 
-/// The default phase names of a mode.
-fn default_phase_names(mode: Mode) -> Vec<&'static str> {
+/// The default phase names of a mode. A spawned child gets the same names in this slice.
+fn default_phase_names(mode: Mode, _spawned: bool) -> Vec<&'static str> {
     match mode {
         Mode::Functional => vec![
             "endpoint_configured",
@@ -128,9 +130,9 @@ fn default_phase_names(mode: Mode) -> Vec<&'static str> {
 }
 
 /// The phase list for a run: the mode's default list, or the names given by `--phases`.
-fn phase_list(mode: Mode, args: &RunArgs) -> Result<Vec<Box<dyn Phase>>> {
+fn phase_list(mode: Mode, args: &RunArgs, spawned: bool) -> Result<Vec<Box<dyn Phase>>> {
     let names: Vec<String> = match &args.phases {
-        None => default_phase_names(mode)
+        None => default_phase_names(mode, spawned)
             .into_iter()
             .map(str::to_string)
             .collect(),
@@ -160,13 +162,48 @@ fn phase_list(mode: Mode, args: &RunArgs) -> Result<Vec<Box<dyn Phase>>> {
         .collect()
 }
 
-/// Runs one mode, writes `report.json` and prints the summary. Returns whether the run passed.
-pub(super) fn execute(mode: Mode, args: RunArgs) -> Result<bool> {
-    let phases = phase_list(mode, &args)?;
-    let outcome = run_phases(mode, &args, &phases, &[], &NoCleanup)?;
+/// Writes `report.json` for one run, prints the summary and returns whether the run passed.
+fn finish(args: &RunArgs, outcome: Outcome) -> Result<bool> {
     let report_path = write_report(&args.artifact_dir, &outcome.report)?;
     println!("{}", summary(&outcome.report, &report_path));
     Ok(outcome.passed)
+}
+
+/// Runs one mode, writes `report.json` and prints the summary. Returns whether the run passed.
+/// With `--spawn` it starts a `lumen serve` child, runs the phases against it and cleans up.
+pub(super) fn execute(mode: Mode, args: RunArgs) -> Result<bool> {
+    let Some(binary) = args.spawn.clone() else {
+        let phases = phase_list(mode, &args, false)?;
+        let outcome = run_phases(mode, &args, &phases, &[], &NoCleanup)?;
+        return finish(&args, outcome);
+    };
+
+    std::fs::create_dir_all(&args.artifact_dir)?;
+    let child = LumenChild::new(&binary, &args.artifact_dir.join("spawn-data"))?;
+    let shared: SharedChild = Arc::new(Mutex::new(child));
+    let cleanup = SpawnCleanup(shared.clone());
+    let started = shared
+        .lock()
+        .map_err(|_| anyhow!("child lock poisoned"))?
+        .start();
+    if let Err(err) = started {
+        let _ = cleanup.run();
+        return Err(err);
+    }
+    let mut run_args = args.clone();
+    run_args.endpoint = shared
+        .lock()
+        .map_err(|_| anyhow!("child lock poisoned"))?
+        .endpoint();
+    let phases = match phase_list(mode, &run_args, true) {
+        Ok(phases) => phases,
+        Err(err) => {
+            let _ = cleanup.run();
+            return Err(err);
+        }
+    };
+    let outcome = run_phases(mode, &run_args, &phases, &[], &cleanup)?;
+    finish(&args, outcome)
 }
 
 #[cfg(test)]
@@ -223,6 +260,7 @@ mod tests {
             memory_limit: "unknown".into(),
             seed: 1,
             phases: None,
+            spawn: None,
         }
     }
 
@@ -321,7 +359,24 @@ mod tests {
     #[test]
     fn functional_default_list_has_all_phases() {
         assert_eq!(
-            default_phase_names(Mode::Functional),
+            default_phase_names(Mode::Functional, false),
+            [
+                "endpoint_configured",
+                "collection_lifecycle",
+                "writes_and_masking",
+                "visible_version"
+            ]
+        );
+    }
+
+    #[test]
+    fn default_phases_unchanged_by_spawn_flag() {
+        assert_eq!(
+            default_phase_names(Mode::Functional, true),
+            default_phase_names(Mode::Functional, false)
+        );
+        assert_eq!(
+            default_phase_names(Mode::Functional, true),
             [
                 "endpoint_configured",
                 "collection_lifecycle",
