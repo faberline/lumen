@@ -140,6 +140,15 @@ release. Search v2 is outside this release, and its activation remains
   before commit, after commit, before apply, and after apply. Acknowledged
   values survive restart, rejected values do not appear, and in-memory startup
   and status identify the mode as ephemeral.
+- Evidence so far: Deterministic tests in `lumen-index` cover the embedded
+  AOF backend (`acknowledged_writes_are_in_the_aof_and_survive_a_cold_restart`,
+  `aof_persist_failure_is_rejected_and_absent_after_cold_restart`,
+  `frame_written_before_apply_is_replayed_exactly_once`) and the Raft backend
+  (`raft_acknowledged_write_is_applied_and_survives_a_cold_restart`,
+  `raft_uncommitted_write_is_rejected_and_absent_after_a_cold_restart`). The
+  embedded guarantee is process-crash durability, not power-loss durability.
+  Other persistent backends and in-memory startup status are not covered by
+  these tests.
 - Tracking: [Milestone #22](https://github.com/faberline/lumen/milestone/22).
 
 ### Idempotent write replay
