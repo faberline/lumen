@@ -338,6 +338,30 @@ spec:
                         nullable: true
                     type: object
                 type: object
+              runtime:
+                description: Typed runtime settings. A field that is not set keeps its default.
+                nullable: true
+                properties:
+                  bootstrapMaxBytesPerSec:
+                    description: Cap on bootstrap transfer in bytes per second (`LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC`).
+                    type: integer
+                    minimum: 0.0
+                    nullable: true
+                  graceSecs:
+                    description: Grace period in seconds (`LUMEN_GRACE_SECS`).
+                    type: integer
+                    minimum: 0.0
+                    nullable: true
+                  otlpEndpoint:
+                    description: OTLP endpoint for exported telemetry (`LUMEN_OTLP_ENDPOINT`).
+                    nullable: true
+                    type: string
+                  snapshotSecs:
+                    description: Seconds between snapshots (`LUMEN_SNAPSHOT_SECS`).
+                    type: integer
+                    minimum: 0.0
+                    nullable: true
+                type: object
               serviceAccountAnnotations:
                 additionalProperties:
                   type: string
@@ -967,6 +991,30 @@ spec:
                             nullable: true
                         type: object
                     type: object
+                  runtime:
+                    description: Typed runtime settings. A field that is not set keeps its default.
+                    nullable: true
+                    properties:
+                      bootstrapMaxBytesPerSec:
+                        description: Cap on bootstrap transfer in bytes per second (`LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC`).
+                        type: integer
+                        minimum: 0.0
+                        nullable: true
+                      graceSecs:
+                        description: Grace period in seconds (`LUMEN_GRACE_SECS`).
+                        type: integer
+                        minimum: 0.0
+                        nullable: true
+                      otlpEndpoint:
+                        description: OTLP endpoint for exported telemetry (`LUMEN_OTLP_ENDPOINT`).
+                        nullable: true
+                        type: string
+                      snapshotSecs:
+                        description: Seconds between snapshots (`LUMEN_SNAPSHOT_SECS`).
+                        type: integer
+                        minimum: 0.0
+                        nullable: true
+                    type: object
                   serviceAccountAnnotations:
                     additionalProperties:
                       type: string
@@ -1102,6 +1150,30 @@ spec:
                     namespace:
                       description: 'The namespace the `Lumen` is materialized into. The namespace must already exist: creating namespaces from a CR would make the operator''s ClusterRole a namespace-creation privilege, and namespace lifecycle (quotas, labels, Workload Identity bindings) belongs to whatever provisions the cluster.'
                       type: string
+                    runtime:
+                      description: Typed runtime settings for this instance. A field set here replaces the same field of [`LumenFleetSpec::defaults`]; a field left unset keeps the default.
+                      nullable: true
+                      properties:
+                        bootstrapMaxBytesPerSec:
+                          description: Cap on bootstrap transfer in bytes per second (`LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC`).
+                          type: integer
+                          minimum: 0.0
+                          nullable: true
+                        graceSecs:
+                          description: Grace period in seconds (`LUMEN_GRACE_SECS`).
+                          type: integer
+                          minimum: 0.0
+                          nullable: true
+                        otlpEndpoint:
+                          description: OTLP endpoint for exported telemetry (`LUMEN_OTLP_ENDPOINT`).
+                          nullable: true
+                          type: string
+                        snapshotSecs:
+                          description: Seconds between snapshots (`LUMEN_SNAPSHOT_SECS`).
+                          type: integer
+                          minimum: 0.0
+                          nullable: true
+                      type: object
                     spec:
                       description: |-
                         A JSON Merge Patch (RFC 7386) applied over [`LumenFleetSpec::defaults`] — the app team's knowledge: this tenant's CPU/memory request, its disk size, the name of its credential source. A `null` value removes an inherited field.

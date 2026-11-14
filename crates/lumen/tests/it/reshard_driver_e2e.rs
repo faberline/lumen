@@ -241,6 +241,7 @@ fn bucket_of(external_id: &str) -> u32 {
 
 fn initial_lumen(max_shard_bytes: Option<u64>, blocking_condition: Option<&str>) -> Lumen {
     let spec = LumenSpec {
+        runtime: None,
         image: "lumen:latest".into(),
         image_pull_policy: None,
         image_pull_secrets: Vec::new(),
