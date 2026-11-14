@@ -155,6 +155,23 @@ async fn version_reports_build_provenance() {
 }
 
 #[tokio::test]
+async fn version_reports_compatibility_capabilities() {
+    let s = server();
+    let resp = s.get("/version").await;
+    resp.assert_status_ok();
+    let body: Value = resp.json();
+    assert_eq!(
+        body["binary_capabilities"],
+        serde_json::json!(["search_facets_v1"])
+    );
+    assert_eq!(body["active_capabilities"], body["binary_capabilities"]);
+    assert_eq!(
+        body["effective_compatibility_version"].as_str(),
+        Some("0.1")
+    );
+}
+
+#[tokio::test]
 async fn create_collection_and_index_keyword_then_search() {
     let s = server();
 
