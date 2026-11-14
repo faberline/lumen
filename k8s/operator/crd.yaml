@@ -1220,6 +1220,9 @@ spec:
                       type: string
                     namespace:
                       type: string
+                    specHash:
+                      description: Lowercase hex SHA-256 of the canonical merged spec, set only for `Created` and `Applied` entries.
+                      type: string
                     state:
                       description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `Orphaned` | `Pruned`.'
                       type: string
@@ -1229,6 +1232,11 @@ spec:
                   - state
                   type: object
                 type: array
+              materializedInstances:
+                default: 0
+                description: 'How many entries are materialized: state `Created` or `Applied`.'
+                format: int32
+                type: integer
               message:
                 default: ''
                 description: Human-readable summary of the last pass.
@@ -1237,6 +1245,21 @@ spec:
                 default: 0
                 description: The `.metadata.generation` this status reflects.
                 format: int64
+                type: integer
+              orphanedInstances:
+                default: 0
+                description: 'How many instances this fleet no longer declares and kept: state `Orphaned`.'
+                format: int32
+                type: integer
+              prunedInstances:
+                default: 0
+                description: 'How many instances this fleet no longer declares and removed: state `Pruned`.'
+                format: int32
+                type: integer
+              rejectedInstances:
+                default: 0
+                description: 'How many entries the fleet rejected: state `Rejected`.'
+                format: int32
                 type: integer
             type: object
         required:
