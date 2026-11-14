@@ -167,6 +167,7 @@ impl SegmentRdbStore {
                 reused: BTreeSet::new(),
                 initial_sparse: BTreeSet::new(),
                 field_deltas: Arc::new(BTreeMap::new()),
+                journal_complete: std::collections::BTreeSet::new(),
                 record_cut: None,
             };
             let delta_decode_started = self.recovery_profile.enabled().then(Instant::now);

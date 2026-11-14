@@ -106,6 +106,8 @@ pub(crate) struct CheckpointCapture {
     /// A new empty base plus the complete frozen journal forms this first
     /// generation. These collections do not reuse any predecessor catalog.
     pub initial_sparse: BTreeSet<String>,
+    /// Collections whose journal was complete since empty at freeze; they always need bind work.
+    pub journal_complete: BTreeSet<String>,
     /// Sparse rows captured from a reusable base.  Frozen-write retries share
     /// this immutable payload instead of cloning every row and value.
     pub field_deltas: std::sync::Arc<BTreeMap<String, CheckpointDeltas>>,
@@ -134,8 +136,36 @@ impl CheckpointCapture {
             frozen_changes: self.frozen_changes.clone(),
             reused: self.reused.clone(),
             initial_sparse: self.initial_sparse.clone(),
+            journal_complete: self.journal_complete.clone(),
             field_deltas: self.field_deltas.clone(),
             record_cut: self.record_cut.clone(),
         }
+    }
+
+    /// True when the bind loop must visit `name`. Judged only from the capture,
+    /// never from the live collection: a collection that is reused and clean
+    /// needs no bind work.
+    pub(crate) fn needs_bind(&self, name: &str) -> bool {
+        !self.reused.contains(name)
+            || self.prepared.contains_key(name)
+            || self.prepared_deltas.contains_key(name)
+            || self.prepared_compactions.contains_key(name)
+            || self
+                .scalar_publications
+                .get(name)
+                .is_some_and(|fields| !fields.is_empty())
+            || self
+                .scalar_retire
+                .get(name)
+                .is_some_and(|fields| !fields.is_empty())
+            || self
+                .field_dirty
+                .get(name)
+                .is_some_and(|fields| fields.values().any(|rows| !rows.is_empty()))
+            || self
+                .frozen_changes
+                .get(name)
+                .is_some_and(|frozen| frozen.rows().next().is_some())
+            || self.journal_complete.contains(name)
     }
 }
