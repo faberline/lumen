@@ -18,6 +18,7 @@
 pub mod backup;
 pub mod identity;
 pub mod monitoring;
+pub mod restart_hash;
 pub mod serving_config;
 pub mod serving_extra_env;
 pub mod serving_statefulset;
