@@ -1,9 +1,10 @@
 use serde_json::{json, Value};
 
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
+use crate::domain::lumen_fleet::status::{canonical_json, project_status, spec_hash, status_patch};
 use crate::domain::lumen_fleet::{
-    FleetInstance, LumenFleet, LumenFleetSpec, PlanOutcome, PlannedInstance, PrunePolicy,
-    FLEET_LABEL,
+    FleetEntryStatus, FleetInstance, LumenFleet, LumenFleetSpec, LumenFleetStatus, PlanOutcome,
+    PlannedInstance, PrunePolicy, FLEET_LABEL,
 };
 use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::LumenSpec;
@@ -338,4 +339,169 @@ fn the_spec_patch_still_merges_as_before_with_runtime_present() {
         "{}",
         rejection(&planned[0])
     );
+}
+
+fn status_entry(state: &str, message: &str) -> FleetEntryStatus {
+    FleetEntryStatus {
+        namespace: "team-x".to_string(),
+        name: "search".to_string(),
+        state: state.to_string(),
+        message: message.to_string(),
+        spec_hash: String::new(),
+    }
+}
+
+fn four_instances() -> Vec<FleetInstance> {
+    vec![
+        instance("team-a", None),
+        instance("team-b", None),
+        instance("team-c", None),
+        instance("team-d", None),
+    ]
+}
+
+#[test]
+fn counts_match_a_mixed_entry_list() {
+    let planned = plan(&fleet(four_instances()));
+    let entries = vec![
+        status_entry("Created", ""),
+        status_entry("Applied", ""),
+        status_entry("Rejected", "bad"),
+        status_entry("Orphaned", ""),
+        status_entry("Pruned", ""),
+        status_entry("NamespaceMissing", ""),
+    ];
+    let status = project_status(&planned, entries, 2);
+    assert_eq!(status.desired_instances, 4);
+    assert_eq!(status.materialized_instances, 2);
+    assert_eq!(status.applied_instances, 2);
+    assert_eq!(status.rejected_instances, 1);
+    assert_eq!(status.orphaned_instances, 1);
+    assert_eq!(status.pruned_instances, 1);
+    assert_eq!(
+        status.message,
+        "2/4 instances converged, 1 rejected, 1 orphaned, 1 pruned"
+    );
+}
+
+#[test]
+fn a_zero_part_is_left_out_of_the_message() {
+    let planned = plan(&fleet(vec![instance("team-a", None)]));
+    let status = project_status(&planned, vec![status_entry("Applied", "")], 1);
+    assert_eq!(status.message, "1/1 instances converged");
+}
+
+#[test]
+fn spec_hash_is_stable_for_equal_specs() {
+    let a = spec_hash(&json!({"image": "x", "serving": {"cpu": "2"}}));
+    let b = spec_hash(&json!({"image": "x", "serving": {"cpu": "2"}}));
+    assert_eq!(a, b);
+    assert_eq!(a.len(), 64);
+    assert!(a
+        .chars()
+        .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)));
+    assert_eq!(
+        spec_hash(&json!({})),
+        "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    );
+}
+
+#[test]
+fn spec_hash_changes_with_an_override() {
+    let base = plan(&fleet(vec![instance("team-a", None)]));
+    let over = plan(&fleet(vec![instance(
+        "team-a",
+        Some(json!({"serving": {"cpu": "4"}})),
+    )]));
+    assert_ne!(spec_hash(ready(&base[0])), spec_hash(ready(&over[0])));
+}
+
+#[test]
+fn spec_hash_ignores_json_key_order() {
+    let a: Value = serde_json::from_str(r#"{"a":1,"b":{"x":1,"y":2}}"#).unwrap();
+    let b: Value = serde_json::from_str(r#"{"b":{"y":2,"x":1},"a":1}"#).unwrap();
+    assert_eq!(spec_hash(&a), spec_hash(&b));
+    assert_eq!(canonical_json(&a), r#"{"a":1,"b":{"x":1,"y":2}}"#);
+    assert_eq!(canonical_json(&b), r#"{"a":1,"b":{"x":1,"y":2}}"#);
+}
+
+#[test]
+fn an_old_status_without_the_new_fields_reads_as_zero() {
+    let status: LumenFleetStatus = serde_json::from_value(json!({
+        "observedGeneration": 1,
+        "desiredInstances": 2,
+        "appliedInstances": 1,
+        "message": "x",
+    }))
+    .unwrap();
+    assert_eq!(
+        (
+            status.materialized_instances,
+            status.rejected_instances,
+            status.orphaned_instances,
+            status.pruned_instances,
+        ),
+        (0, 0, 0, 0)
+    );
+    let entry: FleetEntryStatus = serde_json::from_value(json!({
+        "namespace": "team-x",
+        "name": "search",
+        "state": "Applied",
+    }))
+    .unwrap();
+    assert_eq!(entry.spec_hash, "");
+}
+
+#[test]
+fn spec_hash_is_omitted_for_states_without_one() {
+    let value = serde_json::to_value(status_entry("ApplyFailed", "boom")).unwrap();
+    assert!(value.get("specHash").is_none());
+}
+
+#[test]
+fn a_repaired_entry_leaves_no_stale_failure() {
+    let planned = plan(&fleet(vec![instance("team-x", None)]));
+
+    let pass1 = project_status(&planned, vec![status_entry("ApplyFailed", "boom")], 1);
+    assert_eq!(pass1.materialized_instances, 0);
+    assert_eq!(pass1.message, "0/1 instances converged");
+
+    let repaired = FleetEntryStatus {
+        spec_hash: spec_hash(&json!({})),
+        ..status_entry("Applied", "")
+    };
+    let pass2 = project_status(&planned, vec![repaired], 2);
+    let patch2 = status_patch(&pass2);
+    assert_eq!(patch2["status"]["materializedInstances"], json!(1));
+    assert_eq!(
+        patch2["status"]["message"],
+        json!("1/1 instances converged")
+    );
+    let rows = patch2["status"]["entries"].as_array().unwrap();
+    assert!(rows
+        .iter()
+        .all(|row| !row["message"].as_str().unwrap_or("").contains("boom")));
+}
+
+/// Negative control: a rejected entry is planned but never materialized.
+#[test]
+fn a_rejected_entry_alone_is_not_materialized() {
+    let planned = vec![PlannedInstance {
+        namespace: "team-x".to_string(),
+        name: "search".to_string(),
+        outcome: PlanOutcome::Rejected("bad spec".to_string()),
+    }];
+    let status = project_status(&planned, vec![status_entry("Rejected", "bad spec")], 1);
+    assert_eq!(status.materialized_instances, 0);
+    assert_eq!(status.rejected_instances, 1);
+}
+
+/// Review fix: an empty pass must send `entries: []`, or a JSON merge patch keeps old rows.
+#[test]
+fn an_empty_pass_clears_the_old_entries() {
+    let planned = plan(&fleet(vec![]));
+    let status = project_status(&planned, vec![], 2);
+    let patch = status_patch(&status);
+    assert_eq!(patch["status"]["entries"], json!([]));
+    assert_eq!(patch["status"]["message"], json!("0/0 instances converged"));
 }
