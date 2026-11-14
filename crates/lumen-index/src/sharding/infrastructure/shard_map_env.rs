@@ -110,6 +110,10 @@ pub fn check_fan_in_shard_count(map: &VirtualBucketShardMap, loaded_dirs: usize)
 /// ordinal`; this mirrors `raft_runtime::cluster::ClusterDims::pod_ordinal`/
 /// `shard_index`'s exact math (same `rsplit_once('-')` + `% shard_count`)
 /// so the two derivations can't drift apart.
+///
+/// `LUMEN_SHARD_INDEX` wins over the ordinal when it is set (non-blank),
+/// because a per-shard StatefulSet gives every pod ordinal `0..replicas-1`,
+/// so the ordinal no longer identifies the shard (#227).
 pub fn routed_pod_topology(shard_count: u32) -> Result<(String, u32)> {
     if shard_count == 0 {
         anyhow::bail!("shard_count must be > 0");
@@ -121,7 +125,28 @@ pub fn routed_pod_topology(shard_count: u32) -> Result<(String, u32)> {
     let ordinal: u32 = suffix
         .parse()
         .with_context(|| format!("POD_NAME ordinal '{suffix}' is not a u32"))?;
-    Ok((prefix.to_string(), ordinal % shard_count))
+    let idx = shard_index_from_env(shard_count)?.unwrap_or(ordinal % shard_count);
+    Ok((prefix.to_string(), idx))
+}
+
+/// Reads `LUMEN_SHARD_INDEX`: `Ok(None)` when unset or blank, otherwise the
+/// parsed index, which must be below `shard_count` (#227).
+fn shard_index_from_env(shard_count: u32) -> Result<Option<u32>> {
+    let raw = match std::env::var("LUMEN_SHARD_INDEX") {
+        Ok(raw) => raw,
+        Err(_) => return Ok(None),
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let n: u32 = trimmed
+        .parse()
+        .with_context(|| format!("LUMEN_SHARD_INDEX={raw:?} is not a valid u32"))?;
+    if n >= shard_count {
+        anyhow::bail!("LUMEN_SHARD_INDEX={n} is not below shard_count {shard_count}");
+    }
+    Ok(Some(n))
 }
 
 /// `Some(shard_count)` only when the operator-rendered `SHARD_COUNT` env is

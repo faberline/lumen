@@ -228,6 +228,100 @@ fn routed_pod_topology_rejects_zero_shard_count() {
 }
 
 #[test]
+fn routed_pod_topology_prefers_shard_index_env() {
+    // #227: a per-shard StatefulSet pod has ordinal 0 but belongs to
+    // shard 2; LUMEN_SHARD_INDEX wins over the ordinal.
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    unsafe {
+        std::env::set_var("POD_NAME", "search-s2-0");
+        std::env::set_var("LUMEN_SHARD_INDEX", "2");
+    }
+    assert_eq!(
+        routed_pod_topology(4).unwrap(),
+        ("search-s2".to_string(), 2)
+    );
+    unsafe {
+        std::env::remove_var("POD_NAME");
+        std::env::remove_var("LUMEN_SHARD_INDEX");
+    }
+}
+
+#[test]
+fn routed_pod_topology_shard_index_env_overrides_ordinal() {
+    // #227: ordinal 5 would map to shard 1 (5 % 4); the env var says 3.
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    unsafe {
+        std::env::set_var("POD_NAME", "search-5");
+        std::env::set_var("LUMEN_SHARD_INDEX", "3");
+    }
+    let (_, shard) = routed_pod_topology(4).unwrap();
+    assert_eq!(shard, 3);
+    unsafe {
+        std::env::remove_var("POD_NAME");
+        std::env::remove_var("LUMEN_SHARD_INDEX");
+    }
+}
+
+#[test]
+fn routed_pod_topology_ignores_unset_or_blank_shard_index_env() {
+    // #227: unset or blank LUMEN_SHARD_INDEX keeps `ordinal % shard_count`.
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    unsafe {
+        std::env::set_var("POD_NAME", "search-5");
+        std::env::remove_var("LUMEN_SHARD_INDEX");
+    }
+    let (_, shard) = routed_pod_topology(4).unwrap();
+    assert_eq!(shard, 1);
+    unsafe {
+        std::env::set_var("LUMEN_SHARD_INDEX", " ");
+    }
+    let (_, shard) = routed_pod_topology(4).unwrap();
+    assert_eq!(shard, 1);
+    unsafe {
+        std::env::remove_var("POD_NAME");
+        std::env::remove_var("LUMEN_SHARD_INDEX");
+    }
+}
+
+#[test]
+fn routed_pod_topology_rejects_shard_index_env_not_a_u32() {
+    // #227: a malformed LUMEN_SHARD_INDEX fails fast, naming the var.
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    unsafe {
+        std::env::set_var("POD_NAME", "search-0");
+        std::env::set_var("LUMEN_SHARD_INDEX", "abc");
+    }
+    let err = routed_pod_topology(4).unwrap_err();
+    assert!(
+        err.to_string().contains("LUMEN_SHARD_INDEX"),
+        "error should name LUMEN_SHARD_INDEX: {err}"
+    );
+    unsafe {
+        std::env::remove_var("POD_NAME");
+        std::env::remove_var("LUMEN_SHARD_INDEX");
+    }
+}
+
+#[test]
+fn routed_pod_topology_rejects_shard_index_env_out_of_range() {
+    // #227: LUMEN_SHARD_INDEX must be below shard_count (4 is out of range for 4 shards).
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    unsafe {
+        std::env::set_var("POD_NAME", "search-0");
+        std::env::set_var("LUMEN_SHARD_INDEX", "4");
+    }
+    let err = routed_pod_topology(4).unwrap_err();
+    assert!(
+        err.to_string().contains('4'),
+        "error should name the bad index: {err}"
+    );
+    unsafe {
+        std::env::remove_var("POD_NAME");
+        std::env::remove_var("LUMEN_SHARD_INDEX");
+    }
+}
+
+#[test]
 fn routed_shard_count_from_env_none_when_unset_or_single_shard() {
     let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     unsafe {
