@@ -74,7 +74,7 @@ impl Collection {
         Ok(Self {
             collection_generation: 0,
             data_version: 1,
-            checkpoint_lineage: None,
+            checkpoint_bound: false,
             checkpoint_lineage_schema: None,
             field_dirty: BTreeMap::new(),
             next_field_dirty_revision: 0,
