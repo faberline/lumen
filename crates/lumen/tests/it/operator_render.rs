@@ -104,6 +104,8 @@ fn dev_spec() -> LumenSpec {
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     }
 }
 
@@ -136,6 +138,8 @@ fn prod_spec() -> LumenSpec {
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     }
 }
 
