@@ -117,6 +117,8 @@ fn pod_metrics_urls_covers_every_storage_pod_by_headless_dns() {
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     };
     let mut lumen = Lumen::new("search", spec);
     lumen.metadata.namespace = Some("acme".to_string());

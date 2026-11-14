@@ -152,6 +152,8 @@ pub(super) fn serving_env(lumen: &Lumen) -> Vec<Value> {
     if let Some(limit) = lumen.spec.body_limit_bytes {
         env.push(json!({ "name": "LUMEN_BODY_LIMIT_BYTES", "value": limit.to_string() }));
     }
+    // User entries come last (#41); their rendering lives in `serving_extra_env`.
+    env.extend(crate::application::render::serving_extra_env::extra_env_entries(lumen));
     env
 }
 
