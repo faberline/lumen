@@ -65,7 +65,7 @@ const REGISTRY: &[GatedTarget] = &[
     GatedTarget {
         path: "tests/it/acceptance_spawn_restart.rs",
         gate: r#"#![cfg(feature = "acceptance")]"#,
-        required_features: &[],
+        required_features: &["acceptance"],
     },
     GatedTarget {
         path: "tests/it/access_render_cli.rs",
@@ -179,7 +179,7 @@ const DIRECT_FEATURES: &[&str] = &["operator", "delegated-auth"];
 /// Features the maintained CONTRIBUTING row does not enable. Their cases run
 /// only from commands that name them, which the command check holds to the
 /// gate.
-const NAMED_COMMAND_ONLY_FEATURES: &[&str] = &["raft-wal"];
+const NAMED_COMMAND_ONLY_FEATURES: &[&str] = &["raft-wal", "acceptance"];
 
 /// Files that run or document test commands, relative to the repo root.
 fn command_files(root: &Path) -> Vec<PathBuf> {
