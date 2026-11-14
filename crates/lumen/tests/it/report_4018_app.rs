@@ -49,6 +49,8 @@ fn fixture(replicas_per_shard: u32) -> Lumen {
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     };
     let mut lumen = Lumen::new("search", spec);
     lumen.metadata = ObjectMeta {

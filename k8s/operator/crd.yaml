@@ -107,6 +107,55 @@ spec:
                 type: integer
                 minimum: 0.0
                 nullable: true
+              extraArgs:
+                description: Flag-only extra arguments for `lumen serve`. Each must start with `--` and contain no whitespace. The operator sets no flags today; collisions are checked if it starts to.
+                items:
+                  type: string
+                type: array
+              extraEnv:
+                description: 'Extra environment for the serving container, after the operator-owned entries. Each entry sets exactly one of `value`, `secretKeyRef` or `configMapKeyRef`. A Secret or ConfigMap value is never read or copied: it reaches the pod only as a `valueFrom` reference.'
+                items:
+                  description: One entry of [`LumenSpec::extra_env`]. Exactly one source must be set.
+                  properties:
+                    configMapKeyRef:
+                      description: The value of `key` in a ConfigMap of the instance's own namespace.
+                      nullable: true
+                      properties:
+                        key:
+                          description: The key inside that Secret or ConfigMap.
+                          type: string
+                        name:
+                          description: The Secret or ConfigMap name, in the instance's own namespace.
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    name:
+                      description: The environment variable name. Letters, digits and underscores only, not starting with a digit. Operator-owned prefixes are refused.
+                      type: string
+                    secretKeyRef:
+                      description: The value of `key` in a Secret of the instance's own namespace.
+                      nullable: true
+                      properties:
+                        key:
+                          description: The key inside that Secret or ConfigMap.
+                          type: string
+                        name:
+                          description: The Secret or ConfigMap name, in the instance's own namespace.
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    value:
+                      description: A literal value. Mutually exclusive with the two reference fields.
+                      nullable: true
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               image:
                 description: Serving container image, e.g. `lumen:latest`. Required.
                 type: string
@@ -711,6 +760,55 @@ spec:
                     type: integer
                     minimum: 0.0
                     nullable: true
+                  extraArgs:
+                    description: Flag-only extra arguments for `lumen serve`. Each must start with `--` and contain no whitespace. The operator sets no flags today; collisions are checked if it starts to.
+                    items:
+                      type: string
+                    type: array
+                  extraEnv:
+                    description: 'Extra environment for the serving container, after the operator-owned entries. Each entry sets exactly one of `value`, `secretKeyRef` or `configMapKeyRef`. A Secret or ConfigMap value is never read or copied: it reaches the pod only as a `valueFrom` reference.'
+                    items:
+                      description: One entry of [`LumenSpec::extra_env`]. Exactly one source must be set.
+                      properties:
+                        configMapKeyRef:
+                          description: The value of `key` in a ConfigMap of the instance's own namespace.
+                          nullable: true
+                          properties:
+                            key:
+                              description: The key inside that Secret or ConfigMap.
+                              type: string
+                            name:
+                              description: The Secret or ConfigMap name, in the instance's own namespace.
+                              type: string
+                          required:
+                          - key
+                          - name
+                          type: object
+                        name:
+                          description: The environment variable name. Letters, digits and underscores only, not starting with a digit. Operator-owned prefixes are refused.
+                          type: string
+                        secretKeyRef:
+                          description: The value of `key` in a Secret of the instance's own namespace.
+                          nullable: true
+                          properties:
+                            key:
+                              description: The key inside that Secret or ConfigMap.
+                              type: string
+                            name:
+                              description: The Secret or ConfigMap name, in the instance's own namespace.
+                              type: string
+                          required:
+                          - key
+                          - name
+                          type: object
+                        value:
+                          description: A literal value. Mutually exclusive with the two reference fields.
+                          nullable: true
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
                   image:
                     description: Serving container image, e.g. `lumen:latest`. Required.
                     type: string

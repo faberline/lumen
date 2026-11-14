@@ -81,6 +81,8 @@ fn hpa_test_spec(
         body_limit_bytes: None,
         access: None,
         runtime: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     }
 }
 

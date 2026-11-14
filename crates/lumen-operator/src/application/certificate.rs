@@ -196,6 +196,8 @@ mod tests {
             body_limit_bytes: None,
             access: None,
             runtime: None,
+            extra_env: Vec::new(),
+            extra_args: Vec::new(),
         };
         let mut lumen = Lumen::new("lumen", spec);
         lumen.metadata.namespace = Some("lumen".to_string());

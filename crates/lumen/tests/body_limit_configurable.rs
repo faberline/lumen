@@ -53,6 +53,8 @@ fn test_spec() -> LumenSpec {
         body_limit_bytes: None,
         access: None,
         runtime: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     }
 }
 
