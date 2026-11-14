@@ -272,3 +272,147 @@ fn background_merge_with_the_same_root_keeps_idle_collections_reusable() {
     );
     assert!(reused(&engine, new_root.path()));
 }
+
+/// Runs one checkpoint from `from` into a new root. The returned directory must
+/// stay alive while the next save reuses it.
+fn save(
+    engine: &Engine,
+    from: Option<&std::path::Path>,
+    seq: u64,
+) -> (
+    crate::index::application::checkpoint_capture::CheckpointCapture,
+    tempfile::TempDir,
+) {
+    let frozen = engine.freeze_checkpoint_collections(from).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut capture = frozen.write(dir.path(), seq).unwrap();
+    engine
+        .bind_checkpoint_origins(dir.path(), &mut capture)
+        .unwrap();
+    (capture, dir)
+}
+
+fn set_visits(engine: &Engine, value: usize) {
+    engine.state.write().unwrap().checkpoint_bind_visits = value;
+}
+
+fn visits(engine: &Engine) -> usize {
+    engine.state.read().unwrap().checkpoint_bind_visits
+}
+
+fn frozen_len(engine: &Engine, name: &str) -> usize {
+    engine.state.read().unwrap().collections[name]
+        .change_journal
+        .frozen_len()
+}
+
+#[test]
+fn bind_visits_only_dirty_collections_not_idle_ones() {
+    let mut counts = Vec::new();
+    for n in [4usize, 64] {
+        let engine = Engine::new();
+        for i in 0..n {
+            let name = format!("idle-{i}");
+            engine
+                .create_collection(&name, build_users_schema())
+                .unwrap();
+            index_doc(&engine, &name, "doc");
+        }
+        engine
+            .create_collection("hot", build_users_schema())
+            .unwrap();
+        index_doc(&engine, "hot", "doc");
+        let (_first_capture, first) = save(&engine, None, 1);
+        set_visits(&engine, 0);
+        index_doc(&engine, "hot", "extra");
+        let (_second_capture, _second) = save(&engine, Some(first.path()), 2);
+        counts.push(visits(&engine));
+    }
+    assert_eq!(counts[0], counts[1]);
+    assert_eq!(counts[1], 1);
+}
+
+#[test]
+fn idle_collection_frozen_batches_do_not_accumulate() {
+    let engine = Engine::new();
+    engine
+        .create_collection("idle", build_users_schema())
+        .unwrap();
+    engine
+        .create_collection("hot", build_users_schema())
+        .unwrap();
+    index_doc(&engine, "idle", "doc");
+    index_doc(&engine, "hot", "doc");
+    let (_capture, first) = save(&engine, None, 1);
+    assert_eq!(frozen_len(&engine, "idle"), 0);
+    let mut roots = vec![first];
+    for seq in 2..=4u64 {
+        index_doc(&engine, "hot", &format!("doc{seq}"));
+        let (_capture, next) = save(&engine, Some(roots.last().unwrap().path()), seq);
+        assert_eq!(frozen_len(&engine, "idle"), 0);
+        roots.push(next);
+    }
+}
+
+#[test]
+fn idle_collection_is_still_linked_after_three_saves_and_never_visited() {
+    let engine = Engine::new();
+    engine
+        .create_collection("idle", build_users_schema())
+        .unwrap();
+    engine
+        .create_collection("hot", build_users_schema())
+        .unwrap();
+    index_doc(&engine, "idle", "doc");
+    index_doc(&engine, "hot", "doc");
+    let (_capture, first) = save(&engine, None, 1);
+    set_visits(&engine, 0);
+    let mut roots = vec![first];
+    for seq in 2..=4u64 {
+        index_doc(&engine, "hot", &format!("doc{seq}"));
+        let (capture, next) = save(&engine, Some(roots.last().unwrap().path()), seq);
+        assert!(capture.reused.contains("idle"));
+        roots.push(next);
+    }
+    assert_eq!(visits(&engine), 3);
+}
+
+#[test]
+fn change_made_to_an_idle_collection_after_freeze_keeps_it_reusable_and_is_saved_next() {
+    let engine = Engine::new();
+    engine
+        .create_collection("idle", build_users_schema())
+        .unwrap();
+    index_doc(&engine, "idle", "doc");
+    let (_capture, first) = save(&engine, None, 1);
+    let frozen = engine
+        .freeze_checkpoint_collections(Some(first.path()))
+        .unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let mut capture = frozen.write(second.path(), 2).unwrap();
+    index_doc(&engine, "idle", "changed");
+    engine
+        .bind_checkpoint_origins(second.path(), &mut capture)
+        .unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let next = engine
+        .freeze_checkpoint_collections(Some(second.path()))
+        .unwrap()
+        .write(out.path(), 3)
+        .unwrap();
+    assert!(next.reused.contains("idle"));
+    assert!(next.field_dirty["idle"]
+        .values()
+        .any(|rows| !rows.is_empty()));
+}
+
+#[test]
+fn collection_with_a_complete_journal_is_always_visited() {
+    let engine = Engine::new();
+    engine.create_collection("c", build_users_schema()).unwrap();
+    index_doc(&engine, "c", "doc");
+    set_visits(&engine, 0);
+    let (_capture, _dir) = save(&engine, None, 1);
+    assert_eq!(visits(&engine), 1);
+    assert!(!engine.state.read().unwrap().collections["c"].journal_complete_since_empty);
+}
