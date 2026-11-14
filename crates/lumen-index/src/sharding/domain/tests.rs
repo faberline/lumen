@@ -124,6 +124,8 @@ fn snapshot_reshard_batches_emit_bounded_restorable_partials() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()
@@ -256,6 +258,8 @@ fn snapshot_reshard_batches_splits_oversized_bucket_delta_by_bytes() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()

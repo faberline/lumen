@@ -2885,6 +2885,14 @@
             "type": "string",
             "nullable": true
           },
+          "filter": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryNode"
+              }
+            ],
+            "nullable": true
+          },
           "limit": {
             "type": "integer",
             "format": "int32",
@@ -2903,6 +2911,14 @@
           "routing_key": {
             "type": "string",
             "description": "Optional caller-owned routing key. Reserved: it does not narrow shard\nfan-out while writes cannot carry it, because writes place every\ndocument by `external_id`; a search with `routing_key` returns the same\nhits and `total` as the same search without it.",
+            "nullable": true
+          },
+          "scoring": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryNode"
+              }
+            ],
             "nullable": true
           },
           "sort": {

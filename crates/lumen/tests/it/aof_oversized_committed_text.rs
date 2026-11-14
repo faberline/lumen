@@ -261,6 +261,8 @@ fn match_hits(engine: &Engine, text: &str, limit: u32) -> Vec<SearchHit> {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap_or_else(|error| panic!("Text query `{text}` failed: {error}"))

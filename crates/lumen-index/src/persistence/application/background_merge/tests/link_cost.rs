@@ -55,6 +55,8 @@ fn term_hits(engine: &Engine, collection: &str, field: &str, value: &str) -> usi
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()

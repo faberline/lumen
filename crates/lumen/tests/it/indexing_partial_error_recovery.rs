@@ -53,6 +53,8 @@ fn partial_error_term_ids(engine: &Arc<Engine>, field: &str, value: FieldValue) 
                     sort: None,
                     track_total: true,
                     collapse: None,
+                    scoring: None,
+                    filter: None,
                 },
             )
             .expect("partial-error term query"),

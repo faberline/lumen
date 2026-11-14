@@ -153,6 +153,8 @@ fn term_query(field: &str, value: &str) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 
@@ -317,6 +319,8 @@ async fn checkpoint_persists_vector_field_and_survives_recovery() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("knn query on recovered vector field");

@@ -89,6 +89,8 @@ fn three_key_sort_orders() {
                 sort: Some(sort_asc(&["a", "b", "c"])),
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -115,6 +117,8 @@ fn over_four_keys_rejected() {
                 sort: Some(sort_asc(&["a", "b", "c", "a", "b"])), // 5 keys
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap_err();

@@ -77,6 +77,8 @@ pub(crate) async fn search_all(
             sort: req.sort,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .await?;

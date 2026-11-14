@@ -160,6 +160,8 @@ fn search(engine: &Engine) -> Result<SearchResponse> {
             sort: None,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
 }

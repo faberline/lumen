@@ -51,6 +51,8 @@ fn search_match(e: &Engine, coll: &str, text: &str, op: MatchOp) -> Vec<SearchHi
             sort: None,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()

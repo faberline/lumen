@@ -77,6 +77,8 @@ fn base(query: QueryNode) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 
@@ -235,6 +237,8 @@ fn collapse_early_term_correct() {
             sort: None,
             track_total: false,
             collapse: Some("parent".into()),
+            scoring: None,
+            filter: None,
         };
         e.search("c", req)
             .unwrap()
@@ -444,6 +448,8 @@ fn has_child_composes_in_boolean_tree() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()

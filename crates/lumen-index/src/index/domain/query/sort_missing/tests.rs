@@ -90,6 +90,8 @@ fn search(e: &Engine, missing: SortMissing, limit: u32, cursor: Option<String>) 
             }]),
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()
@@ -198,6 +200,8 @@ fn keyword_missing_last_small_page_bypasses_full_tuple_sort() {
                 }]),
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -279,6 +283,8 @@ fn sealed_keyword_bucket_walk_merges_tombstone_and_live_tail_both_orders() {
                 }]),
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()
@@ -331,6 +337,8 @@ fn missing_sort_fallback_retains_at_most_offset_plus_limit() {
                 }]),
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();

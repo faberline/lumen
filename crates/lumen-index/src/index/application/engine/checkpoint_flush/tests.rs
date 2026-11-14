@@ -140,6 +140,8 @@ fn req(query: QueryNode, limit: u32) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

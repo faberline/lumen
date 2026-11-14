@@ -85,6 +85,8 @@ fn run(e: &Engine, query: QueryNode, sort: Option<Vec<SortSpec>>) -> SearchRespo
             sort,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()

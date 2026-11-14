@@ -400,6 +400,8 @@ fn search_ids(e: &Engine, coll: &str, query: QueryNode, limit: u32) -> Vec<Strin
             sort: None,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()

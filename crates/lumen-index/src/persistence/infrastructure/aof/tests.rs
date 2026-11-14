@@ -73,6 +73,8 @@ fn term_query(field: &str, value: &str) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 
@@ -90,6 +92,8 @@ fn text_match_query(field: &str, text: &str) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

@@ -189,6 +189,8 @@ fn search_ids(engine: &Engine, exact_keyword: &str) -> Vec<String> {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("exact Keyword query")

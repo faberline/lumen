@@ -156,6 +156,8 @@ fn search_city_req(city: &str) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

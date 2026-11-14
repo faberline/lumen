@@ -65,6 +65,8 @@ fn unsupported_text_sort_is_rejected_instead_of_silent_score_ranking() {
                 }]),
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap_err();
@@ -125,6 +127,8 @@ fn keyword_sort_keyset_pagination_walks_lexicographically() {
             }]),
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         };
         let first = e.search("users", base.clone()).unwrap();
         match parse_page_cursor(first.cursor.as_deref().expect("more pages")).unwrap() {
@@ -188,6 +192,8 @@ fn composite_keyword_number_sort_keyset_paginates_to_oracle() {
         ]),
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     };
     let first = e.search("users", base.clone()).unwrap();
     match parse_page_cursor(first.cursor.as_deref().expect("more pages")).unwrap() {
@@ -249,6 +255,8 @@ fn sorted_keyset_pagination_walks_exhaustively_with_ties() {
             }]),
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         };
         // One exhaustive page as the oracle.
         let mut oracle_req = base.clone();
