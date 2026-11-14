@@ -48,6 +48,8 @@ fn spec(shard_count: u32, replicas_per_shard: u32, max_shard_bytes: Option<u64>)
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     }
 }
 
