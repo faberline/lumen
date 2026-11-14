@@ -66,6 +66,12 @@ const AUTH_DELEGATOR_ROLE: &str = "system:auth-delegator";
 /// its own to read.
 const OWNER_NAMESPACE_LABEL: &str = "lumen.dev/owner-namespace";
 
+/// The runtime UID label for precise retention decisions (faberline/lumen#31).
+pub const RUNTIME_UID_LABEL: &str = "lumen.dev/runtime-uid";
+
+/// The authority label indicating the operator manager identity (faberline/lumen#31).
+pub const AUTHORITY_LABEL: &str = "lumen.dev/authority";
+
 /// The same owner namespace under Faberline's cross-repository key. The shared
 /// GKE test cluster's teardown and reaper (faberline/aw
 /// docs/standards/test-cluster.md) delete cluster-scoped objects carrying it

@@ -7,8 +7,9 @@ use service_k8s::render::projected_token::ProjectedServiceAccountToken;
 use service_k8s::render::rbac;
 
 use crate::application::render::{
-    instance, namespace, serving_service_account_name, APP, AUTH_DELEGATION_COMPONENT,
-    AUTH_DELEGATOR_ROLE, FABERLINE_OWNER_NAMESPACE_LABEL, MANAGER, OWNER_NAMESPACE_LABEL,
+    instance, namespace, serving_service_account_name, APP, AUTHORITY_LABEL,
+    AUTH_DELEGATION_COMPONENT, AUTH_DELEGATOR_ROLE, FABERLINE_OWNER_NAMESPACE_LABEL, MANAGER,
+    OWNER_NAMESPACE_LABEL, RUNTIME_UID_LABEL,
 };
 use crate::domain::lumen_spec::Lumen;
 
@@ -60,6 +61,91 @@ pub fn auth_delegator_labels(lumen: &Lumen) -> std::collections::BTreeMap<String
         namespace(lumen),
     );
     labels
+}
+
+/// The labels stamped on data artifacts (PVC templates, backup CronJob, and its pod template)
+/// for precise retention decisions (#31).
+///
+/// Returns the standard instance labels plus `lumen.dev/authority` (set to `lumen-operator`)
+/// and `lumen.dev/runtime-uid` (set to `metadata.uid`). When `metadata.uid` is absent
+/// (unit construction only), no `runtime-uid` label is added, never an empty value.
+pub fn data_artifact_labels(
+    lumen: &Lumen,
+    component: &str,
+) -> std::collections::BTreeMap<String, String> {
+    let mut labels = std::collections::BTreeMap::new();
+    labels.insert("app.kubernetes.io/name".to_string(), APP.to_string());
+    labels.insert("app.kubernetes.io/instance".to_string(), instance(lumen));
+    labels.insert(
+        "app.kubernetes.io/component".to_string(),
+        component.to_string(),
+    );
+    labels.insert(
+        "app.kubernetes.io/managed-by".to_string(),
+        MANAGER.to_string(),
+    );
+    labels.insert("app.kubernetes.io/part-of".to_string(), APP.to_string());
+    labels.insert(AUTHORITY_LABEL.to_string(), MANAGER.to_string());
+    if let Some(uid) = lumen.metadata.uid.as_deref() {
+        if !uid.is_empty() {
+            labels.insert(RUNTIME_UID_LABEL.to_string(), uid.to_string());
+        }
+    }
+    labels
+}
+
+/// Alias for [`data_artifact_labels`] (#31).
+pub fn retention_labels(
+    lumen: &Lumen,
+    component: &str,
+) -> std::collections::BTreeMap<String, String> {
+    data_artifact_labels(lumen, component)
+}
+
+/// Builds the selector requirement for data artifacts owned by a runtime instance and UID (#31).
+///
+/// Requires both the instance label and the runtime UID label; a selector built from
+/// the name alone does not exist.
+pub fn runtime_uid_selector(
+    instance: &str,
+    uid: &str,
+) -> std::collections::BTreeMap<String, String> {
+    let mut selector = std::collections::BTreeMap::new();
+    selector.insert(
+        "app.kubernetes.io/instance".to_string(),
+        instance.to_string(),
+    );
+    selector.insert(RUNTIME_UID_LABEL.to_string(), uid.to_string());
+    selector
+}
+
+/// Alias for [`runtime_uid_selector`] (#31).
+pub fn pvc_selector(instance: &str, uid: &str) -> std::collections::BTreeMap<String, String> {
+    runtime_uid_selector(instance, uid)
+}
+
+/// Pure matching helper: checks if a candidate object's labels match the given selector (#31).
+///
+/// No cluster calls.
+pub fn matches_runtime_selector(
+    object_labels: &std::collections::BTreeMap<String, String>,
+    selector: &std::collections::BTreeMap<String, String>,
+) -> bool {
+    selector
+        .iter()
+        .all(|(k, v)| object_labels.get(k) == Some(v))
+}
+
+/// Pure matching helper: checks if a candidate object's JSON labels match the given selector (#31).
+///
+/// No cluster calls.
+pub fn matches_runtime_labels_value(
+    object_labels: &serde_json::Value,
+    selector: &std::collections::BTreeMap<String, String>,
+) -> bool {
+    selector
+        .iter()
+        .all(|(k, v)| object_labels.get(k).and_then(|val| val.as_str()) == Some(v.as_str()))
 }
 
 /// The ClusterRoleBinding that lets the serving ServiceAccount ask the API

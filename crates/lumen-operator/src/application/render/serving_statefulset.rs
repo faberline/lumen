@@ -97,7 +97,11 @@ pub(super) fn serving_statefulset(
         .image_pull_policy
         .as_deref()
         .unwrap_or("IfNotPresent");
+    let pvc_labels = crate::application::render::identity::data_artifact_labels(lumen, COMPONENT);
     let mut pvc_template = json!({
+        "metadata": {
+            "labels": pvc_labels,
+        },
         "spec": {
             "accessModes": ["ReadWriteOnce"],
             "resources": { "requests": { "storage": s.raft_storage.clone() } },
