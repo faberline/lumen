@@ -2069,6 +2069,7 @@
           "text",
           "keyword",
           "number",
+          "int64",
           "set",
           "vector",
           "hash"

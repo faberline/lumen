@@ -310,7 +310,7 @@ fn field_catalog_matches_the_real_enums() {
     // Exactly the FieldType enum variants (lowercase wire form), in order.
     assert_eq!(
         types,
-        ["text", "keyword", "number", "set", "vector", "hash"],
+        ["text", "keyword", "number", "int64", "set", "vector", "hash"],
         "field types track the FieldType enum"
     );
 
@@ -1212,6 +1212,7 @@ fn dx_field_catalog_matches_runtime_field_capabilities() {
             FieldType::Text => "text",
             FieldType::Keyword => "keyword",
             FieldType::Number => "number",
+            FieldType::Int64 => "int64",
             FieldType::Set => "set",
             FieldType::Vector => "vector",
             FieldType::Hash => "hash",
@@ -1824,3 +1825,21 @@ fn operator_tls_ownership_is_consistently_documented_across_surfaces() {
     }
 }
 // CODEGEN-END
+
+#[test]
+fn dx_field_catalog_lists_int64_exact_range_and_sort() {
+    let catalog = dx::field_catalog();
+    let fields = catalog["field_types"]
+        .as_array()
+        .expect("field catalogue is an array");
+    let int64 = fields
+        .iter()
+        .find(|entry| entry["type"] == "int64")
+        .expect("catalogue omits int64");
+    let operations = &int64["operations"];
+    assert_eq!(operations["exact"], true);
+    assert_eq!(operations["range"], true);
+    assert_eq!(operations["sort"], true);
+    assert_eq!(operations["bm25"], false);
+    assert_eq!(operations["hamming"], false);
+}

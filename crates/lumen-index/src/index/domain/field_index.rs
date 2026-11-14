@@ -68,6 +68,7 @@ impl FieldIndex {
             },
             FieldType::Keyword => FieldIndex::Keyword(KeywordIndex::default()),
             FieldType::Number => FieldIndex::Number(NumberIndex::default()),
+            FieldType::Int64 => return Err(anyhow!("field type `int64` is not indexed yet")),
             FieldType::Set => FieldIndex::Set(SetIndex::default()),
             FieldType::Vector => {
                 let vs = spec
