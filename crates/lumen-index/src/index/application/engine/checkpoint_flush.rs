@@ -151,6 +151,7 @@ impl Engine {
             reused,
             initial_sparse: BTreeSet::new(),
             field_deltas: std::sync::Arc::new(field_deltas),
+            journal_complete: std::collections::BTreeSet::new(),
             record_cut: None,
         })
     }
