@@ -17,6 +17,9 @@ use crate::domain::lumen_spec::Lumen;
 /// auto-splitting, and `maxShardsReached` is a configured ceiling rather than a
 /// fault; gating `Ready` on the raw `blockingConditions` list would therefore
 /// report every default install as permanently not-ready.
+///
+/// A wedge feeds `Writable` and `Degraded`. It never changes `Ready`, which
+/// means only "searchable service is available".
 const RESHARD_WEDGE_CONDITIONS: [&str; 2] =
     ["reshardOversizedDocument", "topologyConvergenceStalled"];
 
@@ -45,6 +48,11 @@ pub(super) struct Observation {
     /// piece of the peer-identity story `observe` *can* derive, since it is
     /// pure spec.
     peer_identity_required: bool,
+    /// Why the spec fails `validate()`, if it does. Pure, so `observe` computes it.
+    config_error: Option<String>,
+    /// Why the capacity profile could not be resolved, if it could not. Same
+    /// provenance as `peer_identity`: filled from the reconcile context.
+    pub(super) capacity_error: Option<String>,
 }
 
 impl Observation {
@@ -80,7 +88,6 @@ impl Observation {
                         .as_deref()
                         .map(|error| ("PeerIdentityNotConfigured", error))
                 }),
-            wedge,
             replicas_ready,
         ) {
             // #2876 AC4. This outranks everything below it: without the
@@ -89,24 +96,16 @@ impl Observation {
             // many pods are Ready or how healthy the shard map is. Reporting
             // Ready here would be reporting on a data plane that answers 401
             // to its own operator.
-            (Some((reason, error)), _, _) => {
+            (Some((reason, error)), _) => {
                 ConditionFact::new("Ready", ConditionStatus::False, reason, error.to_string())
             }
-            // A wedge outranks a healthy replica count: every pod can be Ready
-            // while writes are fenced or a batch is unappliable.
-            (None, Some(wedge), _) => ConditionFact::new(
-                "Ready",
-                ConditionStatus::False,
-                "ReshardWedged",
-                format!("{wedge}: {}", self.reshard.message),
-            ),
-            (None, None, true) => ConditionFact::new(
+            (None, true) => ConditionFact::new(
                 "Ready",
                 ConditionStatus::True,
                 "AllReplicasReady",
                 replicas.clone(),
             ),
-            (None, None, false) => ConditionFact::new(
+            (None, false) => ConditionFact::new(
                 "Ready",
                 ConditionStatus::False,
                 "ReplicasNotReady",
@@ -163,6 +162,89 @@ impl Observation {
             ),
         };
 
+        // Each plane reads its own fact. `Ready` above never reads them, and
+        // `Degraded` below never reads `Ready`.
+        let writable = match wedge {
+            Some(wedge) => ConditionFact::new(
+                "Writable",
+                ConditionStatus::False,
+                "ReshardWedged",
+                format!("{wedge}: {}", self.reshard.message),
+            ),
+            None if self.awaiting_convergence => ConditionFact::new(
+                "Writable",
+                ConditionStatus::False,
+                "WritePauseFenceArmed",
+                self.reshard.message.clone(),
+            ),
+            None => ConditionFact::new(
+                "Writable",
+                ConditionStatus::True,
+                "WritesAccepted",
+                "no reshard wedge or write-pause fence".to_string(),
+            ),
+        };
+        let replication = match &self.peer_identity {
+            Some(error) => ConditionFact::new(
+                "ReplicationReady",
+                ConditionStatus::False,
+                "PeerIdentityNotConfigured",
+                error.clone(),
+            ),
+            None => ConditionFact::new(
+                "ReplicationReady",
+                ConditionStatus::True,
+                "ReplicationAuthenticated",
+                "no replication identity is missing".to_string(),
+            ),
+        };
+        let config = match &self.config_error {
+            Some(error) => ConditionFact::new(
+                "ConfigReady",
+                ConditionStatus::False,
+                "SpecInvalid",
+                error.clone(),
+            ),
+            None => ConditionFact::new(
+                "ConfigReady",
+                ConditionStatus::True,
+                "SpecValid",
+                "spec passed validation".to_string(),
+            ),
+        };
+        let capacity = match &self.capacity_error {
+            Some(error) => ConditionFact::new(
+                "CapacityReady",
+                ConditionStatus::False,
+                "CapacityRefused",
+                error.clone(),
+            ),
+            None => ConditionFact::new(
+                "CapacityReady",
+                ConditionStatus::True,
+                "CapacityResolved",
+                "capacity profile resolved".to_string(),
+            ),
+        };
+        // `Degraded` names the first plane, in this order, that is False.
+        let degraded = match [&writable, &replication, &config, &capacity]
+            .into_iter()
+            .find(|plane| plane.status == ConditionStatus::False)
+        {
+            Some(first) => ConditionFact::new(
+                "Degraded",
+                ConditionStatus::True,
+                format!("{}NotReady", first.type_),
+                format!("{}: {}", first.reason, first.message),
+            ),
+            None => ConditionFact::new(
+                "Degraded",
+                ConditionStatus::False,
+                "AllPlanesHealthy",
+                "writable, replication, config and capacity are healthy".to_string(),
+            ),
+        };
+
         let progressing = if !replicas_ready {
             ConditionFact::new(
                 "Progressing",
@@ -210,7 +292,18 @@ impl Observation {
             )
         };
 
-        vec![ready, progressing, reshard, auth_delegation, peer_identity]
+        vec![
+            ready,
+            progressing,
+            reshard,
+            auth_delegation,
+            peer_identity,
+            writable,
+            replication,
+            config,
+            capacity,
+            degraded,
+        ]
     }
 }
 
@@ -342,6 +435,10 @@ impl Lumen {
             // is derivable here.
             peer_identity: None,
             peer_identity_required: self.spec.peer_identity_required(),
+            // Pure: the same `validate()` the reconcile runs before any apply.
+            config_error: self.spec.validate().err(),
+            // Filled from the reconcile context, like the two verdicts above.
+            capacity_error: None,
         }
     }
 }
