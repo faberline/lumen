@@ -8,7 +8,7 @@ pub use crate::access::application::control_plane_token::{
     CONTROL_PLANE_TOKEN_VOLUME,
 };
 pub use crate::access::domain::identity::{
-    ADMIN_RESOURCE, API_GROUP, AUDIENCE, COLLECTIONS_RESOURCE,
+    ADMIN_RESOURCE, API_GROUP, AUDIENCE, COLLECTIONS_RESOURCE, RUNTIMES_RESOURCE, RUNTIME_VERB,
 };
 pub use crate::access::infrastructure::lumen_verifier::LumenVerifier;
 pub use crate::access::interfaces::http::auth_middleware;

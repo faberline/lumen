@@ -21,3 +21,10 @@ pub const COLLECTIONS_RESOURCE: &str = "lumencollections";
 /// The resource instance-wide administration is checked against — backups,
 /// restores, resharding, checkpoints. Deliberately not `lumencollections/*`.
 pub const ADMIN_RESOURCE: &str = "lumenadmin";
+
+/// The resource whole-runtime access is checked against — one grant on this
+/// runtime's name permits query, index, collection, and admin operations.
+pub const RUNTIMES_RESOURCE: &str = "lumenruntimes";
+
+/// The verb a whole-runtime access grant names.
+pub const RUNTIME_VERB: &str = "use";

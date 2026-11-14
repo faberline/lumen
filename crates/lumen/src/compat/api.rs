@@ -4,7 +4,9 @@
 pub use crate::app::http::api_err::ApiErr;
 pub use crate::app::http::app_state::AppState;
 pub use crate::app::http::openapi::{openapi, ApiDoc};
-pub use crate::app::http::router::{router, router_with_admission};
+pub use crate::app::http::router::{
+    is_anonymous_route, router, router_with_admission, ANONYMOUS_ROUTES,
+};
 pub use crate::app::http::write_fence::WriteFence;
 pub use crate::index::application::ports::search_backend::SearchBackend;
 pub use crate::ingest::application::ports::write_backend::WriteBackend;

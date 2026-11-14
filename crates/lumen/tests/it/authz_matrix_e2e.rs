@@ -48,8 +48,11 @@ use async_trait::async_trait;
 use axum_test::TestServer;
 use serde_json::{json, Value};
 
-use lumen::api::{router, AppState};
-use lumen::auth::{AuthConfig, LumenVerifier, ADMIN_RESOURCE, COLLECTIONS_RESOURCE};
+use lumen::api::{router, AppState, ANONYMOUS_ROUTES};
+use lumen::auth::{
+    AuthConfig, LumenVerifier, ADMIN_RESOURCE, COLLECTIONS_RESOURCE, RUNTIMES_RESOURCE,
+    RUNTIME_VERB,
+};
 use lumen::storage::Engine;
 use service_auth::k8s::{
     AccessReviewOutcome, ResourceAttributes, ReviewBackend, ReviewError, ReviewedIdentity,
@@ -58,10 +61,12 @@ use service_auth::k8s::{
 
 const NAMESPACE: &str = "serving";
 const COLLECTION: &str = "users";
+const RUNTIME: &str = "lumen-serving";
+const OTHER_RUNTIME: &str = "lumen-other";
 
-const ADMIN: &str = "system:serviceaccount:serving:lumen-admin";
-const WRITER: &str = "system:serviceaccount:serving:lumen-writer";
-const READER: &str = "system:serviceaccount:serving:lumen-reader";
+const OPERATOR: &str = "system:serviceaccount:serving:lumen-operator";
+const WRONG_RUNTIME_CALLER: &str = "system:serviceaccount:serving:wrong-runtime-caller";
+const LEGACY_CALLER: &str = "system:serviceaccount:serving:legacy-caller";
 /// A ServiceAccount kube-apiserver knows and Lumen grants nothing to.
 const STRANGER: &str = "system:serviceaccount:serving:lumen-stranger";
 /// A human kube-apiserver authenticates. Never a Lumen caller.
@@ -81,9 +86,9 @@ struct Cluster {
 impl Cluster {
     fn new() -> Self {
         let tokens = HashMap::from([
-            ("t-admin", ADMIN),
-            ("t-writer", WRITER),
-            ("t-reader", READER),
+            ("t-use", OPERATOR),
+            ("t-wrong-runtime", WRONG_RUNTIME_CALLER),
+            ("t-legacy", LEGACY_CALLER),
             ("t-stranger", STRANGER),
             ("t-google", GOOGLE_USER),
         ]);
@@ -93,11 +98,30 @@ impl Cluster {
             access_reachable: true,
             asked: Mutex::new(Vec::new()),
         };
-        // One grant per (identity, verb) — deliberately not a hierarchy.
-        cluster.grant(ADMIN, COLLECTIONS_RESOURCE, Some(COLLECTION), "delete");
-        cluster.grant(ADMIN, ADMIN_RESOURCE, None, "delete");
-        cluster.grant(WRITER, COLLECTIONS_RESOURCE, Some(COLLECTION), "update");
-        cluster.grant(READER, COLLECTIONS_RESOURCE, Some(COLLECTION), "get");
+        // t-use holds lumenruntimes/use on RUNTIME.
+        cluster.grant(OPERATOR, RUNTIMES_RESOURCE, Some(RUNTIME), RUNTIME_VERB);
+        // t-wrong-runtime holds lumenruntimes/use on a different runtime name.
+        cluster.grant(
+            WRONG_RUNTIME_CALLER,
+            RUNTIMES_RESOURCE,
+            Some(OTHER_RUNTIME),
+            RUNTIME_VERB,
+        );
+        // t-legacy holds only legacy per-collection and admin grants.
+        cluster.grant(LEGACY_CALLER, COLLECTIONS_RESOURCE, Some(COLLECTION), "get");
+        cluster.grant(
+            LEGACY_CALLER,
+            COLLECTIONS_RESOURCE,
+            Some(COLLECTION),
+            "update",
+        );
+        cluster.grant(
+            LEGACY_CALLER,
+            COLLECTIONS_RESOURCE,
+            Some(COLLECTION),
+            "delete",
+        );
+        cluster.grant(LEGACY_CALLER, ADMIN_RESOURCE, None, "delete");
         cluster
     }
 
@@ -173,8 +197,8 @@ fn delegated_server(cluster: Arc<Cluster>) -> TestServer {
     let engine = Arc::new(Engine::new());
     let verifier =
         Arc::new(LumenVerifier::delegated(NAMESPACE, cluster).expect("delegated verifier"));
-    let state =
-        AppState::new(engine, Arc::new(AuthConfig::required_in(NAMESPACE))).with_verifier(verifier);
+    let auth = Arc::new(AuthConfig::required_in(NAMESPACE).with_runtime(RUNTIME));
+    let state = AppState::new(engine, auth).with_verifier(verifier);
     TestServer::new(router(state)).expect("server")
 }
 
@@ -200,31 +224,49 @@ fn rows() -> Vec<Row> {
             method: "PUT",
             path: "/collections/users",
             body: Some(schema),
-            allowed: "t-admin",
+            allowed: "t-use",
         },
         Row {
             method: "POST",
             path: "/collections/users/index",
             body: Some(index),
-            allowed: "t-writer",
+            allowed: "t-use",
         },
         Row {
             method: "POST",
             path: "/collections/users/search",
             body: Some(search),
-            allowed: "t-reader",
+            allowed: "t-use",
         },
         Row {
             method: "GET",
             path: "/collections/users/stats",
             body: None,
-            allowed: "t-reader",
+            allowed: "t-use",
+        },
+        Row {
+            method: "GET",
+            path: "/debug/cluster",
+            body: None,
+            allowed: "t-use",
+        },
+        Row {
+            method: "GET",
+            path: "/openapi.json",
+            body: None,
+            allowed: "t-use",
+        },
+        Row {
+            method: "GET",
+            path: "/docs",
+            body: None,
+            allowed: "t-use",
         },
         Row {
             method: "DELETE",
             path: "/collections/users",
             body: None,
-            allowed: "t-admin",
+            allowed: "t-use",
         },
     ]
 }
@@ -294,12 +336,12 @@ async fn delegated_metrics_are_exposed_by_the_actual_router() {
 
     assert_eq!(
         s.get("/collections/users/stats")
-            .add_header("authorization", "Bearer t-reader")
+            .add_header("authorization", "Bearer t-use")
             .await
             .status_code()
             .as_u16(),
         404,
-        "the granted reader reaches the handler even when the collection is absent"
+        "the granted caller reaches the handler even when the collection is absent"
     );
     assert_eq!(
         s.get("/collections/users/stats")
@@ -328,27 +370,21 @@ async fn delegated_metrics_are_exposed_by_the_actual_router() {
     }
 }
 
-/// The whole matrix in one pass: for every endpoint, the three identities that
-/// hold a *different* verb are denied, and only the one holding this
-/// endpoint's verb gets through.
-///
-/// The denials run before the success so the 403s are answered by a server in
-/// the same state the success will see — a 403 that only happened because the
-/// collection did not exist yet would prove nothing.
+/// The whole matrix in one pass: for every endpoint, callers without the
+/// exact whole-runtime grant (strangers, wrong runtime name, legacy grants)
+/// are denied with 403, and only `t-use` holding `lumenruntimes/use` on this
+/// runtime name gets through with 2xx.
 #[tokio::test]
-async fn each_endpoint_admits_exactly_its_own_grant_and_denies_every_other() {
+async fn each_endpoint_admits_exact_runtime_grant_and_denies_unauthorized() {
     let cluster = Arc::new(Cluster::new());
     let s = delegated_server(cluster.clone());
 
     for row in rows() {
-        for token in ["t-admin", "t-writer", "t-reader", "t-stranger"] {
-            if token == row.allowed {
-                continue;
-            }
+        for token in ["t-stranger", "t-wrong-runtime", "t-legacy"] {
             assert_eq!(
                 status(&s, &row, Some(token)).await,
                 403,
-                "{} {} must deny {token}: no RoleBinding grants it that verb",
+                "{} {} must deny {token}",
                 row.method,
                 row.path
             );
@@ -356,7 +392,7 @@ async fn each_endpoint_admits_exactly_its_own_grant_and_denies_every_other() {
         let code = status(&s, &row, Some(row.allowed)).await;
         assert!(
             (200..300).contains(&code),
-            "{} {} with its own grant returned {code}",
+            "{} {} with lumenruntimes/use returned {code}",
             row.method,
             row.path
         );
@@ -402,40 +438,40 @@ async fn unauthenticated_and_non_serviceaccount_callers_are_401_not_403() {
     );
 }
 
-/// Listing is filtered, not denied: a caller sees the collections it may read
-/// and no others, and never a 403 for the ones it may not.
+/// Whole-runtime grant permits collection listing; ungranted callers are denied with 403.
 #[tokio::test]
-async fn the_collection_listing_is_filtered_per_caller() {
+async fn the_collection_listing_is_authorized_per_runtime() {
     let cluster = Arc::new(Cluster::new());
     let s = delegated_server(cluster.clone());
 
     s.put("/collections/users")
-        .add_header("authorization", "Bearer t-admin")
+        .add_header("authorization", "Bearer t-use")
         .json(&json!({ "fields": { "email": { "type": "keyword" } } }))
         .await
         .assert_status_ok();
 
     let listed: Value = s
         .get("/collections")
-        .add_header("authorization", "Bearer t-reader")
+        .add_header("authorization", "Bearer t-use")
         .await
         .json();
     assert_eq!(
         listed,
         json!(["users"]),
-        "a reader with `get` on `users` should see exactly it"
+        "a caller with lumenruntimes/use sees the collections"
     );
 
-    let listed: Value = s
-        .get("/collections")
-        .add_header("authorization", "Bearer t-stranger")
-        .await
-        .json();
-    assert_eq!(
-        listed,
-        json!([]),
-        "a ServiceAccount with no grant sees an empty list, not a 403"
-    );
+    for token in ["t-stranger", "t-wrong-runtime", "t-legacy"] {
+        assert_eq!(
+            s.get("/collections")
+                .add_header("authorization", format!("Bearer {token}"))
+                .await
+                .status_code()
+                .as_u16(),
+            403,
+            "GET /collections without whole-runtime grant must deny with 403"
+        );
+    }
 }
 
 /// An apiserver that cannot answer is 503. Never 200 — that would be a
@@ -454,5 +490,39 @@ async fn an_authorization_outage_is_503() {
             row.path
         );
     }
+}
+
+/// AC: A test lists the anonymous routes and fails if one is added or removed.
+#[test]
+fn anonymous_routes_exact_set() {
+    let mut actual: Vec<&str> = ANONYMOUS_ROUTES.to_vec();
+    actual.sort();
+    let expected = vec!["/healthz", "/metrics", "/readyz", "/version"];
+    assert_eq!(
+        actual, expected,
+        "the anonymous routes set must be exactly /healthz, /readyz, /metrics, /version"
+    );
+}
+
+/// AC: Anonymous routes serve without a token, while protected routes require auth.
+#[tokio::test]
+async fn anonymous_routes_serve_without_token() {
+    let cluster = Arc::new(Cluster::new());
+    let s = delegated_server(cluster);
+
+    for path in ANONYMOUS_ROUTES {
+        let code = s.get(path).await.status_code().as_u16();
+        assert!(
+            (200..300).contains(&code),
+            "anonymous route {path} returned {code} without token"
+        );
+    }
+
+    // /debug/cluster is protected, so without a token it returns 401
+    assert_eq!(
+        s.get("/debug/cluster").await.status_code().as_u16(),
+        401,
+        "/debug/cluster must require authentication"
+    );
 }
 // CODEGEN-END

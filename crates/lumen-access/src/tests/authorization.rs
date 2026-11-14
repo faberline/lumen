@@ -1,8 +1,10 @@
 use axum::http::StatusCode;
 use service_auth::Role;
 
-use crate::application::authorization::{AuthContext, AuthErr};
-use crate::domain::identity::{ADMIN_RESOURCE, COLLECTIONS_RESOURCE};
+use crate::application::authorization::{AuthContext, AuthErr, AuthTarget};
+use crate::domain::identity::{
+    ADMIN_RESOURCE, API_GROUP, COLLECTIONS_RESOURCE, RUNTIMES_RESOURCE, RUNTIME_VERB,
+};
 use crate::tests::{context, Cluster, Reachable};
 
 // ---- authorization --------------------------------------------------
@@ -129,4 +131,46 @@ fn an_unavailable_authorization_renders_with_a_stable_reason() {
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(code, "authorization_unavailable");
     assert!(message.contains("transport"), "{message}");
+}
+
+/// AC: A new `AuthTarget` for the runtime builds attributes group `lumen.axiom.dev`,
+/// resource `lumenruntimes`, resource name = the runtime name, verb `use`, in the
+/// serving namespace.
+#[tokio::test]
+async fn runtime_target_authorizes_with_use_verb_and_scoped_to_serving_namespace() {
+    let (cluster, ctx) = context(Cluster::with_ksa("clients", "operator").granting(
+        RUNTIMES_RESOURCE,
+        Some("lumen-prod"),
+        RUNTIME_VERB,
+    ))
+    .await;
+
+    // Attributes check for AuthTarget::Runtime
+    let target = AuthTarget::Runtime("lumen-prod");
+    let attrs = target.attributes("serving", Role::Read);
+    assert_eq!(attrs.group, API_GROUP);
+    assert_eq!(attrs.namespace, "serving");
+    assert_eq!(attrs.resource, RUNTIMES_RESOURCE);
+    assert_eq!(attrs.name.as_deref(), Some("lumen-prod"));
+    assert_eq!(attrs.verb, "use");
+
+    // Grant on lumen-prod with verb use allows lumen-prod
+    assert!(ctx.ensure_runtime("lumen-prod").await.is_ok());
+
+    // ...but denies another runtime name
+    assert!(ctx.ensure_runtime("lumen-other").await.is_err());
+
+    let asked = cluster.asked();
+    assert_eq!(asked.len(), 2);
+    assert_eq!(asked[0].group, API_GROUP);
+    assert_eq!(asked[0].namespace, "serving");
+    assert_eq!(asked[0].resource, RUNTIMES_RESOURCE);
+    assert_eq!(asked[0].name.as_deref(), Some("lumen-prod"));
+    assert_eq!(asked[0].verb, "use");
+
+    assert_eq!(asked[1].group, API_GROUP);
+    assert_eq!(asked[1].namespace, "serving");
+    assert_eq!(asked[1].resource, RUNTIMES_RESOURCE);
+    assert_eq!(asked[1].name.as_deref(), Some("lumen-other"));
+    assert_eq!(asked[1].verb, "use");
 }
