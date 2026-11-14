@@ -195,6 +195,7 @@ mod tests {
             serving_tls_secret: Some("lumen-serving-tls".into()),
             body_limit_bytes: None,
             access: None,
+            runtime: None,
             extra_env: Vec::new(),
             extra_args: Vec::new(),
         };
