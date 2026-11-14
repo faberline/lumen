@@ -85,6 +85,7 @@ fn field_entry(field_type: FieldType) -> Value {
         }
         FieldType::Number => {
             object.insert("queries".into(), json!(["term", "range", "sort"]));
+            object.insert("aliases".into(), json!(["float64"]));
         }
         FieldType::Set => {
             object.insert("queries".into(), json!(["term", "terms"]));

@@ -75,7 +75,7 @@ pub(in crate::index) fn validate_value(
         (FieldIndex::Text { .. }, FieldValue::String(_)) => Ok(()),
         (FieldIndex::Keyword(_), FieldValue::String(_)) => Ok(()),
         (FieldIndex::Number(_), FieldValue::Number(x)) => {
-            SortableF64::new(*x).map_err(|e| StorageError::InvalidNumber(e.to_string()))?;
+            SortableF64::for_value(*x).map_err(|e| StorageError::InvalidNumber(e.to_string()))?;
             Ok(())
         }
         (FieldIndex::Set(_), FieldValue::StringList(_)) => Ok(()),
