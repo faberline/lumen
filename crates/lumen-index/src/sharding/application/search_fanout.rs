@@ -59,6 +59,18 @@ where
     ))
 }
 
+/// Merge per-shard search responses into a single response page.
+///
+/// Hits are ranked score descending, then tie-broken by `external_id` ascending
+/// (or according to `req.sort` when specified). For both kNN and RRF queries
+/// ([`crate::shared_kernel::types::query::QueryNode::Rrf`]), per-shard pages
+/// are merged by score descending, then `external_id` ascending: per-shard RRF
+/// scores are comparable across shards under the standard reciprocal rank fusion
+/// formulation, and tie-breaking by `external_id` guarantees deterministic ordering
+/// independent of the arrival order of shard responses.
+///
+/// When the same `external_id` appears across multiple shards (e.g. during a shard
+/// split/migration), only one hit survives: the one with the higher score.
 pub fn merge_shard_search_responses<K>(
     req: &SearchRequest,
     responses: impl IntoIterator<Item = SearchResponse>,
@@ -97,7 +109,9 @@ where
                     return ord;
                 }
             }
-            a.external_id.cmp(&b.external_id)
+            a.external_id
+                .cmp(&b.external_id)
+                .then_with(|| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal))
         });
     } else {
         hits.sort_by(|a, b| {
@@ -107,6 +121,11 @@ where
                 .then_with(|| a.external_id.cmp(&b.external_id))
         });
     }
+
+    // Deduplicate identical external_ids across shards: retain the one with
+    // the higher score (first occurrence in score descending order).
+    let mut seen = std::collections::HashSet::new();
+    hits.retain(|h| seen.insert(h.external_id.clone()));
 
     let page: Vec<_> = hits.into_iter().skip(offset).take(limit).collect();
     let next_offset = offset + page.len();
