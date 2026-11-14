@@ -38,6 +38,8 @@ fn the_committed_crd_matches_the_generator() {
     assert_eq!(committed.trim_end(), crd_yaml().trim_end());
 }
 
+mod compat;
+
 /// A namespaced fleet could not legally own objects in other namespaces:
 /// Kubernetes rejects cross-namespace owner references and its garbage
 /// collector deletes the dependents. Cluster scope is the load-bearing
