@@ -113,3 +113,14 @@ fn auth_defaults_to_required() {
     assert_eq!(AuthMode::default(), AuthMode::Required);
     assert_eq!(AuthMode::default().as_env(), "required");
 }
+
+/// The per-instance runtime settings reach the API server: the `Lumen` CRD
+/// carries them, and the fleet carries them under `defaults` and `instances[]`.
+#[test]
+fn the_runtime_field_survives_structural_schema_pruning() {
+    let lumen = lumen_crd_yaml();
+    assert!(lumen.contains("snapshotSecs"), "{lumen}");
+    let fleet = fleet_crd_yaml();
+    assert!(fleet.matches("snapshotSecs").count() >= 2, "{fleet}");
+    assert!(fleet.contains("bootstrapMaxBytesPerSec"), "{fleet}");
+}
