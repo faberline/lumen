@@ -117,6 +117,7 @@ fn pod_metrics_urls_covers_every_storage_pod_by_headless_dns() {
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        runtime: None,
         extra_env: Vec::new(),
         extra_args: Vec::new(),
     };
