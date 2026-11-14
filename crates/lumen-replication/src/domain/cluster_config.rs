@@ -26,8 +26,8 @@ pub struct ClusterConfig {
     pub pod_name: String,
 }
 
-impl From<raft_runtime::cluster::ClusterDims> for ClusterConfig {
-    fn from(d: raft_runtime::cluster::ClusterDims) -> Self {
+impl From<raft_runtime::ClusterDims> for ClusterConfig {
+    fn from(d: raft_runtime::ClusterDims) -> Self {
         Self {
             shard_count: d.shard_count,
             replicas_per_shard: d.replicas_per_shard,
@@ -37,7 +37,7 @@ impl From<raft_runtime::cluster::ClusterDims> for ClusterConfig {
     }
 }
 
-impl From<ClusterConfig> for raft_runtime::cluster::ClusterDims {
+impl From<ClusterConfig> for raft_runtime::ClusterDims {
     fn from(c: ClusterConfig) -> Self {
         Self {
             shard_count: c.shard_count,
@@ -50,30 +50,30 @@ impl From<ClusterConfig> for raft_runtime::cluster::ClusterDims {
 
 impl ClusterConfig {
     pub fn from_env() -> Result<Self> {
-        Ok(raft_runtime::cluster::ClusterDims::from_env()?.into())
+        Ok(raft_runtime::ClusterDims::from_env()?.into())
     }
 
     pub fn pod_ordinal(&self) -> Result<u32> {
-        raft_runtime::cluster::ClusterDims::from(self.clone()).pod_ordinal()
+        raft_runtime::ClusterDims::from(self.clone()).pod_ordinal()
     }
 
     pub fn shard_index(&self) -> Result<u32> {
-        raft_runtime::cluster::ClusterDims::from(self.clone()).shard_index()
+        raft_runtime::ClusterDims::from(self.clone()).shard_index()
     }
 
     pub fn replica_index(&self) -> Result<u32> {
-        raft_runtime::cluster::ClusterDims::from(self.clone()).replica_index()
+        raft_runtime::ClusterDims::from(self.clone()).replica_index()
     }
 
     pub fn is_voter(&self) -> Result<bool> {
-        raft_runtime::cluster::ClusterDims::from(self.clone()).is_voter()
+        raft_runtime::ClusterDims::from(self.clone()).is_voter()
     }
 
     /// This pod's StatefulSet name — the peer-DNS prefix. Delegated for the
     /// same reason as the ordinal math (#1002): one derivation, so
     /// `RaftGroup`'s peer names cannot drift from `ClusterTopology`'s.
     pub fn pod_prefix(&self) -> Result<String> {
-        raft_runtime::cluster::ClusterDims::from(self.clone())
+        raft_runtime::ClusterDims::from(self.clone())
             .pod_prefix()
             .map(str::to_string)
     }
