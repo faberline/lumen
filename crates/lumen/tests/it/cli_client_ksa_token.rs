@@ -750,6 +750,23 @@ fn test_leaf(ca: &TestCa, dns: &str) -> (String, String) {
     (cert.pem(), key.serialize_pem())
 }
 
+/// A serving leaf for `dns` that is valid now and expires `lifetime_secs` from
+/// now, so it can be loaded and then go stale while the server runs.
+fn test_leaf_expiring_in(ca: &TestCa, dns: &str, lifetime_secs: i64) -> (String, String) {
+    let mut params = rcgen::CertificateParams::new(vec![dns.to_string()]).expect("leaf params");
+    params
+        .distinguished_name
+        .push(rcgen::DnType::CommonName, dns);
+    params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth];
+    params.not_before = time::OffsetDateTime::now_utc() - time::Duration::hours(1);
+    params.not_after = time::OffsetDateTime::now_utc() + time::Duration::seconds(lifetime_secs);
+    let key = rcgen::KeyPair::generate().expect("leaf key");
+    let cert = params
+        .signed_by(&key, &ca.cert, &ca.key)
+        .expect("sign leaf");
+    (cert.pem(), key.serialize_pem())
+}
+
 /// One request the TLS upstream answered.
 #[derive(Debug, Clone)]
 struct TlsSeen {
@@ -771,6 +788,29 @@ struct TlsUpstream {
     _material: tempfile::TempDir,
     // Held, never sent on: dropping it is the shutdown edge.
     _shutdown: tokio::sync::oneshot::Sender<()>,
+    // The server's warn lines, captured while it serves.
+    log: LogBuffer,
+}
+
+/// Captures what the upstream server logs. Cloned into the server thread.
+#[derive(Clone, Default)]
+struct LogBuffer(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for LogBuffer {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().expect("log lock").extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl LogBuffer {
+    fn text(&self) -> String {
+        String::from_utf8_lossy(&self.0.lock().expect("log lock")).into_owned()
+    }
 }
 
 impl TlsUpstream {
@@ -784,10 +824,21 @@ impl TlsUpstream {
         let claimed = dns.to_string();
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let recorder = seen.clone();
+        let log = LogBuffer::default();
+        let sink = log.clone();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let (ready_tx, ready_rx) = mpsc::channel();
 
         std::thread::spawn(move || {
+            // Thread-local: the accept loop below runs on this thread, so it
+            // sees this subscriber. The guard lives until the thread ends.
+            let _log_guard = tracing::subscriber::set_default(
+                tracing_subscriber::fmt()
+                    .with_writer(move || sink.clone())
+                    .with_ansi(false)
+                    .with_max_level(tracing::Level::WARN)
+                    .finish(),
+            );
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -839,7 +890,7 @@ impl TlsUpstream {
                 service_http::serve_tls(
                     listener,
                     app,
-                    service_http::config_source(move || tls.server_config()),
+                    service_http::config_source(move || lumen::tls::serving_server_config(&tls)),
                     async move {
                         let _ = shutdown_rx.await;
                     },
@@ -856,7 +907,12 @@ impl TlsUpstream {
             seen,
             _material: material,
             _shutdown: shutdown_tx,
+            log,
         }
+    }
+
+    fn log(&self) -> String {
+        self.log.text()
     }
 
     fn port(&self) -> u16 {
@@ -1114,6 +1170,119 @@ fn a_certificate_for_another_service_is_refused_by_name() {
         !stderr.contains("localhost") && !stderr.contains("127.0.0.1 certificate"),
         "#3113 R7: a localhost certificate is not a remediation path:\n{stderr}"
     );
+}
+
+/// Run `lumen connect --ca-file` against a deployment that should accept it,
+/// and return the stderr. Used as the negative control: the same fixture with
+/// a valid leaf must pass, so a refusal elsewhere is not the fixture's doing.
+fn connect_succeeds(ca_pem: &str, upstream_port: u16) -> String {
+    let fixture = Fixture::new();
+    let apiserver = FakeApiserver::start(Grant::Issue {
+        service_account: CLIENT_SA,
+    });
+    let ca_file = fixture.tmp.path().join("ca.crt");
+    std::fs::write(&ca_file, ca_pem).expect("write trust bundle");
+
+    let out = fixture.run(
+        &apiserver,
+        upstream_port,
+        &[
+            "connect",
+            "--namespace",
+            NAMESPACE,
+            "--cr",
+            "search",
+            "--client-sa",
+            CLIENT_SA,
+            "--ca-file",
+            ca_file.to_str().unwrap(),
+            "--",
+            "true",
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        out.status.success(),
+        "#3113 negative control: a valid leaf must be accepted:\n{stderr}"
+    );
+    stderr
+}
+
+/// R7: a leaf that is valid when the server loads it and expires while the
+/// server runs. The verifying client must say expiry, not a generic handshake
+/// failure, and the diagnostic must not leak key material.
+#[test]
+fn a_leaf_that_expires_after_start_is_refused_and_the_server_logs_the_expiry() {
+    let _connect_test = connect_test_lock();
+    let ca = test_ca("the-fleets-ca");
+
+    // Negative control first: a valid leaf is accepted and logs no refusal.
+    let (good_cert, good_key) = test_leaf(&ca, SERVICE_DNS);
+    let good = TlsUpstream::start(SERVICE_DNS, &good_cert, &good_key, &ca.cert.pem());
+    connect_succeeds(&ca.cert.pem(), good.port());
+    assert!(
+        !good.log().contains("refusing a TLS connection"),
+        "a valid leaf must not log a refusal:\n{}",
+        good.log()
+    );
+    let _ = good.seen();
+
+    let (cert, key) = test_leaf_expiring_in(&ca, SERVICE_DNS, 3);
+    let upstream = TlsUpstream::start(SERVICE_DNS, &cert, &key, &ca.cert.pem());
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    let stderr = refused_connect(&ca.cert.pem(), upstream.port());
+
+    // The server refuses before the handshake, so the server log is where the
+    // expiry is named. Wait briefly in case the line is still in flight.
+    let mut log = upstream.log();
+    for _ in 0..20 {
+        if log.contains("the active serving leaf has expired") {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        log = upstream.log();
+    }
+    assert!(
+        log.contains("the active serving leaf has expired"),
+        "#3113 R7: the server must log the expiry when it refuses an expired leaf:\n{log}"
+    );
+    assert!(
+        !log.contains("PRIVATE KEY") && !log.contains(&key),
+        "#3113 R7: the server log leaked key material:\n{log}"
+    );
+    assert!(
+        !stderr.contains("PRIVATE KEY") && !stderr.contains(&key),
+        "#3113 R7: the client diagnostic leaked key material:\n{stderr}"
+    );
+    let _ = upstream.seen();
+}
+
+/// #3113: the server is addressed by the Service DNS name on the successful
+/// path. Every request the upstream records carries that name as its
+/// authority, and never `localhost` or `127.0.0.1`.
+#[test]
+fn the_server_is_addressed_by_the_service_dns_name_and_a_valid_leaf_is_accepted() {
+    let _connect_test = connect_test_lock();
+    let ca = test_ca("lumen-private-ca");
+    let (cert, key) = test_leaf(&ca, SERVICE_DNS);
+    let upstream = TlsUpstream::start(SERVICE_DNS, &cert, &key, &ca.cert.pem());
+    connect_succeeds(&ca.cert.pem(), upstream.port());
+
+    let seen = upstream.seen();
+    assert!(
+        !seen.is_empty(),
+        "#3113: the TLS preflight must reach the server, which recorded nothing"
+    );
+    for record in &seen {
+        assert_eq!(
+            record.host, SERVICE_DNS,
+            "#3113: a request was addressed to something other than the Service DNS name: {record:?}"
+        );
+        assert!(
+            record.host != "localhost" && record.host != "127.0.0.1",
+            "#3113: a request was addressed to a loopback name: {record:?}"
+        );
+    }
 }
 
 /// R7: a fleet still serving cleartext is a deployment fact, and reads as one

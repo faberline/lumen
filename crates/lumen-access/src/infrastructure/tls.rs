@@ -202,6 +202,30 @@ impl ServingTlsConfig {
     }
 }
 
+/// Server configuration for one accepted connection (#3113 R9).
+///
+/// `None` refuses the connection. Say why, once per refusal, so an operator
+/// can tell an expired serving leaf from a missing one without a new status API.
+pub fn serving_server_config(
+    tls: &peer_tls::ReloadableTls,
+) -> Option<std::sync::Arc<rustls::ServerConfig>> {
+    let config = tls.server_config();
+    if config.is_none() {
+        if tls.generation() > 0 {
+            tracing::warn!(
+                target: "lumen::tls",
+                "refusing a TLS connection: the active serving leaf has expired"
+            );
+        } else {
+            tracing::warn!(
+                target: "lumen::tls",
+                "refusing a TLS connection: no valid serving leaf is active"
+            );
+        }
+    }
+    config
+}
+
 pub use peer_tls::install_default_crypto_provider;
 
 #[cfg(test)]

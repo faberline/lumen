@@ -148,6 +148,7 @@ memory-stats = "1"
 wiremock = "0.6"
 jsonwebtoken = "9"
 rcgen = "0.13"
+time = "0.3"
 
 # Build scripts.
 build-stamp = { git = "https://github.com/faberline/core", tag = "v0.4.14" }
