@@ -98,6 +98,7 @@ impl Engine {
             reused: BTreeSet::new(),
             initial_sparse: BTreeSet::new(),
             field_deltas: std::sync::Arc::new(BTreeMap::new()),
+            journal_complete: std::collections::BTreeSet::new(),
             record_cut: None,
         })
     }
@@ -219,6 +220,7 @@ impl Engine {
             reused: BTreeSet::new(),
             initial_sparse: BTreeSet::new(),
             field_deltas: std::sync::Arc::new(BTreeMap::new()),
+            journal_complete: std::collections::BTreeSet::new(),
             record_cut: None,
         };
         let mut files = Vec::new();
@@ -234,6 +236,9 @@ impl Engine {
                     schema_version: coll.version,
                 },
             );
+            if coll.journal_complete_since_empty {
+                capture.journal_complete.insert(name.clone());
+            }
             // Pin every scalar field, including a field that has not yet acquired
             // a composed reader. The empty cut is later replaced by the real empty
             // base plus its first sparse catalog delta.

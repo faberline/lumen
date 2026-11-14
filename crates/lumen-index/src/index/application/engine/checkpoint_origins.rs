@@ -6,7 +6,9 @@ use std::collections::BTreeSet;
 
 use anyhow::{anyhow, Result};
 
-use crate::index::application::checkpoint_capture::CheckpointCapture;
+use crate::index::application::checkpoint_capture::{
+    CheckpointCapture, CheckpointCollectionIdentity,
+};
 use crate::index::application::engine::state_hold::StateHoldTrace;
 use crate::index::application::engine::Engine;
 use crate::index::application::live_base::{
@@ -25,10 +27,22 @@ impl Engine {
         root: &std::path::Path,
         capture: &mut CheckpointCapture,
     ) -> Result<()> {
+        // Only collections with bind work enter the write lock. A clean reused
+        // collection stays bound, so the lock does not grow with idle collections.
+        let work: Vec<(String, CheckpointCollectionIdentity)> = capture
+            .collections
+            .iter()
+            .filter(|(name, _)| capture.needs_bind(name))
+            .map(|(name, identity)| (name.clone(), identity.clone()))
+            .collect();
         let mut hold = StateHoldTrace::begin("bind_checkpoint_origins", "", "write");
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
         hold.acquired();
-        for (name, identity) in &capture.collections {
+        for (name, identity) in &work {
+            #[cfg(test)]
+            {
+                state.checkpoint_bind_visits += 1;
+            }
             if let Some(coll) = state.collections.get_mut(name) {
                 if coll.collection_generation == identity.generation
                     && coll.version == identity.schema_version
@@ -183,6 +197,15 @@ impl Engine {
         }
         state.checkpoint_lineage_root = Some(root.to_path_buf());
         self.publish_storage_bytes(&state);
+        drop(state);
+        // Release the frozen batches of clean collections after the bind
+        // succeeded. Each journal takes only its own mutex, so no state lock is held.
+        let work_names: BTreeSet<&str> = work.iter().map(|(name, _)| name.as_str()).collect();
+        for (name, frozen) in &capture.frozen_changes {
+            if !work_names.contains(name.as_str()) {
+                frozen.acknowledge_through_own();
+            }
+        }
         Ok(())
     }
 
