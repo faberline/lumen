@@ -307,12 +307,7 @@ fn checkpoint_freeze_exchanges_journal_for_all_field_backends() {
                     .active_revision(field, "sparse-1000000")
                     .is_some());
             }
-            coll.checkpoint_lineage
-                .as_ref()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .to_path_buf()
+            state.checkpoint_lineage_root.clone().unwrap()
         };
         let frozen = engine
             .freeze_checkpoint_collections(Some(&lineage))
@@ -379,3 +374,4 @@ fn checkpoint_freeze_exchanges_journal_for_all_field_backends() {
 }
 
 mod background_merge;
+mod lineage;

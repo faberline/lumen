@@ -219,6 +219,50 @@ pub struct LumenSpec {
     /// current behavior; `allowedServiceAccounts: []` denies all.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub access: Option<AccessSpec>,
+    /// Extra environment for the serving container, after the operator-owned
+    /// entries. Each entry sets exactly one of `value`, `secretKeyRef` or
+    /// `configMapKeyRef`. A Secret or ConfigMap value is never read or copied:
+    /// it reaches the pod only as a `valueFrom` reference.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_env: Vec<EnvEntry>,
+
+    /// Flag-only extra arguments for `lumen serve`. Each must start with `--`
+    /// and contain no whitespace. The operator sets no flags today; collisions
+    /// are checked if it starts to.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_args: Vec<String>,
+}
+
+/// One entry of [`LumenSpec::extra_env`]. Exactly one source must be set.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvEntry {
+    /// The environment variable name. Letters, digits and underscores only,
+    /// not starting with a digit. Operator-owned prefixes are refused.
+    pub name: String,
+
+    /// A literal value. Mutually exclusive with the two reference fields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+
+    /// The value of `key` in a Secret of the instance's own namespace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret_key_ref: Option<KeyRef>,
+
+    /// The value of `key` in a ConfigMap of the instance's own namespace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_map_key_ref: Option<KeyRef>,
+}
+
+/// A reference to one key of a Secret or ConfigMap.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyRef {
+    /// The Secret or ConfigMap name, in the instance's own namespace.
+    pub name: String,
+
+    /// The key inside that Secret or ConfigMap.
+    pub key: String,
 }
 
 /// Minimum accepted request body limit: 1 MiB (1048576 bytes).
