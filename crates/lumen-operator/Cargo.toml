@@ -26,6 +26,7 @@ service-auth.workspace = true
 service-backup.workspace = true
 service-http.workspace = true
 service-k8s = { workspace = true, features = ["full"] }
+sha2.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
