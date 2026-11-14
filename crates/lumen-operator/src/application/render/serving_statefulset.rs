@@ -3,6 +3,9 @@
 use serde_json::{json, Value};
 use service_k8s::render::{self, RenderCtx, ServiceStatefulSet, WorkloadVolumeClaim};
 
+use std::collections::BTreeMap;
+
+use crate::application::render::restart_hash::restart_required_hash;
 use crate::application::render::serving_config::serving_env;
 use crate::application::render::{
     serving_service_account_name, CLIENT_PORT, COMPONENT, EMBEDDED_DATA_DIR, HEADLESS_ENV_KEY,
@@ -122,7 +125,7 @@ pub(super) fn serving_statefulset(
         image: lumen.spec.image.as_str(),
         image_pull_policy,
         command: vec!["lumen".into(), "serve".into()],
-        args: vec![],
+        args: lumen.spec.extra_args.clone(),
         ports: vec![
             json!({ "name": "http", "containerPort": CLIENT_PORT, "protocol": "TCP" }),
             json!({ "name": "raft", "containerPort": RAFT_PORT, "protocol": "TCP" }),
@@ -144,6 +147,7 @@ pub(super) fn serving_statefulset(
             "prometheus.io/scrape": "true",
             "prometheus.io/port": CLIENT_PORT.to_string(),
             "prometheus.io/path": "/metrics",
+            "lumen.dev/restart-hash": restart_required_hash(lumen, &BTreeMap::new()),
         })),
         pod_security_context: Some(render::restricted_pod_security_context()),
         container_security_context: Some(render::restricted_container_security_context()),

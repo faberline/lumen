@@ -493,7 +493,11 @@ impl SegmentRdbStore {
                 .validate_publish(captured_stamp)
                 .map_err(anyhow::Error::msg)?;
             let bind_started = Instant::now();
-            engine.bind_background_merge(&self.root.join(record.name.as_str()), &mut capture)?;
+            engine.bind_background_merge(
+                &self.root.join(record.name.as_str()),
+                &mut capture,
+                &self.root.join(latest.name.as_str()),
+            )?;
             bind_elapsed = bind_started.elapsed();
             drop(binding);
             drop(owner_publication);

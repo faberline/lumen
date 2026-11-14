@@ -8,6 +8,7 @@ use anyhow::{bail, Result};
 use crate::cli::RunArgs;
 use crate::lifecycle::CollectionLifecycle;
 use crate::report::{summary, write_report, Mode, PhaseResult, PhaseStatus, Report};
+use crate::visible_version::VisibleVersion;
 use crate::writes::WritesAndMasking;
 
 pub(super) trait Phase {
@@ -120,6 +121,7 @@ fn default_phase_names(mode: Mode) -> Vec<&'static str> {
             "endpoint_configured",
             "collection_lifecycle",
             "writes_and_masking",
+            "visible_version",
         ],
         Mode::Performance => vec!["endpoint_configured"],
     }
@@ -139,16 +141,20 @@ fn phase_list(mode: Mode, args: &RunArgs) -> Result<Vec<Box<dyn Phase>>> {
             .collect(),
     };
     if names.is_empty() {
-        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking");
+        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, performance_thresholds");
     }
     names
         .iter()
         .map(|name| match name.as_str() {
             "endpoint_configured" => Ok(Box::new(EndpointConfigured) as Box<dyn Phase>),
+            "performance_thresholds" => Ok(Box::new(crate::perf_gate::PerformanceThresholds {
+                expected_commit: args.commit.clone(),
+            }) as Box<dyn Phase>),
             "collection_lifecycle" => Ok(Box::new(CollectionLifecycle) as Box<dyn Phase>),
             "writes_and_masking" => Ok(Box::new(WritesAndMasking) as Box<dyn Phase>),
+            "visible_version" => Ok(Box::new(VisibleVersion) as Box<dyn Phase>),
             other => bail!(
-                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking"
+                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, performance_thresholds"
             ),
         })
         .collect()
@@ -319,7 +325,8 @@ mod tests {
             [
                 "endpoint_configured",
                 "collection_lifecycle",
-                "writes_and_masking"
+                "writes_and_masking",
+                "visible_version"
             ]
         );
     }
@@ -370,6 +377,24 @@ mod tests {
         let text = std::fs::read_to_string(dir.path().join("report.json")).expect("report.json");
         let value: serde_json::Value = serde_json::from_str(&text).expect("json");
         assert_eq!(value["failing_phase"], "endpoint_configured");
+    }
+
+    #[test]
+    fn performance_thresholds_phase_is_wired() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut run_args = args(dir.path());
+        run_args.phases = Some("performance_thresholds".into());
+        run_args.commit = "abc1234".into();
+        let ok = execute(Mode::Performance, run_args.clone()).expect("executes");
+        assert!(!ok, "no evidence file, so the run must fail");
+        let text = std::fs::read_to_string(dir.path().join("report.json")).expect("report.json");
+        let value: serde_json::Value = serde_json::from_str(&text).expect("json");
+        assert_eq!(value["failing_phase"], "performance_thresholds");
+
+        let good = include_str!("fixtures/perf_evidence_good.json");
+        std::fs::write(dir.path().join("perf-evidence.json"), good).expect("write");
+        let ok = execute(Mode::Performance, run_args).expect("executes");
+        assert!(ok, "the good fixture must pass");
     }
 
     #[test]

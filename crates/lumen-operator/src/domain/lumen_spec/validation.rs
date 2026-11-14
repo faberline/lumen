@@ -30,6 +30,59 @@ impl LumenSpec {
                 ));
             }
         }
+        if let Some(access) = &self.access {
+            for subject in &access.allowed_service_accounts {
+                crate::domain::lumen_spec::access::validate_subject(subject)?;
+            }
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for (i, entry) in self.extra_env.iter().enumerate() {
+            let name = entry.name.as_str();
+            let sources = [
+                entry.value.is_some(),
+                entry.secret_key_ref.is_some(),
+                entry.config_map_key_ref.is_some(),
+            ]
+            .into_iter()
+            .filter(|set| *set)
+            .count();
+            if sources != 1 {
+                return Err(format!(
+                    "extraEnv[{i}] ({name}) must set exactly one of value, secretKeyRef, configMapKeyRef"
+                ));
+            }
+            if !is_valid_env_name(name) {
+                return Err(format!(
+                    "extraEnv[{i}] name ({name}) is not a valid environment variable name"
+                ));
+            }
+            for key_ref in [&entry.secret_key_ref, &entry.config_map_key_ref]
+                .into_iter()
+                .flatten()
+            {
+                if key_ref.name.is_empty() || key_ref.key.is_empty() {
+                    return Err(format!(
+                        "extraEnv[{i}] ({name}) secretKeyRef/configMapKeyRef needs a non-empty name and key"
+                    ));
+                }
+            }
+            if is_reserved_env_name(name) {
+                return Err(format!(
+                    "extraEnv[{i}] ({name}) is an environment variable the operator owns"
+                ));
+            }
+            if !seen.insert(name) {
+                return Err(format!("extraEnv has duplicate name ({name})"));
+            }
+        }
+        for (i, arg) in self.extra_args.iter().enumerate() {
+            if !arg.starts_with("--") {
+                return Err(format!("extraArgs[{i}] must be a flag starting with --"));
+            }
+            if arg.chars().any(char::is_whitespace) {
+                return Err(format!("extraArgs[{i}] must not contain whitespace"));
+            }
+        }
         Ok(())
     }
 
@@ -64,4 +117,18 @@ impl LumenSpec {
             1
         }
     }
+}
+
+/// Is `name` an environment variable the operator owns? The operator writes
+/// these names itself, so an extra entry must not reuse them.
+pub fn is_reserved_env_name(name: &str) -> bool {
+    const PREFIXES: [&str; 5] = ["LUMEN_", "POD_", "RAFT_", "SHARD_", "VIRTUAL_"];
+    const NAMES: [&str; 2] = ["REPLICAS_PER_SHARD", "VOTER_COUNT"];
+    PREFIXES.iter().any(|prefix| name.starts_with(prefix)) || NAMES.contains(&name)
+}
+
+fn is_valid_env_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with(|c: char| c.is_ascii_digit())
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }

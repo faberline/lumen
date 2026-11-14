@@ -1,5 +1,42 @@
+use serde_json::json;
+
 use crate::domain::lumen_spec::serving::AuthMode;
-use crate::infrastructure::crd_manifest::{crd_yaml, fleet_crd_yaml, FORBIDDEN_CEL_OPERATOR};
+use crate::infrastructure::crd_manifest::{
+    crd_yaml, fleet_crd_yaml, lumen_crd_yaml, FORBIDDEN_CEL_OPERATOR,
+};
+
+/// The typed ServiceAccount list is a schema contract: each subject must be
+/// an object with both `namespace` and `name` required, so an incomplete
+/// subject is refused by the API server, not only by the Rust type.
+#[test]
+fn the_lumen_crd_offers_typed_allowed_service_accounts() {
+    let yaml = lumen_crd_yaml();
+    assert!(yaml.contains("allowedServiceAccounts"), "{yaml}");
+    let doc: serde_json::Value = serde_yaml::from_str(&yaml).expect("CRD yaml parses");
+    let access = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
+        ["properties"]["access"];
+    assert!(
+        access["required"]
+            .as_array()
+            .expect("access.required")
+            .contains(&json!("allowedServiceAccounts")),
+        "{access}"
+    );
+    let items = &access["properties"]["allowedServiceAccounts"]["items"];
+    let required = items["required"].as_array().expect("items.required");
+    assert!(required.contains(&json!("namespace")), "{items}");
+    assert!(required.contains(&json!("name")), "{items}");
+    assert!(items["properties"]["namespace"].is_object(), "{items}");
+    assert!(items["properties"]["name"].is_object(), "{items}");
+}
+
+/// `k8s/operator/crd.yaml` is regenerated from the Rust types, never edited
+/// by hand: the committed artifact must equal the generator's output.
+#[test]
+fn the_committed_crd_matches_the_generator() {
+    let committed = include_str!("../../../../../k8s/operator/crd.yaml");
+    assert_eq!(committed.trim_end(), crd_yaml().trim_end());
+}
 
 /// A namespaced fleet could not legally own objects in other namespaces:
 /// Kubernetes rejects cross-namespace owner references and its garbage
@@ -75,4 +112,15 @@ fn one_apply_installs_both_custom_resources() {
 fn auth_defaults_to_required() {
     assert_eq!(AuthMode::default(), AuthMode::Required);
     assert_eq!(AuthMode::default().as_env(), "required");
+}
+
+/// The per-instance runtime settings reach the API server: the `Lumen` CRD
+/// carries them, and the fleet carries them under `defaults` and `instances[]`.
+#[test]
+fn the_runtime_field_survives_structural_schema_pruning() {
+    let lumen = lumen_crd_yaml();
+    assert!(lumen.contains("snapshotSecs"), "{lumen}");
+    let fleet = fleet_crd_yaml();
+    assert!(fleet.matches("snapshotSecs").count() >= 2, "{fleet}");
+    assert!(fleet.contains("bootstrapMaxBytesPerSec"), "{fleet}");
 }

@@ -194,6 +194,10 @@ mod tests {
             peer_tls_secret: Some("lumen-peer-tls".into()),
             serving_tls_secret: Some("lumen-serving-tls".into()),
             body_limit_bytes: None,
+            access: None,
+            runtime: None,
+            extra_env: Vec::new(),
+            extra_args: Vec::new(),
         };
         let mut lumen = Lumen::new("lumen", spec);
         lumen.metadata.namespace = Some("lumen".to_string());
