@@ -29,22 +29,22 @@ pub struct ClusterConfig {
 impl From<raft_runtime::ClusterDims> for ClusterConfig {
     fn from(d: raft_runtime::ClusterDims) -> Self {
         Self {
-            shard_count: d.shard_count,
-            replicas_per_shard: d.replicas_per_shard,
-            voter_count: d.voter_count,
-            pod_name: d.pod_name,
+            shard_count: d.shard_count(),
+            replicas_per_shard: d.replicas_per_shard(),
+            voter_count: d.voter_count(),
+            pod_name: d.pod_name().to_string(),
         }
     }
 }
 
 impl From<ClusterConfig> for raft_runtime::ClusterDims {
     fn from(c: ClusterConfig) -> Self {
-        Self {
-            shard_count: c.shard_count,
-            replicas_per_shard: c.replicas_per_shard,
-            voter_count: c.voter_count,
-            pod_name: c.pod_name,
-        }
+        raft_runtime::ClusterDims::new(
+            c.shard_count,
+            c.replicas_per_shard,
+            c.voter_count,
+            c.pod_name,
+        )
     }
 }
 

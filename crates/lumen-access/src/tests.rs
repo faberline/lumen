@@ -92,17 +92,15 @@ impl ReviewBackend for Cluster {
         if self.reachable == Reachable::Neither {
             return Err(ReviewError::Transport("apiserver unreachable".into()));
         }
-        Ok(TokenReviewOutcome {
-            authenticated: true,
-            identity: ReviewedIdentity {
+        Ok(TokenReviewOutcome::authenticated(
+            ReviewedIdentity {
                 username: self.username.clone(),
                 uid: "uid-1".into(),
                 groups: vec!["system:serviceaccounts".into()],
                 ..Default::default()
             },
-            audiences: self.audiences.clone(),
-            error: None,
-        })
+            self.audiences.clone(),
+        ))
     }
 
     async fn review_access(

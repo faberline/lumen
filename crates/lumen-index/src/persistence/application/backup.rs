@@ -8,9 +8,19 @@
 //!   or invoked ad hoc via the CLI.
 
 use anyhow::{bail, Context, Result};
-pub use service_backup::{
-    fetch_admin_snapshot as fetch_snapshot_bytes, run_admin_snapshot_backup as run_backup,
-};
+pub use service_backup::run_admin_snapshot_backup as run_backup;
+
+/// Fetch the exact bytes of one `GET {base_url}/admin/backup` request (Bearer
+/// `token` when set). Uses core's strict admin snapshot transport: production
+/// timeouts, no redirects, only `200 OK`, and redacted errors (core#245/#246).
+pub async fn fetch_snapshot_bytes(base_url: &str, token: Option<&str>) -> Result<Vec<u8>> {
+    let transport = service_backup::AdminSnapshotTransport::new()
+        .map_err(|error| anyhow::anyhow!("admin snapshot transport: {error}"))?;
+    transport
+        .fetch_exact(base_url, token)
+        .await
+        .map_err(|error| anyhow::anyhow!("GET {base_url}/admin/backup: {error}"))
+}
 
 /// POST exact SnapshotV1 JSON bytes to `{base_url}/admin/restore` (Bearer
 /// `token` when set).
