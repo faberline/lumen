@@ -37,6 +37,29 @@ spec:
           spec:
             description: '`lumen.dev/v1alpha1` `Lumen`. Namespaced: every child object the operator renders lands in this object''s namespace, so multiple independent lumen deployments can coexist by name.'
             properties:
+              access:
+                description: 'Exact ServiceAccounts allowed to call the data plane. Absent keeps the current behavior; `allowedServiceAccounts: []` denies all.'
+                nullable: true
+                properties:
+                  allowedServiceAccounts:
+                    description: ServiceAccounts, each named by its exact namespace and name.
+                    items:
+                      description: One ServiceAccount, named exactly. Wildcards, groups and raw usernames are not representable here.
+                      properties:
+                        name:
+                          description: Name of the ServiceAccount, an exact DNS-1123 subdomain.
+                          type: string
+                        namespace:
+                          description: Namespace of the ServiceAccount, an exact DNS-1123 label.
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      type: object
+                    type: array
+                required:
+                - allowedServiceAccounts
+                type: object
               admission:
                 description: Optional in-process request admission (bounded token-bucket rate limiting per endpoint class), mirroring the `LUMEN_ADMISSION_*` env grammar `libs/service-http::AdmissionConfig` already parses (see `bin/lumen.rs`'s `serve` wiring). Absent means admission stays disabled — the pre-existing default; no new semantics, only a declarative surface for the existing env-driven behavior.
                 nullable: true
@@ -84,6 +107,55 @@ spec:
                 type: integer
                 minimum: 0.0
                 nullable: true
+              extraArgs:
+                description: Flag-only extra arguments for `lumen serve`. Each must start with `--` and contain no whitespace. The operator sets no flags today; collisions are checked if it starts to.
+                items:
+                  type: string
+                type: array
+              extraEnv:
+                description: 'Extra environment for the serving container, after the operator-owned entries. Each entry sets exactly one of `value`, `secretKeyRef` or `configMapKeyRef`. A Secret or ConfigMap value is never read or copied: it reaches the pod only as a `valueFrom` reference.'
+                items:
+                  description: One entry of [`LumenSpec::extra_env`]. Exactly one source must be set.
+                  properties:
+                    configMapKeyRef:
+                      description: The value of `key` in a ConfigMap of the instance's own namespace.
+                      nullable: true
+                      properties:
+                        key:
+                          description: The key inside that Secret or ConfigMap.
+                          type: string
+                        name:
+                          description: The Secret or ConfigMap name, in the instance's own namespace.
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    name:
+                      description: The environment variable name. Letters, digits and underscores only, not starting with a digit. Operator-owned prefixes are refused.
+                      type: string
+                    secretKeyRef:
+                      description: The value of `key` in a Secret of the instance's own namespace.
+                      nullable: true
+                      properties:
+                        key:
+                          description: The key inside that Secret or ConfigMap.
+                          type: string
+                        name:
+                          description: The Secret or ConfigMap name, in the instance's own namespace.
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    value:
+                      description: A literal value. Mutually exclusive with the two reference fields.
+                      nullable: true
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               image:
                 description: Serving container image, e.g. `lumen:latest`. Required.
                 type: string
@@ -265,6 +337,30 @@ spec:
                         minimum: 0.0
                         nullable: true
                     type: object
+                type: object
+              runtime:
+                description: Typed runtime settings. A field that is not set keeps its default.
+                nullable: true
+                properties:
+                  bootstrapMaxBytesPerSec:
+                    description: Cap on bootstrap transfer in bytes per second (`LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC`).
+                    type: integer
+                    minimum: 0.0
+                    nullable: true
+                  graceSecs:
+                    description: Grace period in seconds (`LUMEN_GRACE_SECS`).
+                    type: integer
+                    minimum: 0.0
+                    nullable: true
+                  otlpEndpoint:
+                    description: OTLP endpoint for exported telemetry (`LUMEN_OTLP_ENDPOINT`).
+                    nullable: true
+                    type: string
+                  snapshotSecs:
+                    description: Seconds between snapshots (`LUMEN_SNAPSHOT_SECS`).
+                    type: integer
+                    minimum: 0.0
+                    nullable: true
                 type: object
               serviceAccountAnnotations:
                 additionalProperties:
@@ -594,6 +690,29 @@ spec:
               defaults:
                 description: 'The complete `Lumen` spec every instance starts from — the platform team''s knowledge: which image, which node pool, which StorageClass, which auth mode. Required and fully schema-validated, because a fleet that cannot produce one valid instance is not a fleet.'
                 properties:
+                  access:
+                    description: 'Exact ServiceAccounts allowed to call the data plane. Absent keeps the current behavior; `allowedServiceAccounts: []` denies all.'
+                    nullable: true
+                    properties:
+                      allowedServiceAccounts:
+                        description: ServiceAccounts, each named by its exact namespace and name.
+                        items:
+                          description: One ServiceAccount, named exactly. Wildcards, groups and raw usernames are not representable here.
+                          properties:
+                            name:
+                              description: Name of the ServiceAccount, an exact DNS-1123 subdomain.
+                              type: string
+                            namespace:
+                              description: Namespace of the ServiceAccount, an exact DNS-1123 label.
+                              type: string
+                          required:
+                          - name
+                          - namespace
+                          type: object
+                        type: array
+                    required:
+                    - allowedServiceAccounts
+                    type: object
                   admission:
                     description: Optional in-process request admission (bounded token-bucket rate limiting per endpoint class), mirroring the `LUMEN_ADMISSION_*` env grammar `libs/service-http::AdmissionConfig` already parses (see `bin/lumen.rs`'s `serve` wiring). Absent means admission stays disabled — the pre-existing default; no new semantics, only a declarative surface for the existing env-driven behavior.
                     nullable: true
@@ -641,6 +760,55 @@ spec:
                     type: integer
                     minimum: 0.0
                     nullable: true
+                  extraArgs:
+                    description: Flag-only extra arguments for `lumen serve`. Each must start with `--` and contain no whitespace. The operator sets no flags today; collisions are checked if it starts to.
+                    items:
+                      type: string
+                    type: array
+                  extraEnv:
+                    description: 'Extra environment for the serving container, after the operator-owned entries. Each entry sets exactly one of `value`, `secretKeyRef` or `configMapKeyRef`. A Secret or ConfigMap value is never read or copied: it reaches the pod only as a `valueFrom` reference.'
+                    items:
+                      description: One entry of [`LumenSpec::extra_env`]. Exactly one source must be set.
+                      properties:
+                        configMapKeyRef:
+                          description: The value of `key` in a ConfigMap of the instance's own namespace.
+                          nullable: true
+                          properties:
+                            key:
+                              description: The key inside that Secret or ConfigMap.
+                              type: string
+                            name:
+                              description: The Secret or ConfigMap name, in the instance's own namespace.
+                              type: string
+                          required:
+                          - key
+                          - name
+                          type: object
+                        name:
+                          description: The environment variable name. Letters, digits and underscores only, not starting with a digit. Operator-owned prefixes are refused.
+                          type: string
+                        secretKeyRef:
+                          description: The value of `key` in a Secret of the instance's own namespace.
+                          nullable: true
+                          properties:
+                            key:
+                              description: The key inside that Secret or ConfigMap.
+                              type: string
+                            name:
+                              description: The Secret or ConfigMap name, in the instance's own namespace.
+                              type: string
+                          required:
+                          - key
+                          - name
+                          type: object
+                        value:
+                          description: A literal value. Mutually exclusive with the two reference fields.
+                          nullable: true
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
                   image:
                     description: Serving container image, e.g. `lumen:latest`. Required.
                     type: string
@@ -823,6 +991,30 @@ spec:
                             nullable: true
                         type: object
                     type: object
+                  runtime:
+                    description: Typed runtime settings. A field that is not set keeps its default.
+                    nullable: true
+                    properties:
+                      bootstrapMaxBytesPerSec:
+                        description: Cap on bootstrap transfer in bytes per second (`LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC`).
+                        type: integer
+                        minimum: 0.0
+                        nullable: true
+                      graceSecs:
+                        description: Grace period in seconds (`LUMEN_GRACE_SECS`).
+                        type: integer
+                        minimum: 0.0
+                        nullable: true
+                      otlpEndpoint:
+                        description: OTLP endpoint for exported telemetry (`LUMEN_OTLP_ENDPOINT`).
+                        nullable: true
+                        type: string
+                      snapshotSecs:
+                        description: Seconds between snapshots (`LUMEN_SNAPSHOT_SECS`).
+                        type: integer
+                        minimum: 0.0
+                        nullable: true
+                    type: object
                   serviceAccountAnnotations:
                     additionalProperties:
                       type: string
@@ -958,6 +1150,30 @@ spec:
                     namespace:
                       description: 'The namespace the `Lumen` is materialized into. The namespace must already exist: creating namespaces from a CR would make the operator''s ClusterRole a namespace-creation privilege, and namespace lifecycle (quotas, labels, Workload Identity bindings) belongs to whatever provisions the cluster.'
                       type: string
+                    runtime:
+                      description: Typed runtime settings for this instance. A field set here replaces the same field of [`LumenFleetSpec::defaults`]; a field left unset keeps the default.
+                      nullable: true
+                      properties:
+                        bootstrapMaxBytesPerSec:
+                          description: Cap on bootstrap transfer in bytes per second (`LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC`).
+                          type: integer
+                          minimum: 0.0
+                          nullable: true
+                        graceSecs:
+                          description: Grace period in seconds (`LUMEN_GRACE_SECS`).
+                          type: integer
+                          minimum: 0.0
+                          nullable: true
+                        otlpEndpoint:
+                          description: OTLP endpoint for exported telemetry (`LUMEN_OTLP_ENDPOINT`).
+                          nullable: true
+                          type: string
+                        snapshotSecs:
+                          description: Seconds between snapshots (`LUMEN_SNAPSHOT_SECS`).
+                          type: integer
+                          minimum: 0.0
+                          nullable: true
+                      type: object
                     spec:
                       description: |-
                         A JSON Merge Patch (RFC 7386) applied over [`LumenFleetSpec::defaults`] — the app team's knowledge: this tenant's CPU/memory request, its disk size, the name of its credential source. A `null` value removes an inherited field.

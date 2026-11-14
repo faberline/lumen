@@ -126,7 +126,7 @@ pub(super) fn serving_statefulset(
         image: lumen.spec.image.as_str(),
         image_pull_policy,
         command: vec!["lumen".into(), "serve".into()],
-        args: vec![],
+        args: lumen.spec.extra_args.clone(),
         ports: vec![
             json!({ "name": "http", "containerPort": CLIENT_PORT, "protocol": "TCP" }),
             json!({ "name": "raft", "containerPort": RAFT_PORT, "protocol": "TCP" }),
