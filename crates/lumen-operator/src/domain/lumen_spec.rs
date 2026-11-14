@@ -12,6 +12,7 @@
 //! [`super::reconcile`]: crate::application::reconcile
 
 pub mod access;
+pub mod auth_migration;
 pub mod reshard_status;
 pub mod runtime;
 pub mod serving;

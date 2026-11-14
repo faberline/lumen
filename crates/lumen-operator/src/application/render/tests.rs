@@ -4,6 +4,7 @@ use kube::api::ObjectMeta;
 use serde_json::{json, Value};
 
 use super::render;
+use crate::application::render::restart_hash::{canonical_input, restart_required_hash};
 use crate::domain::lumen_spec::{
     serving::{AuthMode, LogFormat, ServingSpec},
     topology::{ReshardPolicy, ShardMapSpec},
@@ -253,4 +254,135 @@ fn operator_owned_env_names_are_all_reserved() {
             );
         }
     }
+}
+
+// #42 (first slice): the restart-required hash and its pod-template annotation.
+
+fn hash(lumen: &Lumen) -> String {
+    restart_required_hash(lumen, &BTreeMap::new())
+}
+
+#[test]
+fn restart_hash_is_stable_for_the_same_spec() {
+    let lumen = single_replica();
+    let first = hash(&lumen);
+    assert_eq!(first, hash(&lumen));
+    assert_eq!(first.len(), 64);
+    assert!(first
+        .bytes()
+        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
+}
+
+#[test]
+fn restart_hash_ignores_field_order_of_object_versions() {
+    let lumen = single_replica();
+    let mut ab = BTreeMap::new();
+    ab.insert("cm".to_string(), "1".to_string());
+    ab.insert("secret".to_string(), "2".to_string());
+    let mut ba = BTreeMap::new();
+    ba.insert("secret".to_string(), "2".to_string());
+    ba.insert("cm".to_string(), "1".to_string());
+    assert_eq!(
+        restart_required_hash(&lumen, &ab),
+        restart_required_hash(&lumen, &ba)
+    );
+}
+
+#[test]
+fn restart_hash_changes_when_a_restart_required_value_changes() {
+    let base = hash(&single_replica());
+
+    let mut log = single_replica();
+    log.spec.log_level = Some("debug".into());
+
+    let mut auth = single_replica();
+    auth.spec.auth = AuthMode::Required;
+
+    let mut body = single_replica();
+    body.spec.body_limit_bytes = Some(2_097_152);
+
+    let mut admission = single_replica();
+    admission.spec.admission = Some(crate::domain::lumen_spec::AdmissionSpec {
+        read_capacity: Some(10),
+        write_capacity: None,
+        admin_capacity: None,
+        refill_secs: None,
+        max_keys: None,
+    });
+
+    for changed in [log, auth, body, admission] {
+        assert_ne!(hash(&changed), base);
+    }
+}
+
+#[test]
+fn restart_hash_changes_when_an_object_version_changes() {
+    let lumen = single_replica();
+    let v1 = BTreeMap::from([("app-config".to_string(), "1".to_string())]);
+    let v2 = BTreeMap::from([("app-config".to_string(), "2".to_string())]);
+    let none = BTreeMap::new();
+    assert_ne!(
+        restart_required_hash(&lumen, &v1),
+        restart_required_hash(&lumen, &v2)
+    );
+    assert_ne!(
+        restart_required_hash(&lumen, &none),
+        restart_required_hash(&lumen, &v1)
+    );
+}
+
+#[test]
+fn restart_hash_ignores_tls_certificate_content_but_not_the_reference() {
+    // Certificate file content is not an input: the hash is a function of the
+    // spec and the object versions only. A rotated file behind the same
+    // reference therefore keeps the hash and does not roll the pods.
+    let mut tls = single_replica();
+    tls.spec.serving_tls_secret = Some("tls-a".into());
+    assert_eq!(hash(&tls), hash(&tls.clone()));
+
+    // Adding or removing the reference changes the rendered env and mounts.
+    assert_ne!(hash(&single_replica()), hash(&tls));
+
+    let mut peer = single_replica();
+    peer.spec.replicas_per_shard = 3;
+    peer.spec.voter_count = 3;
+    let mut peer_tls = peer.clone();
+    peer_tls.spec.peer_tls_secret = Some("peer-a".into());
+    assert_ne!(hash(&peer), hash(&peer_tls));
+}
+
+#[test]
+fn restart_hash_annotation_is_on_the_serving_pod_template() {
+    let lumen = single_replica();
+    let statefulset = render(&lumen)
+        .into_iter()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet");
+    let annotations = &statefulset["spec"]["template"]["metadata"]["annotations"];
+    assert_eq!(annotations["lumen.dev/restart-hash"], json!(hash(&lumen)));
+    assert_eq!(annotations["prometheus.io/scrape"], json!("true"));
+}
+
+#[test]
+fn restart_hash_assertion_bites_when_a_field_is_left_out_of_the_input() {
+    // Negative control: without the LUMEN_LOG_LEVEL lines the two inputs are
+    // equal, so a hash input that left the field out would fail the
+    // "value changes, hash changes" assertion above.
+    let base = single_replica();
+    let mut changed = single_replica();
+    changed.spec.log_level = Some("debug".into());
+
+    let without_log_level = |lumen: &Lumen| {
+        canonical_input(lumen, &BTreeMap::new())
+            .lines()
+            .filter(|line| !line.contains("LUMEN_LOG_LEVEL"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    assert_ne!(
+        canonical_input(&base, &BTreeMap::new()),
+        canonical_input(&changed, &BTreeMap::new())
+    );
+    assert_eq!(without_log_level(&base), without_log_level(&changed));
 }

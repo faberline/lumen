@@ -3311,6 +3311,7 @@ dependencies = [
  "service-backup",
  "service-http",
  "service-k8s",
+ "sha2 0.10.9",
  "tokio",
  "tracing",
  "wiremock",
