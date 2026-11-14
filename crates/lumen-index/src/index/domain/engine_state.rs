@@ -13,6 +13,8 @@ pub(in crate::index) struct EngineState {
     pub(in crate::index) collections: BTreeMap<String, Collection>,
     pub(in crate::index) next_collection_generation: u64,
     pub(in crate::index) checkpoint_namespace: Option<std::path::PathBuf>,
+    /// The generation root that holds every bound collection's directory.
+    pub(in crate::index) checkpoint_lineage_root: Option<std::path::PathBuf>,
 }
 
 impl EngineState {

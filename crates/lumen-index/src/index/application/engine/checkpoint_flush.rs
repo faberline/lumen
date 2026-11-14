@@ -81,6 +81,7 @@ impl Engine {
         };
         for name in names {
             let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
+            let lineage_root = state.checkpoint_lineage_root.clone();
             let Some(coll) = state.collections.get_mut(&name) else {
                 continue; // dropped between snapshot and seal
             };
@@ -100,16 +101,14 @@ impl Engine {
             );
             let dirty = coll.field_dirty_snapshot();
             field_dirty.insert(name.clone(), dirty.clone());
-            let reusable = reuse_root.map(|root| root.join(collection_dir_name(&name)));
-            let origin = coll
-                .checkpoint_lineage
-                .as_ref()
-                .filter(|origin| {
-                    Some(*origin) == reusable.as_ref()
+            let origin = reuse_root
+                .filter(|root| {
+                    coll.checkpoint_bound
+                        && lineage_root.as_deref() == Some(*root)
                         && coll.checkpoint_lineage_schema == Some(coll.version)
                         && !coll.requires_full_checkpoint
                 })
-                .cloned();
+                .map(|root| root.join(collection_dir_name(&name)));
             if let Some(origin) = origin {
                 let fields = capture_dirty_values(coll, &dirty)?;
                 reused.insert(name.clone());
