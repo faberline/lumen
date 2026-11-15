@@ -82,6 +82,7 @@ fn lumen(name: &str, spec: LumenSpec) -> Lumen {
 
 fn dev_spec() -> LumenSpec {
     LumenSpec {
+        runtime: None,
         image: "lumen:latest".into(),
         image_pull_policy: None,
         image_pull_secrets: Vec::new(),
@@ -104,11 +105,14 @@ fn dev_spec() -> LumenSpec {
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     }
 }
 
 fn prod_spec() -> LumenSpec {
     LumenSpec {
+        runtime: None,
         image: "registry.example.com/lumen:1.2.3".into(),
         image_pull_policy: Some("Always".into()),
         image_pull_secrets: Vec::new(),
@@ -136,6 +140,8 @@ fn prod_spec() -> LumenSpec {
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     }
 }
 

@@ -80,6 +80,9 @@ fn hpa_test_spec(
         serving_tls_secret: None,
         body_limit_bytes: None,
         access: None,
+        runtime: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     }
 }
 
