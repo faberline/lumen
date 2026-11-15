@@ -77,6 +77,7 @@ fn sample_catalog_json() -> &'static str {
 
 fn test_lumen(name: &str, ns: &str, machine_type: &str) -> Lumen {
     let spec = LumenSpec {
+        runtime: None,
         image: "lumen:latest".into(),
         image_pull_policy: None,
         image_pull_secrets: Vec::new(),
@@ -101,6 +102,9 @@ fn test_lumen(name: &str, ns: &str, machine_type: &str) -> Lumen {
         peer_tls_secret: None,
         serving_tls_secret: None,
         body_limit_bytes: None,
+        access: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     };
     let mut l = Lumen::new(name, spec);
     l.metadata = ObjectMeta {

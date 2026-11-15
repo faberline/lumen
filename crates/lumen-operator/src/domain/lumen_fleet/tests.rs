@@ -5,6 +5,7 @@ use crate::domain::lumen_fleet::{
     FleetInstance, LumenFleet, LumenFleetSpec, PlanOutcome, PlannedInstance, PrunePolicy,
     FLEET_LABEL,
 };
+use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::LumenSpec;
 
 fn defaults() -> LumenSpec {
@@ -33,6 +34,7 @@ fn instance(namespace: &str, spec: Option<Value>) -> FleetInstance {
     FleetInstance {
         namespace: namespace.to_string(),
         name: None,
+        runtime: None,
         spec,
     }
 }
@@ -226,4 +228,114 @@ fn a_materialized_instance_carries_no_owner_reference() {
     let seed = seed_object("search", &planned[0], ready(&planned[0]));
     assert!(seed["metadata"].get("ownerReferences").is_none(), "{seed}");
     assert_eq!(seed["metadata"]["labels"][FLEET_LABEL], json!("search"));
+}
+
+fn fleet_with_runtime_defaults(
+    defaults_runtime: RuntimeSettings,
+    instances: Vec<FleetInstance>,
+) -> LumenFleet {
+    let mut defaults_spec = defaults();
+    defaults_spec.runtime = Some(defaults_runtime);
+    LumenFleet::new(
+        "search",
+        LumenFleetSpec {
+            defaults: defaults_spec,
+            instances,
+            prune_policy: PrunePolicy::default(),
+        },
+    )
+}
+
+/// A runtime value on an instance replaces the same field of the defaults;
+/// a field the instance leaves unset keeps the default.
+#[test]
+fn runtime_replaces_the_default_field_by_field() {
+    let mut tenant = instance("team-a", None);
+    tenant.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(60),
+        ..Default::default()
+    });
+    let planned = plan(&fleet_with_runtime_defaults(
+        RuntimeSettings {
+            snapshot_secs: Some(300),
+            grace_secs: Some(30),
+            ..Default::default()
+        },
+        vec![tenant],
+    ));
+    assert_eq!(
+        ready(&planned[0])["runtime"],
+        json!({"snapshotSecs": 60, "graceSecs": 30})
+    );
+}
+
+/// Negative control: without the overlay in `plan()`, `team-a` keeps the
+/// default 300 and this test fails.
+#[test]
+fn two_namespaces_get_different_runtime_and_a_third_gets_the_defaults() {
+    let mut team_a = instance("team-a", None);
+    team_a.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(10),
+        ..Default::default()
+    });
+    let mut team_b = instance("team-b", None);
+    team_b.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(20),
+        ..Default::default()
+    });
+    let team_c = instance("team-c", None);
+    let planned = plan(&fleet_with_runtime_defaults(
+        RuntimeSettings {
+            snapshot_secs: Some(300),
+            ..Default::default()
+        },
+        vec![team_a, team_b, team_c],
+    ));
+    assert_eq!(ready(&planned[0])["runtime"]["snapshotSecs"], json!(10));
+    assert_eq!(ready(&planned[1])["runtime"]["snapshotSecs"], json!(20));
+    assert_eq!(ready(&planned[2])["runtime"]["snapshotSecs"], json!(300));
+}
+
+/// A manifest written before `runtime` existed still reads and plans as before.
+#[test]
+fn a_manifest_without_runtime_plans_the_same_spec_as_before() {
+    let tenant: FleetInstance =
+        serde_json::from_value(json!({ "namespace": "team-a" })).expect("instance parses");
+    assert!(tenant.runtime.is_none());
+    let planned = plan(&fleet(vec![tenant]));
+    let spec = ready(&planned[0]);
+    assert!(spec.get("runtime").is_none(), "{spec}");
+    assert_eq!(spec["image"], json!("ghcr.io/acme/lumen:0.4.27"));
+    assert_eq!(spec["serving"]["cpu"], json!("2"));
+}
+
+/// The RFC 7386 `spec` patch keeps its behaviour when `runtime` is present:
+/// `null` still clears, and an unknown key is still rejected.
+#[test]
+fn the_spec_patch_still_merges_as_before_with_runtime_present() {
+    let mut tenant = instance(
+        "team-d",
+        Some(json!({ "logLevel": "debug", "serving": null })),
+    );
+    tenant.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(5),
+        ..Default::default()
+    });
+    let planned = plan(&fleet(vec![tenant]));
+    let spec = ready(&planned[0]);
+    assert_eq!(spec["logLevel"], json!("debug"));
+    assert!(spec.get("serving").is_none(), "{spec}");
+    assert_eq!(spec["runtime"]["snapshotSecs"], json!(5));
+
+    let mut misspelled = instance("team-e", Some(json!({ "nope": 1 })));
+    misspelled.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(5),
+        ..Default::default()
+    });
+    let planned = plan(&fleet(vec![misspelled]));
+    assert!(
+        rejection(&planned[0]).contains("nope"),
+        "{}",
+        rejection(&planned[0])
+    );
 }

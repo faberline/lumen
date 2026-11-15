@@ -6,7 +6,9 @@ use std::collections::BTreeSet;
 
 use anyhow::{anyhow, Result};
 
-use crate::index::application::checkpoint_capture::CheckpointCapture;
+use crate::index::application::checkpoint_capture::{
+    CheckpointCapture, CheckpointCollectionIdentity,
+};
 use crate::index::application::engine::state_hold::StateHoldTrace;
 use crate::index::application::engine::Engine;
 use crate::index::application::live_base::{
@@ -18,7 +20,6 @@ use crate::index::application::live_delta::{
 };
 use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::sortable_f64::MISSING_SORTABLE_F64_BITS;
-use crate::index::infrastructure::checkpoint_fs::collection_dir_name;
 
 impl Engine {
     pub(crate) fn bind_checkpoint_origins(
@@ -26,16 +27,28 @@ impl Engine {
         root: &std::path::Path,
         capture: &mut CheckpointCapture,
     ) -> Result<()> {
+        // Only collections with bind work enter the write lock. A clean reused
+        // collection stays bound, so the lock does not grow with idle collections.
+        let work: Vec<(String, CheckpointCollectionIdentity)> = capture
+            .collections
+            .iter()
+            .filter(|(name, _)| capture.needs_bind(name))
+            .map(|(name, identity)| (name.clone(), identity.clone()))
+            .collect();
         let mut hold = StateHoldTrace::begin("bind_checkpoint_origins", "", "write");
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
         hold.acquired();
-        for (name, identity) in &capture.collections {
+        for (name, identity) in &work {
+            #[cfg(test)]
+            {
+                state.checkpoint_bind_visits += 1;
+            }
             if let Some(coll) = state.collections.get_mut(name) {
                 if coll.collection_generation == identity.generation
                     && coll.version == identity.schema_version
                     && coll.deleted_at.is_none()
                 {
-                    coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
+                    coll.checkpoint_bound = true;
                     coll.checkpoint_lineage_schema = Some(coll.version);
                     // A durable base with this schema is reusable even when newer
                     // row mutations remain above its captured data version.
@@ -182,18 +195,29 @@ impl Engine {
                 }
             }
         }
+        state.checkpoint_lineage_root = Some(root.to_path_buf());
         self.publish_storage_bytes(&state);
+        drop(state);
+        // Release the frozen batches of clean collections after the bind
+        // succeeded. Each journal takes only its own mutex, so no state lock is held.
+        let work_names: BTreeSet<&str> = work.iter().map(|(name, _)| name.as_str()).collect();
+        for (name, frozen) in &capture.frozen_changes {
+            if !work_names.contains(name.as_str()) {
+                frozen.acknowledge_through_own();
+            }
+        }
         Ok(())
     }
 
     pub(crate) fn bind_legacy_checkpoint_origin(&self, root: &std::path::Path) -> Result<()> {
         let mut state = self.state.write().map_err(|_| anyhow!("state poisoned"))?;
-        for (name, coll) in &mut state.collections {
-            coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
+        for coll in state.collections.values_mut() {
+            coll.checkpoint_bound = true;
             coll.checkpoint_lineage_schema = Some(coll.version);
             coll.journal_complete_since_empty = false;
         }
         state.checkpoint_namespace = root.parent().map(std::path::Path::to_path_buf);
+        state.checkpoint_lineage_root = Some(root.to_path_buf());
         Ok(())
     }
 
@@ -210,12 +234,13 @@ impl Engine {
                 .ok_or_else(|| anyhow!("missing reopened collection"))?;
             coll.collection_generation = identity.generation;
             coll.data_version = identity.data_version;
-            coll.checkpoint_lineage = Some(root.join(collection_dir_name(name)));
+            coll.checkpoint_bound = true;
             coll.checkpoint_lineage_schema = Some(coll.version);
             coll.journal_complete_since_empty = false;
         }
         state.next_collection_generation = capture.next_generation;
         state.checkpoint_namespace = root.parent().map(std::path::Path::to_path_buf);
+        state.checkpoint_lineage_root = Some(root.to_path_buf());
         Ok(())
     }
 }
