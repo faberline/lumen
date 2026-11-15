@@ -1,0 +1,17 @@
+{
+  "commit": "abc1234",
+  "cpu_limit": "2.5",
+  "memory_limit": "16Gi",
+  "duration_s": 1800.0,
+  "requested_document_ops_per_s": 120.0,
+  "document_ops_per_s": 118.0,
+  "combined_qps": 42.0,
+  "p99_ms": 640.0,
+  "max_request_ms": 2100.0,
+  "errors": 0,
+  "timeouts": 0,
+  "drain_s": 12.0,
+  "peak_rss_bytes": 9663676416,
+  "checkpoint_count": 6,
+  "merge_count": 3
+}

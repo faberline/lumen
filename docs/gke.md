@@ -193,6 +193,9 @@ migration can disrupt data-bearing workloads.
 One regional cluster can run both the one-Pod profile and larger replicated
 profiles. A regional cluster does not make a one-Pod runtime highly available.
 The runtime topology still decides data-plane availability.
+The offline render and condition tests in `crates/lumen-operator` (`one_pod_*`
+in `application/render/tests.rs` and `conditions.rs`) prove this for the
+rendered objects; the GKE acceptance is the live proof.
 
 ## Storage, placement, and disruption
 

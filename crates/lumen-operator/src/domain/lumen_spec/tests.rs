@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
 
+use serde_json::json;
+
+use crate::domain::lumen_spec::access::{AccessSpec, ServiceAccountSubject};
 use crate::domain::lumen_spec::serving::{AuthMode, LogFormat, ServingSpec};
 use crate::domain::lumen_spec::topology::{ReshardPolicy, ShardMapSpec};
 use crate::domain::lumen_spec::{
-    LumenSpec, PlacementSpec, MAX_BODY_LIMIT_BYTES, MIN_BODY_LIMIT_BYTES,
+    EnvEntry, KeyRef, LumenSpec, PlacementSpec, MAX_BODY_LIMIT_BYTES, MIN_BODY_LIMIT_BYTES,
 };
 
 fn test_spec() -> LumenSpec {
@@ -29,6 +32,10 @@ fn test_spec() -> LumenSpec {
         peer_tls_secret: None,
         serving_tls_secret: None,
         body_limit_bytes: None,
+        access: None,
+        runtime: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     }
 }
 
@@ -91,4 +98,277 @@ fn validate_rejects_out_of_range_body_limit() {
             "error message should name upper bound: {err}"
         );
     }
+}
+
+fn subject(namespace: &str, name: &str) -> ServiceAccountSubject {
+    ServiceAccountSubject {
+        namespace: namespace.into(),
+        name: name.into(),
+    }
+}
+
+#[test]
+fn validate_accepts_exact_service_account_subjects() {
+    let mut spec = test_spec();
+    spec.access = Some(AccessSpec {
+        allowed_service_accounts: vec![subject("apps", "web"), subject("team-a.prod", "svc-1")],
+    });
+    assert!(spec.validate().is_ok());
+}
+
+#[test]
+fn validate_rejects_wildcard_group_raw_username_and_incomplete_subjects() {
+    let invalid = [
+        ("*", "web"),
+        ("apps", "*"),
+        ("apps", ""),
+        ("", "web"),
+        ("system:serviceaccounts", "web"),
+        ("apps", "system:serviceaccount:apps:web"),
+        ("apps", "a/b"),
+        ("Apps", "web"),
+    ];
+    for (namespace, name) in invalid {
+        let mut spec = test_spec();
+        spec.access = Some(AccessSpec {
+            allowed_service_accounts: vec![subject(namespace, name)],
+        });
+        let err = spec.validate().expect_err("expected error");
+        assert!(
+            err.contains("allowedServiceAccounts"),
+            "error message should name allowedServiceAccounts for ({namespace}, {name}): {err}"
+        );
+    }
+}
+
+#[test]
+fn deserialization_rejects_incomplete_group_and_unknown_subject_fields() {
+    for value in [
+        json!({"allowedServiceAccounts": [{"namespace": "apps"}]}),
+        json!({"allowedServiceAccounts": [{"name": "web"}]}),
+        json!({"allowedServiceAccounts": [{"namespace": "a", "name": "b", "group": "g"}]}),
+    ] {
+        assert!(
+            serde_json::from_value::<AccessSpec>(value.clone()).is_err(),
+            "must reject {value}"
+        );
+    }
+}
+
+#[test]
+fn explicit_empty_list_is_deny_all_and_round_trips() {
+    let access: AccessSpec =
+        serde_json::from_value(json!({"allowedServiceAccounts": []})).expect("parse");
+    assert_eq!(
+        access,
+        AccessSpec {
+            allowed_service_accounts: vec![]
+        }
+    );
+    assert_eq!(
+        serde_json::to_value(&access).expect("serialize"),
+        json!({"allowedServiceAccounts": []})
+    );
+
+    let mut spec = test_spec();
+    spec.access = Some(access.clone());
+    let round: LumenSpec =
+        serde_json::from_value(serde_json::to_value(&spec).expect("serialize spec"))
+            .expect("parse spec");
+    assert_eq!(round.access, Some(access));
+}
+
+#[test]
+fn absent_access_deserializes_to_none() {
+    let spec: LumenSpec =
+        serde_json::from_value(json!({"image": "lumen:latest"})).expect("parse spec");
+    assert_eq!(spec.access, None);
+    assert!(serde_json::to_value(&spec)
+        .expect("serialize spec")
+        .get("access")
+        .is_none());
+}
+
+/// Every `env = "..."` option of `lumen serve` has a classification, and every
+/// classified name exists in the source. Negative control: removing one entry
+/// from `SERVE_OPTION_INVENTORY` fails this test.
+#[test]
+fn serve_option_inventory_classifies_every_serve_option() {
+    use crate::domain::lumen_spec::runtime::SERVE_OPTION_INVENTORY;
+    let source = include_str!("../../../../lumen/src/bin/lumen/cli/serve.rs");
+    let found: Vec<&str> = source
+        .split("env = \"")
+        .skip(1)
+        .map(|rest| rest.split('"').next().expect("closing quote"))
+        .collect();
+    assert!(!found.is_empty(), "serve.rs names no env option");
+    for name in &found {
+        assert!(
+            SERVE_OPTION_INVENTORY.iter().any(|(n, _)| n == name),
+            "serve option {name} has no classification in SERVE_OPTION_INVENTORY"
+        );
+    }
+    for (name, _) in SERVE_OPTION_INVENTORY {
+        assert!(
+            found.contains(name),
+            "inventory names {name}, which serve.rs does not define"
+        );
+    }
+    assert_eq!(found.len(), SERVE_OPTION_INVENTORY.len());
+}
+
+#[test]
+fn every_typed_runtime_option_has_a_field() {
+    use crate::domain::lumen_spec::runtime::RuntimeSettings;
+    let settings = RuntimeSettings {
+        snapshot_secs: Some(1),
+        grace_secs: Some(2),
+        otlp_endpoint: Some("http://collector:4317".into()),
+        bootstrap_max_bytes_per_sec: Some(3),
+    };
+    let value = serde_json::to_value(&settings).expect("serialize runtime");
+    let mut keys: Vec<&str> = value
+        .as_object()
+        .expect("object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "bootstrapMaxBytesPerSec",
+            "graceSecs",
+            "otlpEndpoint",
+            "snapshotSecs"
+        ]
+    );
+}
+
+fn spec_with_env(entries: Vec<EnvEntry>) -> LumenSpec {
+    let mut spec = test_spec();
+    spec.extra_env = entries;
+    spec
+}
+
+fn literal_entry(name: &str, value: &str) -> EnvEntry {
+    EnvEntry {
+        name: name.into(),
+        value: Some(value.into()),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn validate_accepts_each_single_source_env_entry() {
+    let secret = EnvEntry {
+        name: "MY_SECRET".into(),
+        secret_key_ref: Some(KeyRef {
+            name: "s".into(),
+            key: "k".into(),
+        }),
+        ..Default::default()
+    };
+    let config_map = EnvEntry {
+        name: "MY_CM".into(),
+        config_map_key_ref: Some(KeyRef {
+            name: "c".into(),
+            key: "k".into(),
+        }),
+        ..Default::default()
+    };
+    for entry in [literal_entry("MY_LITERAL", "x"), secret, config_map] {
+        assert!(spec_with_env(vec![entry]).validate().is_ok());
+    }
+}
+
+#[test]
+fn validate_rejects_env_entry_with_zero_or_two_sources() {
+    let none = EnvEntry {
+        name: "MY_NONE".into(),
+        ..Default::default()
+    };
+    let two = EnvEntry {
+        name: "MY_TWO".into(),
+        value: Some("x".into()),
+        secret_key_ref: Some(KeyRef {
+            name: "s".into(),
+            key: "k".into(),
+        }),
+        ..Default::default()
+    };
+    for entry in [none, two] {
+        let err = spec_with_env(vec![entry])
+            .validate()
+            .expect_err("must reject");
+        assert!(err.contains("extraEnv[0]"), "{err}");
+        assert!(err.contains("exactly one"), "{err}");
+    }
+}
+
+#[test]
+fn validate_rejects_reserved_env_names() {
+    for name in [
+        "LUMEN_AUTH",
+        "LUMEN_PORT",
+        "POD_NAME",
+        "RAFT_ID",
+        "SHARD_COUNT",
+        "VIRTUAL_BUCKET_COUNT",
+        "VOTER_COUNT",
+        "REPLICAS_PER_SHARD",
+    ] {
+        let err = spec_with_env(vec![literal_entry(name, "x")])
+            .validate()
+            .expect_err(name);
+        assert!(err.contains(name), "{err}");
+        assert!(err.contains("operator owns"), "{err}");
+    }
+    assert!(spec_with_env(vec![literal_entry("MY_SETTING", "x")])
+        .validate()
+        .is_ok());
+}
+
+#[test]
+fn validate_rejects_duplicate_env_names() {
+    let err = spec_with_env(vec![literal_entry("MY_A", "1"), literal_entry("MY_A", "2")])
+        .validate()
+        .expect_err("duplicate names");
+    assert!(err.contains("duplicate name (MY_A)"), "{err}");
+}
+
+#[test]
+fn validate_rejects_bad_env_names() {
+    for name in ["1BAD", "has space", ""] {
+        let err = spec_with_env(vec![literal_entry(name, "x")])
+            .validate()
+            .expect_err(name);
+        assert!(
+            err.contains("is not a valid environment variable name"),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn validate_rejects_non_flag_args() {
+    for arg in ["foo", "-x", "--has space"] {
+        let mut spec = test_spec();
+        spec.extra_args = vec![arg.into()];
+        assert!(spec.validate().is_err(), "{arg} must be rejected");
+    }
+    for arg in ["--ok", "--ok=1"] {
+        let mut spec = test_spec();
+        spec.extra_args = vec![arg.into()];
+        assert!(spec.validate().is_ok(), "{arg} must be accepted");
+    }
+}
+
+#[test]
+fn validate_error_never_contains_the_value() {
+    let entry = literal_entry("1BAD", "SENTINEL-LITERAL-7731");
+    let err = spec_with_env(vec![entry])
+        .validate()
+        .expect_err("invalid name");
+    assert!(!err.contains("SENTINEL-LITERAL-7731"), "{err}");
 }
