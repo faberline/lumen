@@ -1143,6 +1143,29 @@ spec:
                 items:
                   description: One data plane the fleet declares.
                   properties:
+                    access:
+                      description: The exact ServiceAccounts allowed to call this instance. When present it replaces the whole `defaults.access` list (it is never merged with it); an explicit empty `allowedServiceAccounts` denies every client. Absent means the instance inherits `defaults.access`.
+                      nullable: true
+                      properties:
+                        allowedServiceAccounts:
+                          description: ServiceAccounts, each named by its exact namespace and name.
+                          items:
+                            description: One ServiceAccount, named exactly. Wildcards, groups and raw usernames are not representable here.
+                            properties:
+                              name:
+                                description: Name of the ServiceAccount, an exact DNS-1123 subdomain.
+                                type: string
+                              namespace:
+                                description: Namespace of the ServiceAccount, an exact DNS-1123 label.
+                                type: string
+                            required:
+                            - name
+                            - namespace
+                            type: object
+                          type: array
+                      required:
+                      - allowedServiceAccounts
+                      type: object
                     name:
                       description: The `Lumen` object's name. Defaults to the fleet's own name, so `kubectl get lumen -A` reads as one fleet spread across namespaces.
                       nullable: true
