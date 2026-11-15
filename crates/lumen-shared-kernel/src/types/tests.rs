@@ -170,3 +170,25 @@ fn unknown_field_type_name_is_still_refused_next_to_date() {
     assert!(serde_json::from_str::<FieldType>("\"dates\"").is_err());
     assert!(serde_json::from_str::<FieldType>("\"datetime\"").is_err());
 }
+
+fn float64_parses_as_number() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"float64"}"#).unwrap();
+    assert_eq!(spec.field_type, FieldType::Number);
+    let value = serde_json::to_value(spec.field_type).unwrap();
+    assert_eq!(value, serde_json::json!("number"));
+    let caps = FieldType::Number.capabilities();
+    assert!(caps.exact && caps.range && caps.sort);
+    assert!(!caps.set_membership && !caps.prefix && !caps.bm25);
+}
+
+#[test]
+fn number_type_still_parses() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"number"}"#).unwrap();
+    assert_eq!(spec.field_type, FieldType::Number);
+}
+
+#[test]
+fn float65_is_refused() {
+    let parsed = serde_json::from_str::<FieldSpec>(r#"{"type":"float65"}"#);
+    assert!(parsed.is_err());
+}
