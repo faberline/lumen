@@ -10,7 +10,9 @@ mod lifecycle;
 mod load;
 mod perf_gate;
 mod report;
+mod restart;
 mod run;
+mod spawn;
 mod visible_version;
 mod writes;
 
