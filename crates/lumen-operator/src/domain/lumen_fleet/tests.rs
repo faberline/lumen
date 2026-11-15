@@ -339,3 +339,26 @@ fn the_spec_patch_still_merges_as_before_with_runtime_present() {
         rejection(&planned[0])
     );
 }
+
+#[test]
+fn a_changed_override_changes_only_its_own_instance_and_plan_has_no_memory() {
+    let before = fleet(vec![instance("team-a", None), instance("team-b", None)]);
+    let after = fleet(vec![
+        instance("team-a", None),
+        instance("team-b", Some(json!({ "serving": { "cpu": "4" } }))),
+    ]);
+    let planned_before = plan(&before);
+    let planned_after = plan(&after);
+
+    assert_eq!(
+        ready(&planned_before[0]),
+        ready(&planned_after[0]),
+        "team-a has no override, so its plan must not change"
+    );
+    assert_eq!(ready(&planned_before[1])["serving"]["cpu"], json!("2"));
+    assert_eq!(ready(&planned_after[1])["serving"]["cpu"], json!("4"));
+
+    // Planning is a pure function of the fleet: an earlier pass leaves no trace.
+    assert_eq!(plan(&before), planned_before);
+    assert_eq!(plan(&after), planned_after);
+}
