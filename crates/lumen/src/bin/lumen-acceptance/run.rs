@@ -9,6 +9,7 @@ use anyhow::{anyhow, bail, Result};
 use crate::cli::RunArgs;
 use crate::lifecycle::CollectionLifecycle;
 use crate::report::{summary, write_report, Mode, PhaseResult, PhaseStatus, Report};
+use crate::restart::RestartPersistence;
 use crate::spawn::{LumenChild, SharedChild, SpawnCleanup};
 use crate::visible_version::VisibleVersion;
 use crate::writes::WritesAndMasking;
@@ -116,23 +117,34 @@ impl Cleanup for NoCleanup {
     }
 }
 
-/// The default phase names of a mode. A spawned child gets the same names in this slice.
-fn default_phase_names(mode: Mode, _spawned: bool) -> Vec<&'static str> {
+/// The default phase names of a mode. A spawned child also gets `restart_persistence`,
+/// which needs the child to restart.
+fn default_phase_names(mode: Mode, spawned: bool) -> Vec<&'static str> {
     match mode {
-        Mode::Functional => vec![
-            "endpoint_configured",
-            "collection_lifecycle",
-            "writes_and_masking",
-            "visible_version",
-        ],
+        Mode::Functional => {
+            let mut names = vec![
+                "endpoint_configured",
+                "collection_lifecycle",
+                "writes_and_masking",
+                "visible_version",
+            ];
+            if spawned {
+                names.push("restart_persistence");
+            }
+            names
+        }
         Mode::Performance => vec!["endpoint_configured"],
     }
 }
 
 /// The phase list for a run: the mode's default list, or the names given by `--phases`.
-fn phase_list(mode: Mode, args: &RunArgs, spawned: bool) -> Result<Vec<Box<dyn Phase>>> {
+fn phase_list(
+    mode: Mode,
+    args: &RunArgs,
+    child: Option<&SharedChild>,
+) -> Result<Vec<Box<dyn Phase>>> {
     let names: Vec<String> = match &args.phases {
-        None => default_phase_names(mode, spawned)
+        None => default_phase_names(mode, child.is_some())
             .into_iter()
             .map(str::to_string)
             .collect(),
@@ -143,7 +155,7 @@ fn phase_list(mode: Mode, args: &RunArgs, spawned: bool) -> Result<Vec<Box<dyn P
             .collect(),
     };
     if names.is_empty() {
-        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, performance_thresholds");
+        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, performance_thresholds");
     }
     names
         .iter()
@@ -155,8 +167,14 @@ fn phase_list(mode: Mode, args: &RunArgs, spawned: bool) -> Result<Vec<Box<dyn P
             "collection_lifecycle" => Ok(Box::new(CollectionLifecycle) as Box<dyn Phase>),
             "writes_and_masking" => Ok(Box::new(WritesAndMasking) as Box<dyn Phase>),
             "visible_version" => Ok(Box::new(VisibleVersion) as Box<dyn Phase>),
+            "restart_persistence" => match child {
+                Some(child) => Ok(Box::new(RestartPersistence {
+                    child: child.clone(),
+                }) as Box<dyn Phase>),
+                None => bail!("phase `restart_persistence` needs --spawn"),
+            },
             other => bail!(
-                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, performance_thresholds"
+                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, performance_thresholds"
             ),
         })
         .collect()
@@ -173,7 +191,7 @@ fn finish(args: &RunArgs, outcome: Outcome) -> Result<bool> {
 /// With `--spawn` it starts a `lumen serve` child, runs the phases against it and cleans up.
 pub(super) fn execute(mode: Mode, args: RunArgs) -> Result<bool> {
     let Some(binary) = args.spawn.clone() else {
-        let phases = phase_list(mode, &args, false)?;
+        let phases = phase_list(mode, &args, None)?;
         let outcome = run_phases(mode, &args, &phases, &[], &NoCleanup)?;
         return finish(&args, outcome);
     };
@@ -195,7 +213,7 @@ pub(super) fn execute(mode: Mode, args: RunArgs) -> Result<bool> {
         .lock()
         .map_err(|_| anyhow!("child lock poisoned"))?
         .endpoint();
-    let phases = match phase_list(mode, &run_args, true) {
+    let phases = match phase_list(mode, &run_args, Some(&shared)) {
         Ok(phases) => phases,
         Err(err) => {
             let _ = cleanup.run();
@@ -370,19 +388,42 @@ mod tests {
     }
 
     #[test]
-    fn default_phases_unchanged_by_spawn_flag() {
+    fn default_phases_add_restart_only_when_spawned() {
+        let without = default_phase_names(Mode::Functional, false);
         assert_eq!(
-            default_phase_names(Mode::Functional, true),
-            default_phase_names(Mode::Functional, false)
-        );
-        assert_eq!(
-            default_phase_names(Mode::Functional, true),
+            without,
             [
                 "endpoint_configured",
                 "collection_lifecycle",
                 "writes_and_masking",
                 "visible_version"
             ]
+        );
+        let with = default_phase_names(Mode::Functional, true);
+        assert_eq!(with.len(), 5);
+        assert_eq!(&with[..4], without.as_slice());
+        assert_eq!(with[4], "restart_persistence");
+        assert_eq!(
+            default_phase_names(Mode::Performance, false),
+            ["endpoint_configured"]
+        );
+        assert_eq!(
+            default_phase_names(Mode::Performance, true),
+            ["endpoint_configured"]
+        );
+    }
+
+    #[test]
+    fn restart_persistence_needs_spawn() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut run_args = args(dir.path());
+        run_args.phases = Some("restart_persistence".into());
+        let err = phase_list(Mode::Functional, &run_args, None)
+            .err()
+            .expect("restart_persistence without a child is an error");
+        assert!(
+            format!("{err:#}").contains("phase `restart_persistence` needs --spawn"),
+            "{err:#}"
         );
     }
 
