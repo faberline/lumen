@@ -171,6 +171,7 @@ fn unknown_field_type_name_is_still_refused_next_to_date() {
     assert!(serde_json::from_str::<FieldType>("\"datetime\"").is_err());
 }
 
+#[test]
 fn float64_parses_as_number() {
     let spec: FieldSpec = serde_json::from_str(r#"{"type":"float64"}"#).unwrap();
     assert_eq!(spec.field_type, FieldType::Number);
