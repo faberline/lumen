@@ -310,7 +310,7 @@ fn field_catalog_matches_the_real_enums() {
     // Exactly the FieldType enum variants (lowercase wire form), in order.
     assert_eq!(
         types,
-        ["text", "keyword", "number", "set", "vector", "hash"],
+        ["text", "keyword", "number", "set", "vector", "hash", "boolean"],
         "field types track the FieldType enum"
     );
 
@@ -1215,6 +1215,7 @@ fn dx_field_catalog_matches_runtime_field_capabilities() {
             FieldType::Set => "set",
             FieldType::Vector => "vector",
             FieldType::Hash => "hash",
+            FieldType::Boolean => "boolean",
         };
         let entry = fields
             .iter()
@@ -1857,9 +1858,35 @@ fn openapi_field_type_schema_names_the_float64_alias() {
     );
     assert_eq!(
         field_type["enum"],
-        json!(["text", "keyword", "number", "set", "vector", "hash"]),
-        "the enum keeps the six type names"
+        json!(["text", "keyword", "number", "set", "vector", "hash", "boolean"]),
+        "the enum keeps the seven type names"
     );
 }
 
 // CODEGEN-END
+
+#[test]
+fn dx_field_catalog_lists_boolean_exact_only() {
+    let catalog = dx::field_catalog();
+    let fields = catalog["field_types"]
+        .as_array()
+        .expect("field_types is an array");
+    let boolean = fields
+        .iter()
+        .find(|entry| entry["type"] == "boolean")
+        .expect("catalogue lists boolean");
+    let ops = &boolean["operations"];
+    assert_eq!(ops["exact"], true);
+    for op in [
+        "bm25",
+        "prefix",
+        "range",
+        "sort",
+        "set_membership",
+        "vector_search",
+        "hamming",
+    ] {
+        assert_eq!(ops[op], false, "boolean must not offer `{op}`");
+    }
+    assert_eq!(boolean["queries"], json!(["term"]));
+}

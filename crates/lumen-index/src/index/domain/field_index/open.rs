@@ -240,6 +240,7 @@ impl FieldIndex {
                     bytes,
                 })
             }
+            FieldType::Boolean => Err(anyhow!("field type `boolean` is not indexed yet")),
         }
     }
 }

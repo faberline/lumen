@@ -2072,7 +2072,8 @@
           "number",
           "set",
           "vector",
-          "hash"
+          "hash",
+          "boolean"
         ]
       },
       "FieldValue": {
