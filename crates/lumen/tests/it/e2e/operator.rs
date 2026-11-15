@@ -122,14 +122,16 @@ fn assert_operator_topology(s: &Suite) {
     let cm = s.kube.get(&[&format!("cm/{CR}-config")]);
     let data = &cm["data"];
     say(format!(
-        "   ConfigMap topology: SHARD_COUNT={} VIRTUAL_BUCKET_COUNT={} SHARD_MAP_VERSION={}",
-        data["SHARD_COUNT"], data["VIRTUAL_BUCKET_COUNT"], data["SHARD_MAP_VERSION"]
+        "   ConfigMap topology: VIRTUAL_BUCKET_COUNT={} SHARD_MAP_VERSION={}",
+        data["VIRTUAL_BUCKET_COUNT"], data["SHARD_MAP_VERSION"]
     ));
     assert!(
-        data["SHARD_COUNT"] == "1"
-            && !data["VIRTUAL_BUCKET_COUNT"].is_null()
-            && !data["SHARD_MAP_VERSION"].is_null(),
+        !data["VIRTUAL_BUCKET_COUNT"].is_null() && !data["SHARD_MAP_VERSION"].is_null(),
         "ConfigMap topology keys are missing or wrong"
+    );
+    assert!(
+        env_count(spec, "server", "SHARD_COUNT", "1") == 1,
+        "server container must carry exactly one SHARD_COUNT=1"
     );
 }
 

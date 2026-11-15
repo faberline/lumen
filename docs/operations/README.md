@@ -10,6 +10,7 @@ These guides describe the maintained runtime and deployment paths.
 | Release gate: GKE e2e and local durable perf | [Deployment](../deployment.md#release-gate-gke-e2e-and-local-durable-perf) |
 | Kubernetes and GKE support | [GKE](../gke.md) |
 | Operator control-plane checks | [Operator runbook](../runbooks/operator-control-plane.md) |
+| Data-plane checks (health, metrics, storage, search, checkpoints) | [Data-plane runbook](../runbooks/data-plane.md) |
 | Write, checkpoint and recovery rules | [Indexing](../indexing.md) |
 | Benchmark context | [Benchmarks](../benchmarks-scale.md) |
 | Local gates | [Contributing](../../CONTRIBUTING.md) |
