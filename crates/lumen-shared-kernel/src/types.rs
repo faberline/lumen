@@ -7,6 +7,7 @@
 
 pub mod api_error;
 pub mod cluster_state_view;
+pub mod date;
 pub mod document;
 pub mod peer_addr;
 pub mod query;
