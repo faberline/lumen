@@ -1858,8 +1858,8 @@ fn openapi_field_type_schema_names_the_float64_alias() {
     );
     assert_eq!(
         field_type["enum"],
-        json!(["text", "keyword", "number", "set", "vector", "hash"]),
-        "the enum keeps the six type names"
+        json!(["text", "keyword", "number", "int64", "set", "vector", "hash"]),
+        "the enum keeps the seven type names"
     );
 }
 
