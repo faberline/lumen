@@ -868,7 +868,7 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
         Some((tls, _)) => tokio::spawn(service_http::serve_tls(
             listener,
             app,
-            service_http::config_source(move || tls.server_config()),
+            service_http::config_source(move || lumen::tls::serving_server_config(&tls)),
             async move {
                 let _ = http_shutdown_rx.await;
             },
