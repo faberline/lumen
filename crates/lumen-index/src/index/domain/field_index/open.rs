@@ -67,7 +67,7 @@ impl FieldIndex {
         // The per-arm reopen reads coverage straight off the reader (e.g. the Text
         // arm via `text_doc_count`/`text_total_doc_len`); no whole-`n_docs` rebuild.
         let _n_docs = reader.n_docs();
-        match spec.field_type {
+        match spec.storage_type() {
             FieldType::Number => {
                 // Phase 2h-3: the inverted/range `values` index is ON DISK (the
                 // ROLE_NUMBER_SORTED sorted-value column + ROLE_NUMBER_POSTINGS).

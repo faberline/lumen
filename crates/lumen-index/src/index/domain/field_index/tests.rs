@@ -125,3 +125,29 @@ fn sparse_high_delta_does_not_hide_middle_live_scalar_overlays() {
     hash.forward.insert(2, 2);
     assert_eq!(hash.hash_at(2), Some(2));
 }
+
+#[test]
+fn from_spec_uses_storage_type_for_keyword_multi() {
+    use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
+
+    // Built WITHOUT `normalize`: only `storage_type` can pick the Set index.
+    let multi = FieldSpec {
+        field_type: FieldType::Keyword,
+        analyzer: None,
+        multi: Some(true),
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let idx = super::FieldIndex::from_spec(&multi).unwrap();
+    assert!(matches!(idx, super::FieldIndex::Set(_)));
+
+    let plain = FieldSpec {
+        multi: None,
+        ..multi
+    };
+    let idx = super::FieldIndex::from_spec(&plain).unwrap();
+    assert!(matches!(idx, super::FieldIndex::Keyword(_)));
+}

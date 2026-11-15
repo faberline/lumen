@@ -164,3 +164,37 @@ fn float65_is_refused() {
     let parsed = serde_json::from_str::<FieldSpec>(r#"{"type":"float65"}"#);
     assert!(parsed.is_err());
 }
+
+#[test]
+fn field_spec_storage_type_follows_keyword_multi() {
+    assert_eq!(
+        FieldSpec {
+            multi: Some(true),
+            ..fs(FieldType::Keyword)
+        }
+        .storage_type(),
+        FieldType::Set
+    );
+    assert_eq!(fs(FieldType::Keyword).storage_type(), FieldType::Keyword);
+    assert_eq!(
+        FieldSpec {
+            multi: Some(false),
+            ..fs(FieldType::Keyword)
+        }
+        .storage_type(),
+        FieldType::Keyword
+    );
+    assert_eq!(fs(FieldType::Text).storage_type(), FieldType::Text);
+    assert_eq!(fs(FieldType::Number).storage_type(), FieldType::Number);
+    assert_eq!(fs(FieldType::Set).storage_type(), FieldType::Set);
+    assert_eq!(fs(FieldType::Vector).storage_type(), FieldType::Vector);
+    assert_eq!(fs(FieldType::Hash).storage_type(), FieldType::Hash);
+    assert_eq!(
+        FieldSpec {
+            multi: Some(true),
+            ..fs(FieldType::Number)
+        }
+        .storage_type(),
+        FieldType::Number
+    );
+}

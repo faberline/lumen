@@ -61,7 +61,7 @@ impl std::fmt::Debug for FieldIndex {
 
 impl FieldIndex {
     pub(in crate::index) fn from_spec(spec: &FieldSpec) -> Result<Self> {
-        Ok(match spec.field_type {
+        Ok(match spec.storage_type() {
             FieldType::Text => FieldIndex::Text {
                 analyzer: spec.analyzer.unwrap_or(Analyzer::WhitespaceLower),
                 idx: TextIndex::default(),
