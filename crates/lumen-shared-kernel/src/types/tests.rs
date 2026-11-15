@@ -164,3 +164,14 @@ fn float65_is_refused() {
     let parsed = serde_json::from_str::<FieldSpec>(r#"{"type":"float65"}"#);
     assert!(parsed.is_err());
 }
+
+#[test]
+fn field_value_is_missing_for_empty_lists_only() {
+    use crate::types::document::FieldValue;
+    assert!(FieldValue::Vector(vec![]).is_missing());
+    assert!(FieldValue::StringList(vec![]).is_missing());
+    assert!(!FieldValue::Vector(vec![1.0]).is_missing());
+    assert!(!FieldValue::StringList(vec!["a".to_string()]).is_missing());
+    assert!(!FieldValue::String(String::new()).is_missing());
+    assert!(!FieldValue::Number(0.0).is_missing());
+}
