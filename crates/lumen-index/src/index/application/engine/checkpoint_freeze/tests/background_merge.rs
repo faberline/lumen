@@ -58,7 +58,7 @@ fn background_merge_capture_and_bind_preserve_live_dirty_ownership() {
     }
     let root = tempfile::tempdir().unwrap();
     engine
-        .bind_background_merge(root.path(), &mut capture)
+        .bind_background_merge(root.path(), &mut capture, root.path())
         .unwrap();
     assert!(engine.checkpoint_dirty_fields().unwrap()["docs"]
         .2

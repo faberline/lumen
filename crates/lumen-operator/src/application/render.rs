@@ -18,7 +18,9 @@
 pub mod backup;
 pub mod identity;
 pub mod monitoring;
+pub mod restart_hash;
 pub mod serving_config;
+pub mod serving_extra_env;
 pub mod serving_statefulset;
 
 use serde_json::{json, Value};
@@ -63,6 +65,12 @@ const AUTH_DELEGATOR_ROLE: &str = "system:auth-delegator";
 /// label set has no equivalent, and the object has no `metadata.namespace` of
 /// its own to read.
 const OWNER_NAMESPACE_LABEL: &str = "lumen.dev/owner-namespace";
+
+/// The runtime UID label for precise retention decisions (faberline/lumen#31).
+pub const RUNTIME_UID_LABEL: &str = "lumen.dev/runtime-uid";
+
+/// The authority label indicating the operator manager identity (faberline/lumen#31).
+pub const AUTHORITY_LABEL: &str = "lumen.dev/authority";
 
 /// The same owner namespace under Faberline's cross-repository key. The shared
 /// GKE test cluster's teardown and reaper (faberline/aw
