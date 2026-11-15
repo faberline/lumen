@@ -570,3 +570,146 @@ fn restart_hash_assertion_bites_when_a_field_is_left_out_of_the_input() {
     );
     assert_eq!(without_log_level(&base), without_log_level(&changed));
 }
+
+fn serving_statefulset_of(lumen: &Lumen) -> Value {
+    render(lumen)
+        .into_iter()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet")
+}
+
+fn replicated(replicas: u32) -> Lumen {
+    let mut lumen = single_replica();
+    lumen.spec.replicas_per_shard = replicas;
+    lumen.spec.voter_count = replicas;
+    lumen
+}
+
+#[test]
+fn one_pod_statefulset_has_one_replica_and_one_raft_pvc() {
+    let lumen = single_replica();
+    let statefulset = serving_statefulset_of(&lumen);
+
+    assert_eq!(statefulset["spec"]["replicas"].as_i64(), Some(1));
+
+    let claims = statefulset["spec"]["volumeClaimTemplates"]
+        .as_array()
+        .expect("volumeClaimTemplates");
+    assert_eq!(claims.len(), 1, "exactly one PVC template, got: {claims:?}");
+    assert_eq!(claims[0]["metadata"]["name"], "raft");
+    assert_eq!(claims[0]["spec"]["accessModes"], json!(["ReadWriteOnce"]));
+    assert_eq!(
+        claims[0]["spec"]["resources"]["requests"]["storage"],
+        json!(lumen.spec.serving.raft_storage)
+    );
+}
+
+#[test]
+fn one_pod_pod_keeps_the_same_pvc_and_data_path() {
+    let mounts = serving_mounts(&single_replica());
+
+    assert!(
+        mounts.contains(&json!({
+            "name": "raft",
+            "mountPath": "/var/lib/lumen",
+            "readOnly": false,
+        })),
+        "missing the raft mount at /var/lib/lumen, got: {mounts:?}"
+    );
+    assert!(
+        mounts.contains(&json!({
+            "name": "raft",
+            "mountPath": "/var/lib/lumen/data",
+            "subPath": "data",
+            "readOnly": false,
+        })),
+        "missing the raft data subPath mount, got: {mounts:?}"
+    );
+}
+
+#[test]
+fn one_pod_render_carries_no_ha_claim_in_labels_or_annotations() {
+    fn string_values(map: &Value, out: &mut Vec<String>) {
+        if let Some(object) = map.as_object() {
+            for value in object.values() {
+                if let Some(text) = value.as_str() {
+                    out.push(text.to_lowercase());
+                }
+            }
+        }
+    }
+
+    let mut values = Vec::new();
+    for object in render(&single_replica()) {
+        string_values(&object["metadata"]["labels"], &mut values);
+        string_values(&object["metadata"]["annotations"], &mut values);
+        string_values(
+            &object["spec"]["template"]["metadata"]["labels"],
+            &mut values,
+        );
+        string_values(
+            &object["spec"]["template"]["metadata"]["annotations"],
+            &mut values,
+        );
+    }
+
+    // Non-vacuity: the check must actually see label and annotation values.
+    assert!(
+        !values.is_empty(),
+        "no label or annotation values were rendered"
+    );
+    for value in &values {
+        for claim in ["highly available", "high availability", "quorum"] {
+            assert!(
+                !value.contains(claim),
+                "rendered value claims `{claim}`: {value}"
+            );
+        }
+    }
+}
+
+#[test]
+fn one_pod_env_has_no_raft_peer_or_voter_keys() {
+    let names = env_entry_names(&serving_container(&single_replica()));
+
+    assert!(
+        !names.iter().any(|name| name == "REPLICAS_PER_SHARD"),
+        "one-Pod env must not carry REPLICAS_PER_SHARD, got: {names:?}"
+    );
+    assert!(
+        !names.iter().any(|name| name == "VOTER_COUNT"),
+        "one-Pod env must not carry VOTER_COUNT, got: {names:?}"
+    );
+}
+
+#[test]
+fn three_voter_render_is_the_opposite_of_the_one_pod_render() {
+    // Negative control: a pass must not come from a fixture that ignores
+    // the replica count.
+    let lumen = replicated(3);
+    let statefulset = serving_statefulset_of(&lumen);
+    assert_eq!(statefulset["spec"]["replicas"].as_i64(), Some(3));
+
+    let names = env_entry_names(&serving_container(&lumen));
+    assert!(
+        names.iter().any(|name| name == "REPLICAS_PER_SHARD"),
+        "got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|name| name == "VOTER_COUNT"),
+        "got: {names:?}"
+    );
+
+    let claims = statefulset["spec"]["volumeClaimTemplates"]
+        .as_array()
+        .expect("volumeClaimTemplates");
+    assert_eq!(claims[0]["metadata"]["name"], "raft");
+
+    let mounts = serving_mounts(&lumen);
+    assert!(
+        !mounts
+            .iter()
+            .any(|mount| mount["mountPath"] == "/var/lib/lumen/data"),
+        "the three-voter render must not carry the one-Pod data subPath mount, got: {mounts:?}"
+    );
+}
