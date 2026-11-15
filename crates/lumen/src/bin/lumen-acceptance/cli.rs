@@ -25,9 +25,17 @@ pub(super) enum Command {
 
 #[derive(Parser, Clone)]
 pub(super) struct RunArgs {
-    /// Base URL of the Lumen under test. Stored in this slice, not contacted.
-    #[arg(long)]
+    /// Base URL of the Lumen under test. Not used with --spawn.
+    #[arg(
+        long,
+        default_value = "",
+        required_unless_present = "spawn",
+        conflicts_with = "spawn"
+    )]
     pub(super) endpoint: String,
+    /// Path of the lumen binary. The runner starts it as a child with its own data dir.
+    #[arg(long)]
+    pub(super) spawn: Option<PathBuf>,
     /// Directory that receives report.json.
     #[arg(long)]
     pub(super) artifact_dir: PathBuf,
@@ -91,5 +99,39 @@ mod tests {
         let no_endpoint =
             Cli::try_parse_from(["lumen-acceptance", "functional", "--artifact-dir", "/tmp/a"]);
         assert!(no_endpoint.is_err());
+    }
+
+    #[test]
+    fn spawn_and_endpoint_conflict() {
+        let both = Cli::try_parse_from([
+            "lumen-acceptance",
+            "functional",
+            "--endpoint",
+            "http://x",
+            "--spawn",
+            "/bin/lumen",
+            "--artifact-dir",
+            "/tmp/a",
+        ]);
+        assert!(both.is_err());
+    }
+
+    #[test]
+    fn spawn_replaces_endpoint() {
+        let parsed = Cli::try_parse_from([
+            "lumen-acceptance",
+            "functional",
+            "--spawn",
+            "/bin/lumen",
+            "--artifact-dir",
+            "/tmp/a",
+        ])
+        .expect("spawn parses without --endpoint");
+        match parsed.command {
+            Command::Functional(args) => {
+                assert_eq!(args.spawn, Some(PathBuf::from("/bin/lumen")));
+            }
+            Command::Performance(_) => panic!("expected functional"),
+        }
     }
 }

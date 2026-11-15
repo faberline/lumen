@@ -269,6 +269,17 @@ impl<V> ChangeJournal<V> {
         present
     }
 
+    /// Number of frozen batches this journal still owns.
+    #[cfg(test)]
+    pub(crate) fn frozen_len(&self) -> usize {
+        self.inner
+            .state
+            .lock()
+            .expect("change journal lock poisoned")
+            .frozen
+            .len()
+    }
+
     #[cfg(test)]
     fn active_len(&self) -> usize {
         self.inner
@@ -295,6 +306,19 @@ impl<V> FrozenChanges<V> {
                 .iter()
                 .map(move |(id, row)| (field.as_str(), id.as_str(), row))
         })
+    }
+
+    /// Release this batch and every earlier one without a `ChangeJournal`
+    /// handle: used for a collection that needs no bind work. It takes only the
+    /// journal's own mutex, never the engine state lock.
+    pub(crate) fn acknowledge_through_own(&self) -> bool {
+        let Some(inner) = self.journal.upgrade() else {
+            return false;
+        };
+        let mut state = inner.state.lock().expect("change journal lock poisoned");
+        let present = state.frozen.contains_key(&self.id);
+        state.frozen.retain(|id, _| *id > self.id);
+        present
     }
 
     #[cfg(test)]
