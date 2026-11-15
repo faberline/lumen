@@ -39,6 +39,7 @@ fn entry(namespace: &str) -> FleetInstance {
     FleetInstance {
         namespace: namespace.to_string(),
         name: None,
+        runtime: None,
         spec: None,
     }
 }
