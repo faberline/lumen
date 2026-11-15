@@ -339,3 +339,44 @@ fn the_spec_patch_still_merges_as_before_with_runtime_present() {
         rejection(&planned[0])
     );
 }
+
+/// Drift during the operator's absence: the plan is a pure function of the
+/// fleet, so a changed override reaches only the instance it names, and a
+/// later pass has no memory of an earlier one.
+#[test]
+fn a_changed_override_changes_only_its_own_instance_and_plan_has_no_memory() {
+    let before = fleet(vec![instance("team-a", None), instance("team-b", None)]);
+    let after = fleet(vec![
+        instance("team-a", None),
+        instance("team-b", Some(json!({ "serving": { "cpu": "4" } }))),
+    ]);
+
+    let first = plan(&before);
+    let again = plan(&before);
+    for index in 0..2 {
+        assert_eq!(
+            ready(&first[index]),
+            ready(&again[index]),
+            "same fleet, same plan"
+        );
+    }
+
+    let before_plan = plan(&before);
+    let after_plan = plan(&after);
+    assert_eq!(
+        ready(&after_plan[0]),
+        ready(&before_plan[0]),
+        "team-a names no override, so it is unchanged"
+    );
+    assert_eq!(ready(&before_plan[1])["serving"]["cpu"], json!("2"));
+    assert_eq!(ready(&after_plan[1])["serving"]["cpu"], json!("4"));
+
+    let alone = plan(&after);
+    for index in 0..2 {
+        assert_eq!(
+            ready(&alone[index]),
+            ready(&after_plan[index]),
+            "planning after an earlier pass must equal planning alone"
+        );
+    }
+}

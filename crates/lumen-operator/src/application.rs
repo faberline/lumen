@@ -9,3 +9,41 @@ pub mod reconcile;
 pub mod render;
 pub mod reshard_driver;
 pub mod resize;
+
+#[cfg(test)]
+mod lease_tests {
+    use std::collections::BTreeSet;
+
+    use crate::application::fleet_reconcile::FLEET_LEASE_NAME;
+    use crate::application::reconcile::loops::{
+        AUTH_DELEGATOR_SWEEP_LEASE_NAME, HPA_HANDOFF_LEASE_NAME,
+    };
+    use crate::application::reshard_driver::DRIVER_LEASE_NAME;
+
+    /// Each independently leader-gated loop holds its own Lease, so two loops
+    /// can never both believe they lead the same work.
+    #[test]
+    fn every_independently_leader_gated_loop_has_its_own_lease_name() {
+        let names = [
+            FLEET_LEASE_NAME,
+            HPA_HANDOFF_LEASE_NAME,
+            AUTH_DELEGATOR_SWEEP_LEASE_NAME,
+            DRIVER_LEASE_NAME,
+        ];
+        let distinct: BTreeSet<&str> = names.iter().copied().collect();
+        assert_eq!(
+            distinct.len(),
+            names.len(),
+            "two loops share a Lease: {names:?}"
+        );
+        assert_eq!(
+            names,
+            [
+                "lumen-fleet",
+                "lumen-hpa-handoff",
+                "lumen-auth-delegator-sweep",
+                "lumen-reshard-driver",
+            ]
+        );
+    }
+}

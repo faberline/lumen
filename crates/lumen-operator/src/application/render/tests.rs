@@ -570,3 +570,79 @@ fn restart_hash_assertion_bites_when_a_field_is_left_out_of_the_input() {
     );
     assert_eq!(without_log_level(&base), without_log_level(&changed));
 }
+
+/// Bookkeeping label pairs that record which controller wrote an object or
+/// which authority owns its data. The workload never reads them and no selector
+/// uses them, so they are the only operator name the check allows.
+const OPERATOR_BOOKKEEPING_LABELS: [&str; 2] = [
+    r#""app.kubernetes.io/managed-by":"lumen-operator""#,
+    r#""lumen.dev/authority":"lumen-operator""#,
+];
+
+/// The operator must not be a runtime dependency of what it renders: no
+/// rendered object may name the operator in anything the workload reads (env,
+/// volumes, selectors, service accounts, names), so only the bookkeeping pairs
+/// above are removed before the check.
+fn assert_operator_independent(objects: &[Value]) {
+    for object in objects {
+        let mut text = serde_json::to_string(object).expect("rendered object serializes");
+        for pair in OPERATOR_BOOKKEEPING_LABELS {
+            text = text.replace(pair, "");
+        }
+        assert!(
+            !text.contains("lumen-operator"),
+            "rendered {} names the operator: {text}",
+            object["kind"]
+        );
+    }
+}
+
+#[test]
+fn render_is_a_pure_function_of_the_cr() {
+    let lumen = single_replica();
+    let first = render(&lumen);
+    let second = render(&lumen);
+    assert_eq!(
+        first, second,
+        "a restarted operator must re-apply identical objects"
+    );
+
+    let statefulset = first
+        .iter()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet");
+    let template_meta = &statefulset["spec"]["template"]["metadata"];
+    assert!(
+        template_meta.get("ownerReferences").is_none(),
+        "pod template must not carry ownerReferences: {template_meta}"
+    );
+    assert!(
+        template_meta.get("finalizers").is_none(),
+        "pod template must not carry finalizers: {template_meta}"
+    );
+}
+
+#[test]
+fn rendered_objects_never_name_the_operator() {
+    assert_operator_independent(&render(&single_replica()));
+}
+
+#[test]
+#[should_panic(expected = "names the operator")]
+fn injecting_an_operator_env_var_fails_the_independence_check() {
+    let mut objects = render(&single_replica());
+    let statefulset = objects
+        .iter_mut()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet");
+    let container = &mut statefulset["spec"]["template"]["spec"]["containers"][0];
+    if container.get("env").is_none() {
+        container["env"] = json!([]);
+    }
+    container["env"]
+        .as_array_mut()
+        .expect("env array")
+        .push(json!({ "name": "POD_NAMESPACE", "value": "lumen-operator-system" }));
+
+    assert_operator_independent(&objects);
+}
