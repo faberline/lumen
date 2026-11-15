@@ -15,6 +15,7 @@
 //! Stateful data pods are not a direct HPA target. The reconcile loop in [`super::reconcile`]
 //! server-side-applies whatever this returns.
 
+pub mod access;
 pub mod backup;
 pub mod identity;
 pub mod monitoring;
@@ -55,6 +56,10 @@ const BACKUP_COMPONENT: &str = "backup";
 /// and sharing a component with the namespaced serving children would make
 /// that selector match objects the sweep has no business deleting.
 const AUTH_DELEGATION_COMPONENT: &str = "auth-delegation";
+
+/// Component label of the namespaced access Role and RoleBinding; the sweep
+/// in [`super::reconcile`] selects on it.
+const ACCESS_POLICY_COMPONENT: &str = "access-policy";
 
 /// The built-in ClusterRole granting `create` on `tokenreviews` and
 /// `subjectaccessreviews` — the two APIs delegated request auth is made of.
