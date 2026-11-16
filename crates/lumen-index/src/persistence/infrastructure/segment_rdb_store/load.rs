@@ -2,6 +2,8 @@
 //! caches saved beside it.
 
 use crate::index::application::{engine::Engine, recovery_profile::RecoveryPhase};
+use crate::persistence::infrastructure::segment_rdb_store::generation_validation::validate_generation_layout;
+use crate::persistence::infrastructure::segment_rdb_store::records::parse_revision_name;
 use crate::persistence::infrastructure::segment_rdb_store::startup::{
     SegmentStartupDecision, SegmentStartupOutcome, StartupBootstrap,
 };
@@ -12,7 +14,7 @@ use crate::persistence::infrastructure::segment_rdb_store::{
 use anyhow::{bail, Context, Result};
 use std::sync::Arc;
 use std::time::Instant;
-use storage_durable::{CurrentReadErrorKind, CurrentTarget};
+use storage_durable::{CurrentReadErrorKind, CurrentTarget, GenerationName};
 
 impl SegmentRdbStore {
     /// Allocated generation bytes, counted once per file identity across hard links.
@@ -106,6 +108,44 @@ impl SegmentRdbStore {
             sequence: record.sequence,
             engine,
         }))
+    }
+
+    /// Newest complete revision generation whose sequence is above
+    /// `current_sequence`, as `(generation name, sequence)`. A directory that
+    /// fails `record_for_name` or `validate_generation_layout` is an aborted
+    /// attempt and is ignored. Read only; never selects or changes anything.
+    pub fn newest_complete_generation_after(
+        &self,
+        current_sequence: u64,
+    ) -> Result<Option<(String, u64)>> {
+        let _guard = self.save_gate.lock_owned();
+        let mut newest: Option<(String, u64, u64)> = None;
+        for (raw, _) in self.generation_entries()? {
+            let Some((sequence, revision)) = parse_revision_name(&raw) else {
+                continue;
+            };
+            if sequence <= current_sequence {
+                continue;
+            }
+            let Ok(name) = GenerationName::parse(raw.clone()) else {
+                continue;
+            };
+            let Ok(record) = self.record_for_name(name) else {
+                continue;
+            };
+            if validate_generation_layout(&record).is_err() {
+                continue;
+            }
+            let is_newer = newest
+                .as_ref()
+                .is_none_or(|(_, seen_sequence, seen_revision)| {
+                    (sequence, revision) > (*seen_sequence, *seen_revision)
+                });
+            if is_newer {
+                newest = Some((raw, sequence, revision));
+            }
+        }
+        Ok(newest.map(|(raw, sequence, _)| (raw, sequence)))
     }
 
     /// Reopen the cold-start checkpoint and return the decision that selected

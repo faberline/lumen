@@ -8,8 +8,12 @@ mod http;
 mod lifecycle;
 #[allow(dead_code)] // used by the performance phase of slice 7 (#264)
 mod load;
+mod perf_gate;
 mod report;
+mod restart;
 mod run;
+mod spawn;
+mod visible_version;
 mod writes;
 
 use std::process::ExitCode;

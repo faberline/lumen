@@ -217,6 +217,23 @@ fn exact_loader_never_selects_unpointed_higher_generation() {
 }
 
 #[test]
+fn newest_complete_generation_after_reports_only_a_newer_complete_generation() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = SegmentRdbStore::new(dir.path()).unwrap();
+    let engine = Arc::new(Engine::new());
+    engine.create_collection("u", kw_schema()).unwrap();
+    index_kw(&engine, "u1", "a@x.com");
+    store.save_required(&engine, 7).unwrap();
+    let newer = store.save_required(&engine, 99).unwrap();
+
+    assert_eq!(
+        store.newest_complete_generation_after(7).unwrap(),
+        Some((newer.as_str().to_owned(), 99))
+    );
+    assert_eq!(store.newest_complete_generation_after(99).unwrap(), None);
+}
+
+#[test]
 fn exact_loader_never_adopts_a_legacy_generation_when_current_is_missing() {
     let dir = tempfile::tempdir().unwrap();
     let legacy = dir.path().join("gen-42");

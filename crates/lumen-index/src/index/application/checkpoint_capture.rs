@@ -106,6 +106,8 @@ pub(crate) struct CheckpointCapture {
     /// A new empty base plus the complete frozen journal forms this first
     /// generation. These collections do not reuse any predecessor catalog.
     pub initial_sparse: BTreeSet<String>,
+    /// Collections whose journal was complete since empty at freeze; they always need bind work.
+    pub journal_complete: BTreeSet<String>,
     /// Sparse rows captured from a reusable base.  Frozen-write retries share
     /// this immutable payload instead of cloning every row and value.
     pub field_deltas: std::sync::Arc<BTreeMap<String, CheckpointDeltas>>,
@@ -134,8 +136,92 @@ impl CheckpointCapture {
             frozen_changes: self.frozen_changes.clone(),
             reused: self.reused.clone(),
             initial_sparse: self.initial_sparse.clone(),
+            journal_complete: self.journal_complete.clone(),
             field_deltas: self.field_deltas.clone(),
             record_cut: self.record_cut.clone(),
         }
+    }
+
+    /// True when the bind loop must visit `name`. Judged only from the capture,
+    /// never from the live collection: a collection that is reused and clean
+    /// needs no bind work.
+    pub(crate) fn needs_bind(&self, name: &str) -> bool {
+        !self.reused.contains(name)
+            || self.prepared.contains_key(name)
+            || self.prepared_deltas.contains_key(name)
+            || self.prepared_compactions.contains_key(name)
+            || self
+                .scalar_publications
+                .get(name)
+                .is_some_and(|fields| !fields.is_empty())
+            || self
+                .scalar_retire
+                .get(name)
+                .is_some_and(|fields| fields.values().any(|cells| !cells.is_empty()))
+            || self
+                .field_dirty
+                .get(name)
+                .is_some_and(|fields| fields.values().any(|rows| !rows.is_empty()))
+            || self
+                .frozen_changes
+                .get(name)
+                .is_some_and(|frozen| frozen.rows().next().is_some())
+            || self.journal_complete.contains(name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CheckpointCapture;
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::sync::Arc;
+
+    fn empty_capture() -> CheckpointCapture {
+        CheckpointCapture {
+            prepared: BTreeMap::new(),
+            prepared_deltas: BTreeMap::new(),
+            prepared_compactions: BTreeMap::new(),
+            scalar_cuts: BTreeMap::new(),
+            scalar_publications: BTreeMap::new(),
+            scalar_retire: BTreeMap::new(),
+            live_delta_inputs: BTreeMap::new(),
+            live_base_inputs: BTreeMap::new(),
+            collections: BTreeMap::new(),
+            next_generation: 0,
+            field_dirty: BTreeMap::new(),
+            frozen_changes: BTreeMap::new(),
+            reused: BTreeSet::new(),
+            initial_sparse: BTreeSet::new(),
+            journal_complete: BTreeSet::new(),
+            field_deltas: Arc::new(BTreeMap::new()),
+            record_cut: None,
+        }
+    }
+
+    #[test]
+    fn needs_bind_is_false_only_for_a_clean_reused_collection() {
+        let mut capture = empty_capture();
+        capture.reused.insert("c".to_string());
+        assert!(!capture.needs_bind("c"));
+
+        let mut journal = empty_capture();
+        journal.reused.insert("c".to_string());
+        journal.journal_complete.insert("c".to_string());
+        assert!(journal.needs_bind("c"));
+
+        let mut deltas = empty_capture();
+        deltas.reused.insert("c".to_string());
+        deltas.prepared_deltas.insert("c".to_string(), Vec::new());
+        assert!(deltas.needs_bind("c"));
+
+        let mut retire = empty_capture();
+        retire.reused.insert("c".to_string());
+        retire.scalar_retire.insert(
+            "c".to_string(),
+            BTreeMap::from([("field".to_string(), Vec::new())]),
+        );
+        assert!(!retire.needs_bind("c"));
+
+        assert!(empty_capture().needs_bind("absent"));
     }
 }
