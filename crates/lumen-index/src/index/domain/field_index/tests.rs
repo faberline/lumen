@@ -151,3 +151,24 @@ fn from_spec_uses_storage_type_for_keyword_multi() {
     let idx = super::FieldIndex::from_spec(&plain).unwrap();
     assert!(matches!(idx, super::FieldIndex::Keyword(_)));
 }
+
+#[test]
+fn int64_spec_is_refused_with_not_indexed_yet() {
+    let spec = crate::shared_kernel::types::schema::FieldSpec {
+        field_type: crate::shared_kernel::types::schema::FieldType::Int64,
+        analyzer: None,
+        multi: None,
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let Err(err) = super::FieldIndex::from_spec(&spec) else {
+        panic!("int64 must be refused until #299");
+    };
+    assert!(
+        err.to_string().contains("not indexed yet"),
+        "error should say not indexed yet: {err}"
+    );
+}
