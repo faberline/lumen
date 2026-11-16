@@ -273,6 +273,8 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
     // Cold-start sequence: the WAL position the checkpoint is current as of, so
     // the apply loop tails from `start_seq + 1`.
     let mut deferred_graph_restore = false;
+    let mut newer_generation: Option<(String, u64)> = None;
+    let mut current_generation_label = String::from("empty");
     let mut start_seq = {
         if is_raft {
             // Raft cold-starts inside `RaftHost::spawn` (snapshot restore + replay
@@ -305,6 +307,12 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
                 checkpoint_reopen_ms = checkpoint_reopen_started.elapsed().as_millis() as u64,
                 "segment checkpoint startup decision"
             );
+            current_generation_label = generation
+                .map(str::to_owned)
+                .unwrap_or_else(|| "empty".to_owned());
+            newer_generation = store
+                .newest_complete_generation_after(outcome.checkpoint_sequence.unwrap_or(0))
+                .context("scan segment generations newer than CURRENT")?;
             outcome.checkpoint_sequence.unwrap_or(0)
         } else {
             cbor_cold_start(&rdb_store, &engine).await?
@@ -371,6 +379,20 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
                     "AOF startup decision"
                 );
                 start_seq = recovered_head;
+                if let Some((newer_name, newer_sequence)) = &newer_generation {
+                    if *newer_sequence > recovered_head {
+                        tracing::error!(
+                            current = %current_generation_label,
+                            newer = %newer_name,
+                            newer_sequence,
+                            recovered_head,
+                            "stale CURRENT refused"
+                        );
+                        anyhow::bail!(
+                            "segment CURRENT names generation `{current_generation_label}` but a newer complete generation `{newer_name}` (sequence {newer_sequence}) exists on disk and the AOF ends at sequence {recovered_head}; refusing to serve older state. Restore a consistent backup, or remove the newer generation directory on purpose to roll back"
+                        );
+                    }
+                }
                 // Open the same AOF for continued appends (truncates any torn tail).
                 let w = lumen::aof::AofWriter::open_with_policy(
                     &aof_path,
@@ -868,7 +890,7 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
         Some((tls, _)) => tokio::spawn(service_http::serve_tls(
             listener,
             app,
-            service_http::config_source(move || tls.server_config()),
+            service_http::config_source(move || lumen::tls::serving_server_config(&tls)),
             async move {
                 let _ = http_shutdown_rx.await;
             },

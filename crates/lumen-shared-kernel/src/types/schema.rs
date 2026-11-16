@@ -67,12 +67,17 @@ fn is_false(v: &bool) -> bool {
     !*v
 }
 
+/// Field type name. `float64` is accepted as an alias of `number`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum FieldType {
     Text,
     Keyword,
+    #[serde(alias = "float64")]
     Number,
+    /// 64-bit signed integer, exact. Its index is not built yet: a schema that
+    /// declares an `int64` field is refused at index build (see #299).
+    Int64,
     Set,
     Vector,
     /// 64-bit perceptual/structural hash (pHash / dHash / SimHash / b-bit
@@ -97,10 +102,11 @@ pub struct FieldCapabilities {
 }
 
 impl FieldType {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Text,
         Self::Keyword,
         Self::Number,
+        Self::Int64,
         Self::Set,
         Self::Vector,
         Self::Hash,
@@ -129,6 +135,16 @@ impl FieldType {
                 hamming: false,
             },
             Self::Number => FieldCapabilities {
+                bm25: false,
+                exact: true,
+                prefix: false,
+                range: true,
+                sort: true,
+                set_membership: false,
+                vector_search: false,
+                hamming: false,
+            },
+            Self::Int64 => FieldCapabilities {
                 bm25: false,
                 exact: true,
                 prefix: false,

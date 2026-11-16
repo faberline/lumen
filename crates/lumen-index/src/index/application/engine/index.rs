@@ -13,6 +13,7 @@ use crate::index::application::engine::Engine;
 use crate::index::domain::collection::Collection;
 use crate::index::domain::fast_hash::FastHashMap;
 use crate::index::domain::field_coverage::FieldCoverage;
+use crate::index::domain::field_index::FieldIndex;
 use crate::index::domain::storage_error::StorageError;
 use crate::shared_kernel::types::document::{IndexRequest, IndexResponse};
 use crate::shared_kernel::types::schema::FieldType;
@@ -148,6 +149,12 @@ impl Engine {
                     if stale {
                         continue;
                     }
+                }
+                // An empty list is a missing value: nothing is written, the stored value stays.
+                if item.value.is_missing()
+                    && matches!(coll.fields.get(field), Some(fi) if !matches!(fi, FieldIndex::Vector { .. }))
+                {
+                    continue;
                 }
                 if !cleared_text_rank_caches || !cleared_number_filter_caches {
                     let field_type = match coll.fields.get(field) {

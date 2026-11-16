@@ -24,6 +24,7 @@ use std::process::Command;
 
 fn lumen_with_backup() -> Lumen {
     let mut spec = LumenSpec {
+        runtime: None,
         image: "asia-east1-docker.pkg.dev/example/lumen:sha".into(),
         image_pull_policy: Some("Always".into()),
         image_pull_secrets: Vec::new(),
@@ -45,6 +46,9 @@ fn lumen_with_backup() -> Lumen {
         peer_tls_secret: None,
         serving_tls_secret: None,
         body_limit_bytes: None,
+        access: None,
+        extra_env: Vec::new(),
+        extra_args: Vec::new(),
     };
     spec.serving.backup = Some(ServingBackupSpec {
         policy: service_backup::ScheduledBackupPolicy {
@@ -1090,14 +1094,23 @@ fn the_control_plane_paths_reach_for_no_other_credential() {
     collect_text_files(&lumen_root.join("crates/lumen/src/bin/lumen"), &mut files);
     files.sort();
 
+    let secret_ref_needle = ["secret", "KeyRef"].concat();
     for file in &files {
         let Ok(text) = std::fs::read_to_string(file) else {
             continue;
         };
         scanned += 1;
         let rel = file.strip_prefix(lumen_root).unwrap_or(file).display();
+        let rel_path = file
+            .strip_prefix(lumen_root)
+            .unwrap_or(file)
+            .to_string_lossy()
+            .replace('\\', "/");
         for (line_no, line) in text.lines().enumerate() {
             for (needle, why) in forbidden {
+                if *needle == secret_ref_needle && secret_ref_exempt(&rel_path) {
+                    continue;
+                }
                 assert!(
                     !line.contains(needle),
                     "{rel}:{}: control-plane paths must present only their own \
@@ -1115,6 +1128,54 @@ fn the_control_plane_paths_reach_for_no_other_credential() {
         "expected the operator, backup, and CLI control-plane paths to be readable, \
          but only {scanned} files were scanned"
     );
+}
+
+/// #41: the exemption names exactly the six files that may hold a pod-level
+/// Secret reference, and each of them must exist, so a rename cannot leave a
+/// dead exemption behind.
+#[test]
+fn secret_ref_exemption_covers_only_the_serving_env_files() {
+    let lumen_root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
+    let exempt = [
+        "crates/lumen-operator/src/domain/lumen_spec.rs",
+        "crates/lumen-operator/src/domain/lumen_spec/validation.rs",
+        "crates/lumen-operator/src/domain/lumen_spec/tests.rs",
+        "crates/lumen-operator/src/application/render/serving_extra_env.rs",
+        "crates/lumen-operator/src/application/render/tests.rs",
+        "k8s/operator/crd.yaml",
+    ];
+    for path in exempt {
+        assert!(secret_ref_exempt(path), "{path} must be exempt");
+        assert!(
+            lumen_root.join(path).exists(),
+            "exempt file {path} does not exist"
+        );
+    }
+    for path in [
+        "crates/lumen-operator/src/application/render/serving_config.rs",
+        "crates/lumen-operator/src/application/render/serving_statefulset.rs",
+        "crates/lumen-operator/src/application/render/backup.rs",
+        "crates/lumen-index/src/persistence/application/backup.rs",
+        "crates/lumen/src/bin/lumen/main.rs",
+        "k8s/operator/kustomization.yaml",
+    ] {
+        assert!(!secret_ref_exempt(path), "{path} must not be exempt");
+    }
+}
+
+/// #41: the only files that may name a pod-level Secret reference. They declare
+/// or render user-chosen serving env as `valueFrom`; the operator never reads
+/// the Secret.
+fn secret_ref_exempt(rel: &str) -> bool {
+    const FILES: [&str; 6] = [
+        "crates/lumen-operator/src/domain/lumen_spec.rs",
+        "crates/lumen-operator/src/domain/lumen_spec/validation.rs",
+        "crates/lumen-operator/src/domain/lumen_spec/tests.rs",
+        "crates/lumen-operator/src/application/render/serving_extra_env.rs",
+        "crates/lumen-operator/src/application/render/tests.rs",
+        "k8s/operator/crd.yaml",
+    ];
+    FILES.contains(&rel)
 }
 
 fn collect_text_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
