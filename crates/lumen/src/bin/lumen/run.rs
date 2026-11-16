@@ -12,6 +12,7 @@ use crate::connect::connect;
 use crate::dockerfile::dockerfile;
 use crate::issue::{issue, TOOL};
 use crate::k8s::k8s;
+use crate::migrate;
 use crate::query::dispatch_query;
 use crate::serve::serve;
 use crate::spec::spec_gen;
@@ -85,5 +86,6 @@ pub(crate) async fn run() -> Result<()> {
         Command::Inspect(args) => dispatch_snapshot_inspect(args),
         Command::Connect(args) => connect(args).await,
         Command::Query(args) => dispatch_query(args).await,
+        Command::Migrate(args) => migrate::dispatch(args),
     }
 }
