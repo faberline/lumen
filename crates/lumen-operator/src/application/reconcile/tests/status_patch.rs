@@ -303,3 +303,25 @@ fn status_patch_never_reports_awaiting_convergence_for_a_manually_authored_map_v
              awaitingTopologyConvergence, got: {reshard}"
     );
 }
+
+#[test]
+fn status_patch_for_a_stale_status_equals_the_patch_for_no_status() {
+    // The patch is a function of spec, generation and facts only. A stale
+    // status (from an earlier process or an older pass) must not change it.
+    let fresh = hpa_test_lumen("search", "acme-catchup", 2, 1);
+    let mut stale = fresh.clone();
+    stale.status = Some(crate::domain::lumen_spec::status::LumenStatus {
+        phase: "Degraded".into(),
+        observed_generation: -7,
+        serving_ready_replicas: 99,
+        desired_replicas: 99,
+        shard_count: 99,
+        ..Default::default()
+    });
+
+    let ready = ReadyFacts {
+        ready: std::collections::HashMap::new(),
+    };
+    assert_eq!(stale.status_patch(&ready), fresh.status_patch(&ready));
+    assert_eq!(fresh.status_patch(&ready), fresh.status_patch(&ready));
+}
