@@ -64,6 +64,7 @@ fn schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -76,6 +77,7 @@ fn schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     CreateCollectionRequest { fields }

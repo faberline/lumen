@@ -120,6 +120,7 @@ fn setup_collection(engine: &Engine, collection_id: &str) {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     engine

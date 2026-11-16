@@ -49,6 +49,9 @@ impl Engine {
     ///   **different** type / analyzer / multi flag is rejected — type
     ///   changes are an offline op (collection version bump + reindex)
     ///   not covered by this surface in v1.
+    ///   * A `facetable` change from false to true is accepted for a field with
+    ///     no documents, and refused with `StorageError::ShadowRebuildRequired`
+    ///     otherwise.
     ///
     /// `collection_id` must not contain `:` — that character is reserved for
     /// custom-method routes such as `POST /collections:search`, so keeping
@@ -89,9 +92,32 @@ impl Engine {
                 .collections
                 .get_mut(collection_id)
                 .expect("checked live above under the same state lock");
+            // Pre-pass: refuse before any change, so a refusal leaves the
+            // other new fields of the same call unapplied too.
+            for (name, spec) in &schema {
+                if let Some(existing) = coll.schema.get(name) {
+                    if enables_facetable_only(existing, spec)
+                        && coll.eid_fields.values().any(|c| c.contains(name))
+                    {
+                        return Err(StorageError::ShadowRebuildRequired {
+                            collection: collection_id.to_string(),
+                            field: name.clone(),
+                        }
+                        .into());
+                    }
+                }
+            }
             let mut added = 0u32;
             for (name, spec) in schema {
                 match coll.schema.get(&name) {
+                    Some(existing) if enables_facetable_only(existing, &spec) => {
+                        // The pre-pass proved the field has no documents.
+                        coll.clear_search_cache();
+                        coll.requires_full_checkpoint = true;
+                        coll.journal_complete_since_empty = false;
+                        coll.schema.insert(name.clone(), spec);
+                        added += 1;
+                    }
                     Some(existing) if existing != &spec => {
                         bail!(
                             "field `{name}` already declared in collection `{collection_id}` \
@@ -305,3 +331,15 @@ impl Engine {
 
 #[cfg(test)]
 mod tests;
+
+/// True when `requested` differs from `existing` only by `facetable`
+/// going from false to true.
+fn enables_facetable_only(existing: &FieldSpec, requested: &FieldSpec) -> bool {
+    !existing.facetable
+        && requested.facetable
+        && *existing
+            == FieldSpec {
+                facetable: false,
+                ..requested.clone()
+            }
+}

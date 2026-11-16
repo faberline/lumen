@@ -23,6 +23,7 @@ fn vector_capacity_schema(
             metric: Some(crate::shared_kernel::types::schema::VectorMetric::L2),
             backend,
             quantize: None,
+            facetable: false,
         },
     );
     CreateCollectionRequest { fields }

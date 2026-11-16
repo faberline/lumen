@@ -400,6 +400,7 @@ fn recovered_schema() -> CreateCollectionRequest {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         )]),
     }
@@ -1169,4 +1170,124 @@ fn exact_legacy_beside_unknown_content_refuses_before_listener_or_mutation() {
             && logs.contains("unrecognized non-empty segment checkpoint root entry"),
         "mixed legacy root must list both direct entries and refuse adoption:\n{logs}"
     );
+}
+
+/// This writes two complete revision generations through the production store.
+/// It returns the `CURRENT` bytes that name the older and the newer one.
+fn write_two_generation_root(root: &Path) -> (Vec<u8>, Vec<u8>) {
+    let store = SegmentRdbStore::new(root).expect("open production checkpoint store");
+    let engine = indexed_checkpoint_engine();
+    store.save(&engine, 2).expect("save older checkpoint");
+    let older = std::fs::read(root.join("CURRENT")).expect("read older CURRENT");
+    engine
+        .index(
+            CHECKPOINT_COLLECTION,
+            IndexRequest {
+                items: vec![IndexItem {
+                    external_id: POST_ADOPTION_EXTERNAL_ID.into(),
+                    field: "email".into(),
+                    value: FieldValue::String(POST_ADOPTION_VALUE.into()),
+                    version: None,
+                }],
+                request_id: None,
+            },
+        )
+        .expect("index second checkpoint document");
+    store.save(&engine, 3).expect("save newer checkpoint");
+    let newer = std::fs::read(root.join("CURRENT")).expect("read newer CURRENT");
+    assert_ne!(
+        older, newer,
+        "the two checkpoints must name different generations"
+    );
+    assert!(root.join(generation_name(&older)).is_dir());
+    assert!(root.join(generation_name(&newer)).is_dir());
+    (older, newer)
+}
+
+/// The generation name is the text after `generation:`, without the newline.
+fn generation_name(current: &[u8]) -> String {
+    std::str::from_utf8(current)
+        .expect("CURRENT is UTF-8")
+        .trim()
+        .strip_prefix("generation:")
+        .expect("CURRENT names a generation")
+        .to_owned()
+}
+
+#[test]
+fn undamaged_two_generation_root_serves_both_documents() {
+    let root = tempfile::tempdir().expect("undamaged two generation segment root");
+    write_two_generation_root(root.path());
+
+    let mut process = LumenProcess::spawn(root.path());
+    process.wait_until_ready();
+    assert_checkpoint_document_is_searchable(&process);
+    assert_checkpoint_value_is_searchable(&process, POST_ADOPTION_EXTERNAL_ID, POST_ADOPTION_VALUE);
+    process.stop_and_logs();
+}
+
+#[test]
+fn stale_current_beside_newer_generation_refuses_before_listener() {
+    let root = tempfile::tempdir().expect("stale CURRENT segment root");
+    let (older, newer) = write_two_generation_root(root.path());
+    let older_name = generation_name(&older);
+    let newer_name = generation_name(&newer);
+    std::fs::write(root.path().join("CURRENT"), &older).expect("write stale CURRENT");
+    let before = snapshot_root(root.path());
+
+    let mut process = LumenProcess::spawn(root.path());
+    let (status, logs, ever_bound) = process.wait_for_refusal();
+    assert!(
+        !status.success(),
+        "stale CURRENT root exited successfully:\n{logs}"
+    );
+    assert!(
+        !ever_bound,
+        "stale CURRENT root bound a listener before refusing startup:\n{logs}"
+    );
+    assert!(
+        logs.contains(&older_name) && logs.contains(&newer_name),
+        "refusal must name the CURRENT generation and the newer generation:\n{logs}"
+    );
+    assert!(
+        logs.contains("refusing to serve older state"),
+        "refusal must say that it will not serve older state:\n{logs}"
+    );
+    assert_eq!(
+        std::fs::read(root.path().join("CURRENT")).expect("read stale CURRENT"),
+        older,
+        "refused startup must not rewrite CURRENT"
+    );
+    assert_eq!(
+        snapshot_root(root.path()),
+        before,
+        "stale CURRENT root changed during its refused startup"
+    );
+}
+
+#[test]
+fn crash_before_current_publish_with_aof_tail_still_starts() {
+    let root = tempfile::tempdir().expect("crash before CURRENT publish segment root");
+    let (older, _newer) = write_two_generation_root(root.path());
+    std::fs::write(root.path().join("CURRENT"), &older).expect("write pre-crash CURRENT");
+    write_checkpoint_aof_tail(root.path(), 3);
+
+    let mut process = LumenProcess::spawn(root.path());
+    process.wait_until_ready();
+    assert_checkpoint_value_is_searchable(&process, AOF_TAIL_EXTERNAL_ID, AOF_TAIL_VALUE);
+    process.stop_and_logs();
+}
+
+#[test]
+fn removing_the_newer_generation_lets_an_older_current_start() {
+    let root = tempfile::tempdir().expect("operator rollback segment root");
+    let (older, newer) = write_two_generation_root(root.path());
+    std::fs::write(root.path().join("CURRENT"), &older).expect("write rollback CURRENT");
+    std::fs::remove_dir_all(root.path().join(generation_name(&newer)))
+        .expect("operator removes the newer generation");
+
+    let mut process = LumenProcess::spawn(root.path());
+    process.wait_until_ready();
+    assert_checkpoint_document_is_searchable(&process);
+    process.stop_and_logs();
 }

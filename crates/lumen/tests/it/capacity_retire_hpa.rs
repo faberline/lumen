@@ -13,6 +13,8 @@ fn retired_serving_autoscaling_override_is_rejected_at_the_fleet() {
             }))
             .unwrap(),
             instances: vec![FleetInstance {
+                runtime: None,
+                access: None,
                 namespace: "team-a".to_string(),
                 name: Some("search".to_string()),
                 spec: Some(json!({
@@ -62,6 +64,8 @@ fn retired_serving_autoscaling_individual_knobs_are_rejected_at_the_fleet() {
                 }))
                 .unwrap(),
                 instances: vec![FleetInstance {
+                    runtime: None,
+                    access: None,
                     namespace: "team-a".to_string(),
                     name: Some("search".to_string()),
                     spec: Some(knob),
@@ -99,6 +103,8 @@ fn supported_serving_cpu_override_is_admitted_at_the_fleet() {
             }))
             .unwrap(),
             instances: vec![FleetInstance {
+                runtime: None,
+                access: None,
                 namespace: "team-a".to_string(),
                 name: Some("search".to_string()),
                 spec: Some(json!({
@@ -132,6 +138,8 @@ fn supported_serving_resources_override_is_admitted_at_the_fleet() {
             }))
             .unwrap(),
             instances: vec![FleetInstance {
+                runtime: None,
+                access: None,
                 namespace: "team-a".to_string(),
                 name: Some("search".to_string()),
                 spec: Some(json!({

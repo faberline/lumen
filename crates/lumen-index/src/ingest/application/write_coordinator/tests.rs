@@ -93,6 +93,7 @@ fn keyword_schema() -> CreateCollectionRequest {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     CreateCollectionRequest { fields }
@@ -110,6 +111,7 @@ fn hnsw_schema() -> CreateCollectionRequest {
             metric: Some(VectorMetric::L2),
             backend: Some(VectorBackend::HnswCpu),
             quantize: None,
+            facetable: false,
         },
     );
     CreateCollectionRequest { fields }

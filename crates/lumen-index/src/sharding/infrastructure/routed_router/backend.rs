@@ -11,8 +11,7 @@ use futures::future::{join_all, try_join_all};
 
 use crate::index::application::engine::collections::DropOutcome;
 use crate::sharding::application::ports::routed_backend::RoutedBackend;
-use crate::sharding::domain::forward_error::{ShardForwardMisrouted, ShardForwardRemoteError};
-use crate::sharding::domain::shard_route::SearchShardTarget;
+use crate::sharding::domain::forward_error::ShardForwardRemoteError;
 use crate::sharding::infrastructure::routed_router::{
     drop_outcome_from_status, merge_drop_outcomes, percent_encode_component, RoutedRouter,
 };
@@ -104,39 +103,26 @@ impl RoutedBackend for RoutedRouter {
     async fn search(
         &self,
         collection_id: &str,
-        req: SearchRequest,
+        mut req: SearchRequest,
         headers: &HeaderMap,
     ) -> Result<SearchResponse> {
+        // Writes place every document by `external_id` and no write carries
+        // `routing_key`, so a key cannot name the owning shard. Clear it before
+        // anything else: a scatter sub-request then never runs the keyed
+        // misroute check on a remote pod, and every search fans out (ADR 0002 D8).
+        req.routing_key = None;
         if Self::already_forwarded(headers) {
-            // #1457 R4: only a keyed forward has a single owner-of-record to
-            // validate, so only that arm re-checks the sender's map version
-            // (#1442 R2) and recomputes ownership (#1442 R1). A keyless
-            // (scatter) sub-request has no single owner and this pod always
-            // answers truthfully for its own local data regardless of which
-            // map version the scattering pod ran — checking the map version
-            // there only starved scatter search during every rolling
-            // restart after a completed split (see `assert_owns`'s doc
-            // comment and this module's header for the full rationale).
-            if let Some(key) = req.routing_key.as_deref() {
-                self.check_forwarded_map_version(headers)?;
-                let route = self.shard_map.route_key(collection_id, key);
-                if route.shard != self.local_shard {
-                    return Err(anyhow::Error::new(ShardForwardMisrouted {
-                        bucket: route.bucket,
-                        owner_shard: route.shard,
-                        local_shard: self.local_shard,
-                    }));
-                }
-            } else if let Some(sender_version) = Self::forwarded_map_version(headers) {
-                // #1467 R6: a keyless (scatter) sub-request is still exempt
-                // from the hard `check_forwarded_map_version` rejection above
-                // — availability over completeness, see this module's header
-                // doc — but a disagreement here means the scattering pod's
-                // view of the topology and this pod's are momentarily out of
-                // sync (a mixed-map rolling-restart window), which can make a
-                // scatter search's result set silently incomplete or
-                // overlapping rather than merely stale. Surface that
-                // non-fatally instead of staying invisible.
+            // #1457 R4 / #1467 R6: a forwarded search is always a keyless scatter
+            // sub-request, which has no single owner to validate. This pod
+            // answers truthfully for its own local data regardless of which map
+            // version the scattering pod ran — checking the map version here
+            // only starved scatter search during every rolling restart after a
+            // completed split (see `assert_owns`'s doc comment and this module's
+            // header for the full rationale). A disagreement is still surfaced
+            // non-fatally, because a mixed-map rolling-restart window can make a
+            // scatter result set silently incomplete or overlapping rather than
+            // merely stale.
+            if let Some(sender_version) = Self::forwarded_map_version(headers) {
                 let local_version = self.shard_map.version();
                 if sender_version != local_version {
                     self.engine.metrics().incr_scatter_map_version_mismatch();
@@ -157,35 +143,7 @@ impl RoutedBackend for RoutedRouter {
                 .run(move || engine.search(&collection_id, req))
                 .await;
         }
-        match self
-            .shard_map
-            .search_target(collection_id, req.routing_key.as_deref())
-        {
-            SearchShardTarget::One(route) if route.shard == self.local_shard => {
-                let engine = Arc::clone(&self.engine);
-                let collection_id = collection_id.to_string();
-                self.search_executor
-                    .run(move || engine.search(&collection_id, req))
-                    .await
-            }
-            SearchShardTarget::One(route) => {
-                // #1457 R3: percent-encode the caller-controlled collection
-                // id (see `scatter_search`'s comment for the rationale).
-                let path = format!(
-                    "/collections/{}/search",
-                    percent_encode_component(collection_id)
-                );
-                self.forward_json(
-                    route.shard,
-                    reqwest::Method::POST,
-                    &path,
-                    Some(req),
-                    headers,
-                )
-                .await
-            }
-            SearchShardTarget::All => self.scatter_search(collection_id, req, headers).await,
-        }
+        self.scatter_search(collection_id, req, headers).await
     }
 
     async fn index(

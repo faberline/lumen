@@ -55,6 +55,9 @@ All three generated clients support Lumen's dedicated `QUERY` operations and a
 runtime POST fallback. They generate ordinary JSON operations. The current
 operation model ignores non-JSON request and response content.
 
+Generated clients expose `merge_docs` (Python and Rust) and `mergeDocs`
+(TypeScript) and still expose `index`.
+
 ## Connect
 
 Standalone in-cluster clients use `http://lumen.lumen.svc.cluster.local:7373`
@@ -102,8 +105,6 @@ main generated-client boundaries are:
   OpenAPI snapshot.
 - No generated client applies Lumen's planned operation-aware backoff,
   `Retry-After`, deadline, cancellation, or idempotency-safe write retry.
-- No generated client accepts a caller-owned bulk source-fetch callback or
-  restores Lumen hit order after hydration.
 - Lumen does not ship a Managed client-workload Kustomize template. The current
   `k8s/overlays/template` is a Standalone runtime template.
 - The generated-client CRUD test can skip Python, TypeScript, or Rust when its
@@ -117,7 +118,6 @@ These are future outcomes. They are not hidden installation steps. See
 [Strict generated-client gates](../ROADMAP.md#strict-generated-client-gates),
 [Generated-client search v2 parity](../ROADMAP.md#generated-client-search-v2-parity),
 [Generated-client request resilience](../ROADMAP.md#generated-client-request-resilience),
-[Generated-client source-integration helpers](../ROADMAP.md#generated-client-source-integration-helpers),
 [Versioned client workload template](../ROADMAP.md#versioned-client-workload-template),
 and [Protocol compatibility policy](../ROADMAP.md#protocol-compatibility-policy).
 

@@ -71,11 +71,14 @@ pub(in crate::index) fn validate_value(
     value: &FieldValue,
     field_name: &str,
 ) -> Result<()> {
+    if value.is_missing() && !matches!(fi, FieldIndex::Vector { .. }) {
+        return Ok(());
+    }
     match (fi, value) {
         (FieldIndex::Text { .. }, FieldValue::String(_)) => Ok(()),
         (FieldIndex::Keyword(_), FieldValue::String(_)) => Ok(()),
         (FieldIndex::Number(_), FieldValue::Number(x)) => {
-            SortableF64::new(*x).map_err(|e| StorageError::InvalidNumber(e.to_string()))?;
+            SortableF64::for_value(*x).map_err(|e| StorageError::InvalidNumber(e.to_string()))?;
             Ok(())
         }
         (FieldIndex::Set(_), FieldValue::StringList(_)) => Ok(()),

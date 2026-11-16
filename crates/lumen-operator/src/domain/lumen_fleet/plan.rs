@@ -46,9 +46,42 @@ pub fn plan(fleet: &LumenFleet) -> Vec<PlannedInstance> {
             continue;
         }
 
+        // The access list is typed on the entry. A copy under `spec` would be
+        // merged key by key, so it is refused rather than guessed at.
+        if entry
+            .spec
+            .as_ref()
+            .and_then(Value::as_object)
+            .is_some_and(|map| map.contains_key("access"))
+        {
+            planned.push(PlannedInstance {
+                namespace,
+                name,
+                outcome: PlanOutcome::Rejected(
+                    "instances[].spec.access is not allowed; declare the list in instances[].access, which replaces defaults.access"
+                        .to_string(),
+                ),
+            });
+            continue;
+        }
+
         let mut merged = defaults.clone();
+        if let Some(instance_runtime) = &entry.runtime {
+            let base = fleet.spec.defaults.runtime.clone().unwrap_or_default();
+            let effective = base.overlay(instance_runtime);
+            merged["runtime"] = serde_json::to_value(&effective).unwrap_or(Value::Null);
+        }
         if let Some(patch) = &entry.spec {
             merge_patch(&mut merged, patch);
+        }
+        // Replace the whole list: `merge_patch` would keep default entries.
+        if let Some(access) = &entry.access {
+            if let Some(map) = merged.as_object_mut() {
+                map.insert(
+                    "access".to_string(),
+                    serde_json::to_value(access).unwrap_or(Value::Null),
+                );
+            }
         }
         planned.push(PlannedInstance {
             namespace,

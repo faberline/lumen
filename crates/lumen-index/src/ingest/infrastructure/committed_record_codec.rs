@@ -172,6 +172,7 @@ mod tests {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         }
     }
 

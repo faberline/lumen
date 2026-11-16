@@ -114,12 +114,13 @@ current runtime still accepts the current field model.
 
 ### Current writes
 
-`POST /collections/{id}/index` is a field merge. Each item replaces one
-`(external_id, field)` value. Fields not present in the request stay unchanged.
+`POST /collections/{id}/docs:merge` is the canonical field merge: each item
+replaces one `(external_id, field)` value, and fields not present in the request
+stay unchanged. `POST /collections/{id}/index` is a wire-compatible alias of it.
 
 `PUT /collections/{id}/docs:replace` is full document replacement. It replaces
 all indexed fields for the supplied `external_id`. Fields omitted from the
-replacement are removed from that indexed row.
+replacement are removed from that IndexedDocument.
 
 `POST /collections/{id}/docs:truncate` has no request body. It clears every
 indexed document but keeps the collection ID, declared fields, and schema
@@ -157,6 +158,13 @@ provide one collection-wide ownership and versioning contract.
 The current batch behavior is not the Search v2 item-atomic partial-success
 contract. A caller must not infer a stable per-item commit and error model from
 the current batch response.
+
+### Migration: /index to docs:merge
+
+1. Change the path from `/collections/{id}/index` to `/collections/{id}/docs:merge`.
+2. Keep the body, headers, limits and responses.
+3. `/index` keeps working in 0.7.0.
+4. The wire field `version` is a FieldVersion for a merge write and a DocumentVersion for a full replacement.
 
 ### Search v2 target writes
 

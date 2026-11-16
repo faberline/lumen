@@ -251,6 +251,7 @@ fn public_replay_growth_wait_starts_its_own_capacity_maintainer() {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     };
     let fields = (0..8)
         .map(|ordinal| (format!("field-{ordinal:03}"), keyword.clone()))

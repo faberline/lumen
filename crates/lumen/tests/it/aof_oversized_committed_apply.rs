@@ -110,6 +110,7 @@ fn keyword_schema() -> CreateCollectionRequest {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         )]),
     }

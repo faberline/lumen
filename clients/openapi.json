@@ -4,8 +4,7 @@
     "title": "lumen",
     "description": "Standalone search and duplicate-detection index. Generic Collection / Field primitive; the caller owns the source of truth.",
     "contact": {
-      "name": "Chris Cheng",
-      "email": "chris.cheng.c4@gmail.com"
+      "name": "Faberline contributors"
     },
     "license": {
       "name": "MIT"
@@ -813,6 +812,89 @@
         }
       }
     },
+    "/collections/{collection_id}/docs:merge": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "summary": "Merge indexed fields: each item sets one (external_id, field) value; omitted fields stay unchanged.",
+        "description": "At most [`MAX_INDEX_BATCH_SIZE`] items per request; a longer batch is\nrejected with 400 before any item runs.",
+        "operationId": "merge_docs",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "description": "Collection namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Items indexed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Batch size over the limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown collection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Type mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Node in ENOSPC degraded read-only mode (#2516)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/collections/{collection_id}/docs:replace": {
       "put": {
         "tags": [
@@ -1084,8 +1166,8 @@
         "tags": [
           "Index"
         ],
-        "summary": "At most [`MAX_INDEX_BATCH_SIZE`] items per request; a longer batch is",
-        "description": "rejected with 400 before any item runs.",
+        "summary": "Legacy alias of `POST /collections/{collection_id}/docs:merge`: the same",
+        "description": "merge under its older name, kept wire-compatible.",
         "operationId": "index",
         "parameters": [
           {
@@ -1527,15 +1609,17 @@
         "tags": [
           "Admin"
         ],
-        "summary": "Build provenance. `version` is the crate version; `git_sha` and `built_at`",
-        "description": "are stamped by `build.rs` and degrade to \"unknown\" outside a git checkout.",
+        "summary": "Build provenance and compatibility capabilities. `version` is the crate",
+        "description": "version; `git_sha` and `built_at` are stamped by `build.rs` and degrade to\n\"unknown\" outside a git checkout. `binary_capabilities`,\n`active_capabilities`, and `effective_compatibility_version` distinguish\nbinary support, active cluster capability, and compatibility version.",
         "operationId": "version",
         "responses": {
           "200": {
-            "description": "Build provenance: version, git sha, build time",
+            "description": "Build provenance and compatibility capabilities",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
               }
             }
           }
@@ -1918,6 +2002,10 @@
             "nullable": true,
             "minimum": 0
           },
+          "facetable": {
+            "type": "boolean",
+            "description": "Whether the field may be used for facets. Default false. Turning it on\nfor a field that already has documents needs a shadow rebuild."
+          },
           "metric": {
             "allOf": [
               {
@@ -1977,10 +2065,12 @@
       },
       "FieldType": {
         "type": "string",
+        "description": "Field type name. `float64` is accepted as an alias of `number`.",
         "enum": [
           "text",
           "keyword",
           "number",
+          "int64",
           "set",
           "vector",
           "hash"
@@ -2720,6 +2810,7 @@
           },
           "routing_key": {
             "type": "string",
+            "description": "Optional caller-owned routing key. Reserved: it does not narrow shard\nfan-out while writes cannot carry it, because writes place every\ndocument by `external_id`; a search with `routing_key` returns the same\nhits and `total` as the same search without it.",
             "nullable": true
           },
           "sort": {
@@ -2813,7 +2904,7 @@
           },
           "routing_key": {
             "type": "string",
-            "description": "Optional caller-owned routing key for sharded deployments. When present,\na sharded router can target the one shard that owns\n`(collection_id, routing_key)` instead of scatter/gathering every shard.\nWrites default to `external_id` as the routing key, so one large\ncollection can still spread across shards without caller help.",
+            "description": "Optional caller-owned routing key. Reserved: it does not narrow shard\nfan-out while writes cannot carry it, because writes place every\ndocument by `external_id`; a search with `routing_key` returns the same\nhits and `total` as the same search without it.",
             "nullable": true
           },
           "sort": {
@@ -3034,6 +3125,43 @@
               }
             ],
             "nullable": true
+          }
+        }
+      },
+      "VersionResponse": {
+        "type": "object",
+        "required": [
+          "version",
+          "git_sha",
+          "built_at",
+          "binary_capabilities",
+          "active_capabilities",
+          "effective_compatibility_version"
+        ],
+        "properties": {
+          "active_capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "binary_capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "built_at": {
+            "type": "string"
+          },
+          "effective_compatibility_version": {
+            "type": "string"
+          },
+          "git_sha": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
           }
         }
       }

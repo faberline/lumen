@@ -21,7 +21,7 @@
 //! disagrees with this pod's live map (the mixed-map window during a
 //! rolling restart after a completed reshard split), and `assert_owns`
 //! recomputes bucket ownership (R1) for every deterministic-owner path
-//! (writes, keyed search) and rejects (`ShardForwardMisrouted`) rather than
+//! (writes) and rejects (`ShardForwardMisrouted`) rather than
 //! answering locally when this pod isn't actually the owner — a spoofed or
 //! genuinely misrouted forward is rejected, never honored. A forwarded
 //! request still never forwards again, so cross-pod routing remains one hop
@@ -34,7 +34,8 @@
 //! agreement made every scatter search unavailable pod-wide during the
 //! entire rolling-restart window after a completed split, even though no
 //! single sub-answer here actually depended on the sender's map version
-//! (see `search`'s `SearchShardTarget::All` arm). This is a deliberate
+//! (search always scatters: `RoutedRouter::search` clears `routing_key` before
+//! any check, so no search is ever keyed). This is a deliberate
 //! availability-over-completeness tradeoff (#1467 R6): a scatter search
 //! answered mid-rolling-restart, with sub-responses spanning two map
 //! versions, can silently miss or double-count buckets that moved between
@@ -201,9 +202,8 @@ impl RoutedRouter {
     /// this for keyless (scatter) sub-requests (#1457 R4): those never rely
     /// on the sender's map version to pick an owner, so gating on agreement
     /// only starved scatter search availability during a rolling restart
-    /// without protecting anything. Only `search`'s keyed forward arm and
-    /// the deterministic-owner write paths (`index`/`replace_docs`/`delete`)
-    /// call this.
+    /// without protecting anything. Only the deterministic-owner write
+    /// paths (`index`/`replace_docs`/`delete`) call this: `search` always scatters.
     fn check_forwarded_map_version(&self, headers: &HeaderMap) -> Result<()> {
         if let Some(sender_version) = Self::forwarded_map_version(headers) {
             let local_version = self.shard_map.version();
@@ -221,13 +221,13 @@ impl RoutedRouter {
     /// bucket before honoring a forwarded request's one-hop marker. The
     /// marker alone is caller-controlled (an external client can set
     /// `x-lumen-forwarded` directly on a request to any pod), so every
-    /// deterministic-owner path (writes, keyed search) recomputes ownership
+    /// deterministic-owner path (writes) recomputes ownership
     /// on receipt and rejects (`ShardForwardMisrouted`) rather than
     /// answering locally when this pod isn't the real owner — a spoofed or
     /// genuinely misrouted forward is rejected, never honored. Keyless
     /// (scatter) sub-requests have no single owner to validate against and
-    /// are deliberately not routed through this check (see `search`'s
-    /// `SearchShardTarget::All` arm).
+    /// are deliberately not routed through this check (`search` always scatters,
+    /// so it never reaches the keyed ownership check).
     fn assert_owns(&self, collection_id: &str, external_id: &str) -> Result<()> {
         let route = self
             .shard_map

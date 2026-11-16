@@ -31,8 +31,7 @@ const SEARCH_RESULT_CACHE_MAX: usize = 256;
 pub(in crate::index) struct Collection {
     pub(in crate::index) collection_generation: u64,
     pub(in crate::index) data_version: u64,
-    pub(in crate::index) checkpoint_origin: Option<std::path::PathBuf>,
-    pub(in crate::index) checkpoint_lineage: Option<std::path::PathBuf>,
+    pub(in crate::index) checkpoint_bound: bool,
     pub(in crate::index) checkpoint_lineage_schema: Option<u32>,
     pub(in crate::index) field_dirty: BTreeMap<String, BTreeMap<String, u64>>,
     pub(in crate::index) next_field_dirty_revision: u64,
@@ -102,8 +101,7 @@ impl Collection {
         Ok(Self {
             collection_generation: 0,
             data_version: 1,
-            checkpoint_origin: None,
-            checkpoint_lineage: None,
+            checkpoint_bound: false,
             checkpoint_lineage_schema: None,
             field_dirty: BTreeMap::new(),
             next_field_dirty_revision: 0,
@@ -207,7 +205,6 @@ impl Collection {
         // Conservative invalidation precedes mutation. Even a partially failed
         // batch must never reuse its earlier immutable checkpoint bytes.
         self.data_version = self.data_version.saturating_add(1);
-        self.checkpoint_origin = None;
         if let Ok(mut cache) = self.search_cache.write() {
             cache.clear();
         }

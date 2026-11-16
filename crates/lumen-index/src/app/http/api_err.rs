@@ -29,6 +29,7 @@ pub(crate) fn batch_search_storage_error(e: anyhow::Error) -> BatchSearchResult 
         Some(StorageError::CollectionNotFound(_)) => "collection_not_found",
         Some(StorageError::InvalidCollectionName(_)) => "invalid_collection_name",
         Some(StorageError::UnknownField { .. }) => "unknown_field",
+        Some(StorageError::ShadowRebuildRequired { .. }) => "shadow_rebuild_required",
         Some(StorageError::TypeMismatch { .. }) => "type_mismatch",
         Some(StorageError::DuplicatesOnText(_)) => "bad_request",
         Some(StorageError::InvalidNumber(_)) => "invalid_number",
@@ -165,6 +166,11 @@ impl From<anyhow::Error> for ApiErr {
                 StorageError::UnknownField { .. } => Self::new(
                     StatusCode::UNPROCESSABLE_ENTITY,
                     "unknown_field",
+                    e.to_string(),
+                ),
+                StorageError::ShadowRebuildRequired { .. } => Self::new(
+                    StatusCode::CONFLICT,
+                    "shadow_rebuild_required",
                     e.to_string(),
                 ),
                 StorageError::TypeMismatch { .. } => Self::new(

@@ -343,6 +343,7 @@ mod large_aof_codec_compatibility {
                     metric: None,
                     backend: None,
                     quantize: None,
+                    facetable: false,
                 },
             )]),
         }

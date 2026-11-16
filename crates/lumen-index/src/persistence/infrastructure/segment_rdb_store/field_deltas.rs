@@ -317,6 +317,9 @@ pub(super) fn write_field_deltas(
                         as usize;
                     write_vector_segment(&root.join(&segment_path), sequence, dim, &values)?;
                 }
+                crate::shared_kernel::types::schema::FieldType::Int64 => {
+                    return Err(anyhow!("field type `int64` is not indexed yet"));
+                }
             }
         }
         encode_sparse_local_rows(&root.join(&rows_path), &ids)?;

@@ -184,6 +184,7 @@ fn num_spec() -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 fn kw_spec() -> FieldSpec {
@@ -195,6 +196,7 @@ fn kw_spec() -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 fn body_spec() -> FieldSpec {
@@ -206,6 +208,7 @@ fn body_spec() -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 fn emb_spec(dim: u32) -> FieldSpec {
@@ -217,6 +220,7 @@ fn emb_spec(dim: u32) -> FieldSpec {
         metric: Some(VectorMetric::L2),
         backend: Some(VectorBackend::FlatCpu),
         quantize: None,
+        facetable: false,
     }
 }
 

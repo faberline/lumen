@@ -28,6 +28,7 @@ fn checkpoint_capture_marks_unsealed_scalar_fields_with_empty_cuts() {
                 metric: None,
                 backend: None,
                 quantize: None,
+                facetable: false,
             },
         );
     }

@@ -9,6 +9,7 @@
 //! (`terraform/modules/lumen-capacity/catalog.tf`), mapping direct GCE
 //! machine types to `lumen.axiom.dev/capacity-profile` labels and tolerations.
 
+pub mod envelope;
 pub mod placement;
 pub mod preflight;
 
@@ -115,6 +116,7 @@ pub enum RejectionReason {
     DataMemberNodeConflict,
     TransitionNotAllowed,
     MonetaryPolicyNotAllowed,
+    InvalidEnvelope,
 }
 
 impl RejectionReason {
@@ -130,6 +132,7 @@ impl RejectionReason {
             Self::DataMemberNodeConflict => "data_member_node_conflict",
             Self::TransitionNotAllowed => "transition_not_allowed",
             Self::MonetaryPolicyNotAllowed => "monetary_policy_not_allowed",
+            Self::InvalidEnvelope => "invalid_envelope",
         }
     }
 }

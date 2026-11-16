@@ -21,6 +21,7 @@ fn number_field() -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 
@@ -191,3 +192,4 @@ fn unindex_control_record_applies_and_survives_a_raft_snapshot() {
 }
 
 mod admission_contract;
+mod durable_ack;

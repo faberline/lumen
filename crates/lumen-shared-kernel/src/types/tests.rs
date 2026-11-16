@@ -1,7 +1,7 @@
 use crate::types::document::FieldValue;
 use crate::types::query::{MatchOp, MatchQuery, QueryNode};
 use crate::types::schema::{
-    Analyzer, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
+    Analyzer, FieldCapabilities, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
 };
 
 fn fs(t: FieldType) -> FieldSpec {
@@ -13,6 +13,7 @@ fn fs(t: FieldType) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 
@@ -121,4 +122,94 @@ fn field_value_polymorphic() {
     assert!(matches!(n, FieldValue::Number(_)));
     let l: FieldValue = serde_json::from_str(r#"["a","b"]"#).unwrap();
     assert!(matches!(l, FieldValue::StringList(_)));
+}
+
+#[test]
+fn int64_field_type_parses_and_has_capabilities() {
+    assert_eq!(
+        serde_json::from_str::<FieldType>("\"int64\"").expect("int64 parses"),
+        FieldType::Int64
+    );
+    assert!(FieldType::ALL.contains(&FieldType::Int64));
+    let caps = FieldType::Int64.capabilities();
+    assert!(caps.exact && caps.range && caps.sort);
+    assert!(!caps.bm25);
+    assert!(!caps.prefix);
+    assert!(!caps.set_membership);
+    assert!(!caps.vector_search);
+    assert!(!caps.hamming);
+}
+
+#[test]
+fn unknown_field_type_name_is_refused() {
+    assert!(serde_json::from_str::<FieldType>("\"int65\"").is_err());
+}
+
+#[test]
+fn number_capabilities_are_unchanged() {
+    assert_eq!(
+        FieldType::Number.capabilities(),
+        FieldCapabilities {
+            bm25: false,
+            exact: true,
+            prefix: false,
+            range: true,
+            sort: true,
+            set_membership: false,
+            vector_search: false,
+            hamming: false,
+        }
+    );
+}
+
+#[test]
+fn facetable_defaults_to_false_and_is_omitted_on_the_wire() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"keyword"}"#).unwrap();
+    assert!(!spec.facetable);
+    let wire = serde_json::to_string(&spec).unwrap();
+    assert!(!wire.contains("facetable"), "wire form changed: {wire}");
+}
+
+#[test]
+fn facetable_true_round_trips() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"keyword","facetable":true}"#).unwrap();
+    assert!(spec.facetable);
+    let value = serde_json::to_value(&spec).unwrap();
+    assert_eq!(value["facetable"], serde_json::json!(true));
+    let back: FieldSpec = serde_json::from_value(value).unwrap();
+    assert_eq!(back, spec);
+}
+
+#[test]
+fn float64_parses_as_number() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"float64"}"#).unwrap();
+    assert_eq!(spec.field_type, FieldType::Number);
+    let value = serde_json::to_value(spec.field_type).unwrap();
+    assert_eq!(value, serde_json::json!("number"));
+    let caps = FieldType::Number.capabilities();
+    assert!(caps.exact && caps.range && caps.sort);
+    assert!(!caps.set_membership && !caps.prefix && !caps.bm25);
+}
+
+#[test]
+fn number_type_still_parses() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"number"}"#).unwrap();
+    assert_eq!(spec.field_type, FieldType::Number);
+}
+
+#[test]
+fn float65_is_refused() {
+    let parsed = serde_json::from_str::<FieldSpec>(r#"{"type":"float65"}"#);
+    assert!(parsed.is_err());
+}
+
+#[test]
+fn field_value_is_missing_for_empty_lists_only() {
+    use crate::types::document::FieldValue;
+    assert!(FieldValue::Vector(vec![]).is_missing());
+    assert!(FieldValue::StringList(vec![]).is_missing());
+    assert!(!FieldValue::Vector(vec![1.0]).is_missing());
+    assert!(!FieldValue::StringList(vec!["a".to_string()]).is_missing());
+    assert!(!FieldValue::String(String::new()).is_missing());
+    assert!(!FieldValue::Number(0.0).is_missing());
 }

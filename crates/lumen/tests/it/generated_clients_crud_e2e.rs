@@ -471,6 +471,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{
             analyzer: None,
             backend: None,
             dim: None,
+            facetable: Some(false),
             metric: None,
             multi: None,
             quantize: None,

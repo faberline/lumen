@@ -296,6 +296,7 @@ fn hnsw_cold_collection_reopen_does_not_scan_owned_vectors_for_coverage() {
             metric: Some(VectorMetric::L2),
             backend: Some(VectorBackend::HnswCpu),
             quantize: None,
+            facetable: false,
         },
     )]);
     let root = tempfile::tempdir().unwrap();
@@ -372,6 +373,7 @@ fn cold_vector_coverage_fixture(
             metric: Some(VectorMetric::L2),
             backend: Some(backend),
             quantize: None,
+            facetable: false,
         },
     )]);
     (root, schema)

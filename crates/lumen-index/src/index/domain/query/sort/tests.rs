@@ -21,6 +21,7 @@ fn schema() -> CreateCollectionRequest {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     };
     let mut fields = BTreeMap::new();
     fields.insert("a".into(), num());

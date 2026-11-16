@@ -15,12 +15,13 @@ use crate::shared_kernel::types::document::{
     IndexItem, IndexRequest, IndexResponse, MAX_INDEX_BATCH_SIZE,
 };
 
+/// Merge indexed fields: each item sets one (external_id, field) value; omitted fields stay unchanged.
+///
 /// At most [`MAX_INDEX_BATCH_SIZE`] items per request; a longer batch is
 /// rejected with 400 before any item runs.
-#[deprecated(note = "use PUT /collections/{collection_id}/docs:replace for complete indexed rows")]
 #[utoipa::path(
     post,
-    path = "/collections/{collection_id}/index",
+    path = "/collections/{collection_id}/docs:merge",
     tag = "Index",
     params(("collection_id" = String, Path, description = "Collection namespace")),
     request_body = IndexRequest,
@@ -32,7 +33,7 @@ use crate::shared_kernel::types::document::{
         (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
     )
 )]
-pub(crate) async fn index(
+pub(crate) async fn merge_docs(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthContext>,
     headers: HeaderMap,
@@ -67,6 +68,42 @@ pub(crate) async fn index(
             .map_err(ApiErr::from)?
     };
     Ok(Json(resp))
+}
+
+/// Legacy alias of `POST /collections/{collection_id}/docs:merge`: the same
+/// merge under its older name, kept wire-compatible.
+#[deprecated(
+    note = "use POST /collections/{collection_id}/docs:merge; /index stays as a wire-compatible alias"
+)]
+#[utoipa::path(
+    post,
+    path = "/collections/{collection_id}/index",
+    tag = "Index",
+    params(("collection_id" = String, Path, description = "Collection namespace")),
+    request_body = IndexRequest,
+    responses(
+        (status = 200, description = "Items indexed",     body = IndexResponse),
+        (status = 400, description = "Batch size over the limit", body = ApiError),
+        (status = 404, description = "Unknown collection", body = ApiError),
+        (status = 422, description = "Type mismatch",      body = ApiError),
+        (status = 507, description = "Node in ENOSPC degraded read-only mode (#2516)", body = ApiError)
+    )
+)]
+pub(crate) async fn index(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    headers: HeaderMap,
+    Path(collection_id): Path<String>,
+    Json(req): Json<IndexRequest>,
+) -> Result<Json<IndexResponse>, ApiErr> {
+    merge_docs(
+        State(state),
+        Extension(auth),
+        headers,
+        Path(collection_id),
+        Json(req),
+    )
+    .await
 }
 
 /// Streaming bulk-reindex endpoint.

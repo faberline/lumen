@@ -5,6 +5,7 @@
 //! key, the fast hash maps, and the storage error type.
 
 pub mod analysis;
+pub mod capability_report;
 pub mod collection;
 pub mod engine_state;
 pub mod fast_hash;
@@ -16,6 +17,7 @@ pub mod keyword_index;
 pub mod number_index;
 pub mod postings;
 pub mod query;
+pub mod rebuild_operation;
 pub mod record_ram;
 pub mod schema_validation;
 pub mod set_index;

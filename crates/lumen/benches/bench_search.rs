@@ -140,6 +140,7 @@ fn build_corpus() -> Engine {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     fields.insert(
@@ -152,6 +153,7 @@ fn build_corpus() -> Engine {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     engine

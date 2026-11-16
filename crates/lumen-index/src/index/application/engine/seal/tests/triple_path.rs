@@ -69,6 +69,7 @@ fn fieldspec(t: FieldType, analyzer: Option<Analyzer>) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 
@@ -81,6 +82,7 @@ fn vec_fieldspec() -> FieldSpec {
         metric: Some(VectorMetric::L2),
         backend: Some(VectorBackend::FlatCpu),
         quantize: None,
+        facetable: false,
     }
 }
 

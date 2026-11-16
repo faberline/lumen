@@ -45,6 +45,7 @@ fn build_corpus() -> Engine {
             metric: None,
             backend: None,
             quantize: None,
+            facetable: false,
         },
     );
     engine

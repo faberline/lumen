@@ -189,7 +189,9 @@ flow is:
 6. The generated helper restores Lumen's result order and joins search
    metadata to the hydrated records.
 
-The helper never connects to PostgreSQL. It accepts the ordered hits and a
+The generated helper is `hydrateHits` (TypeScript), `hydrate_hits` (Python,
+with `hydrate_hits_async` for asyncio), and `hydrate_hits` (Rust). The helper
+never connects to PostgreSQL. It accepts the ordered hits and a
 caller-supplied bulk fetch function or returned ID map. This keeps source
 credentials, row-level authorization, projection, and transaction policy out
 of the search client while avoiding N+1 lookups and handwritten reorder code.
@@ -255,7 +257,6 @@ variables, and CA ConfigMap rotation reaches the file.
 - No generated client exposes the NDJSON reindex stream or one typed Lumen API
   error.
 - Cross-language gates can currently skip a missing toolchain.
-- No generated ordered hydration helper exists.
 - No versioned client workload Kustomize template exists.
 - Current Fleet does not create access RBAC or publish client CA ConfigMaps.
 - Generated source is not published as a language package.

@@ -30,6 +30,8 @@ The shipped image defaults are `LUMEN_DATA_DIR=/var/lib/lumen/data`,
 
 A 0.4.28 volume upgrades only when it contains a valid segment checkpoint in the exact legacy `gen-<seq>` form. On the first 0.4.29 start, Lumen validates the highest such generation and atomically writes `CURRENT`. A corrupt highest legacy generation fails startup and never falls back to an older generation.
 
+A segment root whose `CURRENT` names a generation with a lower sequence than the newest complete `gen-<seq>-rev-<rev>` generation on disk fails startup before the listener opens, unless the AOF tail reaches that newer sequence. The error names both generations. A checkpoint that crashed before it published `CURRENT` still starts, because its untrimmed AOF reaches the newer sequence. `lumen standalone restore` leaves a consistent root. To roll back on purpose, the operator deletes the newer `gen-*` directories.
+
 A truly new empty root can initialize an empty `CURRENT` baseline. An AOF-only root is also valid when it has a regular `aof.log`; it starts from the empty checkpoint baseline and replays its AOF. `aof.log.compact.tmp` is valid only beside that regular `aof.log`. A compact temporary file on its own fails closed.
 
 `CURRENT` is the checkpoint authority. A valid `CURRENT=empty` remains authoritative even if an unpointed generation beside it looks like data that an operator expected Lumen to restore. Lumen does not choose another generation or rewrite that `CURRENT` automatically. Repair that state from a verified backup or an explicit recovery procedure.
@@ -204,7 +206,7 @@ these jobs against the exact commit:
 | `container-smoke` | The Rust suite `e2e::standalone_container::` (`bind` and `durable`) under docker against the candidate root digest. |
 | `container-smoke-arm64` | The same suite on a native arm64 runner, so docker runs the root digest's `linux/arm64` child. |
 | `cloud-free-config` | Terraform and Kustomize static checks; it calls no cloud API. |
-| `perf-coarse` | The release-profile `perf_gate::` cases except the thirty-minute durable workload. It still blocks the release. |
+| `perf-coarse` | The release-profile `perf_gate::` cases except the thirty-minute durable workload, then the index performance gates and the native performance contracts. It still blocks the release. |
 | `verify-candidate` | `scripts/verify-release-candidate.sh`: supply-chain verification only. |
 | `gke-e2e` | `e2e::overlay::` and `e2e::operator::` on the shared GKE test cluster through `gke-test.yml`. |
 | `result` | Writes `final-candidate-manifest.json`, whose `jobs` map binds every job above. |

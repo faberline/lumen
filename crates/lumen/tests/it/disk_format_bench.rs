@@ -49,6 +49,7 @@ fn vec_field(dim: u32, metric: VectorMetric) -> FieldSpec {
         // setup is fast. The snapshot content (raw vectors) is backend-agnostic.
         backend: Some(VectorBackend::FlatCpu),
         quantize: None,
+        facetable: false,
     }
 }
 
@@ -61,6 +62,7 @@ fn scalar_field(ty: FieldType) -> FieldSpec {
         metric: None,
         backend: None,
         quantize: None,
+        facetable: false,
     }
 }
 

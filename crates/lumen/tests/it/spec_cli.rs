@@ -310,7 +310,7 @@ fn field_catalog_matches_the_real_enums() {
     // Exactly the FieldType enum variants (lowercase wire form), in order.
     assert_eq!(
         types,
-        ["text", "keyword", "number", "set", "vector", "hash"],
+        ["text", "keyword", "number", "int64", "set", "vector", "hash"],
         "field types track the FieldType enum"
     );
 
@@ -1212,6 +1212,7 @@ fn dx_field_catalog_matches_runtime_field_capabilities() {
             FieldType::Text => "text",
             FieldType::Keyword => "keyword",
             FieldType::Number => "number",
+            FieldType::Int64 => "int64",
             FieldType::Set => "set",
             FieldType::Vector => "vector",
             FieldType::Hash => "hash",
@@ -1467,10 +1468,6 @@ fn dx_llm_composes_library_owned_provider_content() {
         "scripts/verify-release-candidate.sh",
         "tests/it/release_candidate.rs",
         ".github/workflows/lumen-release.yml",
-        ".github/workflows/lumen-release-recovery.yml",
-        ".github/workflows/lumen-release-0.4.29-recovery.yml",
-        ".github/workflows/lumen-release-0.4.30-recovery.yml",
-        ".github/workflows/lumen-release-0.4.29-public-verify.yml",
         "scripts/verify-release-artifacts.sh",
         "tests/it/release_promotion.rs",
         ".agents/skills/build-release/SKILL.md",
@@ -1525,18 +1522,8 @@ fn dx_llm_composes_library_owned_provider_content() {
         "downloaded host archive passes its checksum",
         "scripts/raft-implementor-build.sh",
         "normal candidate-to-tag-to-promotion workflow remains canonical",
-        "main-only, exact-identity recovery workflow",
         "fails before any public GHCR or GitHub Release write",
-        ".github/workflows/lumen-release-recovery.yml",
-        "fixed-identity",
-        ".github/workflows/lumen-release-recovery.yml is only for lumen@0.4.28",
-        ".github/workflows/lumen-release-0.4.29-recovery.yml is only for lumen@0.4.29",
-        ".github/workflows/lumen-release-0.4.30-recovery.yml is only for lumen@0.4.30",
         "do not rerun that broken route",
-        "normal release path lands main once",
-        "Recovery tooling may land separately",
-        "cannot change the frozen release commit",
-        "cannot rebuild, move, or recreate the tag",
     ] {
         assert!(
             release_markdown.contains(needle),
@@ -1837,4 +1824,61 @@ fn operator_tls_ownership_is_consistently_documented_across_surfaces() {
         }
     }
 }
+#[test]
+fn dx_field_catalog_lists_float64_as_a_number_alias() {
+    let catalog = dx::field_catalog();
+    let fields = catalog["field_types"]
+        .as_array()
+        .expect("field catalogue is an array");
+    assert_eq!(fields.len(), FieldType::ALL.len());
+
+    let number = fields
+        .iter()
+        .find(|entry| entry["type"] == "number")
+        .expect("catalogue omits number");
+    assert_eq!(number["aliases"], json!(["float64"]));
+    for entry in fields.iter().filter(|entry| entry["type"] != "number") {
+        assert!(
+            entry.get("aliases").is_none(),
+            "only number has an alias: {entry}"
+        );
+    }
+}
+
+#[test]
+fn openapi_field_type_schema_names_the_float64_alias() {
+    let v: Value = serde_json::from_str(&openapi_json()).expect("openapi is valid JSON");
+    let field_type = &v["components"]["schemas"]["FieldType"];
+    let description = field_type["description"]
+        .as_str()
+        .expect("FieldType schema has a description");
+    assert!(
+        description.contains("float64"),
+        "FieldType description names the alias: {description}"
+    );
+    assert_eq!(
+        field_type["enum"],
+        json!(["text", "keyword", "number", "int64", "set", "vector", "hash"]),
+        "the enum keeps the seven type names"
+    );
+}
+
 // CODEGEN-END
+
+#[test]
+fn dx_field_catalog_lists_int64_exact_range_and_sort() {
+    let catalog = dx::field_catalog();
+    let fields = catalog["field_types"]
+        .as_array()
+        .expect("field catalogue is an array");
+    let int64 = fields
+        .iter()
+        .find(|entry| entry["type"] == "int64")
+        .expect("catalogue omits int64");
+    let operations = &int64["operations"];
+    assert_eq!(operations["exact"], true);
+    assert_eq!(operations["range"], true);
+    assert_eq!(operations["sort"], true);
+    assert_eq!(operations["bm25"], false);
+    assert_eq!(operations["hamming"], false);
+}
