@@ -1,3 +1,6 @@
+use std::collections::BTreeSet;
+
+use crate::domain::lumen_fleet::children::*;
 use serde_json::{json, Value};
 
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
@@ -5,6 +8,7 @@ use crate::domain::lumen_fleet::{
     FleetInstance, LumenFleet, LumenFleetSpec, PlanOutcome, PlannedInstance, PrunePolicy,
     FLEET_LABEL,
 };
+use crate::domain::lumen_spec::access::{AccessSpec, ServiceAccountSubject};
 use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::LumenSpec;
 
@@ -36,6 +40,7 @@ fn instance(namespace: &str, spec: Option<Value>) -> FleetInstance {
         name: None,
         runtime: None,
         spec,
+        access: None,
     }
 }
 
@@ -337,5 +342,317 @@ fn the_spec_patch_still_merges_as_before_with_runtime_present() {
         rejection(&planned[0]).contains("nope"),
         "{}",
         rejection(&planned[0])
+    );
+}
+
+#[test]
+fn child_key_is_namespace_and_name() {
+    assert_eq!(child_key("a", "b"), ("a".to_string(), "b".to_string()));
+}
+
+#[test]
+fn duplicate_targets_collapse_to_one_declared_key() {
+    let mut second = instance("team-j", None);
+    second.name = Some("search".to_string());
+    let planned = plan(&fleet(vec![instance("team-j", None), second]));
+    let keys: BTreeSet<ChildKey> = planned
+        .iter()
+        .map(|p| child_key(&p.namespace, &p.name))
+        .collect();
+    assert_eq!(
+        keys.len(),
+        1,
+        "two entries for one object must share one key"
+    );
+}
+
+#[test]
+fn a_foreign_owner_label_is_not_adopted() {
+    match adoption(Some(Some("other")), "search") {
+        Adoption::NotAdopted { message } => {
+            assert!(message.contains("found other"), "{message}");
+            assert!(message.contains("lumen.dev/fleet=search"), "{message}");
+        }
+        other => panic!("expected NotAdopted, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_missing_label_is_not_adopted() {
+    match adoption(Some(None), "search") {
+        Adoption::NotAdopted { message } => {
+            assert!(message.contains("found no label"), "{message}");
+        }
+        other => panic!("expected NotAdopted, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_owned_child_is_applied_and_an_absent_one_is_created() {
+    assert_eq!(adoption(Some(Some("search")), "search"), Adoption::Apply);
+    assert_eq!(adoption(None, "search"), Adoption::Create);
+}
+
+#[test]
+fn ownership_distinguishes_owned_and_foreign() {
+    assert_eq!(ownership(Some("search"), "search"), Ownership::Owned);
+    assert_eq!(
+        ownership(Some("x"), "search"),
+        Ownership::Foreign {
+            found: Some("x".into())
+        }
+    );
+    assert_eq!(
+        ownership(None, "search"),
+        Ownership::Foreign { found: None }
+    );
+}
+
+#[test]
+fn a_retained_orphan_is_reported_not_deleted() {
+    let declared: BTreeSet<ChildKey> = [child_key("a", "x")].into_iter().collect();
+    assert_eq!(
+        prune_decision(&child_key("a", "y"), &declared, PrunePolicy::Retain),
+        PruneDecision::Orphaned
+    );
+}
+
+#[test]
+fn a_deleted_orphan_under_delete_policy() {
+    let declared: BTreeSet<ChildKey> = [child_key("a", "x")].into_iter().collect();
+    assert_eq!(
+        prune_decision(&child_key("a", "y"), &declared, PrunePolicy::Delete),
+        PruneDecision::Pruned
+    );
+}
+
+#[test]
+fn a_declared_child_is_kept_under_either_policy() {
+    let declared: BTreeSet<ChildKey> = [child_key("a", "x")].into_iter().collect();
+    for policy in [PrunePolicy::Retain, PrunePolicy::Delete] {
+        assert_eq!(
+            prune_decision(&child_key("a", "x"), &declared, policy),
+            PruneDecision::Keep
+        );
+    }
+}
+
+/// FNV-1a 64-bit over raw bytes, with the constants the spec names, written out
+/// here so the test does not call the code it checks.
+fn fnv1a_hex(bytes: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+#[test]
+fn the_desired_hash_ignores_key_order_and_sees_value_changes() {
+    let hash = desired_hash(&json!({"a": 1, "b": {"c": 2, "d": 3}}));
+    assert_eq!(hash, desired_hash(&json!({"b": {"d": 3, "c": 2}, "a": 1})));
+    assert_ne!(hash, desired_hash(&json!({"a": 1, "b": {"c": 2, "d": 4}})));
+    assert_eq!(hash.len(), 16);
+    assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    assert_eq!(desired_hash(&json!({})), fnv1a_hex(b"{}"));
+}
+
+#[test]
+fn the_desired_hash_is_sensitive_to_array_order() {
+    assert_ne!(desired_hash(&json!([1, 2])), desired_hash(&json!([2, 1])));
+}
+
+#[test]
+fn a_foreign_labelled_child_is_never_applicable_or_prunable() {
+    for label in [Some("other"), None] {
+        let decision = adoption(Some(label), "search");
+        assert!(
+            !matches!(decision, Adoption::Apply | Adoption::Create),
+            "a child labelled {label:?} must not be applied or created: {decision:?}"
+        );
+    }
+}
+
+#[test]
+fn decisions_depend_only_on_live_state_not_process_memory() {
+    let run = || {
+        let declared: BTreeSet<ChildKey> = [child_key("a", "x"), child_key("b", "x")]
+            .into_iter()
+            .collect();
+        (
+            adoption(Some(Some("search")), "search"),
+            adoption(Some(Some("other")), "search"),
+            prune_decision(&child_key("a", "y"), &declared, PrunePolicy::Retain),
+            desired_hash(&json!({"serving": {"cpu": "2"}, "image": "x"})),
+        )
+    };
+    assert_eq!(run(), run());
+}
+
+fn sa(namespace: &str, name: &str) -> ServiceAccountSubject {
+    ServiceAccountSubject {
+        namespace: namespace.to_string(),
+        name: name.to_string(),
+    }
+}
+
+fn access(subjects: Vec<ServiceAccountSubject>) -> AccessSpec {
+    AccessSpec {
+        allowed_service_accounts: subjects,
+    }
+}
+
+fn with_access(namespace: &str, subjects: Option<Vec<ServiceAccountSubject>>) -> FleetInstance {
+    let mut entry = instance(namespace, None);
+    entry.access = subjects.map(access);
+    entry
+}
+
+fn fleet_with_default_access(
+    instances: Vec<FleetInstance>,
+    subjects: Vec<ServiceAccountSubject>,
+) -> LumenFleet {
+    let mut fleet = fleet(instances);
+    fleet.spec.defaults.access = Some(access(subjects));
+    fleet
+}
+
+fn list(planned: &PlannedInstance) -> &Value {
+    &ready(planned)["access"]["allowedServiceAccounts"]
+}
+
+#[test]
+fn fleet_access_accepts_exact_namespace_and_name() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", Some(vec![sa("app-b", "search.v2")]))],
+        vec![sa("app-a", "client")],
+    );
+    let planned = plan(&f);
+    assert_eq!(
+        list(&planned[0]),
+        &json!([{"namespace": "app-b", "name": "search.v2"}])
+    );
+}
+
+#[test]
+fn an_instance_without_access_inherits_the_default_list() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", None)],
+        vec![sa("app-a", "client")],
+    );
+    let planned = plan(&f);
+    assert_eq!(
+        list(&planned[0]),
+        &json!([{"namespace": "app-a", "name": "client"}])
+    );
+}
+
+/// Negative control for the main failure mode: a union of the default and
+/// the instance list would keep `app-a` and `app-c`.
+#[test]
+fn an_instance_access_list_replaces_the_default_and_is_not_a_union() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", Some(vec![sa("app-b", "search")]))],
+        vec![sa("app-a", "client"), sa("app-c", "other")],
+    );
+    let planned = plan(&f);
+    assert_eq!(
+        list(&planned[0]),
+        &json!([{"namespace": "app-b", "name": "search"}])
+    );
+    let text = list(&planned[0]).to_string();
+    assert!(!text.contains("app-a"), "{text}");
+    assert!(!text.contains("app-c"), "{text}");
+}
+
+#[test]
+fn an_explicit_empty_instance_list_is_deny_all() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", Some(Vec::new()))],
+        vec![sa("app-a", "client")],
+    );
+    let planned = plan(&f);
+    assert_eq!(list(&planned[0]), &json!([]));
+}
+
+#[test]
+fn fleet_access_rejects_wildcards_groups_and_usernames() {
+    let cases = [
+        ("*", "client", "namespace"),
+        ("system:serviceaccounts", "client", "namespace"),
+        ("app-a", "*", "name"),
+        ("app-a", "system:serviceaccount:app-a:client", "name"),
+    ];
+    for (namespace, name, field) in cases {
+        let value = if field == "namespace" {
+            namespace
+        } else {
+            name
+        };
+        let f = fleet(vec![with_access("team-a", Some(vec![sa(namespace, name)]))]);
+        let planned = plan(&f);
+        let expected = format!(
+            "allowedServiceAccounts subject ({namespace}/{name}): {field} \"{value}\" must be an exact DNS-1123 name"
+        );
+        assert!(
+            rejection(&planned[0]).contains(&expected),
+            "{}",
+            rejection(&planned[0])
+        );
+    }
+
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", None), with_access("team-b", None)],
+        vec![sa("*", "client")],
+    );
+    let planned = plan(&f);
+    assert!(matches!(planned[0].outcome, PlanOutcome::Rejected(_)));
+    assert!(matches!(planned[1].outcome, PlanOutcome::Rejected(_)));
+}
+
+#[test]
+fn instances_spec_access_is_rejected() {
+    let spec =
+        json!({"access": {"allowedServiceAccounts": [{"namespace": "app-a", "name": "client"}]}});
+    let planned = plan(&fleet(vec![instance("team-a", Some(spec.clone()))]));
+    assert!(
+        rejection(&planned[0]).contains("instances[].spec.access"),
+        "{}",
+        rejection(&planned[0])
+    );
+
+    let mut both = instance("team-a", Some(spec));
+    both.access = Some(access(vec![sa("app-b", "search")]));
+    let planned = plan(&fleet(vec![both]));
+    assert!(
+        rejection(&planned[0]).contains("instances[].spec.access"),
+        "{}",
+        rejection(&planned[0])
+    );
+}
+
+#[test]
+fn a_rejected_access_entry_does_not_stop_the_others() {
+    let f = fleet(vec![
+        with_access("team-a", Some(vec![sa("*", "client")])),
+        with_access("team-b", Some(vec![sa("app-b", "search")])),
+    ]);
+    let planned = plan(&f);
+    assert!(matches!(planned[0].outcome, PlanOutcome::Rejected(_)));
+    assert!(matches!(planned[1].outcome, PlanOutcome::Ready(_)));
+}
+
+#[test]
+fn the_steady_state_apply_keeps_the_access_list() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", Some(vec![sa("app-b", "search")]))],
+        vec![sa("app-a", "client"), sa("app-c", "other")],
+    );
+    let planned = plan(&f);
+    let body = apply_object("search", &planned[0], ready(&planned[0]));
+    assert_eq!(
+        body["spec"]["access"]["allowedServiceAccounts"],
+        json!([{"namespace": "app-b", "name": "search"}])
     );
 }
