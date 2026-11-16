@@ -84,6 +84,9 @@ pub enum FieldType {
     /// MinHash). The caller computes the hash; lumen indexes the bits and
     /// answers Hamming-distance queries. Wire value is a hex string.
     Hash,
+    /// true/false value, exact match only. Its index is not built yet: a schema that
+    /// declares a `boolean` field is refused at index build (see #394).
+    Boolean,
 }
 
 /// Operations a field type can truthfully expose to clients. This is shared by
@@ -102,7 +105,7 @@ pub struct FieldCapabilities {
 }
 
 impl FieldType {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Text,
         Self::Keyword,
         Self::Number,
@@ -110,6 +113,7 @@ impl FieldType {
         Self::Set,
         Self::Vector,
         Self::Hash,
+        Self::Boolean,
     ];
 
     pub const fn capabilities(self) -> FieldCapabilities {
@@ -183,6 +187,16 @@ impl FieldType {
                 set_membership: false,
                 vector_search: false,
                 hamming: true,
+            },
+            Self::Boolean => FieldCapabilities {
+                bm25: false,
+                exact: true,
+                prefix: false,
+                range: false,
+                sort: false,
+                set_membership: false,
+                vector_search: false,
+                hamming: false,
             },
         }
     }
