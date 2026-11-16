@@ -1,7 +1,7 @@
 use crate::types::document::FieldValue;
 use crate::types::query::{MatchOp, MatchQuery, QueryNode};
 use crate::types::schema::{
-    Analyzer, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
+    Analyzer, FieldCapabilities, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
 };
 
 fn fs(t: FieldType) -> FieldSpec {
@@ -122,6 +122,44 @@ fn field_value_polymorphic() {
     assert!(matches!(n, FieldValue::Number(_)));
     let l: FieldValue = serde_json::from_str(r#"["a","b"]"#).unwrap();
     assert!(matches!(l, FieldValue::StringList(_)));
+}
+
+#[test]
+fn int64_field_type_parses_and_has_capabilities() {
+    assert_eq!(
+        serde_json::from_str::<FieldType>("\"int64\"").expect("int64 parses"),
+        FieldType::Int64
+    );
+    assert!(FieldType::ALL.contains(&FieldType::Int64));
+    let caps = FieldType::Int64.capabilities();
+    assert!(caps.exact && caps.range && caps.sort);
+    assert!(!caps.bm25);
+    assert!(!caps.prefix);
+    assert!(!caps.set_membership);
+    assert!(!caps.vector_search);
+    assert!(!caps.hamming);
+}
+
+#[test]
+fn unknown_field_type_name_is_refused() {
+    assert!(serde_json::from_str::<FieldType>("\"int65\"").is_err());
+}
+
+#[test]
+fn number_capabilities_are_unchanged() {
+    assert_eq!(
+        FieldType::Number.capabilities(),
+        FieldCapabilities {
+            bm25: false,
+            exact: true,
+            prefix: false,
+            range: true,
+            sort: true,
+            set_membership: false,
+            vector_search: false,
+            hamming: false,
+        }
+    );
 }
 
 #[test]
