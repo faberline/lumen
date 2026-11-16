@@ -8,6 +8,7 @@ use crate::domain::lumen_fleet::{
     FleetInstance, LumenFleet, LumenFleetSpec, PlanOutcome, PlannedInstance, PrunePolicy,
     FLEET_LABEL,
 };
+use crate::domain::lumen_spec::access::{AccessSpec, ServiceAccountSubject};
 use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::LumenSpec;
 
@@ -39,6 +40,7 @@ fn instance(namespace: &str, spec: Option<Value>) -> FleetInstance {
         name: None,
         runtime: None,
         spec,
+        access: None,
     }
 }
 
@@ -486,4 +488,171 @@ fn decisions_depend_only_on_live_state_not_process_memory() {
         )
     };
     assert_eq!(run(), run());
+}
+
+fn sa(namespace: &str, name: &str) -> ServiceAccountSubject {
+    ServiceAccountSubject {
+        namespace: namespace.to_string(),
+        name: name.to_string(),
+    }
+}
+
+fn access(subjects: Vec<ServiceAccountSubject>) -> AccessSpec {
+    AccessSpec {
+        allowed_service_accounts: subjects,
+    }
+}
+
+fn with_access(namespace: &str, subjects: Option<Vec<ServiceAccountSubject>>) -> FleetInstance {
+    let mut entry = instance(namespace, None);
+    entry.access = subjects.map(access);
+    entry
+}
+
+fn fleet_with_default_access(
+    instances: Vec<FleetInstance>,
+    subjects: Vec<ServiceAccountSubject>,
+) -> LumenFleet {
+    let mut fleet = fleet(instances);
+    fleet.spec.defaults.access = Some(access(subjects));
+    fleet
+}
+
+fn list(planned: &PlannedInstance) -> &Value {
+    &ready(planned)["access"]["allowedServiceAccounts"]
+}
+
+#[test]
+fn fleet_access_accepts_exact_namespace_and_name() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", Some(vec![sa("app-b", "search.v2")]))],
+        vec![sa("app-a", "client")],
+    );
+    let planned = plan(&f);
+    assert_eq!(
+        list(&planned[0]),
+        &json!([{"namespace": "app-b", "name": "search.v2"}])
+    );
+}
+
+#[test]
+fn an_instance_without_access_inherits_the_default_list() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", None)],
+        vec![sa("app-a", "client")],
+    );
+    let planned = plan(&f);
+    assert_eq!(
+        list(&planned[0]),
+        &json!([{"namespace": "app-a", "name": "client"}])
+    );
+}
+
+/// Negative control for the main failure mode: a union of the default and
+/// the instance list would keep `app-a` and `app-c`.
+#[test]
+fn an_instance_access_list_replaces_the_default_and_is_not_a_union() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", Some(vec![sa("app-b", "search")]))],
+        vec![sa("app-a", "client"), sa("app-c", "other")],
+    );
+    let planned = plan(&f);
+    assert_eq!(
+        list(&planned[0]),
+        &json!([{"namespace": "app-b", "name": "search"}])
+    );
+    let text = list(&planned[0]).to_string();
+    assert!(!text.contains("app-a"), "{text}");
+    assert!(!text.contains("app-c"), "{text}");
+}
+
+#[test]
+fn an_explicit_empty_instance_list_is_deny_all() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", Some(Vec::new()))],
+        vec![sa("app-a", "client")],
+    );
+    let planned = plan(&f);
+    assert_eq!(list(&planned[0]), &json!([]));
+}
+
+#[test]
+fn fleet_access_rejects_wildcards_groups_and_usernames() {
+    let cases = [
+        ("*", "client", "namespace"),
+        ("system:serviceaccounts", "client", "namespace"),
+        ("app-a", "*", "name"),
+        ("app-a", "system:serviceaccount:app-a:client", "name"),
+    ];
+    for (namespace, name, field) in cases {
+        let value = if field == "namespace" {
+            namespace
+        } else {
+            name
+        };
+        let f = fleet(vec![with_access("team-a", Some(vec![sa(namespace, name)]))]);
+        let planned = plan(&f);
+        let expected = format!(
+            "allowedServiceAccounts subject ({namespace}/{name}): {field} \"{value}\" must be an exact DNS-1123 name"
+        );
+        assert!(
+            rejection(&planned[0]).contains(&expected),
+            "{}",
+            rejection(&planned[0])
+        );
+    }
+
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", None), with_access("team-b", None)],
+        vec![sa("*", "client")],
+    );
+    let planned = plan(&f);
+    assert!(matches!(planned[0].outcome, PlanOutcome::Rejected(_)));
+    assert!(matches!(planned[1].outcome, PlanOutcome::Rejected(_)));
+}
+
+#[test]
+fn instances_spec_access_is_rejected() {
+    let spec =
+        json!({"access": {"allowedServiceAccounts": [{"namespace": "app-a", "name": "client"}]}});
+    let planned = plan(&fleet(vec![instance("team-a", Some(spec.clone()))]));
+    assert!(
+        rejection(&planned[0]).contains("instances[].spec.access"),
+        "{}",
+        rejection(&planned[0])
+    );
+
+    let mut both = instance("team-a", Some(spec));
+    both.access = Some(access(vec![sa("app-b", "search")]));
+    let planned = plan(&fleet(vec![both]));
+    assert!(
+        rejection(&planned[0]).contains("instances[].spec.access"),
+        "{}",
+        rejection(&planned[0])
+    );
+}
+
+#[test]
+fn a_rejected_access_entry_does_not_stop_the_others() {
+    let f = fleet(vec![
+        with_access("team-a", Some(vec![sa("*", "client")])),
+        with_access("team-b", Some(vec![sa("app-b", "search")])),
+    ]);
+    let planned = plan(&f);
+    assert!(matches!(planned[0].outcome, PlanOutcome::Rejected(_)));
+    assert!(matches!(planned[1].outcome, PlanOutcome::Ready(_)));
+}
+
+#[test]
+fn the_steady_state_apply_keeps_the_access_list() {
+    let f = fleet_with_default_access(
+        vec![with_access("team-a", Some(vec![sa("app-b", "search")]))],
+        vec![sa("app-a", "client"), sa("app-c", "other")],
+    );
+    let planned = plan(&f);
+    let body = apply_object("search", &planned[0], ready(&planned[0]));
+    assert_eq!(
+        body["spec"]["access"]["allowedServiceAccounts"],
+        json!([{"namespace": "app-b", "name": "search"}])
+    );
 }
