@@ -713,3 +713,78 @@ fn three_voter_render_is_the_opposite_of_the_one_pod_render() {
         "the three-voter render must not carry the one-Pod data subPath mount, got: {mounts:?}"
     );
 }
+
+/// The parts of a rendered object that run at pod time: the pod spec of each
+/// workload and the selector of each Service. The `app.kubernetes.io/managed-by`
+/// label names the manager on every object; it is bookkeeping, not a runtime
+/// dependency, so it is not checked here.
+fn runtime_surfaces(object: &Value) -> Vec<&Value> {
+    let mut surfaces = Vec::new();
+    if let Some(pod) = object.pointer("/spec/template/spec") {
+        surfaces.push(pod);
+    }
+    if let Some(pod) = object.pointer("/spec/jobTemplate/spec/template/spec") {
+        surfaces.push(pod);
+    }
+    if object["kind"] == "Service" {
+        surfaces.push(&object["spec"]["selector"]);
+    }
+    surfaces
+}
+
+/// A pod must not depend on the operator: no name, namespace or env var of the
+/// operator may appear in what runs, so a restarted operator re-applies the same
+/// desired state and the data plane never waits for it.
+fn assert_operator_independent(objects: &[Value]) {
+    // Operator values only. The env name `POD_NAMESPACE` alone is not checked:
+    // the serving pod also has one, and it is not the operator's namespace.
+    let forbidden = ["lumen-operator", "lumen-operator-system"];
+    for object in objects {
+        for surface in runtime_surfaces(object) {
+            let text = surface.to_string();
+            for needle in forbidden {
+                assert!(
+                    !text.contains(needle),
+                    "rendered {} names the operator in its runtime ({needle})",
+                    object["kind"]
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn render_is_a_pure_function_of_the_cr() {
+    let lumen = single_replica();
+    assert_eq!(render(&lumen), render(&lumen));
+
+    let statefulset = serving_statefulset_of(&lumen);
+    let pod_meta = &statefulset["spec"]["template"]["metadata"];
+    assert!(pod_meta.get("ownerReferences").is_none());
+    assert!(pod_meta.get("finalizers").is_none());
+}
+
+#[test]
+fn rendered_objects_never_name_the_operator() {
+    assert_operator_independent(&render(&single_replica()));
+}
+
+#[test]
+#[should_panic(expected = "names the operator")]
+fn injecting_an_operator_env_var_fails_the_independence_check() {
+    let mut objects = render(&single_replica());
+    let statefulset = objects
+        .iter_mut()
+        .find(|object| object["kind"] == "StatefulSet")
+        .expect("rendered serving StatefulSet");
+    let container = &mut statefulset["spec"]["template"]["spec"]["containers"][0];
+    let env = container
+        .as_object_mut()
+        .expect("container object")
+        .entry("env")
+        .or_insert_with(|| json!([]));
+    env.as_array_mut()
+        .expect("env array")
+        .push(json!({"name": "POD_NAMESPACE", "value": "lumen-operator-system"}));
+    assert_operator_independent(&objects);
+}
