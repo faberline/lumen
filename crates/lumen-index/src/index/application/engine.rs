@@ -12,6 +12,8 @@ pub mod collections;
 pub mod cost;
 mod delete;
 mod duplicates;
+#[cfg(test)]
+mod empty_list_tests;
 pub mod index;
 mod lookup;
 pub mod raft_dispatch;
