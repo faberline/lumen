@@ -320,6 +320,9 @@ pub(super) fn write_field_deltas(
                 crate::shared_kernel::types::schema::FieldType::Int64 => {
                     return Err(anyhow!("field type `int64` is not indexed yet"));
                 }
+                crate::shared_kernel::types::schema::FieldType::Date => {
+                    return Err(anyhow!("field type `date` is not indexed yet"));
+                }
             }
         }
         encode_sparse_local_rows(&root.join(&rows_path), &ids)?;

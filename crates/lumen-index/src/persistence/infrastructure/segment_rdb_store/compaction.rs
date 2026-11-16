@@ -142,6 +142,7 @@ pub(in crate::persistence) fn write_compacted_field(
         FieldType::Number => stream::number::write_number_stream(&segment_path, sequence, &view)?,
         FieldType::Hash => stream::hash::write_hash_stream(&segment_path, sequence, &view)?,
         FieldType::Int64 => return Err(anyhow!("field type `int64` is not indexed yet")),
+        FieldType::Date => return Err(anyhow!("field type `date` is not indexed yet")),
         FieldType::Vector => {
             let dim = spec
                 .dim
