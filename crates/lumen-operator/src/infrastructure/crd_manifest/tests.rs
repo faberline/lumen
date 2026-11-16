@@ -126,3 +126,25 @@ fn the_runtime_field_survives_structural_schema_pruning() {
     assert!(fleet.matches("snapshotSecs").count() >= 2, "{fleet}");
     assert!(fleet.contains("bootstrapMaxBytesPerSec"), "{fleet}");
 }
+
+/// Instance access in the Fleet CRD is typed like the Lumen one: each
+/// subject needs an exact namespace and name, so the API server refuses an
+/// incomplete subject before the operator sees it.
+#[test]
+fn the_fleet_crd_types_instance_access() {
+    let yaml = fleet_crd_yaml();
+    let doc: serde_json::Value = serde_yaml::from_str(&yaml).expect("CRD yaml parses");
+    let access = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
+        ["properties"]["instances"]["items"]["properties"]["access"];
+    assert!(
+        access["required"]
+            .as_array()
+            .expect("access.required")
+            .contains(&json!("allowedServiceAccounts")),
+        "{access}"
+    );
+    let items = &access["properties"]["allowedServiceAccounts"]["items"];
+    let required = items["required"].as_array().expect("items.required");
+    assert!(required.contains(&json!("namespace")), "{items}");
+    assert!(required.contains(&json!("name")), "{items}");
+}
