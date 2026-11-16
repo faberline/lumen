@@ -49,6 +49,7 @@ fn field_entry(field_type: FieldType) -> Value {
         ),
         FieldType::Number => ("number", "numeric value; numeric range and sort"),
         FieldType::Int64 => ("int64", "64-bit integer, exact; numeric range and sort"),
+        FieldType::Boolean => ("boolean", "true or false; exact match only"),
         FieldType::Set => ("set", "multi-valued keyword membership"),
         FieldType::Vector => ("vector", "semantic kNN over a caller-supplied embedding"),
         FieldType::Hash => ("hash", "perceptual/structural near-duplicate search"),
@@ -90,6 +91,9 @@ fn field_entry(field_type: FieldType) -> Value {
         }
         FieldType::Int64 => {
             object.insert("queries".into(), json!(["term", "range", "sort"]));
+        }
+        FieldType::Boolean => {
+            object.insert("queries".into(), json!(["term"]));
         }
         FieldType::Set => {
             object.insert("queries".into(), json!(["term", "terms"]));
