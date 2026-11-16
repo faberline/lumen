@@ -146,3 +146,36 @@ fn int64_spec_is_refused_with_not_indexed_yet() {
         "error should say not indexed yet: {err}"
     );
 }
+
+#[test]
+fn from_spec_uses_storage_type_for_keyword_multi() {
+    use super::FieldIndex;
+    use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
+
+    // Built WITHOUT `normalize`: only `storage_type` can pick the Set storage.
+    let multi = FieldSpec {
+        field_type: FieldType::Keyword,
+        analyzer: None,
+        multi: Some(true),
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let idx = FieldIndex::from_spec(&multi).unwrap();
+    assert!(
+        matches!(idx, FieldIndex::Set(_)),
+        "keyword + multi must be a set index"
+    );
+
+    let plain = FieldSpec {
+        multi: None,
+        ..multi
+    };
+    let idx = FieldIndex::from_spec(&plain).unwrap();
+    assert!(
+        matches!(idx, FieldIndex::Keyword(_)),
+        "plain keyword must stay a keyword index"
+    );
+}
