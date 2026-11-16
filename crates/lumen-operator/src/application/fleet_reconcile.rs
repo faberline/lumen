@@ -4,12 +4,11 @@
 use std::collections::BTreeSet;
 use std::time::Duration;
 
-use serde_json::json;
-
 use crate::domain::lumen_fleet::children::{
     adoption, child_key, prune_decision, Adoption, ChildKey, PruneDecision, ORPHAN_RETAINED_MESSAGE,
 };
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
+use crate::domain::lumen_fleet::status::{project_status, spec_hash, status_patch};
 use crate::domain::lumen_fleet::{
     FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL, FLEET_MANAGER,
     FLEET_SEED_MANAGER,
@@ -83,7 +82,6 @@ async fn converge(
     let fleet_name = fleet.name_any();
     let planned = plan(fleet);
     let mut entries = Vec::new();
-    let mut applied = 0;
     let mut declared: BTreeSet<ChildKey> = BTreeSet::new();
 
     for instance in &planned {
@@ -118,10 +116,7 @@ async fn converge(
                     ..Default::default()
                 };
                 match lumens.create(&params, &body).await {
-                    Ok(_) => {
-                        applied += 1;
-                        entries.push(entry(instance, "Created", ""));
-                    }
+                    Ok(_) => entries.push(entry_with_hash(instance, "Created", spec)),
                     Err(err) => {
                         entries.push(entry(instance, "ApplyFailed", &err.to_string()));
                     }
@@ -143,10 +138,7 @@ async fn converge(
                     )
                     .await
                 {
-                    Ok(_) => {
-                        applied += 1;
-                        entries.push(entry(instance, "Applied", ""));
-                    }
+                    Ok(_) => entries.push(entry_with_hash(instance, "Applied", spec)),
                     Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
                 }
             }
@@ -155,15 +147,11 @@ async fn converge(
 
     entries.extend(prune(client, fleet, &declared).await?);
 
-    let status = json!({
-        "status": {
-            "observedGeneration": fleet.metadata.generation.unwrap_or(0),
-            "desiredInstances": planned.len() as i32,
-            "appliedInstances": applied,
-            "entries": entries,
-            "message": format!("{applied}/{} instances converged", planned.len()),
-        }
-    });
+    let status = status_patch(&project_status(
+        &planned,
+        entries,
+        fleet.metadata.generation.unwrap_or(0),
+    ));
     fleets
         .patch_status(
             &fleet_name,
@@ -224,5 +212,19 @@ pub(crate) fn entry(instance: &PlannedInstance, state: &str, message: &str) -> F
         name: instance.name.clone(),
         state: state.to_string(),
         message: message.to_string(),
+        spec_hash: String::new(),
+    }
+}
+
+/// An entry that carries the hash of the merged spec the fleet wrote for it.
+/// The hash is of `spec` (the merged `Lumen` spec), not of the apply body.
+pub(crate) fn entry_with_hash(
+    instance: &PlannedInstance,
+    state: &str,
+    spec: &serde_json::Value,
+) -> FleetEntryStatus {
+    FleetEntryStatus {
+        spec_hash: spec_hash(spec),
+        ..entry(instance, state, "")
     }
 }

@@ -1243,6 +1243,9 @@ spec:
                       type: string
                     namespace:
                       type: string
+                    specHash:
+                      description: Lowercase hex SHA-256 of the canonical JSON of the spec the fleet wrote for this entry. Set only for `Created` and `Applied`.
+                      type: string
                     state:
                       description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `Orphaned` | `Pruned`.'
                       type: string
@@ -1252,6 +1255,11 @@ spec:
                   - state
                   type: object
                 type: array
+              materializedInstances:
+                default: 0
+                description: 'How many entries are materialized: state `Created` or `Applied`.'
+                format: int32
+                type: integer
               message:
                 default: ''
                 description: Human-readable summary of the last pass.
@@ -1260,6 +1268,21 @@ spec:
                 default: 0
                 description: The `.metadata.generation` this status reflects.
                 format: int64
+                type: integer
+              orphanedInstances:
+                default: 0
+                description: How many materialized `Lumen`s no longer match a declared entry and were kept (state `Orphaned`).
+                format: int32
+                type: integer
+              prunedInstances:
+                default: 0
+                description: How many orphaned `Lumen`s were deleted under `Delete` (state `Pruned`).
+                format: int32
+                type: integer
+              rejectedInstances:
+                default: 0
+                description: How many entries the spec rejected (state `Rejected`).
+                format: int32
                 type: integer
             type: object
         required:
