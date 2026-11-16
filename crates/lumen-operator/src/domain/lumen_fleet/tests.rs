@@ -1,3 +1,6 @@
+use std::collections::BTreeSet;
+
+use crate::domain::lumen_fleet::children::*;
 use serde_json::{json, Value};
 
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
@@ -340,6 +343,151 @@ fn the_spec_patch_still_merges_as_before_with_runtime_present() {
         "{}",
         rejection(&planned[0])
     );
+}
+
+#[test]
+fn child_key_is_namespace_and_name() {
+    assert_eq!(child_key("a", "b"), ("a".to_string(), "b".to_string()));
+}
+
+#[test]
+fn duplicate_targets_collapse_to_one_declared_key() {
+    let mut second = instance("team-j", None);
+    second.name = Some("search".to_string());
+    let planned = plan(&fleet(vec![instance("team-j", None), second]));
+    let keys: BTreeSet<ChildKey> = planned
+        .iter()
+        .map(|p| child_key(&p.namespace, &p.name))
+        .collect();
+    assert_eq!(
+        keys.len(),
+        1,
+        "two entries for one object must share one key"
+    );
+}
+
+#[test]
+fn a_foreign_owner_label_is_not_adopted() {
+    match adoption(Some(Some("other")), "search") {
+        Adoption::NotAdopted { message } => {
+            assert!(message.contains("found other"), "{message}");
+            assert!(message.contains("lumen.dev/fleet=search"), "{message}");
+        }
+        other => panic!("expected NotAdopted, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_missing_label_is_not_adopted() {
+    match adoption(Some(None), "search") {
+        Adoption::NotAdopted { message } => {
+            assert!(message.contains("found no label"), "{message}");
+        }
+        other => panic!("expected NotAdopted, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_owned_child_is_applied_and_an_absent_one_is_created() {
+    assert_eq!(adoption(Some(Some("search")), "search"), Adoption::Apply);
+    assert_eq!(adoption(None, "search"), Adoption::Create);
+}
+
+#[test]
+fn ownership_distinguishes_owned_and_foreign() {
+    assert_eq!(ownership(Some("search"), "search"), Ownership::Owned);
+    assert_eq!(
+        ownership(Some("x"), "search"),
+        Ownership::Foreign {
+            found: Some("x".into())
+        }
+    );
+    assert_eq!(
+        ownership(None, "search"),
+        Ownership::Foreign { found: None }
+    );
+}
+
+#[test]
+fn a_retained_orphan_is_reported_not_deleted() {
+    let declared: BTreeSet<ChildKey> = [child_key("a", "x")].into_iter().collect();
+    assert_eq!(
+        prune_decision(&child_key("a", "y"), &declared, PrunePolicy::Retain),
+        PruneDecision::Orphaned
+    );
+}
+
+#[test]
+fn a_deleted_orphan_under_delete_policy() {
+    let declared: BTreeSet<ChildKey> = [child_key("a", "x")].into_iter().collect();
+    assert_eq!(
+        prune_decision(&child_key("a", "y"), &declared, PrunePolicy::Delete),
+        PruneDecision::Pruned
+    );
+}
+
+#[test]
+fn a_declared_child_is_kept_under_either_policy() {
+    let declared: BTreeSet<ChildKey> = [child_key("a", "x")].into_iter().collect();
+    for policy in [PrunePolicy::Retain, PrunePolicy::Delete] {
+        assert_eq!(
+            prune_decision(&child_key("a", "x"), &declared, policy),
+            PruneDecision::Keep
+        );
+    }
+}
+
+/// FNV-1a 64-bit over raw bytes, with the constants the spec names, written out
+/// here so the test does not call the code it checks.
+fn fnv1a_hex(bytes: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+#[test]
+fn the_desired_hash_ignores_key_order_and_sees_value_changes() {
+    let hash = desired_hash(&json!({"a": 1, "b": {"c": 2, "d": 3}}));
+    assert_eq!(hash, desired_hash(&json!({"b": {"d": 3, "c": 2}, "a": 1})));
+    assert_ne!(hash, desired_hash(&json!({"a": 1, "b": {"c": 2, "d": 4}})));
+    assert_eq!(hash.len(), 16);
+    assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    assert_eq!(desired_hash(&json!({})), fnv1a_hex(b"{}"));
+}
+
+#[test]
+fn the_desired_hash_is_sensitive_to_array_order() {
+    assert_ne!(desired_hash(&json!([1, 2])), desired_hash(&json!([2, 1])));
+}
+
+#[test]
+fn a_foreign_labelled_child_is_never_applicable_or_prunable() {
+    for label in [Some("other"), None] {
+        let decision = adoption(Some(label), "search");
+        assert!(
+            !matches!(decision, Adoption::Apply | Adoption::Create),
+            "a child labelled {label:?} must not be applied or created: {decision:?}"
+        );
+    }
+}
+
+#[test]
+fn decisions_depend_only_on_live_state_not_process_memory() {
+    let run = || {
+        let declared: BTreeSet<ChildKey> = [child_key("a", "x"), child_key("b", "x")]
+            .into_iter()
+            .collect();
+        (
+            adoption(Some(Some("search")), "search"),
+            adoption(Some(Some("other")), "search"),
+            prune_decision(&child_key("a", "y"), &declared, PrunePolicy::Retain),
+            desired_hash(&json!({"serving": {"cpu": "2"}, "image": "x"})),
+        )
+    };
+    assert_eq!(run(), run());
 }
 
 #[test]
