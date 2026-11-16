@@ -26,7 +26,7 @@ const HPA_HANDOFF_POLL_INTERVAL: Duration = Duration::from_secs(15);
 /// same duplicated `identity`/`lease_namespace` resolution
 /// `reshard_driver::spawn_reshard_driver_loop` already uses for the same
 /// reason).
-const HPA_HANDOFF_LEASE_NAME: &str = "lumen-hpa-handoff";
+pub(crate) const HPA_HANDOFF_LEASE_NAME: &str = "lumen-hpa-handoff";
 
 /// Poll interval for [`spawn_auth_delegator_sweep_loop`] (#2876). A leftover
 /// binding is a standing grant of delegated authentication review to a
@@ -37,7 +37,7 @@ const AUTH_DELEGATOR_SWEEP_POLL_INTERVAL: Duration = Duration::from_secs(15);
 /// Leader-election Lease name for [`spawn_auth_delegator_sweep_loop`] (#2876),
 /// distinct from every other independently leader-gated loop's Lease for the
 /// same reason [`HPA_HANDOFF_LEASE_NAME`] is.
-const AUTH_DELEGATOR_SWEEP_LEASE_NAME: &str = "lumen-auth-delegator-sweep";
+pub(crate) const AUTH_DELEGATOR_SWEEP_LEASE_NAME: &str = "lumen-auth-delegator-sweep";
 
 /// Background loop (#1385): every [`HPA_HANDOFF_POLL_INTERVAL`], while
 /// holding the [`HPA_HANDOFF_LEASE_NAME`] Lease, list every `Lumen` CR
