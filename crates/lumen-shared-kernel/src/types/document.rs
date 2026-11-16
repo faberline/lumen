@@ -62,6 +62,17 @@ pub enum FieldValue {
     StringList(Vec<String>),
 }
 
+impl FieldValue {
+    /// True for an empty list (`[]`), which a write treats as "no value".
+    pub fn is_missing(&self) -> bool {
+        match self {
+            FieldValue::Vector(v) => v.is_empty(),
+            FieldValue::StringList(v) => v.is_empty(),
+            FieldValue::String(_) | FieldValue::Number(_) => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct IndexResponse {
     pub indexed: u32,
