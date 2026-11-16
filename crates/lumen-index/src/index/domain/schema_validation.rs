@@ -71,6 +71,9 @@ pub(in crate::index) fn validate_value(
     value: &FieldValue,
     field_name: &str,
 ) -> Result<()> {
+    if value.is_missing() && !matches!(fi, FieldIndex::Vector { .. }) {
+        return Ok(());
+    }
     match (fi, value) {
         (FieldIndex::Text { .. }, FieldValue::String(_)) => Ok(()),
         (FieldIndex::Keyword(_), FieldValue::String(_)) => Ok(()),
