@@ -36,6 +36,7 @@ mod connect;
 mod dockerfile;
 mod issue;
 mod k8s;
+mod migrate;
 mod query;
 mod run;
 mod serve;
