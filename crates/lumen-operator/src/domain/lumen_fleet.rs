@@ -43,6 +43,7 @@
 //!
 //! [`super::reshard_driver`]: crate::application::reshard_driver
 
+pub mod children;
 pub mod plan;
 
 use kube::CustomResource;
@@ -50,6 +51,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::domain::lumen_spec::access::AccessSpec;
 use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::LumenSpec;
 
@@ -136,6 +138,12 @@ pub struct FleetInstance {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(schema_with = "free_form_object")]
     pub spec: Option<Value>,
+    /// The exact ServiceAccounts allowed to call this instance. When present it
+    /// replaces the whole `defaults.access` list (it is never merged with it);
+    /// an explicit empty `allowedServiceAccounts` denies every client.
+    /// Absent means the instance inherits `defaults.access`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<AccessSpec>,
 }
 
 /// What happens to a materialized `Lumen` whose entry leaves the fleet.
