@@ -13,7 +13,6 @@ use std::time::{Duration, Instant};
 use lumen::aof::{AofReader, AofWriter};
 use lumen::log_entry::RaftLogEntry;
 use lumen::rdb::{LocalFsRdbStore, RdbStore};
-use lumen::segment_rdb::SegmentRdbStore;
 use lumen::storage::Engine;
 use lumen::types::{
     CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
@@ -591,24 +590,39 @@ pub fn aof_sequences(root: &Path) -> Vec<u64> {
     sequences
 }
 
+/// Name of the generation that `CURRENT` selects. Reads plain files only: it
+/// never opens `SegmentRdbStore`, so it cannot sweep a staging directory that a
+/// live server process is still filling.
+pub fn read_current_generation_name(root: &Path) -> String {
+    let current = std::fs::read_to_string(root.join("CURRENT")).expect("read segment CURRENT");
+    let name = current
+        .strip_prefix("generation:")
+        .expect("CURRENT names a generation")
+        .trim();
+    assert!(!name.is_empty(), "CURRENT must name a non-empty generation");
+    name.to_owned()
+}
+
+/// Checkpoint sequence in the manifest of the generation that `CURRENT` selects.
+/// Reads plain files only, like `read_current_generation_name`.
+pub fn read_current_checkpoint_sequence(root: &Path) -> u64 {
+    let name = read_current_generation_name(root);
+    let manifest: Value = serde_json::from_slice(
+        &std::fs::read(root.join(&name).join("_generation.json"))
+            .expect("read generation manifest"),
+    )
+    .expect("decode generation manifest");
+    manifest["checkpoint_sequence"]
+        .as_u64()
+        .expect("manifest checkpoint_sequence")
+}
+
 pub fn checkpoint_sequence(root: &Path) -> u64 {
-    SegmentRdbStore::new(root)
-        .expect("open segment checkpoint root")
-        .load_current_generation()
-        .expect("read segment CURRENT")
-        .expect("replay checkpoint must publish CURRENT")
-        .sequence
+    read_current_checkpoint_sequence(root)
 }
 
 pub fn checkpoint_generation_name(root: &Path) -> String {
-    SegmentRdbStore::new(root)
-        .expect("open segment checkpoint root")
-        .load_current_generation()
-        .expect("read segment CURRENT")
-        .expect("replay checkpoint must publish CURRENT")
-        .name
-        .as_str()
-        .to_owned()
+    read_current_generation_name(root)
 }
 
 pub fn checkpoint_generation_names(root: &Path) -> Vec<String> {
