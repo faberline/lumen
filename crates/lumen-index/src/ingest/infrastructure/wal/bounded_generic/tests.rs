@@ -279,3 +279,15 @@ fn owned_string_token_moves_into_final_field_value_without_content_copy() {
         "decoder copied an owned string token"
     );
 }
+
+#[test]
+fn wire_field_value_decodes_integers_exactly() {
+    let v = serde_json::from_str::<WireFieldValue>("9007199254740993").unwrap();
+    assert!(matches!(v.0, FieldValue::Int64(9007199254740993)));
+    let v = serde_json::from_str::<WireFieldValue>("42").unwrap();
+    assert!(matches!(v.0, FieldValue::Number(x) if x == 42.0));
+    let v = serde_json::from_str::<WireFieldValue>("-9223372036854775808").unwrap();
+    assert!(matches!(v.0, FieldValue::Int64(i64::MIN)));
+    let v = serde_json::from_str::<WireFieldValue>("9223372036854775808").unwrap();
+    assert!(matches!(v.0, FieldValue::Number(_)));
+}
