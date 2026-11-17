@@ -59,6 +59,8 @@ fn search(e: &Engine, query: QueryNode, sort: Option<Vec<SortSpec>>) -> (Vec<Str
                 sort,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
