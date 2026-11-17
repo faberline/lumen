@@ -137,6 +137,14 @@ fn a_string_list_is_refused() {
 }
 
 #[test]
+fn an_int64_is_refused() {
+    assert_eq!(
+        parse_decimal_value(&FieldValue::Int64(9_007_199_254_740_993), 10, 2),
+        Err(DecimalError::NotAString("integer"))
+    );
+}
+
+#[test]
 fn a_vector_is_refused() {
     assert_eq!(
         parse_decimal_value(&FieldValue::Vector(vec![1.0]), 10, 2),
