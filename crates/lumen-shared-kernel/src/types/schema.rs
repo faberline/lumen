@@ -263,6 +263,16 @@ pub enum Analyzer {
 // ---------------------------------------------------------------------------
 
 impl FieldSpec {
+    /// The storage this field uses: `Set` for `{type: keyword, multi: true}`,
+    /// the declared type otherwise.
+    pub fn storage_type(&self) -> FieldType {
+        if self.field_type == FieldType::Keyword && self.multi == Some(true) {
+            FieldType::Set
+        } else {
+            self.field_type
+        }
+    }
+
     /// Normalize sugar: `{type: "keyword", multi: true}` → `{type: "set"}`.
     /// Sets a default analyzer on `text` if absent. Fills in a default
     /// `hnsw-cpu` backend on a vector field when none is declared.
