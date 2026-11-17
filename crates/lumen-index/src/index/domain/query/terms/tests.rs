@@ -331,6 +331,8 @@ fn term_int64_on_keyword_field_still_errors() {
             sort: None,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     );
     assert!(
