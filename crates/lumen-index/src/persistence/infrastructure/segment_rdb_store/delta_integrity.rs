@@ -35,7 +35,7 @@ pub(super) fn validate_field_delta(
     if !matches!(segment.role, SegmentRole::Field)
         || !fields.get(field).is_some_and(|spec| {
             matches!(
-                spec.field_type,
+                spec.storage_type(),
                 crate::shared_kernel::types::schema::FieldType::Keyword
                     | crate::shared_kernel::types::schema::FieldType::Number
                     | crate::shared_kernel::types::schema::FieldType::Set
