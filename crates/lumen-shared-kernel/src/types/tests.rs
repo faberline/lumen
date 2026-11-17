@@ -213,3 +213,32 @@ fn field_value_is_missing_for_empty_lists_only() {
     assert!(!FieldValue::String(String::new()).is_missing());
     assert!(!FieldValue::Number(0.0).is_missing());
 }
+
+#[test]
+fn boolean_field_type_parses_and_is_exact_only() {
+    assert_eq!(
+        serde_json::from_str::<FieldType>("\"boolean\"").expect("boolean parses"),
+        FieldType::Boolean
+    );
+    assert!(FieldType::ALL.contains(&FieldType::Boolean));
+    assert_eq!(FieldType::ALL.len(), 8);
+    assert_eq!(
+        FieldType::Boolean.capabilities(),
+        FieldCapabilities {
+            bm25: false,
+            exact: true,
+            prefix: false,
+            range: false,
+            sort: false,
+            set_membership: false,
+            vector_search: false,
+            hamming: false,
+        }
+    );
+}
+
+#[test]
+fn unknown_field_type_name_is_still_refused_next_to_boolean() {
+    assert!(serde_json::from_str::<FieldType>("\"booleans\"").is_err());
+    assert!(serde_json::from_str::<FieldType>("\"bool\"").is_err());
+}
