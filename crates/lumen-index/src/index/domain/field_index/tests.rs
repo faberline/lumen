@@ -207,3 +207,31 @@ fn boolean_spec_is_refused_with_not_indexed_yet() {
         "error should say not indexed yet: {err}"
     );
 }
+
+/// Negative control: a keyword + multi spec that skips `normalize` must still
+/// build a `Set` index. An old `from_spec` that reads `field_type` builds `Keyword`.
+#[test]
+fn from_spec_uses_storage_type_for_keyword_multi() {
+    use crate::index::domain::field_index::FieldIndex;
+    use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
+
+    let spec = FieldSpec {
+        field_type: FieldType::Keyword,
+        analyzer: None,
+        multi: Some(true),
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let idx = FieldIndex::from_spec(&spec).unwrap();
+    assert!(matches!(idx, FieldIndex::Set(_)));
+
+    let plain = FieldSpec {
+        multi: None,
+        ..spec
+    };
+    let idx = FieldIndex::from_spec(&plain).unwrap();
+    assert!(matches!(idx, FieldIndex::Keyword(_)));
+}
