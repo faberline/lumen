@@ -263,6 +263,7 @@ mod integrity;
 mod manifest_catalog;
 
 mod merge_selection;
+mod migrate_plan;
 
 mod pending_retry;
 
