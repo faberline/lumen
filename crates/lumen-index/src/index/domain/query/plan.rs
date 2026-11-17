@@ -269,12 +269,13 @@ pub(in crate::index) fn try_plan(
                 (Some(FieldIndex::Keyword(k)), FieldValue::String(s)) => k.term_postings(s),
                 // Phase 2h-3: Number exact-match through the unified accessor (segment
                 // count-prefix index + tail when sealed, else the live posting).
-                (Some(FieldIndex::Number(n)), FieldValue::Number(x)) => {
-                    match SortableF64::new(*x) {
-                        Ok(key) => n.value_postings(key),
-                        Err(_) => return Ok(None),
-                    }
-                }
+                (
+                    Some(FieldIndex::Number(n)),
+                    v @ (FieldValue::Number(_) | FieldValue::Int64(_)),
+                ) => match SortableF64::new(v.as_query_number().unwrap_or_default()) {
+                    Ok(key) => n.value_postings(key),
+                    Err(_) => return Ok(None),
+                },
                 (Some(FieldIndex::Set(s)), FieldValue::String(el)) => s.element_postings(el),
                 _ => return Ok(None), // type mismatch → fall back (eval_term reports it)
             };
