@@ -235,3 +235,64 @@ fn from_spec_uses_storage_type_for_keyword_multi() {
     let idx = FieldIndex::from_spec(&plain).unwrap();
     assert!(matches!(idx, FieldIndex::Keyword(_)));
 }
+
+#[test]
+fn date_schema_is_accepted_by_validate_schema() {
+    use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, FieldType};
+    let mut schema = BTreeMap::new();
+    schema.insert(
+        "when".to_string(),
+        FieldSpec {
+            field_type: FieldType::Date,
+            analyzer: None,
+            multi: None,
+            dim: None,
+            metric: None,
+            backend: None,
+            quantize: None,
+            facetable: false,
+        },
+    );
+    crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect("a date field is a valid schema entry");
+    schema.insert(
+        "bad".to_string(),
+        FieldSpec {
+            field_type: FieldType::Date,
+            analyzer: Some(Analyzer::WhitespaceLower),
+            multi: None,
+            dim: None,
+            metric: None,
+            backend: None,
+            quantize: None,
+            facetable: false,
+        },
+    );
+    let err = crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect_err("a date field with an analyzer is refused");
+    assert!(
+        err.to_string().contains("does not accept an analyzer"),
+        "error should name the analyzer refusal: {err}"
+    );
+}
+
+#[test]
+fn date_spec_is_refused_with_not_indexed_yet() {
+    let spec = crate::shared_kernel::types::schema::FieldSpec {
+        field_type: crate::shared_kernel::types::schema::FieldType::Date,
+        analyzer: None,
+        multi: None,
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let Err(err) = super::FieldIndex::from_spec(&spec) else {
+        panic!("date must be refused until #411");
+    };
+    assert!(
+        err.to_string().contains("not indexed yet"),
+        "error should say not indexed yet: {err}"
+    );
+}
