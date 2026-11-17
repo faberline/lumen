@@ -285,7 +285,7 @@ fn field_cost(
     text_representation: TextRepresentation,
     ngram_table: Option<&mut NgramDistinctTable>,
 ) -> Result<FieldCost, FieldCostError> {
-    match (&spec.field_type, value) {
+    match (&spec.storage_type(), value) {
         (FieldType::Keyword, FieldValue::String(value)) => Ok(FieldCost::Keyword {
             value_bytes: value.len(),
         }),
