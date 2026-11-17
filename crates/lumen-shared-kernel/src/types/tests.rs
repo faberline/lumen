@@ -294,7 +294,7 @@ fn boolean_field_type_parses_and_is_exact_only() {
         FieldType::Boolean
     );
     assert!(FieldType::ALL.contains(&FieldType::Boolean));
-    assert_eq!(FieldType::ALL.len(), 8);
+    assert_eq!(FieldType::ALL.len(), 9);
     assert_eq!(
         FieldType::Boolean.capabilities(),
         FieldCapabilities {
@@ -348,4 +348,33 @@ fn field_spec_storage_type_follows_keyword_multi() {
         .storage_type(),
         FieldType::Number
     );
+}
+
+#[test]
+fn date_field_type_parses_with_exact_range_and_sort() {
+    assert_eq!(
+        serde_json::from_str::<FieldType>("\"date\"").expect("date parses"),
+        FieldType::Date
+    );
+    assert!(FieldType::ALL.contains(&FieldType::Date));
+    assert_eq!(FieldType::ALL.len(), 9);
+    assert_eq!(
+        FieldType::Date.capabilities(),
+        FieldCapabilities {
+            bm25: false,
+            exact: true,
+            prefix: false,
+            range: true,
+            sort: true,
+            set_membership: false,
+            vector_search: false,
+            hamming: false,
+        }
+    );
+}
+
+#[test]
+fn unknown_field_type_name_is_still_refused_next_to_date() {
+    assert!(serde_json::from_str::<FieldType>("\"dates\"").is_err());
+    assert!(serde_json::from_str::<FieldType>("\"datetime\"").is_err());
 }

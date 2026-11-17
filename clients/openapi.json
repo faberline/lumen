@@ -2074,7 +2074,8 @@
           "set",
           "vector",
           "hash",
-          "boolean"
+          "boolean",
+          "date"
         ]
       },
       "FieldValue": {
