@@ -127,11 +127,14 @@ fn term_or_range_iter<'a>(
                         None => Box::new(std::iter::empty()),
                     })
                 }
-                (Some(FieldIndex::Number(n)), FieldValue::Number(x)) => {
+                (
+                    Some(FieldIndex::Number(n)),
+                    v @ (FieldValue::Number(_) | FieldValue::Int64(_)),
+                ) => {
                     // Phase 2h-3: Number exact-match through the unified accessor —
                     // Borrowed (segment OFF) iterates by reference; Owned (segment
                     // ON) consumes the decoded sorted-value+tail union.
-                    let Ok(key) = SortableF64::new(*x) else {
+                    let Ok(key) = SortableF64::new(v.as_query_number().unwrap_or_default()) else {
                         return None;
                     };
                     Some(match n.value_postings(key) {

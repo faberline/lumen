@@ -95,6 +95,12 @@ impl WalRecord {
                     out.write_all(&[WAL_VALUE_NUMBER])?;
                     out.write_all(&value.to_le_bytes())?;
                 }
+                FieldValue::Int64(_) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "WAL encode of an int64 value is not supported yet",
+                    ));
+                }
                 FieldValue::Vector(values) => {
                     out.write_all(&[WAL_VALUE_VECTOR])?;
                     let len = u32::try_from(values.len()).map_err(|_| {
@@ -152,6 +158,16 @@ impl WalRecord {
             "WAL v{} is reserved for fast control records",
             WAL_CONTROL_FORMAT_VERSION
         );
+        // The fast encoder has no int64 tag yet; without this check the CBOR
+        // fallback would write the value as a plain integer silently.
+        if let RaftLogEntry::Index { req, .. } = &self.entry {
+            anyhow::ensure!(
+                !req.items
+                    .iter()
+                    .any(|item| matches!(item.value, FieldValue::Int64(_))),
+                "WAL encode of an int64 value is not supported yet"
+            );
+        }
         if let Some(bytes) = self.encode_fast_index() {
             return Ok(bytes);
         }
@@ -216,6 +232,7 @@ impl WalRecord {
                     bytes.push(WAL_VALUE_NUMBER);
                     bytes.extend_from_slice(&n.to_le_bytes());
                 }
+                FieldValue::Int64(_) => return None,
                 FieldValue::Vector(v) => {
                     bytes.push(WAL_VALUE_VECTOR);
                     put_u32(&mut bytes, v.len())?;
@@ -290,7 +307,7 @@ fn estimate_fast_index_len(collection_id: &str, req: &IndexRequest, versioned: b
         }
         match &item.value {
             FieldValue::String(s) => len += 4 + s.len(),
-            FieldValue::Number(_) => len += 8,
+            FieldValue::Number(_) | FieldValue::Int64(_) => len += 8,
             FieldValue::Vector(v) => len += 4 + v.len() * 4,
             FieldValue::StringList(values) => {
                 len += 4;

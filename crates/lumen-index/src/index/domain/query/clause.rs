@@ -39,8 +39,8 @@ pub(super) fn clause_matches(coll: &Collection, node: &QueryNode, id: u32) -> Re
                 (FieldIndex::Keyword(k), FieldValue::String(s)) => {
                     k.keyword_at(id).map(|v| &v == s).unwrap_or(false)
                 }
-                (FieldIndex::Number(n), FieldValue::Number(x)) => {
-                    let key = SortableF64::new(*x)?;
+                (FieldIndex::Number(n), v @ (FieldValue::Number(_) | FieldValue::Int64(_))) => {
+                    let key = SortableF64::new(v.as_query_number().unwrap_or_default())?;
                     n.number_at(id) == Some(key)
                 }
                 (FieldIndex::Set(s), FieldValue::String(el)) => s.set_contains(id, el),
@@ -58,8 +58,8 @@ pub(super) fn clause_matches(coll: &Collection, node: &QueryNode, id: u32) -> Re
                 }),
                 FieldIndex::Number(n) => n.number_at(id).is_some_and(|v| {
                     t.values.iter().any(|val| {
-                        matches!(val, FieldValue::Number(x)
-                            if SortableF64::new(*x).map(|k| k == v).unwrap_or(false))
+                        val.as_query_number()
+                            .is_some_and(|x| SortableF64::new(x).map(|k| k == v).unwrap_or(false))
                     })
                 }),
                 FieldIndex::Set(s) => s.set_contains_any(id, &t.values),
