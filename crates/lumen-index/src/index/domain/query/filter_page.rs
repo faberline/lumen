@@ -124,7 +124,10 @@ fn filter_driver_postings_are_disjoint(coll: &Collection, driver: &QueryNode) ->
         QueryNode::Term(t) => Ok(matches!(
             (coll.fields.get(&t.field), &t.value),
             (Some(FieldIndex::Keyword(_)), FieldValue::String(_))
-                | (Some(FieldIndex::Number(_)), FieldValue::Number(_))
+                | (
+                    Some(FieldIndex::Number(_)),
+                    FieldValue::Number(_) | FieldValue::Int64(_)
+                )
                 | (Some(FieldIndex::Set(_)), FieldValue::String(_))
         )),
         QueryNode::Terms(t) => {
@@ -147,10 +150,10 @@ fn filter_driver_postings_are_disjoint(coll: &Collection, driver: &QueryNode) ->
                 FieldIndex::Number(_) => {
                     let mut seen = BTreeSet::new();
                     for v in &t.values {
-                        let FieldValue::Number(x) = v else {
+                        let Some(x) = v.as_query_number() else {
                             return Ok(false);
                         };
-                        if !seen.insert(SortableF64::new(*x)?) {
+                        if !seen.insert(SortableF64::new(x)?) {
                             return Ok(false);
                         }
                     }

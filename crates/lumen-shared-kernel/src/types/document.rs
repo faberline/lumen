@@ -202,6 +202,16 @@ impl FieldValue {
             FieldValue::String(_) | FieldValue::Number(_) | FieldValue::Int64(_) => false,
         }
     }
+
+    /// The f64 a number-field query compares with: `Number(x)` is `x`, `Int64(v)`
+    /// is `v as f64` (the same value an index write stores), anything else is `None`.
+    pub fn as_query_number(&self) -> Option<f64> {
+        match self {
+            FieldValue::Number(x) => Some(*x),
+            FieldValue::Int64(v) => Some(*v as f64),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
