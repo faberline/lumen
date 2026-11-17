@@ -124,10 +124,37 @@ fn spawn_with_the_default_phase_list_includes_restart_persistence() {
 
     let report = read_report(dir.path());
     let phases = report["phases"].as_array().expect("phases");
-    assert_eq!(phases.len(), 5);
+    assert_eq!(phases.len(), 6);
     assert_eq!(phases[4]["name"], "restart_persistence");
+    assert_eq!(phases[5]["name"], "checkpoint_and_merge");
     assert!(phases.iter().all(|phase| phase["status"] == "passed"));
     assert_eq!(report["cleanup_complete"], true);
+}
+
+#[test]
+fn spawn_checkpoint_and_merge_reports_a_checkpoint() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let status = acceptance()
+        .args([
+            "functional",
+            "--spawn",
+            env!("CARGO_BIN_EXE_lumen"),
+            "--artifact-dir",
+        ])
+        .arg(dir.path())
+        .args(["--phases", "checkpoint_and_merge"])
+        .status()
+        .expect("runs");
+    assert!(status.success(), "checkpoint_and_merge must pass");
+
+    let report = read_report(dir.path());
+    assert!(report["checkpoint_count"].as_u64().unwrap_or(0) >= 1);
+    assert!(report["failing_phase"].is_null());
+    assert_eq!(report["cleanup_complete"], true);
+    let phases = report["phases"].as_array().expect("phases");
+    assert_eq!(phases.len(), 1);
+    assert_eq!(phases[0]["name"], "checkpoint_and_merge");
+    assert_eq!(phases[0]["status"], "passed");
 }
 
 #[test]
