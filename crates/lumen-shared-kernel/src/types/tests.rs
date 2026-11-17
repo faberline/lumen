@@ -153,14 +153,16 @@ fn int64_boundaries_decode_exactly() {
     assert!(matches!(v, FieldValue::Int64(i64::MIN)));
 }
 
+/// Desk decision A (faberline/aw#556): an integer outside the i64 range stays
+/// `Number` (lossy, as today). It is not refused and it is not `Int64`.
 #[test]
-fn integer_outside_i64_is_refused() {
+fn integer_outside_i64_stays_number() {
     for text in ["9223372036854775808", "-9223372036854775809"] {
-        let err =
-            serde_json::from_str::<FieldValue>(text).expect_err(&format!("{text} must be refused"));
+        let v: FieldValue =
+            serde_json::from_str(text).unwrap_or_else(|e| panic!("{text}: unexpected error {e}"));
         assert!(
-            err.to_string().contains("out of i64 range"),
-            "{text}: unexpected error {err}"
+            matches!(v, FieldValue::Number(_)),
+            "{text}: expected Number, got another variant"
         );
     }
 }

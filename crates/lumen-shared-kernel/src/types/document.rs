@@ -71,15 +71,16 @@ pub enum FieldValue {
 /// Every integer up to 2^53 is exact in an `f64`.
 const MAX_SAFE_F64_INTEGER: u128 = 1 << 53;
 
-/// Decodes a JSON integer: `Number` up to 2^53 in magnitude, `Int64` above
-/// that when it fits `i64`, and an error otherwise.
+/// Decodes a JSON integer: `Int64` above 2^53 in magnitude when it fits `i64`,
+/// otherwise `Number`. An integer outside the i64 range stays `Number` (lossy),
+/// by desk decision A (faberline/aw#556).
 pub fn decode_integer<E: de::Error>(n: i128) -> Result<FieldValue, E> {
     if n.unsigned_abs() <= MAX_SAFE_F64_INTEGER {
         Ok(FieldValue::Number(n as f64))
     } else if let Ok(v) = i64::try_from(n) {
         Ok(FieldValue::Int64(v))
     } else {
-        Err(E::custom("integer out of i64 range"))
+        Ok(FieldValue::Number(n as f64))
     }
 }
 
