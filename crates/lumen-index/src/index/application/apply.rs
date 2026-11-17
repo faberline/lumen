@@ -61,6 +61,15 @@ fn apply_value(
     field_name: &str,
     telemetry: Option<&mut CommittedApplyTelemetry<'_>>,
 ) -> Result<u64> {
+    // An Int64 written to a number field is indexed as that number.
+    let as_number;
+    let value = match value {
+        FieldValue::Int64(v) if matches!(*fi, FieldIndex::Number(_)) => {
+            as_number = FieldValue::Number(*v as f64);
+            &as_number
+        }
+        other => other,
+    };
     match (fi, value) {
         (FieldIndex::Text { analyzer, idx }, FieldValue::String(s)) => {
             let mut bytes = 0u64;

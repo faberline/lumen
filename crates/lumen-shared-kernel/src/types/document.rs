@@ -2,8 +2,10 @@
 //! results, and the field values an item carries.
 
 use std::collections::BTreeMap;
+use std::fmt;
 
-use serde::{Deserialize, Serialize};
+use serde::de::{self, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::ToSchema;
 
 // ---------------------------------------------------------------------------
@@ -53,13 +55,142 @@ pub struct IndexItem {
 /// On the wire, `Vector` is a plain JSON `[f32]` array — `serde(untagged)`
 /// resolves the variant by JSON shape (string vs number vs list-of-string
 /// vs list-of-number).
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(untagged)]
 pub enum FieldValue {
     String(String),
     Number(f64),
     Vector(Vec<f32>),
     StringList(Vec<String>),
+    /// An integer beyond 2^53 that fits `i64`, kept exact. Decoded by the
+    /// hand-written [`Deserialize`] below; never produced for smaller integers.
+    Int64(i64),
+}
+
+/// Largest magnitude an integer may have and still decode as `Number(f64)`.
+/// Every integer up to 2^53 is exact in an `f64`.
+const MAX_SAFE_F64_INTEGER: u128 = 1 << 53;
+
+/// Decodes a JSON integer: `Int64` above 2^53 in magnitude when it fits `i64`,
+/// otherwise `Number`. An integer outside the i64 range stays `Number` (lossy),
+/// by desk decision A (faberline/aw#556).
+pub fn decode_integer<E: de::Error>(n: i128) -> Result<FieldValue, E> {
+    if n.unsigned_abs() <= MAX_SAFE_F64_INTEGER {
+        Ok(FieldValue::Number(n as f64))
+    } else if let Ok(v) = i64::try_from(n) {
+        Ok(FieldValue::Int64(v))
+    } else {
+        Ok(FieldValue::Number(n as f64))
+    }
+}
+
+/// One array element: a number (kept as `f32`, as `Vector` stores it) or a string.
+enum Element {
+    Number(f32),
+    String(String),
+}
+
+impl<'de> Deserialize<'de> for Element {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct ElementVisitor;
+
+        impl<'de> Visitor<'de> for ElementVisitor {
+            type Value = Element;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a number or string")
+            }
+
+            fn visit_str<E: de::Error>(self, value: &str) -> Result<Element, E> {
+                Ok(Element::String(value.to_owned()))
+            }
+
+            fn visit_string<E: de::Error>(self, value: String) -> Result<Element, E> {
+                Ok(Element::String(value))
+            }
+
+            fn visit_f64<E: de::Error>(self, value: f64) -> Result<Element, E> {
+                Ok(Element::Number(value as f32))
+            }
+
+            fn visit_i64<E: de::Error>(self, value: i64) -> Result<Element, E> {
+                Ok(Element::Number(value as f32))
+            }
+
+            fn visit_u64<E: de::Error>(self, value: u64) -> Result<Element, E> {
+                Ok(Element::Number(value as f32))
+            }
+        }
+
+        deserializer.deserialize_any(ElementVisitor)
+    }
+}
+
+/// Hand-written so that integers above 2^53 decode to `Int64` exactly.
+/// `serde(untagged)` would turn every integer into `Number(f64)`.
+impl<'de> Deserialize<'de> for FieldValue {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct FieldValueVisitor;
+
+        impl<'de> Visitor<'de> for FieldValueVisitor {
+            type Value = FieldValue;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string, number, or homogeneous array of strings or numbers")
+            }
+
+            fn visit_str<E: de::Error>(self, value: &str) -> Result<FieldValue, E> {
+                Ok(FieldValue::String(value.to_owned()))
+            }
+
+            fn visit_string<E: de::Error>(self, value: String) -> Result<FieldValue, E> {
+                Ok(FieldValue::String(value))
+            }
+
+            fn visit_f64<E: de::Error>(self, value: f64) -> Result<FieldValue, E> {
+                Ok(FieldValue::Number(value))
+            }
+
+            fn visit_i64<E: de::Error>(self, value: i64) -> Result<FieldValue, E> {
+                decode_integer(value as i128)
+            }
+
+            fn visit_u64<E: de::Error>(self, value: u64) -> Result<FieldValue, E> {
+                decode_integer(value as i128)
+            }
+
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<FieldValue, A::Error> {
+                // Grow only after each observed element, as the wire decoder does.
+                let mut numbers = Vec::new();
+                let mut strings = Vec::new();
+                let mut kind = None;
+                while let Some(element) = seq.next_element::<Element>()? {
+                    match element {
+                        Element::Number(value) => {
+                            if matches!(kind, Some(false)) {
+                                return Err(de::Error::custom("mixed field-value array"));
+                            }
+                            kind = Some(true);
+                            numbers.push(value);
+                        }
+                        Element::String(value) => {
+                            if matches!(kind, Some(true)) {
+                                return Err(de::Error::custom("mixed field-value array"));
+                            }
+                            kind = Some(false);
+                            strings.push(value);
+                        }
+                    }
+                }
+                Ok(match kind {
+                    Some(false) => FieldValue::StringList(strings),
+                    Some(true) | None => FieldValue::Vector(numbers),
+                })
+            }
+        }
+
+        deserializer.deserialize_any(FieldValueVisitor)
+    }
 }
 
 impl FieldValue {
@@ -68,7 +199,17 @@ impl FieldValue {
         match self {
             FieldValue::Vector(v) => v.is_empty(),
             FieldValue::StringList(v) => v.is_empty(),
-            FieldValue::String(_) | FieldValue::Number(_) => false,
+            FieldValue::String(_) | FieldValue::Number(_) | FieldValue::Int64(_) => false,
+        }
+    }
+
+    /// The f64 a number-field query compares with: `Number(x)` is `x`, `Int64(v)`
+    /// is `v as f64` (the same value an index write stores), anything else is `None`.
+    pub fn as_query_number(&self) -> Option<f64> {
+        match self {
+            FieldValue::Number(x) => Some(*x),
+            FieldValue::Int64(v) => Some(*v as f64),
+            _ => None,
         }
     }
 }
