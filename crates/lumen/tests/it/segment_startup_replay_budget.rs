@@ -244,6 +244,30 @@ fn multi_generation_segment_checkpoint_recovers_a_retained_aof_tail_before_ready
     assert_safe_aof_tail(&all_sequences, &tail_sequences, complete_base_sequence);
 }
 
+#[test]
+fn current_readers_do_not_sweep_a_staging_dir_of_a_live_writer() {
+    let root = tempfile::tempdir().expect("current reader root");
+    let generation = root.path().join("gen-1-rev-0");
+    std::fs::create_dir_all(&generation).expect("create fake generation");
+    std::fs::write(
+        generation.join("_generation.json"),
+        br#"{"checkpoint_sequence": 42}"#,
+    )
+    .expect("write fake generation manifest");
+    std::fs::write(root.path().join("CURRENT"), "generation:gen-1-rev-0\n")
+        .expect("write fake CURRENT");
+    let staging = root.path().join(".stage-gen-2-rev-0");
+    std::fs::create_dir_all(&staging).expect("create live writer staging dir");
+    std::fs::write(staging.join("x"), b"in flight").expect("write in-flight file");
+
+    assert_eq!(checkpoint_generation_name(root.path()), "gen-1-rev-0");
+    assert_eq!(checkpoint_sequence(root.path()), 42);
+    assert!(
+        staging.join("x").exists(),
+        "a CURRENT reader must not sweep a live writer's staging dir"
+    );
+}
+
 mod large_aof_codec_compatibility {
     //! # Facets
     //!
@@ -270,11 +294,11 @@ mod large_aof_codec_compatibility {
     use std::path::Path;
 
     use super::serve_budget_support::{
-        aof_sequences, assert_safe_aof_tail, LumenProcess, ServeMode,
+        aof_sequences, assert_safe_aof_tail, read_current_checkpoint_sequence, LumenProcess,
+        ServeMode,
     };
     use lumen::aof::AofReader;
     use lumen::log_entry::RaftLogEntry;
-    use lumen::segment_rdb::SegmentRdbStore;
     use lumen::types::{
         CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
     };
@@ -557,12 +581,12 @@ mod large_aof_codec_compatibility {
     }
 
     fn current_checkpoint_sequence(root: &Path) -> u64 {
-        SegmentRdbStore::new(root)
-            .expect("open segment root after compatibility replay")
-            .load_current_generation()
-            .expect("read compatibility CURRENT")
-            .map(|generation| generation.sequence)
-            .unwrap_or(0)
+        match std::fs::read_to_string(root.join("CURRENT")) {
+            Ok(text) if text.trim_start().starts_with("generation:") => {
+                read_current_checkpoint_sequence(root)
+            }
+            _ => 0,
+        }
     }
 
     /// A restart may compact a frame only after `CURRENT` covers that sequence.
