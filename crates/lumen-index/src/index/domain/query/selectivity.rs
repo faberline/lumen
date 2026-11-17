@@ -76,12 +76,14 @@ pub(super) fn estimate_selectivity(coll: &Collection, node: &QueryNode) -> u64 {
                 // clause ordering cheap with no posting decode.
                 k.term_df(s)
             }
-            (Some(FieldIndex::Number(n)), FieldValue::Number(x)) => SortableF64::new(*x)
-                .ok()
-                // Phase 2h-3: df from the active source (segment count-prefix when
-                // sealed, else live posting length) — rarest-first ordering cheap.
-                .map(|key| n.value_df(key))
-                .unwrap_or(0),
+            (Some(FieldIndex::Number(n)), v @ (FieldValue::Number(_) | FieldValue::Int64(_))) => {
+                SortableF64::new(v.as_query_number().unwrap_or_default())
+                    .ok()
+                    // Phase 2h-3: df from the active source (segment count-prefix when
+                    // sealed, else live posting length) — rarest-first ordering cheap.
+                    .map(|key| n.value_df(key))
+                    .unwrap_or(0)
+            }
             (Some(FieldIndex::Set(s)), FieldValue::String(el)) => {
                 // Phase 2h-2: df from the active source (segment count-prefix when
                 // sealed, else live posting length) — rarest-first ordering cheap.
