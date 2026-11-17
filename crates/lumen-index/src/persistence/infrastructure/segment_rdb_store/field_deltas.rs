@@ -323,6 +323,9 @@ pub(super) fn write_field_deltas(
                 crate::shared_kernel::types::schema::FieldType::Boolean => {
                     return Err(anyhow!("field type `boolean` is not indexed yet"));
                 }
+                crate::shared_kernel::types::schema::FieldType::Date => {
+                    return Err(anyhow!("field type `date` is not indexed yet"));
+                }
             }
         }
         encode_sparse_local_rows(&root.join(&rows_path), &ids)?;
