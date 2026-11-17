@@ -28,6 +28,7 @@ pub mod generations;
 pub mod load;
 pub mod manifest_io;
 pub mod merge_selection;
+pub mod migrate_plan;
 pub mod open;
 #[cfg(feature = "raft-wal")]
 pub mod raft_archive;

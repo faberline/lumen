@@ -20,6 +20,8 @@ mod auth_delegator;
 
 mod conditions;
 
+mod google_credential;
+
 mod hpa;
 
 mod peer_identity;
