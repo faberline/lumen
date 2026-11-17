@@ -39,6 +39,21 @@ use serve_budget_support::{
 use std::time::{Duration, Instant};
 
 #[test]
+fn checkpoint_helpers_leave_live_staging_directory_in_place() {
+    let root = tempfile::tempdir().expect("checkpoint fixture root");
+    let store = lumen::segment_rdb::SegmentRdbStore::new(root.path()).expect("segment store");
+    let engine = std::sync::Arc::new(lumen::storage::Engine::new());
+    store.save(&engine, 42).expect("publish generation");
+    let published = store.load_current_generation().unwrap().unwrap();
+    let name = published.name.as_str().to_owned();
+    let staging = root.path().join(".gen-999.tmp");
+    std::fs::create_dir(&staging).unwrap();
+    assert_eq!(checkpoint_sequence(root.path()), published.sequence);
+    assert_eq!(checkpoint_generation_name(root.path()), name);
+    assert!(staging.is_dir(), "checkpoint reads must not sweep staging");
+}
+
+#[test]
 fn idle_segment_sigterm_drains_before_default_grace_and_cold_restarts() {
     let _load = crate::support::test_load::heavy_slot();
     let root = tempfile::tempdir().expect("segment graceful-shutdown root");
@@ -274,7 +289,6 @@ mod large_aof_codec_compatibility {
     };
     use lumen::aof::AofReader;
     use lumen::log_entry::RaftLogEntry;
-    use lumen::segment_rdb::SegmentRdbStore;
     use lumen::types::{
         CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
     };
@@ -557,11 +571,8 @@ mod large_aof_codec_compatibility {
     }
 
     fn current_checkpoint_sequence(root: &Path) -> u64 {
-        SegmentRdbStore::new(root)
-            .expect("open segment root after compatibility replay")
-            .load_current_generation()
-            .expect("read compatibility CURRENT")
-            .map(|generation| generation.sequence)
+        super::serve_budget_support::read_checkpoint_generation(root, "read compatibility CURRENT")
+            .map(|(_, sequence)| sequence)
             .unwrap_or(0)
     }
 

@@ -10,7 +10,9 @@ use crate::index::domain::collection::Collection;
 use crate::index::domain::fast_hash::FastHashMap;
 
 #[cfg(test)]
-static RETIREMENT_FAILSAFE_RETAINS: AtomicU64 = AtomicU64::new(0);
+thread_local! {
+    static RETIREMENT_FAILSAFE_RETAINS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
 
 /// One detached-generation reclaim token removes no more than this many
 /// external-id items. This is an item-count work bound only. It is not a hard
@@ -345,7 +347,7 @@ fn run_retire_task(task: RetireTask, sender: &mpsc::Sender<RetireTask>) {
 fn retain_retirement_task_failsafe(task: RetireTask, reason: &'static str) {
     tracing::error!(%reason, generation_id = task.generation.id, "collection retirement unavailable; retaining detached generation");
     #[cfg(test)]
-    RETIREMENT_FAILSAFE_RETAINS.fetch_add(1, Ordering::Relaxed);
+    RETIREMENT_FAILSAFE_RETAINS.with(|count| count.set(count.get() + 1));
     // The registry holds a strong reference. Dropping this failed token cannot
     // run the collection destructor on the apply thread.
     drop(task);

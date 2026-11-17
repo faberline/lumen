@@ -13,7 +13,6 @@ use std::time::{Duration, Instant};
 use lumen::aof::{AofReader, AofWriter};
 use lumen::log_entry::RaftLogEntry;
 use lumen::rdb::{LocalFsRdbStore, RdbStore};
-use lumen::segment_rdb::SegmentRdbStore;
 use lumen::storage::Engine;
 use lumen::types::{
     CreateCollectionRequest, FieldSpec, FieldType, FieldValue, IndexItem, IndexRequest,
@@ -591,24 +590,35 @@ pub fn aof_sequences(root: &Path) -> Vec<u64> {
     sequences
 }
 
+// Read the pointer without opening the store: opening it sweeps staging directories.
+pub fn read_checkpoint_generation(root: &Path, read_error: &str) -> Option<(String, u64)> {
+    let pointer = std::fs::read_to_string(root.join("CURRENT")).expect(read_error);
+    if pointer == "empty\n" {
+        return None;
+    }
+    let name = pointer
+        .strip_prefix("generation:")
+        .and_then(|value| value.strip_suffix('\n'))
+        .expect("invalid segment CURRENT");
+    let (sequence, revision) = name
+        .strip_prefix("gen-")
+        .and_then(|value| value.split_once("-rev-"))
+        .expect("invalid segment generation name");
+    let sequence = sequence.parse().expect("invalid checkpoint sequence");
+    let _: u64 = revision.parse().expect("invalid checkpoint revision");
+    Some((name.to_owned(), sequence))
+}
+
 pub fn checkpoint_sequence(root: &Path) -> u64 {
-    SegmentRdbStore::new(root)
-        .expect("open segment checkpoint root")
-        .load_current_generation()
-        .expect("read segment CURRENT")
+    read_checkpoint_generation(root, "read segment CURRENT")
         .expect("replay checkpoint must publish CURRENT")
-        .sequence
+        .1
 }
 
 pub fn checkpoint_generation_name(root: &Path) -> String {
-    SegmentRdbStore::new(root)
-        .expect("open segment checkpoint root")
-        .load_current_generation()
-        .expect("read segment CURRENT")
+    read_checkpoint_generation(root, "read segment CURRENT")
         .expect("replay checkpoint must publish CURRENT")
-        .name
-        .as_str()
-        .to_owned()
+        .0
 }
 
 pub fn checkpoint_generation_names(root: &Path) -> Vec<String> {
