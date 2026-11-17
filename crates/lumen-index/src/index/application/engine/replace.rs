@@ -164,6 +164,9 @@ impl Engine {
             (FieldIndex::Number(n), FieldValue::Number(x)) => {
                 SortableF64::new(*x).is_ok_and(|key| n.number_at(id) == Some(key))
             }
+            (FieldIndex::Number(n), FieldValue::Int64(v)) => {
+                SortableF64::new(*v as f64).is_ok_and(|key| n.number_at(id) == Some(key))
+            }
             (FieldIndex::Set(s), FieldValue::StringList(elems)) => {
                 let want: BTreeSet<String> = elems.iter().cloned().collect();
                 s.set_members(id) == Some(want)
