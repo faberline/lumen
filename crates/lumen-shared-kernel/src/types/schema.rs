@@ -87,6 +87,9 @@ pub enum FieldType {
     /// true/false value, exact match only. Its index is not built yet: a schema that
     /// declares a `boolean` field is refused at index build (see #394).
     Boolean,
+    /// Calendar date, exact, range and sort. Its index is not built yet: a schema that
+    /// declares a `date` field is refused at index build (see #411).
+    Date,
 }
 
 /// Operations a field type can truthfully expose to clients. This is shared by
@@ -105,7 +108,7 @@ pub struct FieldCapabilities {
 }
 
 impl FieldType {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Text,
         Self::Keyword,
         Self::Number,
@@ -114,6 +117,7 @@ impl FieldType {
         Self::Vector,
         Self::Hash,
         Self::Boolean,
+        Self::Date,
     ];
 
     pub const fn capabilities(self) -> FieldCapabilities {
@@ -194,6 +198,16 @@ impl FieldType {
                 prefix: false,
                 range: false,
                 sort: false,
+                set_membership: false,
+                vector_search: false,
+                hamming: false,
+            },
+            Self::Date => FieldCapabilities {
+                bm25: false,
+                exact: true,
+                prefix: false,
+                range: true,
+                sort: true,
                 set_membership: false,
                 vector_search: false,
                 hamming: false,
