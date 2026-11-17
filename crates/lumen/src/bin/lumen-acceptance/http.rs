@@ -76,6 +76,21 @@ impl HttpApi {
         Ok(())
     }
 
+    /// GET `path` and return the body as text. Fails unless the status is 200.
+    pub(super) fn text(&self, path: &str) -> Result<String> {
+        let req = self.client.get(format!("{}{}", self.base, path));
+        let (status, text) = self.rt.block_on(async {
+            let resp = req.send().await?;
+            let status = resp.status().as_u16();
+            let text = resp.text().await?;
+            Ok::<_, anyhow::Error>((status, text))
+        })?;
+        if status != 200 {
+            bail!("GET {path} returned {status}");
+        }
+        Ok(text)
+    }
+
     /// Like `call`, but fails unless the status is one of `want`. Returns the body.
     pub(super) fn expect(
         &self,
