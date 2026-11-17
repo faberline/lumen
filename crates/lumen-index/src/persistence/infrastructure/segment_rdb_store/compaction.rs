@@ -63,7 +63,7 @@ pub(in crate::persistence) fn write_compacted_field(
         .get(field)
         .ok_or_else(|| anyhow!("compacted field is absent from schema: {field}"))?;
     if !matches!(
-        spec.field_type,
+        spec.storage_type(),
         FieldType::Keyword
             | FieldType::Number
             | FieldType::Set
@@ -131,7 +131,7 @@ pub(in crate::persistence) fn write_compacted_field(
         (segment_rel, rows_rel, SegmentKind::Delta, last.ordinal)
     };
     let segment_path = confined(root, &segment_rel)?;
-    match spec.field_type {
+    match spec.storage_type() {
         FieldType::Text => {
             stream::text_projection::write_text_stream(&segment_path, sequence, &view)?
         }
