@@ -7,6 +7,7 @@
 pub mod analysis;
 pub mod capability_report;
 pub mod collection;
+pub mod decimal;
 pub mod engine_state;
 pub mod fast_hash;
 pub mod field_coverage;
