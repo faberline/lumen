@@ -347,3 +347,21 @@ fn decode_accepts_legacy_json_payload() {
     assert!(matches!(back.entry, RaftLogEntry::CreateCollection { .. }));
     assert_eq!(back.version, WAL_FORMAT_VERSION);
 }
+
+#[test]
+fn wal_encode_of_int64_returns_the_explicit_error() {
+    let rec = WalRecord::new(RaftLogEntry::Index {
+        collection_id: "docs".into(),
+        req: IndexRequest {
+            request_id: None,
+            items: vec![IndexItem {
+                external_id: "doc-1".into(),
+                field: "count".into(),
+                value: FieldValue::Int64(1),
+                version: None,
+            }],
+        },
+    });
+    let err = rec.encode().expect_err("int64 has no WAL tag yet");
+    assert!(err.to_string().contains("int64"), "unexpected error: {err}");
+}
