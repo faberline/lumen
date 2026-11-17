@@ -54,6 +54,7 @@ pub(in crate::index) fn value_kind(v: &FieldValue) -> &'static str {
     match v {
         FieldValue::String(_) => "string",
         FieldValue::Number(_) => "number",
+        FieldValue::Int64(_) => "int64",
         FieldValue::Vector(_) => "f32[]",
         FieldValue::StringList(_) => "string[]",
     }
@@ -79,6 +80,11 @@ pub(in crate::index) fn validate_value(
         (FieldIndex::Keyword(_), FieldValue::String(_)) => Ok(()),
         (FieldIndex::Number(_), FieldValue::Number(x)) => {
             SortableF64::for_value(*x).map_err(|e| StorageError::InvalidNumber(e.to_string()))?;
+            Ok(())
+        }
+        (FieldIndex::Number(_), FieldValue::Int64(v)) => {
+            SortableF64::for_value(*v as f64)
+                .map_err(|e| StorageError::InvalidNumber(e.to_string()))?;
             Ok(())
         }
         (FieldIndex::Set(_), FieldValue::StringList(_)) => Ok(()),
@@ -108,5 +114,24 @@ pub(in crate::index) fn validate_value(
             got: value_kind(v),
         }
         .into()),
+    }
+}
+
+#[cfg(test)]
+mod int64_tests {
+    use super::*;
+    use crate::index::domain::keyword_index::KeywordIndex;
+    use crate::index::domain::number_index::NumberIndex;
+
+    #[test]
+    fn number_index_accepts_int64_as_f64() {
+        let fi = FieldIndex::Number(NumberIndex::default());
+        assert!(validate_value(&fi, &FieldValue::Int64(7), "count").is_ok());
+    }
+
+    #[test]
+    fn keyword_index_refuses_int64() {
+        let fi = FieldIndex::Keyword(KeywordIndex::default());
+        assert!(validate_value(&fi, &FieldValue::Int64(7), "tag").is_err());
     }
 }
