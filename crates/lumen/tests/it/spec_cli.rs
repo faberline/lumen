@@ -310,7 +310,7 @@ fn field_catalog_matches_the_real_enums() {
     // Exactly the FieldType enum variants (lowercase wire form), in order.
     assert_eq!(
         types,
-        ["text", "keyword", "number", "int64", "set", "vector", "hash"],
+        ["text", "keyword", "number", "int64", "set", "vector", "hash", "boolean"],
         "field types track the FieldType enum"
     );
 
@@ -1216,6 +1216,7 @@ fn dx_field_catalog_matches_runtime_field_capabilities() {
             FieldType::Set => "set",
             FieldType::Vector => "vector",
             FieldType::Hash => "hash",
+            FieldType::Boolean => "boolean",
         };
         let entry = fields
             .iter()
@@ -1858,8 +1859,8 @@ fn openapi_field_type_schema_names_the_float64_alias() {
     );
     assert_eq!(
         field_type["enum"],
-        json!(["text", "keyword", "number", "int64", "set", "vector", "hash"]),
-        "the enum keeps the seven type names"
+        json!(["text", "keyword", "number", "int64", "set", "vector", "hash", "boolean"]),
+        "the enum keeps the eight type names"
     );
 }
 
@@ -1881,4 +1882,26 @@ fn dx_field_catalog_lists_int64_exact_range_and_sort() {
     assert_eq!(operations["sort"], true);
     assert_eq!(operations["bm25"], false);
     assert_eq!(operations["hamming"], false);
+}
+
+#[test]
+fn dx_field_catalog_lists_boolean_exact_only() {
+    let catalog = dx::field_catalog();
+    let fields = catalog["field_types"]
+        .as_array()
+        .expect("field catalogue is an array");
+    let boolean = fields
+        .iter()
+        .find(|entry| entry["type"] == "boolean")
+        .expect("catalogue omits boolean");
+    let operations = &boolean["operations"];
+    assert_eq!(operations["exact"], true);
+    assert_eq!(operations["range"], false);
+    assert_eq!(operations["sort"], false);
+    assert_eq!(operations["bm25"], false);
+    assert_eq!(operations["prefix"], false);
+    assert_eq!(operations["set_membership"], false);
+    assert_eq!(operations["vector_search"], false);
+    assert_eq!(operations["hamming"], false);
+    assert_eq!(boolean["queries"], json!(["term"]));
 }

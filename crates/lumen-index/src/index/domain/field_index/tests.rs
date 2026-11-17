@@ -146,3 +146,64 @@ fn int64_spec_is_refused_with_not_indexed_yet() {
         "error should say not indexed yet: {err}"
     );
 }
+
+#[test]
+fn boolean_schema_is_accepted_by_validate_schema() {
+    use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, FieldType};
+    let mut schema = BTreeMap::new();
+    schema.insert(
+        "flag".to_string(),
+        FieldSpec {
+            field_type: FieldType::Boolean,
+            analyzer: None,
+            multi: None,
+            dim: None,
+            metric: None,
+            backend: None,
+            quantize: None,
+            facetable: false,
+        },
+    );
+    crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect("a boolean field is a valid schema entry");
+    schema.insert(
+        "bad".to_string(),
+        FieldSpec {
+            field_type: FieldType::Boolean,
+            analyzer: Some(Analyzer::WhitespaceLower),
+            multi: None,
+            dim: None,
+            metric: None,
+            backend: None,
+            quantize: None,
+            facetable: false,
+        },
+    );
+    let err = crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect_err("a boolean field with an analyzer is refused");
+    assert!(
+        err.to_string().contains("does not accept an analyzer"),
+        "error should name the analyzer refusal: {err}"
+    );
+}
+
+#[test]
+fn boolean_spec_is_refused_with_not_indexed_yet() {
+    let spec = crate::shared_kernel::types::schema::FieldSpec {
+        field_type: crate::shared_kernel::types::schema::FieldType::Boolean,
+        analyzer: None,
+        multi: None,
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let Err(err) = super::FieldIndex::from_spec(&spec) else {
+        panic!("boolean must be refused until #394");
+    };
+    assert!(
+        err.to_string().contains("not indexed yet"),
+        "error should say not indexed yet: {err}"
+    );
+}
