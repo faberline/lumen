@@ -223,8 +223,8 @@ where
                         visit(posting.as_ref())?;
                     }
                 }
-                (FieldIndex::Number(n), FieldValue::Number(x)) => {
-                    let key = SortableF64::new(*x)?;
+                (FieldIndex::Number(n), v @ (FieldValue::Number(_) | FieldValue::Int64(_))) => {
+                    let key = SortableF64::new(v.as_query_number().unwrap_or_default())?;
                     if let Some(posting) = n.value_postings(key) {
                         visit(posting.as_ref())?;
                     }
@@ -249,8 +249,8 @@ where
                             visit(posting.as_ref())?;
                         }
                     }
-                    (FieldIndex::Number(n), FieldValue::Number(x)) => {
-                        let key = SortableF64::new(*x)?;
+                    (FieldIndex::Number(n), v @ (FieldValue::Number(_) | FieldValue::Int64(_))) => {
+                        let key = SortableF64::new(v.as_query_number().unwrap_or_default())?;
                         if let Some(posting) = n.value_postings(key) {
                             visit(posting.as_ref())?;
                         }

@@ -7,7 +7,7 @@ use std::fmt;
 use serde::de::{self, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
-use crate::shared_kernel::types::document::FieldValue;
+use crate::shared_kernel::types::document::{decode_integer, FieldValue};
 
 pub struct GrowVec<T>(pub Vec<T>);
 
@@ -116,11 +116,11 @@ impl<'de> Deserialize<'de> for WireFieldValue {
             }
 
             fn visit_i64<E: de::Error>(self, value: i64) -> std::result::Result<Self::Value, E> {
-                self.visit_f64(value as f64)
+                decode_integer(value as i128).map(WireFieldValue)
             }
 
             fn visit_u64<E: de::Error>(self, value: u64) -> std::result::Result<Self::Value, E> {
-                self.visit_f64(value as f64)
+                decode_integer(value as i128).map(WireFieldValue)
             }
 
             fn visit_seq<A: SeqAccess<'de>>(
