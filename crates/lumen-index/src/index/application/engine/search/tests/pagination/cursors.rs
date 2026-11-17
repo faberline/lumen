@@ -55,6 +55,8 @@ fn sorted_keyset_cursor_is_v2_and_filtered_walks_match() {
         }]),
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     };
     let first = e.search("users", base.clone()).unwrap();
     // The first page of a sorted query hands out a v2 keyset cursor.
@@ -111,6 +113,8 @@ fn score_keyset_pagination_matches_full_ranking() {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     };
     let mut oracle_req = base.clone();
     oracle_req.limit = 1000;
@@ -162,6 +166,8 @@ fn legacy_offset_cursor_still_pages() {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     };
     let resp = e.search("users", req).unwrap();
     assert_eq!(resp.hits.len(), 5);
@@ -210,6 +216,8 @@ fn deep_pagination_depth_invariance() {
         }]),
         track_total: false,
         collapse: None,
+        scoring: None,
+        filter: None,
     };
 
     // Page 1, then jump a keyset cursor to depth ~50_000 and time a page.
