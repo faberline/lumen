@@ -37,7 +37,7 @@ pub(super) fn prepare_live_delta_readers(
                 .get(field)
                 .ok_or_else(|| anyhow!("captured delta field is absent from schema"))?;
             if matches!(
-                spec.field_type,
+                spec.storage_type(),
                 crate::shared_kernel::types::schema::FieldType::Vector
             ) && spec.vector_spec()?.is_some_and(|vector| {
                 vector.backend != crate::shared_kernel::types::schema::VectorBackend::FlatCpu
@@ -148,7 +148,7 @@ pub(super) fn read_delta_values(
     }
     (0..reader.n_docs())
         .map(|row| {
-            Ok(match spec.field_type {
+            Ok(match spec.storage_type() {
                 FieldType::Keyword => reader.keyword_at(row).map(CheckpointValue::Keyword),
                 FieldType::Number => reader.number_at(row).map(CheckpointValue::Number),
                 FieldType::Set => reader.set_at(row).map(CheckpointValue::Set),
@@ -214,7 +214,7 @@ pub(super) fn write_field_deltas(
         });
         if staged_scalar
             && matches!(
-                spec.field_type,
+                spec.storage_type(),
                 crate::shared_kernel::types::schema::FieldType::Keyword
                     | crate::shared_kernel::types::schema::FieldType::Number
                     | crate::shared_kernel::types::schema::FieldType::Set
@@ -223,11 +223,11 @@ pub(super) fn write_field_deltas(
             scalar_projection::write_checkpoint_rows(
                 &root.join(&segment_path),
                 sequence,
-                spec.field_type,
+                spec.storage_type(),
                 rows,
             )?;
         } else {
-            match spec.field_type {
+            match spec.storage_type() {
                 crate::shared_kernel::types::schema::FieldType::Keyword => {
                     let values: Vec<_> = rows
                         .iter()
