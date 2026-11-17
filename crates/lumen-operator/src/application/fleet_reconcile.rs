@@ -25,7 +25,7 @@ mod tests;
 
 /// Leader-election Lease for the fleet loop, independent of the main
 /// controller's so each can fail over on its own.
-const FLEET_LEASE_NAME: &str = "lumen-fleet";
+pub(crate) const FLEET_LEASE_NAME: &str = "lumen-fleet";
 
 /// How often the loop wakes to check leadership and the repair schedule.
 /// Each wake does no cluster read unless work is due.
