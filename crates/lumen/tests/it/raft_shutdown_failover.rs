@@ -104,6 +104,8 @@ fn keyword_total(engine: &Engine) -> u64 {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("search acknowledged Raft document")

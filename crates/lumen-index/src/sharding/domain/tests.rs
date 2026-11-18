@@ -124,6 +124,8 @@ fn snapshot_reshard_batches_emit_bounded_restorable_partials() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()
@@ -256,6 +258,8 @@ fn snapshot_reshard_batches_splits_oversized_bucket_delta_by_bytes() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()
@@ -268,7 +272,7 @@ fn snapshot_reshard_batches_splits_oversized_bucket_delta_by_bytes() {
     );
 }
 
-fn field(field_type: FieldType) -> FieldSpec {
+pub(crate) fn field(field_type: FieldType) -> FieldSpec {
     FieldSpec {
         field_type,
         analyzer: None,
@@ -281,7 +285,7 @@ fn field(field_type: FieldType) -> FieldSpec {
     }
 }
 
-fn item(external_id: &str, field: &str, value: FieldValue) -> IndexItem {
+pub(crate) fn item(external_id: &str, field: &str, value: FieldValue) -> IndexItem {
     IndexItem {
         external_id: external_id.into(),
         field: field.into(),

@@ -298,6 +298,8 @@ fn stage1_capture_barrier_engine_term_ids(
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("capture barrier engine term query");

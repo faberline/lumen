@@ -85,6 +85,8 @@ fn run(e: &Engine, query: QueryNode, sort: Option<Vec<SortSpec>>) -> SearchRespo
             sort,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()
@@ -329,6 +331,8 @@ fn term_int64_on_keyword_field_still_errors() {
             sort: None,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     );
     assert!(
