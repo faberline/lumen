@@ -89,6 +89,8 @@ fn frozen_checkpoint_replays_the_same_captured_payload_after_live_mutation() {
                     sort: None,
                     track_total: true,
                     collapse: None,
+                    scoring: None,
+                    filter: None,
                 },
             )
             .unwrap();
@@ -110,6 +112,8 @@ fn frozen_checkpoint_replays_the_same_captured_payload_after_live_mutation() {
                     sort: None,
                     track_total: true,
                     collapse: None,
+                    scoring: None,
+                    filter: None,
                 },
             )
             .unwrap();
@@ -129,6 +133,8 @@ fn frozen_checkpoint_replays_the_same_captured_payload_after_live_mutation() {
                         sort: None,
                         track_total: true,
                         collapse: None,
+                        scoring: None,
+                        filter: None,
                     },
                 )
                 .unwrap();

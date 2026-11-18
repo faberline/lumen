@@ -1130,7 +1130,7 @@ fn the_control_plane_paths_reach_for_no_other_credential() {
     );
 }
 
-/// #41: the exemption names exactly the six files that may hold a pod-level
+/// #41: the exemption names exactly the seven files that may hold a pod-level
 /// Secret reference, and each of them must exist, so a rename cannot leave a
 /// dead exemption behind.
 #[test]
@@ -1143,6 +1143,7 @@ fn secret_ref_exemption_covers_only_the_serving_env_files() {
         "crates/lumen-operator/src/application/render/serving_extra_env.rs",
         "crates/lumen-operator/src/application/render/tests.rs",
         "k8s/operator/crd.yaml",
+        "crates/lumen-operator/src/infrastructure/crd_manifest/testdata/lumen-crd-n-minus-1.yaml",
     ];
     for path in exempt {
         assert!(secret_ref_exempt(path), "{path} must be exempt");
@@ -1166,14 +1167,16 @@ fn secret_ref_exemption_covers_only_the_serving_env_files() {
 /// #41: the only files that may name a pod-level Secret reference. They declare
 /// or render user-chosen serving env as `valueFrom`; the operator never reads
 /// the Secret.
+/// The N-1 CRD snapshot is a frozen copy of the generated CRD (same text as k8s/operator/crd.yaml).
 fn secret_ref_exempt(rel: &str) -> bool {
-    const FILES: [&str; 6] = [
+    const FILES: [&str; 7] = [
         "crates/lumen-operator/src/domain/lumen_spec.rs",
         "crates/lumen-operator/src/domain/lumen_spec/validation.rs",
         "crates/lumen-operator/src/domain/lumen_spec/tests.rs",
         "crates/lumen-operator/src/application/render/serving_extra_env.rs",
         "crates/lumen-operator/src/application/render/tests.rs",
         "k8s/operator/crd.yaml",
+        "crates/lumen-operator/src/infrastructure/crd_manifest/testdata/lumen-crd-n-minus-1.yaml",
     ];
     FILES.contains(&rel)
 }

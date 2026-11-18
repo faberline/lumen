@@ -147,6 +147,8 @@ mod tests {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
