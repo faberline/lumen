@@ -40,6 +40,8 @@ fn range_query_on_number() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -99,6 +101,8 @@ fn range_query_on_keyword_byte_lexicographic() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()
@@ -156,6 +160,8 @@ fn range_query_bound_type_mismatch_rejected() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap_err();
@@ -183,6 +189,8 @@ fn range_query_bound_type_mismatch_rejected() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap_err();
@@ -220,6 +228,8 @@ fn range_bounds_are_exclusive_vs_inclusive() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap()
