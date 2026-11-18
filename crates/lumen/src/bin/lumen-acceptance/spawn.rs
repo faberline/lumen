@@ -49,6 +49,12 @@ impl LumenChild {
     }
 
     pub(super) fn start(&mut self) -> Result<()> {
+        self.start_within(READY_TIMEOUT)
+    }
+
+    /// Starts the child and waits up to `limit` for `/readyz` to answer 200. When the child
+    /// exits first, or never becomes ready, the child is gone and the call returns `Err`.
+    pub(super) fn start_within(&mut self, limit: Duration) -> Result<()> {
         if self.child.is_some() {
             bail!("lumen child already running");
         }
@@ -66,7 +72,7 @@ impl LumenChild {
             .with_context(|| format!("start {}", self.binary.display()))?;
 
         let api = HttpApi::new(&self.endpoint())?;
-        let deadline = Instant::now() + READY_TIMEOUT;
+        let deadline = Instant::now() + limit;
         loop {
             if let Some(status) = child.try_wait()? {
                 bail!("lumen child exited before it was ready: {status}");
@@ -78,7 +84,7 @@ impl LumenChild {
             if Instant::now() >= deadline {
                 let _ = child.kill();
                 let _ = child.wait();
-                bail!("lumen child not ready after 60s");
+                bail!("lumen child not ready after {limit:?}");
             }
             std::thread::sleep(Duration::from_millis(200));
         }
