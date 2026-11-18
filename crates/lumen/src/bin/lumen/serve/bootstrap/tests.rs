@@ -99,6 +99,8 @@ fn bootstrap_seed_file_restores_snapshot_before_catchup() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();

@@ -5,6 +5,8 @@ use crate::infrastructure::crd_manifest::{
     crd_yaml, fleet_crd_yaml, lumen_crd_yaml, FORBIDDEN_CEL_OPERATOR,
 };
 
+mod compat;
+
 /// The typed ServiceAccount list is a schema contract: each subject must be
 /// an object with both `namespace` and `name` required, so an incomplete
 /// subject is refused by the API server, not only by the Rust type.

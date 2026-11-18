@@ -65,6 +65,8 @@ fn matches_price(e: &Engine, price: f64) -> Vec<String> {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     };
     e.search("c", req)
         .unwrap()

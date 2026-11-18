@@ -74,6 +74,8 @@ fn eval_query_and_sums_child_scores_exactly() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -126,6 +128,8 @@ fn eval_query_or_sums_and_ranks_multi_match_first() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -167,6 +171,8 @@ fn eval_query_not_excludes_exactly_the_matched_set() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -203,6 +209,8 @@ fn validate_query_rejects_pathological_trees_but_allows_normal() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
     };
