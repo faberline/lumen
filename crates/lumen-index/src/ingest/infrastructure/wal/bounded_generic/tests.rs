@@ -196,10 +196,10 @@ fn generic_cbor_and_legacy_json_preserve_every_entry_shape_and_defaults() {
 
 #[test]
 fn generic_field_value_rejects_mixed_and_non_value_shapes_like_untagged_field_value() {
+    // A JSON boolean is a value now (`FieldValue::Bool`), so it is not here.
     for json in [
         br#"[1,"two"]"#.as_slice(),
         br#"null"#.as_slice(),
-        br#"true"#.as_slice(),
         br#"{}"#.as_slice(),
     ] {
         assert!(
@@ -290,4 +290,12 @@ fn wire_field_value_decodes_integers_exactly() {
     assert!(matches!(v.0, FieldValue::Int64(i64::MIN)));
     let v = serde_json::from_str::<WireFieldValue>("9223372036854775808").unwrap();
     assert!(matches!(v.0, FieldValue::Number(_)));
+}
+
+#[test]
+fn wire_field_value_decodes_a_json_bool() {
+    let v = serde_json::from_str::<WireFieldValue>("true").unwrap();
+    assert!(matches!(v.0, FieldValue::Bool(true)));
+    let v = serde_json::from_str::<WireFieldValue>("false").unwrap();
+    assert!(matches!(v.0, FieldValue::Bool(false)));
 }

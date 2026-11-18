@@ -95,7 +95,9 @@ impl<'de> Deserialize<'de> for WireFieldValue {
             type Value = WireFieldValue;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a string, number, or homogeneous array of strings or numbers")
+                formatter.write_str(
+                    "a string, number, boolean, or homogeneous array of strings or numbers",
+                )
             }
 
             fn visit_str<E: de::Error>(self, value: &str) -> std::result::Result<Self::Value, E> {
@@ -113,6 +115,10 @@ impl<'de> Deserialize<'de> for WireFieldValue {
 
             fn visit_f64<E: de::Error>(self, value: f64) -> std::result::Result<Self::Value, E> {
                 Ok(WireFieldValue(FieldValue::Number(value)))
+            }
+
+            fn visit_bool<E: de::Error>(self, value: bool) -> std::result::Result<Self::Value, E> {
+                Ok(WireFieldValue(FieldValue::Bool(value)))
             }
 
             fn visit_i64<E: de::Error>(self, value: i64) -> std::result::Result<Self::Value, E> {
