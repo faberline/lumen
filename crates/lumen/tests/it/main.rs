@@ -65,6 +65,7 @@ mod field_query_correctness_contract;
 mod generated_clients_crud_e2e;
 mod generated_hydration;
 mod gke_perf_evidence;
+mod gke_selection;
 mod hash_hamming;
 mod hnsw_ef_recall;
 mod hnsw_shutdown_cache;
