@@ -135,6 +135,8 @@ fn build_search_body(args: &QuerySearchArgs) -> Result<(String, serde_json::Valu
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     };
     let body = serde_json::to_value(&request).context("serialize SearchRequest")?;
     Ok((format!("/collections/{}/search", args.collection), body))

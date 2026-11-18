@@ -10,6 +10,7 @@ description = "lumen-operator — the Lumen and LumenFleet custom resources, the
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+futures.workspace = true
 k8s-openapi.workspace = true
 kube.workspace = true
 lumen-access.workspace = true

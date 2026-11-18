@@ -98,6 +98,8 @@ fn create_collection_supersedes_tombstone_with_fresh_empty_collection() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
