@@ -7,8 +7,8 @@ use service_k8s::{ConditionFact, ManagedService, ReadinessTarget, ReadyFacts};
 
 use crate::application::reconcile::auth_delegator::apply_auth_delegator_binding;
 use crate::application::reconcile::plan_verdicts::{
-    auth_delegation_error, check_peer_identity, peer_identity_error, AUTH_DELEGATION_CONTEXT_KEY,
-    PEER_IDENTITY_CONTEXT_KEY,
+    auth_delegation_error, capacity_error, check_peer_identity, peer_identity_error,
+    AUTH_DELEGATION_CONTEXT_KEY, PEER_IDENTITY_CONTEXT_KEY,
 };
 use crate::application::render;
 use crate::domain::lumen_spec::Lumen;
@@ -146,6 +146,9 @@ impl ManagedService for Lumen {
         // #2890 R4: same channel, same reason — the peer-identity verdict is a
         // Secret read, and `observe` does no I/O.
         observation.peer_identity = peer_identity_error(context);
+        // The capacity verdict rides the same channel. `reconcile_plan` still
+        // refuses an unresolvable profile with `Err`; this only projects it.
+        observation.capacity_error = capacity_error(context);
         observation.conditions()
     }
 
