@@ -78,7 +78,7 @@ fn find<'a>(objects: &'a [Value], kind: &str, name: &str) -> &'a Value {
 
 #[test]
 fn backup_cronjob_uses_owned_cloud_neutral_service_account() {
-    let objects = render::render(&lumen_with_backup());
+    let objects = render::render(&lumen_with_backup()).expect("render");
     let service_account = find(&objects, "ServiceAccount", "search-backup");
     let cron_job = find(&objects, "CronJob", "search-backup");
     let serving = find(&objects, "StatefulSet", "search");
@@ -125,7 +125,7 @@ fn backup_cronjob_uses_owned_cloud_neutral_service_account() {
 fn backup_service_account_is_stable_when_schedule_is_disabled() {
     let mut lumen = lumen_with_backup();
     lumen.spec.serving.backup = None;
-    let objects = render::render(&lumen);
+    let objects = render::render(&lumen).expect("render");
 
     find(&objects, "ServiceAccount", "search-backup");
     assert!(
@@ -225,13 +225,14 @@ fn rendered_network_policy_is_opt_in_and_never_exposes_the_raft_port() {
     );
     assert!(
         render::render(&lumen)
+            .expect("render")
             .iter()
             .all(|object| object["kind"] != "NetworkPolicy"),
         "no policy may be rendered while the field is false"
     );
 
     lumen.spec.network_policy = true;
-    let objects = render::render(&lumen);
+    let objects = render::render(&lumen).expect("render");
     let policy = find(&objects, "NetworkPolicy", "search");
     assert_eq!(policy["apiVersion"], "networking.k8s.io/v1");
     assert_eq!(policy["metadata"]["namespace"], "lumen-acceptance");
@@ -297,14 +298,15 @@ fn operator_cli_renders_requested_immutable_image_and_preserves_default() {
         String::from_utf8(output.stdout).expect("operator YAML is utf8")
     };
 
-    let default_yaml = render(&[]);
+    let default_yaml = render(&[]).expect("render");
     assert!(default_yaml.contains(&format!(
         "image: ghcr.io/faberline/lumen:{}",
         env!("CARGO_PKG_VERSION")
     )));
 
     let immutable = "asia-east1-docker.pkg.dev/axiom/lumen/lumen@sha256:0123456789abcdef";
-    let immutable_yaml = render(&["--namespace", "lumen-live", "--image", immutable]);
+    let immutable_yaml =
+        render(&["--namespace", "lumen-live", "--image", immutable]).expect("render");
     assert!(immutable_yaml.contains("namespace: lumen-live"));
     assert!(immutable_yaml.contains(&format!("image: {immutable}")));
     assert!(!immutable_yaml.contains(&format!(
@@ -918,7 +920,7 @@ fn each_control_plane_caller_mounts_its_own_audience_bound_token() {
 
     let mut lumen = lumen_with_backup();
     lumen.spec.auth = AuthMode::Required;
-    let objects = render::render(&lumen);
+    let objects = render::render(&lumen).expect("render");
     let cron_job = find(&objects, "CronJob", "search-backup");
     let backup_pod = &cron_job["spec"]["jobTemplate"]["spec"]["template"]["spec"];
 
@@ -992,7 +994,7 @@ fn the_backup_runner_is_given_a_path_and_only_when_auth_is_required() {
     let mut lumen = lumen_with_backup();
 
     lumen.spec.auth = AuthMode::Required;
-    let objects = render::render(&lumen);
+    let objects = render::render(&lumen).expect("render");
     let required = find(&objects, "CronJob", "search-backup").clone();
     let pod = &required["spec"]["jobTemplate"]["spec"]["template"]["spec"];
     let args: Vec<String> = pod["containers"][0]["args"]
@@ -1018,7 +1020,7 @@ fn the_backup_runner_is_given_a_path_and_only_when_auth_is_required() {
     }
 
     lumen.spec.auth = AuthMode::Off;
-    let objects = render::render(&lumen);
+    let objects = render::render(&lumen).expect("render");
     let open = find(&objects, "CronJob", "search-backup");
     let open_pod = &open["spec"]["jobTemplate"]["spec"]["template"]["spec"];
     let open_args: Vec<&str> = open_pod["containers"][0]["args"]

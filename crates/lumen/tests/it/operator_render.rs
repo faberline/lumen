@@ -45,7 +45,7 @@
 //!   and migration durability are covered by the dedicated reshard-durability gate).
 //! - `lumen-claim-k8s-single-member-persistence` — The Kubernetes instance renderer
 //!   gives a single-member service durable StatefulSet storage.
-//! - `lumen-long-running-stability-operator-render` — render(Lumen) emits the managed
+//! - `lumen-long-running-stability-operator-render` — render(Lumen).expect("render") emits the managed
 //!   serving Deployment/Service/HPA/PDB plus the Relay StatefulSet/Service/PDB when the
 //!   broker is managed.
 #![cfg(feature = "operator")]
@@ -194,7 +194,7 @@ fn env_names(container: &Value) -> Vec<String> {
 #[test]
 fn dev_renders_full_managed_set() {
     let l = lumen("search", dev_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
 
     // Serving objects, in the CR's namespace, named off the instance. The
     // serving fleet is a StatefulSet even at replicasPerShard:1 (#812). A
@@ -250,7 +250,7 @@ fn unset_service_account_name_renders_and_uses_operator_owned_sa() {
     // renders and owns a workload ServiceAccount named after the instance,
     // and the StatefulSet pod spec references it (#2497).
     let l = lumen("search", dev_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
 
     assert!(
         has(&objs, "ServiceAccount", "search"),
@@ -273,7 +273,7 @@ fn set_service_account_name_omits_workload_sa_and_uses_external_name() {
     let mut spec = dev_spec();
     spec.service_account_name = Some("external-sa".into());
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
 
     // The backup ServiceAccount is a separate, still operator-owned concern
     // and is unaffected by this field — assert specifically on the workload
@@ -304,7 +304,7 @@ fn set_service_account_name_never_emits_any_serviceaccount_named_the_instance() 
         let mut spec = spec_fn();
         spec.service_account_name = Some("external-sa".into());
         let l = lumen("search", spec);
-        let objs = render(&l);
+        let objs = render(&l).expect("render");
 
         assert!(
             !objs
@@ -349,7 +349,7 @@ fn auth_delegator_binding_follows_an_externally_managed_service_account() {
     let mut spec = dev_spec();
     spec.service_account_name = Some("external-sa".into());
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let binding = auth_delegator_binding(&l);
 
     assert_eq!(binding["subjects"][0]["name"], "external-sa");
@@ -450,7 +450,10 @@ fn the_auth_delegator_binding_is_never_one_of_the_namespaced_children() {
     for spec_fn in [dev_spec, prod_spec] {
         let l = lumen("search", spec_fn());
         assert!(
-            !render(&l).iter().any(|o| o["kind"] == "ClusterRoleBinding"),
+            !render(&l)
+                .expect("render")
+                .iter()
+                .any(|o| o["kind"] == "ClusterRoleBinding"),
             "the delegated-review grant is applied on its own path, not as a child"
         );
     }
@@ -459,7 +462,7 @@ fn the_auth_delegator_binding_is_never_one_of_the_namespaced_children() {
 #[test]
 fn statefulset_wires_serving_contract_single_member() {
     let l = lumen("search", dev_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let sts = serving(&objs, "search");
 
     // replicasPerShard is the apply-time floor; StatefulSet-native rollout knobs.
@@ -595,7 +598,7 @@ fn statefulset_wires_serving_contract_single_member() {
     // exact `raft-<name>-` prefix `service_k8s::resize::resize_instance` filters
     // on when detecting/patching live PVCs, and the "raft" template name +
     // `resources.requests.storage` field below are what it reads back to
-    // compare against `spec.serving.raftStorage`. render() itself is
+    // compare against `spec.serving.raftStorage`. render().expect("render") itself is
     // unchanged by #809 — resize tooling only reads what's already rendered
     // here.
     let vcts = sts["spec"]["volumeClaimTemplates"].as_array().unwrap();
@@ -607,7 +610,7 @@ fn statefulset_wires_serving_contract_single_member() {
 #[test]
 fn configmap_tracks_serving_spec() {
     let l = lumen("search", dev_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let cm = find(&objs, "ConfigMap", "search-config");
     // #issue-221: the container's SHARD_COUNT is core's literal, not a ConfigMap key.
     assert!(cm["data"]["SHARD_COUNT"].is_null());
@@ -628,7 +631,7 @@ fn multi_shard_single_replica_is_fixed_storage_topology_not_hpa() {
     spec.shard_count = 4;
     spec.replicas_per_shard = 1;
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
 
     // One StatefulSet per shard, each with one member.
     assert!(!has(&objs, "StatefulSet", "search"));
@@ -665,7 +668,7 @@ fn multi_shard_single_replica_is_fixed_storage_topology_not_hpa() {
 #[test]
 fn direct_hpa_is_never_rendered_for_single_replica_serving() {
     let l = lumen("search", dev_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     assert!(!has(&objs, "HorizontalPodAutoscaler", "search"));
 }
 
@@ -677,7 +680,7 @@ fn single_member_storage_pod_count_clamps_to_one() {
     assert_eq!(default_spec.storage_pod_count(), 1);
 
     let l = lumen("search", default_spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let sts = serving(&objs, "search");
     assert_eq!(sts["spec"]["replicas"], 1);
     assert!(!has(&objs, "HorizontalPodAutoscaler", "search"));
@@ -697,7 +700,7 @@ fn raft_ha_storage_pod_count_is_unaffected_by_single_member_clamp() {
 #[test]
 fn prod_wires_auth_and_observability() {
     let l = lumen("lumen", prod_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
 
     // auth=required without registry projection (retired phase 1).
     let dep = serving(&objs, "lumen");
@@ -789,7 +792,7 @@ fn no_retired_credential_registry_projections() {
 
     for spec_fn in [dev_spec, prod_spec] {
         let auth = spec_fn().auth;
-        let objs = render(&lumen("search", spec_fn()));
+        let objs = render(&lumen("search", spec_fn())).expect("render");
 
         for obj in &objs {
             let text = serde_json::to_string(obj).expect("rendered object serializes");
@@ -817,7 +820,7 @@ fn no_retired_credential_registry_projections() {
 #[test]
 fn prometheus_rule_covers_backup_failure_and_crash_looping() {
     let l = lumen("lumen", prod_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let rule = find(&objs, "PrometheusRule", "lumen");
     let rules = rule["spec"]["groups"][0]["rules"].as_array().unwrap();
     let alert_names: Vec<&str> = rules.iter().map(|r| r["alert"].as_str().unwrap()).collect();
@@ -891,7 +894,7 @@ fn prometheus_rule_covers_backup_failure_and_crash_looping() {
 #[test]
 fn prometheus_rule_covers_raft_reshard_pvc_and_auth_failure_modes() {
     let l = lumen("lumen", prod_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let rule = find(&objs, "PrometheusRule", "lumen");
     let rules = rule["spec"]["groups"][0]["rules"].as_array().unwrap();
 
@@ -943,7 +946,7 @@ fn prometheus_rule_covers_raft_reshard_pvc_and_auth_failure_modes() {
 #[test]
 fn prometheus_rule_covers_slow_queries() {
     let l = lumen("lumen", prod_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let rule = find(&objs, "PrometheusRule", "lumen");
     let rules = rule["spec"]["groups"][0]["rules"].as_array().unwrap();
 
@@ -971,7 +974,7 @@ fn prometheus_rule_covers_slow_queries() {
 #[test]
 fn prometheus_rule_covers_storage_degraded() {
     let l = lumen("lumen", prod_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let rule = find(&objs, "PrometheusRule", "lumen");
     let rules = rule["spec"]["groups"][0]["rules"].as_array().unwrap();
 
@@ -1167,7 +1170,7 @@ fn shard_map_assignments_are_exposed_to_serving_config() {
         assignments: vec![0, 1, 1, 0],
     };
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let cm = find(&objs, "ConfigMap", "search-config");
 
     assert_eq!(cm["data"]["SHARD_MAP_VERSION"], "7");
@@ -1196,7 +1199,7 @@ fn shard_map_assignments_are_exposed_to_serving_config() {
 #[test]
 fn relay_objects_are_not_rendered() {
     let l = lumen("search", dev_spec());
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
 
     // No managed Relay objects at all: Lumen owns HA via raft-runtime.
     assert!(!has(&objs, "StatefulSet", "search-relay"));
@@ -1215,7 +1218,7 @@ fn raft_ha_renders_serving_statefulset() {
     spec.replicas_per_shard = 3;
     spec.voter_count = 3;
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
 
     // The serving fleet is now a StatefulSet per shard + headless Service; no Deployment/HPA.
     assert!(
@@ -1256,7 +1259,7 @@ fn raft_ha_renders_serving_statefulset() {
     // The raft PVC shape is unchanged by #812 — it was already unconditional
     // in the raft-HA regime. Still unchanged by #809: `service_k8s::resize`
     // only reads this rendered `raft-<name>-<ordinal>` PVC shape, it never
-    // alters render()'s output.
+    // alters render().expect("render")'s output.
     let vcts = sts["spec"]["volumeClaimTemplates"].as_array().unwrap();
     assert_eq!(vcts.len(), 1);
     assert_eq!(vcts[0]["metadata"]["name"], "raft");
@@ -1393,7 +1396,7 @@ fn placement_names_a_node_pool_without_replacing_the_anti_affinity() {
             toleration_seconds: None,
         }],
     };
-    let objs = render(&lumen("search", spec));
+    let objs = render(&lumen("search", spec)).expect("render");
     let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
 
     assert_eq!(
@@ -1423,7 +1426,7 @@ fn placement_names_a_node_pool_without_replacing_the_anti_affinity() {
 /// A default CR renders same-shard anti-affinity, scoped to its own namespace.
 #[test]
 fn default_placement_renders_same_shard_anti_affinity() {
-    let objs = render(&lumen("search", prod_spec()));
+    let objs = render(&lumen("search", prod_spec())).expect("render");
     let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
     let rule =
         &pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0];
@@ -1451,7 +1454,8 @@ fn render_with_profile_sets_capacity_profile_node_selector_and_toleration() {
         lifecycle_state: "ready".to_string(),
     };
     let objs =
-        lumen::operator::render::render_with_profile(&lumen("search", prod_spec()), &profile);
+        lumen::operator::render::render_with_profile(&lumen("search", prod_spec()), &profile)
+            .expect("render");
     let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
     assert_eq!(
         pod["nodeSelector"]["lumen.axiom.dev/capacity-profile"],
@@ -1470,7 +1474,7 @@ fn three_namespaces_share_same_pool_selector_and_same_shard_anti_affinity() {
     for ns in ["alpha", "beta", "gamma"] {
         let mut l = lumen("search", prod_spec());
         l.metadata.namespace = Some(ns.to_string());
-        let objs = render(&l);
+        let objs = render(&l).expect("render");
         let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
         assert_eq!(
             pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
@@ -1547,7 +1551,7 @@ fn image_pull_secrets_reach_every_pod_that_pulls_the_image() {
         },
         admin_token_secret: None,
     });
-    let objs = render(&lumen("search", spec));
+    let objs = render(&lumen("search", spec)).expect("render");
     let sts = &serving(&objs, "search")["spec"]["template"]["spec"];
     assert_eq!(
         sts["imagePullSecrets"],
@@ -1565,7 +1569,7 @@ fn image_pull_secrets_reach_every_pod_that_pulls_the_image() {
 /// field existed renders the same StatefulSet as before.
 #[test]
 fn no_image_pull_secrets_renders_no_key() {
-    let objs = render(&lumen("search", prod_spec()));
+    let objs = render(&lumen("search", prod_spec())).expect("render");
     let sts = &serving(&objs, "search")["spec"]["template"]["spec"];
     assert!(sts.get("imagePullSecrets").is_none(), "{sts:#}");
 }
@@ -1632,7 +1636,7 @@ fn no_backup_cronjob_when_unset() {
     // default, via `ServingSpec::default()`) renders no CronJob at all.
     for spec in [dev_spec(), prod_spec()] {
         let l = lumen("search", spec);
-        let objs = render(&l);
+        let objs = render(&l).expect("render");
         assert!(
             !has(&objs, "CronJob", "search-backup"),
             "unexpected backup CronJob with no serving.backup policy: {:?}",
@@ -1656,7 +1660,7 @@ fn backup_cronjob_wires_schedule_and_destination() {
         admin_token_secret: None,
     });
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
 
     assert_eq!(
         objs.iter().filter(|o| o["kind"] == "CronJob").count(),
@@ -1709,7 +1713,7 @@ fn backup_cronjob_wires_retention_and_carries_no_credential_env() {
         admin_token_secret: None,
     });
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let cj = find(&objs, "CronJob", "search-backup");
     let c = &cj["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0];
 
@@ -1746,7 +1750,7 @@ fn service_account_annotations_pass_through_to_both_service_accounts() {
         "lumen-sa@project.iam.gserviceaccount.com".to_string(),
     );
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
 
     let sa = find(&objs, "ServiceAccount", "search");
     assert_eq!(
@@ -1769,7 +1773,7 @@ fn bootstrap_seed_policy_wires_serving_env() {
         max_bytes_per_sec: Some(1_048_576),
     });
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let sts = serving(&objs, "search");
     let env = sts["spec"]["template"]["spec"]["containers"][0]["env"]
         .as_array()
@@ -1800,7 +1804,7 @@ fn admission_spec_wires_serving_env() {
         max_keys: None,
     });
     let l = lumen("search", spec);
-    let objs = render(&l);
+    let objs = render(&l).expect("render");
     let sts = serving(&objs, "search");
     let env = sts["spec"]["template"]["spec"]["containers"][0]["env"]
         .as_array()
@@ -1832,7 +1836,7 @@ fn admission_spec_wires_serving_env() {
 fn admission_spec_absent_renders_no_admission_env() {
     for spec in [dev_spec(), prod_spec()] {
         let l = lumen("search", spec);
-        let objs = render(&l);
+        let objs = render(&l).expect("render");
         let sts = serving(&objs, "search");
         let names = env_names(&sts["spec"]["template"]["spec"]["containers"][0]);
         for absent in [
@@ -1864,7 +1868,7 @@ fn network_policy_off_prunes_the_policy_render_no_longer_emits() {
     spec.network_policy = true;
     let on = lumen("search", spec.clone());
     assert!(
-        has(&render(&on), "NetworkPolicy", "search"),
+        has(&render(&on).expect("render"), "NetworkPolicy", "search"),
         "networkPolicy=true must render the policy"
     );
     assert!(
@@ -1875,7 +1879,7 @@ fn network_policy_off_prunes_the_policy_render_no_longer_emits() {
     spec.network_policy = false;
     let off = lumen("search", spec);
     assert!(
-        !has(&render(&off), "NetworkPolicy", "search"),
+        !has(&render(&off).expect("render"), "NetworkPolicy", "search"),
         "networkPolicy=false must stop rendering the policy"
     );
     let policy_targets: Vec<PruneTarget> = prunes(&off)
@@ -1906,7 +1910,7 @@ fn pruned_network_policy_name_matches_the_rendered_one() {
     for name in ["search", "lumen", "a-much-longer-instance-name"] {
         let mut spec = prod_spec();
         spec.network_policy = true;
-        let rendered = render(&lumen(name, spec.clone()));
+        let rendered = render(&lumen(name, spec.clone())).expect("render");
         let policy = rendered
             .iter()
             .find(|o| o["kind"] == "NetworkPolicy")
@@ -1970,7 +1974,7 @@ fn env_value(container: &Value, name: &str) -> Option<String> {
 /// silently become part of what the container can read.
 #[test]
 fn peer_tls_secret_projects_exactly_its_three_keys_read_only() {
-    let objs = render(&lumen("search", replicated_spec(Some("search-peer-tls"))));
+    let objs = render(&lumen("search", replicated_spec(Some("search-peer-tls")))).expect("render");
     let pod = pod_spec(&objs);
 
     let volume = pod["volumes"]
@@ -2015,7 +2019,7 @@ fn peer_tls_secret_projects_exactly_its_three_keys_read_only() {
 /// offer TLS, so it travels with the paths and never alone.
 #[test]
 fn peer_tls_secret_sets_the_four_peer_mtls_env_vars() {
-    let objs = render(&lumen("search", replicated_spec(Some("search-peer-tls"))));
+    let objs = render(&lumen("search", replicated_spec(Some("search-peer-tls")))).expect("render");
     let pod = pod_spec(&objs);
     let container = &pod["containers"][0];
     let mount_path = container["volumeMounts"]
@@ -2051,7 +2055,7 @@ fn peer_tls_secret_sets_the_four_peer_mtls_env_vars() {
 /// "the field is ignored" would look the same.
 #[test]
 fn an_instance_without_peer_tls_secret_renders_no_peer_volume_or_env() {
-    let objs = render(&lumen("search", dev_spec()));
+    let objs = render(&lumen("search", dev_spec())).expect("render");
     let pod = pod_spec(&objs);
     let container = &pod["containers"][0];
 
@@ -2258,7 +2262,8 @@ fn serving_tls_secret_projects_exactly_its_three_keys_read_only() {
     let objs = render(&lumen(
         "search",
         serving_tls_spec(Some("search-serving-tls")),
-    ));
+    ))
+    .expect("render");
     let pod = pod_spec(&objs);
 
     let volume = pod["volumes"]
@@ -2305,7 +2310,8 @@ fn serving_tls_secret_sets_the_four_serving_tls_env_vars() {
     let objs = render(&lumen(
         "search",
         serving_tls_spec(Some("search-serving-tls")),
-    ));
+    ))
+    .expect("render");
     let pod = pod_spec(&objs);
     let container = &pod["containers"][0];
     let mount_path = container["volumeMounts"]
@@ -2343,7 +2349,7 @@ fn every_probe_speaks_the_scheme_the_client_port_speaks() {
         (serving_tls_spec(Some("search-serving-tls")), "HTTPS"),
         (serving_tls_spec(None), "HTTP"),
     ] {
-        let objs = render(&lumen("search", spec));
+        let objs = render(&lumen("search", spec)).expect("render");
         let container = &pod_spec(&objs)["containers"][0];
         for probe in ["readinessProbe", "livenessProbe", "startupProbe"] {
             assert_eq!(
@@ -2365,7 +2371,7 @@ fn every_probe_speaks_the_scheme_the_client_port_speaks() {
 /// identical.
 #[test]
 fn a_peer_identity_alone_renders_no_serving_tls_volume_or_env() {
-    let objs = render(&lumen("search", replicated_spec(Some("search-peer-tls"))));
+    let objs = render(&lumen("search", replicated_spec(Some("search-peer-tls")))).expect("render");
     let pod = pod_spec(&objs);
     let container = &pod["containers"][0];
 
@@ -2408,7 +2414,7 @@ fn serving_and_peer_identities_never_share_material() {
         serving_tls_secret: Some("search-serving-tls".into()),
         ..replicated_spec(Some("search-peer-tls"))
     };
-    let objs = render(&lumen("search", spec));
+    let objs = render(&lumen("search", spec)).expect("render");
     let pod = pod_spec(&objs);
     let container = &pod["containers"][0];
 
@@ -2442,7 +2448,8 @@ fn serving_tls_never_renders_a_public_address() {
     let objs = render(&lumen(
         "search",
         serving_tls_spec(Some("search-serving-tls")),
-    ));
+    ))
+    .expect("render");
 
     let service = find(&objs, "Service", "search");
     let service_type = service["spec"]["type"].as_str().unwrap_or("ClusterIP");
@@ -2477,7 +2484,8 @@ fn render_has_no_trust_anchor_publisher_or_writer_resources() {
     let objs = render(&lumen(
         "search",
         serving_tls_spec(Some("search-serving-tls")),
-    ));
+    ))
+    .expect("render");
     assert!(!objs.iter().any(|object| {
         let kind = object["kind"].as_str().unwrap_or_default();
         let name = object["metadata"]["name"].as_str().unwrap_or_default();
@@ -2701,7 +2709,7 @@ fn every_configmap_key_is_consumed_by_the_serving_container() {
     ];
     for (name, spec) in cases {
         let l = lumen(name, spec);
-        let objs = render(&l);
+        let objs = render(&l).expect("render");
         let cm = find(&objs, "ConfigMap", &format!("{name}-config"));
         let sts = serving(&objs, name);
         let c = &sts["spec"]["template"]["spec"]["containers"][0];
@@ -2735,7 +2743,7 @@ fn serving_container_env_names_are_unique() {
     routed.shard_count = 4;
     for spec in [dev_spec(), prod_spec(), routed] {
         let l = lumen("search", spec);
-        let objs = render(&l);
+        let objs = render(&l).expect("render");
         let sts = serving(&objs, "search");
         let c = &sts["spec"]["template"]["spec"]["containers"][0];
         let names = env_names(c);
