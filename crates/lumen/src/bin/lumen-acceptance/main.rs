@@ -5,6 +5,7 @@ mod checkpoint;
 mod cli;
 #[allow(dead_code)] // used by the performance phase of slice 7 (#264)
 mod dataset;
+mod fail_closed;
 mod http;
 mod lifecycle;
 #[allow(dead_code)] // used by the performance phase of slice 7 (#264)

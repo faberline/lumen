@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::checkpoint::CheckpointAndMerge;
 use crate::cli::RunArgs;
+use crate::fail_closed::FailClosed;
 use crate::lifecycle::CollectionLifecycle;
 use crate::report::{summary, write_report, Mode, PhaseResult, PhaseStatus, Report};
 use crate::restart::RestartPersistence;
@@ -134,7 +135,8 @@ impl Cleanup for NoCleanup {
 }
 
 /// The default phase names of a mode. A spawned child also gets `restart_persistence`,
-/// which needs the child to restart, and then `checkpoint_and_merge`, which reads the counters.
+/// which needs the child to restart, then `checkpoint_and_merge`, which reads the counters,
+/// and last `fail_closed`, which stops the child and damages its files.
 fn default_phase_names(mode: Mode, spawned: bool) -> Vec<&'static str> {
     match mode {
         Mode::Functional => {
@@ -147,6 +149,7 @@ fn default_phase_names(mode: Mode, spawned: bool) -> Vec<&'static str> {
             if spawned {
                 names.push("restart_persistence");
                 names.push("checkpoint_and_merge");
+                names.push("fail_closed");
             }
             names
         }
@@ -172,7 +175,7 @@ fn phase_list(
             .collect(),
     };
     if names.is_empty() {
-        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, checkpoint_and_merge, performance_thresholds");
+        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, checkpoint_and_merge, fail_closed, performance_thresholds");
     }
     names
         .iter()
@@ -196,8 +199,12 @@ fn phase_list(
                 }
                 None => bail!("phase `checkpoint_and_merge` needs --spawn"),
             },
+            "fail_closed" => match child {
+                Some(child) => Ok(Box::new(FailClosed::new(child.clone())) as Box<dyn Phase>),
+                None => bail!("phase `fail_closed` needs --spawn"),
+            },
             other => bail!(
-                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, checkpoint_and_merge, performance_thresholds"
+                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, checkpoint_and_merge, fail_closed, performance_thresholds"
             ),
         })
         .collect()
@@ -481,10 +488,11 @@ mod tests {
             ]
         );
         let with = default_phase_names(Mode::Functional, true);
-        assert_eq!(with.len(), 6);
+        assert_eq!(with.len(), 7);
         assert_eq!(&with[..4], without.as_slice());
         assert_eq!(with[4], "restart_persistence");
         assert_eq!(with[5], "checkpoint_and_merge");
+        assert_eq!(with[6], "fail_closed");
         assert_eq!(
             default_phase_names(Mode::Performance, false),
             ["endpoint_configured"]
@@ -507,6 +515,26 @@ mod tests {
             format!("{err:#}").contains("phase `restart_persistence` needs --spawn"),
             "{err:#}"
         );
+    }
+
+    #[test]
+    fn fail_closed_needs_spawn() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut run_args = args(dir.path());
+        run_args.phases = Some("fail_closed".into());
+        let err = phase_list(Mode::Functional, &run_args, None)
+            .err()
+            .expect("fail_closed without a child is an error");
+        assert!(format!("{err:#}").contains("needs --spawn"), "{err:#}");
+    }
+
+    #[test]
+    fn default_phases_end_with_fail_closed_when_spawned() {
+        assert_eq!(
+            default_phase_names(Mode::Functional, true).last(),
+            Some(&"fail_closed")
+        );
+        assert!(!default_phase_names(Mode::Functional, false).contains(&"fail_closed"));
     }
 
     #[test]
