@@ -6,7 +6,7 @@ use service_k8s::{ConditionFact, ReadyFacts};
 fn ready_facts(name: &str, count: i64) -> ReadyFacts {
     let mut ready = std::collections::HashMap::new();
     ready.insert(name.to_string(), count);
-    ReadyFacts { ready }
+    ReadyFacts::new(ready)
 }
 
 fn condition<'a>(facts: &'a [ConditionFact], type_: &str) -> &'a ConditionFact {

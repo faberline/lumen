@@ -55,6 +55,7 @@ fn single_replica() -> Lumen {
 
 fn serving_mounts(lumen: &Lumen) -> Vec<Value> {
     render(lumen)
+        .expect("render")
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
         .expect("rendered serving StatefulSet")["spec"]["template"]["spec"]["containers"][0]
@@ -92,6 +93,7 @@ fn embedded_data_is_an_exact_child_of_the_raft_pvc_mount() {
 
 fn serving_container(lumen: &Lumen) -> Value {
     render(lumen)
+        .expect("render")
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
         .expect("rendered serving StatefulSet")["spec"]["template"]["spec"]["containers"][0]
@@ -181,7 +183,7 @@ fn sentinel_secret_value_never_in_rendered_output() {
         }),
         ..Default::default()
     }];
-    let rendered = serde_json::to_string(&render(&lumen)).expect("rendered json");
+    let rendered = serde_json::to_string(&render(&lumen).expect("render")).expect("rendered json");
     assert!(rendered.contains("sentinel-secret"));
     assert!(!rendered.contains("SENTINEL-SECRET-VALUE-7731"));
 }
@@ -194,7 +196,7 @@ fn literal_env_value_is_rendered() {
         value: Some("SENTINEL-LITERAL-7731".into()),
         ..Default::default()
     }];
-    let rendered = serde_json::to_string(&render(&lumen)).expect("rendered json");
+    let rendered = serde_json::to_string(&render(&lumen).expect("render")).expect("rendered json");
     assert!(rendered.contains("SENTINEL-LITERAL-7731"));
 }
 
@@ -220,8 +222,8 @@ fn two_namespaces_render_independent_inputs() {
         }),
         ..Default::default()
     }];
-    let rendered_a = serde_json::to_string(&render(&a)).expect("rendered json");
-    let rendered_b = serde_json::to_string(&render(&b)).expect("rendered json");
+    let rendered_a = serde_json::to_string(&render(&a).expect("render")).expect("rendered json");
+    let rendered_b = serde_json::to_string(&render(&b).expect("render")).expect("rendered json");
     assert!(rendered_a.contains(r#""secretKeyRef":{"name":"secret-a","key":"k"}"#));
     assert!(!rendered_a.contains("secret-b"));
     assert!(rendered_b.contains(r#""secretKeyRef":{"name":"secret-b","key":"k"}"#));
@@ -355,6 +357,7 @@ fn restart_hash_ignores_tls_certificate_content_but_not_the_reference() {
 fn restart_hash_annotation_is_on_the_serving_pod_template() {
     let lumen = single_replica();
     let statefulset = render(&lumen)
+        .expect("render")
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
         .expect("rendered serving StatefulSet");

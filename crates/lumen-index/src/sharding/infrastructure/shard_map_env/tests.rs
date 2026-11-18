@@ -187,12 +187,7 @@ fn routed_pod_topology_matches_cluster_dims_math() {
         std::env::set_var("POD_NAME", "search-7");
     }
     let (_, shard) = routed_pod_topology(3).unwrap();
-    let dims = raft_runtime::ClusterDims {
-        shard_count: 3,
-        replicas_per_shard: 1,
-        voter_count: 1,
-        pod_name: "search-7".to_string(),
-    };
+    let dims = raft_runtime::ClusterDims::new(3, 1, 1, "search-7");
     assert_eq!(shard, dims.shard_index().unwrap());
     unsafe {
         std::env::remove_var("POD_NAME");

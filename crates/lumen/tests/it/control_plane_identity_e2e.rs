@@ -122,12 +122,7 @@ impl ReviewBackend for Cluster {
         // from token *bytes* to principal, so a rotated file is a different
         // answer here.
         let Some(subject) = claim(token, "sub") else {
-            return Ok(TokenReviewOutcome {
-                authenticated: false,
-                identity: ReviewedIdentity::default(),
-                audiences: Vec::new(),
-                error: Some("not a token".into()),
-            });
+            return Ok(TokenReviewOutcome::rejected("not a token"));
         };
         Ok(match self.subjects.get(&subject) {
             Some(username) => {
@@ -135,22 +130,15 @@ impl ReviewBackend for Cluster {
                     .lock()
                     .expect("authenticated")
                     .push(username.clone());
-                TokenReviewOutcome {
-                    authenticated: true,
-                    identity: ReviewedIdentity {
+                TokenReviewOutcome::authenticated(
+                    ReviewedIdentity {
                         username: username.clone(),
                         ..Default::default()
                     },
-                    audiences: audiences.to_vec(),
-                    error: None,
-                }
+                    audiences.to_vec(),
+                )
             }
-            None => TokenReviewOutcome {
-                authenticated: false,
-                identity: ReviewedIdentity::default(),
-                audiences: Vec::new(),
-                error: Some("unknown subject".into()),
-            },
+            None => TokenReviewOutcome::rejected("unknown subject"),
         })
     }
 
@@ -275,12 +263,12 @@ fn serving_fleet(cluster: Arc<Cluster>) -> TestServer {
     // five minutes late.
     let config = DelegatedAuthConfig::new(vec![AUDIENCE.to_string()])
         .expect("audience")
-        .with_cache_policy(CachePolicy {
-            allow_ttl: Duration::ZERO,
-            deny_ttl: Duration::ZERO,
-            stale_window: Duration::ZERO,
-            ..CachePolicy::default()
-        });
+        .with_cache_policy(
+            CachePolicy::default()
+                .with_allow_ttl(Duration::ZERO)
+                .with_deny_ttl(Duration::ZERO)
+                .with_stale_window(Duration::ZERO),
+        );
     let verifier = Arc::new(LumenVerifier::with_authenticator(
         SERVING_NAMESPACE,
         Arc::new(DelegatedAuthenticator::new(cluster, config)),

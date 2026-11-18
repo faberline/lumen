@@ -913,8 +913,11 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
             if deadline.remaining().is_zero() {
                 tracing::warn!("optional HNSW shutdown cache skipped after shutdown deadline");
             } else {
-                match tokio::time::timeout_at(deadline.expires_at, sink.save_shutdown_graph_cache())
-                    .await
+                match tokio::time::timeout_at(
+                    deadline.expires_at(),
+                    sink.save_shutdown_graph_cache(),
+                )
+                .await
                 {
                     Ok(Ok(0)) => tracing::debug!("no HNSW shutdown cache needed"),
                     Ok(Ok(fields)) => tracing::info!(fields, "HNSW shutdown cache saved"),
@@ -936,7 +939,7 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
             }
         }
         tracing::info!(grace_secs = grace.as_secs(), "draining");
-        match tokio::time::timeout_at(deadline.expires_at, &mut http_server).await {
+        match tokio::time::timeout_at(deadline.expires_at(), &mut http_server).await {
             Ok(Ok(())) => tracing::info!("http server drained; shutting down"),
             Ok(Err(error)) => tracing::warn!(%error, "http server task failed during drain"),
             Err(_) => {

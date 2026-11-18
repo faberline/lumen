@@ -1,6 +1,7 @@
 //! The serving StatefulSet, layered on the shared workload primitive.
 
 use serde_json::{json, Value};
+use service_k8s::render::stateful_instance::StatefulInstanceError;
 use service_k8s::render::{self, RenderCtx, ServiceStatefulSet, WorkloadVolumeClaim};
 
 use std::collections::BTreeMap;
@@ -27,7 +28,7 @@ pub(super) fn serving_statefulset(
     cx: &RenderCtx<'_>,
     headless: &str,
     profile: Option<&crate::domain::capacity::preflight::ResolvedProfile>,
-) -> Value {
+) -> Result<Value, StatefulInstanceError> {
     let s = &lumen.spec.serving;
     let sa_name = serving_service_account_name(lumen);
     let res = render::requested_resources(&s.cpu, &s.memory);
@@ -120,7 +121,7 @@ pub(super) fn serving_statefulset(
     }
     let serving_plan = ServiceStatefulSet {
         cx,
-        name: cx.name,
+        name: cx.name(),
         component: COMPONENT,
         image: lumen.spec.image.as_str(),
         image_pull_policy,
@@ -216,7 +217,7 @@ pub(super) fn serving_statefulset(
     };
     // Keep Kubernetes' legacy Service env injection from replacing the
     // ConfigMap-backed numeric `LUMEN_PORT` with a `tcp://...` value.
-    let mut sts = render::service_statefulset_with_service_links(serving_plan, false);
+    let mut sts = render::service_statefulset_with_service_links(serving_plan, false)?;
     if !lumen.spec.image_pull_secrets.is_empty() {
         sts["spec"]["template"]["spec"]["imagePullSecrets"] = json!(lumen.spec.image_pull_secrets);
     }
@@ -252,5 +253,5 @@ pub(super) fn serving_statefulset(
             });
         }
     }
-    sts
+    Ok(sts)
 }

@@ -89,17 +89,7 @@ impl LumenServer {
 }
 
 fn opts(lang: Lang) -> GenOptions {
-    GenOptions {
-        lang,
-        target: None,
-        spec_path: PathBuf::new(),
-        out_dir: PathBuf::new(),
-        client_name: "createLumenClient".to_string(),
-        http_client: HttpClient::Fetch,
-        emit_types: true,
-        emit_client: true,
-        emit_hooks: lang == Lang::Ts,
-    }
+    GenOptions::new(lang, "", "", "createLumenClient").with_http_client(HttpClient::Fetch)
 }
 
 fn unique_temp_dir(label: &str) -> PathBuf {

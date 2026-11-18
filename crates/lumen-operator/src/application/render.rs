@@ -33,6 +33,7 @@ use crate::application::render::monitoring::{prometheus_rule, service_monitor};
 use crate::application::render::serving_config::{serving_configmap, serving_network_policy};
 use crate::application::render::serving_statefulset::serving_statefulset;
 use crate::domain::lumen_spec::Lumen;
+use service_k8s::render::stateful_instance::StatefulInstanceError;
 
 const APP: &str = "lumen";
 
@@ -144,15 +145,7 @@ fn namespace(lumen: &Lumen) -> String {
 
 /// lumen's render identity for the shared [`service_k8s::render`] helpers.
 fn ctx<'a>(lumen: &Lumen, name: &'a str, ns: &'a str) -> RenderCtx<'a> {
-    RenderCtx {
-        app: APP,
-        manager: MANAGER,
-        api_version: API_VERSION,
-        kind: KIND,
-        name,
-        ns,
-        owner: owner_ref(lumen),
-    }
+    RenderCtx::new(APP, MANAGER, API_VERSION, KIND, name, ns).with_owner(owner_ref(lumen))
 }
 
 /// The owner reference that ties a child to its `Lumen` CR, enabling
@@ -203,7 +196,7 @@ pub(crate) fn hpa_labels(lumen: &Lumen) -> std::collections::BTreeMap<String, St
 /// of `replicasPerShard`. No topology renders a direct HPA: single-member
 /// scale-out would create uncoordinated copies, while raft-HA needs a
 /// membership-aware whole-layer transition before changing pod count.
-pub fn render(lumen: &Lumen) -> Vec<Value> {
+pub fn render(lumen: &Lumen) -> Result<Vec<Value>, StatefulInstanceError> {
     render_with_profile_opt(lumen, None)
 }
 
@@ -211,14 +204,14 @@ pub fn render(lumen: &Lumen) -> Vec<Value> {
 pub fn render_with_profile(
     lumen: &Lumen,
     profile: &crate::domain::capacity::preflight::ResolvedProfile,
-) -> Vec<Value> {
+) -> Result<Vec<Value>, StatefulInstanceError> {
     render_with_profile_opt(lumen, Some(profile))
 }
 
 fn render_with_profile_opt(
     lumen: &Lumen,
     profile: Option<&crate::domain::capacity::preflight::ResolvedProfile>,
-) -> Vec<Value> {
+) -> Result<Vec<Value>, StatefulInstanceError> {
     let name = instance(lumen);
     let ns = namespace(lumen);
     let cx = ctx(lumen, &name, &ns);
@@ -237,7 +230,7 @@ fn render_with_profile_opt(
     out.push(bsa);
     out.push(serving_configmap(lumen, &cx));
     out.extend([
-        serving_statefulset(lumen, &cx, &headless, profile),
+        serving_statefulset(lumen, &cx, &headless, profile)?,
         render::headless_service_with_ports(
             &cx,
             &headless,
@@ -261,7 +254,7 @@ fn render_with_profile_opt(
     if let Some(cj) = backup_cron_job(lumen, &cx) {
         out.push(cj);
     }
-    out
+    Ok(out)
 }
 
 /// Children a previous spec rendered that this one no longer wants (#2603).
@@ -277,14 +270,14 @@ pub fn prunes(lumen: &Lumen) -> Vec<PruneTarget> {
     if lumen.spec.network_policy {
         return Vec::new();
     }
-    vec![PruneTarget {
-        api_version: "networking.k8s.io/v1",
-        kind: "NetworkPolicy",
+    vec![PruneTarget::new(
+        "networking.k8s.io/v1",
+        "NetworkPolicy",
         // Resolved through the same `instance` helper `render` uses, so this is
         // the exact inverse of the branch that creates it rather than an
         // independent guess at the name.
-        name: instance(lumen),
-    }]
+        instance(lumen),
+    )]
 }
 
 /// The ServiceAccount the serving pods actually run as (#2497, #2876).

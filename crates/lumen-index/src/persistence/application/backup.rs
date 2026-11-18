@@ -115,7 +115,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn non_success_status_bails_with_body() {
+    async fn non_success_status_bails_without_the_body() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/admin/backup"))
@@ -133,7 +133,7 @@ mod tests {
             .await
             .expect_err("non-2xx must bail");
         assert!(err.to_string().contains("503"));
-        assert!(err.to_string().contains("engine not ready"));
+        assert!(!err.to_string().contains("engine not ready"));
     }
 
     #[tokio::test]

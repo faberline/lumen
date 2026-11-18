@@ -158,7 +158,7 @@ pub(super) fn serving_env(lumen: &Lumen) -> Vec<Value> {
 }
 
 pub(super) fn serving_configmap(lumen: &Lumen, cx: &RenderCtx<'_>) -> Value {
-    let name = format!("{}-config", cx.name);
+    let name = format!("{}-config", cx.name());
     let mut data = json!({
         "SHARD_MAP_VERSION": lumen.spec.shard_map.version.to_string(),
         "VIRTUAL_BUCKET_COUNT": lumen.spec.shard_map.virtual_bucket_count.to_string(),

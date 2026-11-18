@@ -11,7 +11,7 @@ pub(super) fn service_monitor(cx: &RenderCtx<'_>) -> Value {
     json!({
         "apiVersion": "monitoring.coreos.com/v1",
         "kind": "ServiceMonitor",
-        "metadata": cx.meta(cx.name, COMPONENT),
+        "metadata": cx.meta(cx.name(), COMPONENT),
         "spec": {
             "selector": { "matchLabels": cx.selector(COMPONENT) },
             "endpoints": [{ "port": "http", "path": "/metrics", "interval": "30s" }],
@@ -51,7 +51,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
     json!({
         "apiVersion": "monitoring.coreos.com/v1",
         "kind": "PrometheusRule",
-        "metadata": cx.meta(cx.name, COMPONENT),
+        "metadata": cx.meta(cx.name(), COMPONENT),
         "spec": {
             "groups": [{
                 "name": "lumen.slo",
@@ -60,7 +60,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                         "alert": "LumenNoReadyServingPods",
                         "expr": format!(
                             "kube_statefulset_status_replicas_ready{{statefulset=\"{}\", namespace=\"{}\"}} == 0",
-                            cx.name, cx.ns
+                            cx.name(), cx.ns()
                         ),
                         "for": "2m",
                         "labels": { "severity": "critical" },
@@ -73,7 +73,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                         "alert": "LumenBackupCronJobFailed",
                         "expr": format!(
                             "kube_job_status_failed{{namespace=\"{}\", job_name=~\"^{}-backup-.*\"}} >= 2",
-                            cx.ns, cx.name
+                            cx.ns(), cx.name()
                         ),
                         "for": "5m",
                         "labels": { "severity": "warning" },
@@ -86,7 +86,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                         "alert": "LumenPodCrashLooping",
                         "expr": format!(
                             "increase(kube_pod_container_status_restarts_total{{namespace=\"{}\", pod=~\"^{}-[0-9]+$\"}}[15m]) > 3",
-                            cx.ns, cx.name
+                            cx.ns(), cx.name()
                         ),
                         "for": "5m",
                         "labels": { "severity": "warning" },
@@ -99,7 +99,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                         "alert": "LumenRaftLeaderAbsent",
                         "expr": format!(
                             "max(lumen_raft_leader_known{{namespace=\"{}\"}}) by (shard) == 0",
-                            cx.ns
+                            cx.ns()
                         ),
                         "for": "2m",
                         "labels": { "severity": "critical" },
@@ -112,7 +112,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                         "alert": "LumenReshardWorkflowStalled",
                         "expr": format!(
                             "lumen_reshard_fence_active{{namespace=\"{}\"}} == 1 and (time() - lumen_reshard_fence_armed_unixtime{{namespace=\"{}\"}}) > 900",
-                            cx.ns, cx.ns
+                            cx.ns(), cx.ns()
                         ),
                         "for": "1m",
                         "labels": { "severity": "warning" },
@@ -125,7 +125,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                         "alert": "LumenPvcNearFull",
                         "expr": format!(
                             "kubelet_volume_stats_available_bytes{{namespace=\"{}\", persistentvolumeclaim=~\"^raft-{}-[0-9]+$\"}} / kubelet_volume_stats_capacity_bytes{{namespace=\"{}\", persistentvolumeclaim=~\"^raft-{}-[0-9]+$\"}} < 0.1",
-                            cx.ns, cx.name, cx.ns, cx.name
+                            cx.ns(), cx.name(), cx.ns(), cx.name()
                         ),
                         "for": "10m",
                         "labels": { "severity": "warning" },
@@ -138,7 +138,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                         "alert": "LumenStorageDegraded",
                         "expr": format!(
                             "max(lumen_storage_degraded{{namespace=\"{}\"}}) by (pod) == 1",
-                            cx.ns
+                            cx.ns()
                         ),
                         "for": "1m",
                         "labels": { "severity": "critical" },
@@ -151,7 +151,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                         "alert": "LumenSlowQueries",
                         "expr": format!(
                             "rate(lumen_slow_queries_total{{namespace=\"{}\"}}[5m]) > 0.1",
-                            cx.ns
+                            cx.ns()
                         ),
                         "for": "10m",
                         "labels": { "severity": "warning" },

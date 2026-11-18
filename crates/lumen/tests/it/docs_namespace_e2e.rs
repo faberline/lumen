@@ -81,21 +81,14 @@ impl ReviewBackend for AuthzOracle {
         audiences: &[String],
     ) -> Result<TokenReviewOutcome, ReviewError> {
         Ok(match self.tokens.get(token) {
-            Some(username) => TokenReviewOutcome {
-                authenticated: true,
-                identity: ReviewedIdentity {
+            Some(username) => TokenReviewOutcome::authenticated(
+                ReviewedIdentity {
                     username: (*username).to_string(),
                     ..Default::default()
                 },
-                audiences: audiences.to_vec(),
-                error: None,
-            },
-            None => TokenReviewOutcome {
-                authenticated: false,
-                identity: ReviewedIdentity::default(),
-                audiences: Vec::new(),
-                error: Some("unknown token".to_string()),
-            },
+                audiences.to_vec(),
+            ),
+            None => TokenReviewOutcome::rejected("unknown token"),
         })
     }
 
@@ -286,17 +279,7 @@ fn openapi_publishes_canonical_delete_and_deprecated_legacy_index_operations() {
 }
 
 fn generated_client_options(lang: Lang) -> GenOptions {
-    GenOptions {
-        lang,
-        target: None,
-        spec_path: Default::default(),
-        out_dir: Default::default(),
-        client_name: "createLumenClient".to_string(),
-        http_client: HttpClient::Fetch,
-        emit_types: true,
-        emit_client: true,
-        emit_hooks: lang == Lang::Ts,
-    }
+    GenOptions::new(lang, "", "", "createLumenClient").with_http_client(HttpClient::Fetch)
 }
 
 #[test]
