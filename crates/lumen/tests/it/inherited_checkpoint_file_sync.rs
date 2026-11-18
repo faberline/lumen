@@ -404,6 +404,8 @@ fn exact_ids(engine: &Engine, collection: &str, field: &str, value: &str) -> Vec
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .expect("run public exact Keyword query")

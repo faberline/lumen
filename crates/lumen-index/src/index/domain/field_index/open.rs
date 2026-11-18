@@ -242,6 +242,7 @@ impl FieldIndex {
             }
             FieldType::Int64 => Err(anyhow!("field type `int64` is not indexed yet")),
             FieldType::Boolean => Err(anyhow!("field type `boolean` is not indexed yet")),
+            FieldType::Date => Err(anyhow!("field type `date` is not indexed yet")),
         }
     }
 }
