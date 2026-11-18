@@ -16,6 +16,8 @@ fn condition<'a>(facts: &'a [ConditionFact], type_: &str) -> &'a ConditionFact {
         .unwrap_or_else(|| panic!("expected a `{type_}` condition, got: {facts:?}"))
 }
 
+mod access_policy;
+
 mod auth_delegator;
 
 mod conditions;
