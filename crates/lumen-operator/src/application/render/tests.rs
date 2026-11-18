@@ -788,3 +788,244 @@ fn injecting_an_operator_env_var_fails_the_independence_check() {
         .push(json!({"name": "POD_NAMESPACE", "value": "lumen-operator-system"}));
     assert_operator_independent(&objects);
 }
+
+/// A spec with `shards` shards, `replicas` members per shard and `voters` voters.
+fn sharded(shards: u32, replicas: u32, voters: u32) -> Lumen {
+    let mut lumen = single_replica();
+    lumen.spec.shard_count = shards;
+    lumen.spec.replicas_per_shard = replicas;
+    lumen.spec.voter_count = voters;
+    lumen
+}
+
+fn objs_of(lumen: &Lumen, kind: &str) -> Vec<Value> {
+    render(lumen)
+        .into_iter()
+        .filter(|object| object["kind"] == kind)
+        .collect()
+}
+
+fn statefulset(lumen: &Lumen, name: &str) -> Value {
+    objs_of(lumen, "StatefulSet")
+        .into_iter()
+        .find(|object| object["metadata"]["name"] == name)
+        .unwrap_or_else(|| panic!("no StatefulSet named {name}"))
+}
+
+/// The hard pod anti-affinity rule of a rendered StatefulSet.
+fn hard_affinity(sts: &Value) -> Value {
+    sts["spec"]["template"]["spec"]["affinity"]["podAntiAffinity"]
+        ["requiredDuringSchedulingIgnoredDuringExecution"][0]
+        .clone()
+}
+
+/// True when every pair of `selector` is present in `labels`.
+fn selector_matches(selector: &Value, labels: &Value) -> bool {
+    selector
+        .as_object()
+        .expect("selector is a label map")
+        .iter()
+        .all(|(key, value)| labels.get(key) == Some(value))
+}
+
+#[test]
+fn single_shard_keeps_one_statefulset_and_one_pdb() {
+    let lumen = single_replica();
+    let statefulsets = objs_of(&lumen, "StatefulSet");
+    assert_eq!(statefulsets.len(), 1);
+    assert_eq!(statefulsets[0]["metadata"]["name"], "search");
+
+    let pdbs = objs_of(&lumen, "PodDisruptionBudget");
+    assert_eq!(pdbs.len(), 1);
+    assert_eq!(pdbs[0]["metadata"]["name"], "search");
+    assert_eq!(pdbs[0]["spec"]["maxUnavailable"], 1);
+}
+
+#[test]
+fn three_shards_render_three_statefulsets_named_per_shard() {
+    let lumen = sharded(3, 1, 1);
+    let statefulsets = objs_of(&lumen, "StatefulSet");
+    let mut names: Vec<String> = statefulsets
+        .iter()
+        .map(|sts| sts["metadata"]["name"].as_str().unwrap().to_string())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["search-s0", "search-s1", "search-s2"]);
+
+    for shard in 0..3 {
+        let name = format!("search-s{shard}");
+        let sts = statefulset(&lumen, &name);
+        let index = shard.to_string();
+        assert_eq!(sts["metadata"]["labels"]["lumen.dev/shard"], index.as_str());
+        assert_eq!(
+            sts["spec"]["selector"]["matchLabels"]["lumen.dev/shard"],
+            index.as_str()
+        );
+        assert_eq!(
+            sts["spec"]["template"]["metadata"]["labels"]["lumen.dev/shard"],
+            index.as_str()
+        );
+    }
+}
+
+#[test]
+fn shard_pod_selects_only_its_own_shard() {
+    let lumen = sharded(2, 1, 1);
+    let s0 = hard_affinity(&statefulset(&lumen, "search-s0"));
+    let s1 = hard_affinity(&statefulset(&lumen, "search-s1"));
+
+    assert_eq!(s0["labelSelector"]["matchLabels"]["lumen.dev/shard"], "0");
+    assert_eq!(s1["labelSelector"]["matchLabels"]["lumen.dev/shard"], "1");
+    for rule in [&s0, &s1] {
+        assert_eq!(rule["topologyKey"], "kubernetes.io/hostname");
+        assert!(
+            rule.get("namespaceSelector").is_none(),
+            "a shard rule applies to the pod's own namespace only: {rule}"
+        );
+    }
+}
+
+#[test]
+fn different_shards_may_share_a_node() {
+    let lumen = sharded(2, 1, 1);
+    let s0 = statefulset(&lumen, "search-s0");
+    let s1 = statefulset(&lumen, "search-s1");
+    let shard0_rule = hard_affinity(&s0)["labelSelector"]["matchLabels"].clone();
+    let shard0_pod = s0["spec"]["template"]["metadata"]["labels"].clone();
+    let shard1_pod = s1["spec"]["template"]["metadata"]["labels"].clone();
+
+    assert!(selector_matches(&shard0_rule, &shard0_pod));
+    assert!(
+        !selector_matches(&shard0_rule, &shard1_pod),
+        "a pod of shard 1 must not be excluded from a node by shard 0's rule"
+    );
+
+    // The old runtime-wide selector would match shard 1's pods, so the test
+    // above fails if the shard label is dropped from the rule.
+    let runtime_wide = serde_json::json!({
+        "app.kubernetes.io/name": "lumen",
+        "app.kubernetes.io/component": "server",
+    });
+    assert!(selector_matches(&runtime_wide, &shard1_pod));
+}
+
+#[test]
+fn shard_env_reads_the_shard_label() {
+    let lumen = sharded(3, 1, 1);
+    let sts = statefulset(&lumen, "search-s2");
+    let env = sts["spec"]["template"]["spec"]["containers"][0]["env"]
+        .as_array()
+        .expect("container env");
+    let entry = env
+        .iter()
+        .find(|e| e["name"] == "LUMEN_SHARD_INDEX")
+        .expect("LUMEN_SHARD_INDEX env");
+    assert_eq!(
+        entry["valueFrom"]["fieldRef"]["fieldPath"],
+        "metadata.labels['lumen.dev/shard']"
+    );
+}
+
+#[test]
+fn three_voter_shard_has_hard_zone_spread_scoped_to_the_shard() {
+    let lumen = sharded(2, 3, 3);
+    let sts = statefulset(&lumen, "search-s0");
+    assert_eq!(sts["spec"]["replicas"], 3);
+
+    let spreads = sts["spec"]["template"]["spec"]["topologySpreadConstraints"]
+        .as_array()
+        .expect("spread constraints");
+    let hard: Vec<&Value> = spreads
+        .iter()
+        .filter(|s| s["whenUnsatisfiable"] == "DoNotSchedule")
+        .collect();
+    assert_eq!(hard.len(), 1, "one hard zone rule for a three-voter shard");
+    assert_eq!(hard[0]["topologyKey"], "topology.kubernetes.io/zone");
+    assert_eq!(hard[0]["maxSkew"], 1);
+    assert_eq!(
+        hard[0]["labelSelector"]["matchLabels"]["lumen.dev/shard"],
+        "0"
+    );
+
+    let soft = spreads
+        .iter()
+        .filter(|s| s["whenUnsatisfiable"] == "ScheduleAnyway")
+        .count();
+    assert!(
+        soft >= 2,
+        "runtime-wide spreads stay ScheduleAnyway: {spreads:?}"
+    );
+}
+
+#[test]
+fn single_voter_shard_has_no_hard_zone_spread() {
+    let lumen = sharded(2, 1, 1);
+    let sts = statefulset(&lumen, "search-s0");
+    let spreads = sts["spec"]["template"]["spec"]["topologySpreadConstraints"]
+        .as_array()
+        .expect("spread constraints");
+    assert!(
+        spreads
+            .iter()
+            .all(|s| s["whenUnsatisfiable"] != "DoNotSchedule"),
+        "a one-voter shard gets no hard zone rule: {spreads:?}"
+    );
+}
+
+#[test]
+fn pdb_per_shard_uses_quorum_safe_max_unavailable() {
+    let lumen = sharded(2, 3, 3);
+    let pdbs = objs_of(&lumen, "PodDisruptionBudget");
+    let names: Vec<String> = pdbs
+        .iter()
+        .map(|p| p["metadata"]["name"].as_str().unwrap().to_string())
+        .collect();
+    assert!(names.contains(&"search-s0".to_string()), "{names:?}");
+    assert!(names.contains(&"search-s1".to_string()), "{names:?}");
+    assert!(!names.contains(&"search".to_string()), "{names:?}");
+
+    for pdb in &pdbs {
+        assert_eq!(pdb["spec"]["maxUnavailable"], 1);
+    }
+    let pdb1 = pdbs
+        .iter()
+        .find(|p| p["metadata"]["name"] == "search-s1")
+        .expect("search-s1 PDB");
+    assert_eq!(
+        pdb1["spec"]["selector"]["matchLabels"]["lumen.dev/shard"],
+        "1"
+    );
+
+    let five = sharded(2, 5, 5);
+    let pdb = objs_of(&five, "PodDisruptionBudget")
+        .into_iter()
+        .find(|p| p["metadata"]["name"] == "search-s0")
+        .expect("search-s0 PDB");
+    assert_eq!(pdb["spec"]["maxUnavailable"], 2);
+}
+
+#[test]
+fn prunes_old_single_statefulset_and_pdb_when_sharded() {
+    let has = |targets: &[service_k8s::service::PruneTarget], kind: &str, name: &str| {
+        targets.iter().any(|t| t.kind == kind && t.name == name)
+    };
+
+    let mut sharded_policy = sharded(2, 1, 1);
+    sharded_policy.spec.network_policy = true;
+    let targets = super::prunes(&sharded_policy);
+    assert!(has(&targets, "StatefulSet", "search"), "{targets:?}");
+    assert!(
+        has(&targets, "PodDisruptionBudget", "search"),
+        "{targets:?}"
+    );
+    assert!(!has(&targets, "NetworkPolicy", "search"), "{targets:?}");
+
+    let mut single_policy = single_replica();
+    single_policy.spec.network_policy = true;
+    assert!(super::prunes(&single_policy).is_empty());
+
+    let single_open = single_replica();
+    let targets = super::prunes(&single_open);
+    assert!(has(&targets, "NetworkPolicy", "search"), "{targets:?}");
+    assert!(!has(&targets, "StatefulSet", "search"), "{targets:?}");
+}
