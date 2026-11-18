@@ -32,7 +32,7 @@ use crate::application::render::backup::{backup_cron_job, backup_service_account
 use crate::application::render::identity::attach_service_account_annotations;
 use crate::application::render::monitoring::{prometheus_rule, service_monitor};
 use crate::application::render::serving_config::{serving_configmap, serving_network_policy};
-use crate::application::render::serving_statefulset::serving_statefulset;
+use crate::application::render::serving_statefulset::{serving_statefulsets, shard_selector};
 use crate::domain::lumen_spec::Lumen;
 use service_k8s::render::stateful_instance::StatefulInstanceError;
 
@@ -240,8 +240,8 @@ fn render_with_profile_opt(
     attach_service_account_annotations(&mut bsa, &lumen.spec.service_account_annotations);
     out.push(bsa);
     out.push(serving_configmap(lumen, &cx));
+    out.extend(serving_statefulsets(lumen, &cx, &headless, profile)?);
     out.extend([
-        serving_statefulset(lumen, &cx, &headless, profile)?,
         render::headless_service_with_ports(
             &cx,
             &headless,
@@ -253,7 +253,7 @@ fn render_with_profile_opt(
         ),
         render::client_service(&cx, &name, COMPONENT, CLIENT_PORT),
     ]);
-    out.push(render::pdb(&cx, &name, COMPONENT, 1));
+    out.extend(serving_pdbs(lumen, &cx, &name));
     if lumen.spec.network_policy {
         out.push(serving_network_policy(&cx, &name));
     }
@@ -268,27 +268,60 @@ fn render_with_profile_opt(
     Ok(out)
 }
 
+/// The PodDisruptionBudgets of the serving fleet.
+///
+/// A single shard keeps its one PDB. Otherwise each shard gets one, so a
+/// voluntary eviction takes at most `voters - quorum` members of one shard. A
+/// PDB only limits voluntary evictions; it does not control StatefulSet rolling
+/// updates.
+fn serving_pdbs(lumen: &Lumen, cx: &RenderCtx<'_>, name: &str) -> Vec<Value> {
+    if lumen.spec.shard_count <= 1 {
+        return vec![render::pdb(cx, name, COMPONENT, 1)];
+    }
+    let voters = lumen.spec.voter_count.max(1);
+    let quorum = voters / 2 + 1;
+    let max_unavailable = (voters - quorum).max(1) as i32;
+    (0..lumen.spec.shard_count)
+        .map(|shard| {
+            let mut pdb = render::pdb(cx, &format!("{name}-s{shard}"), COMPONENT, max_unavailable);
+            pdb["spec"]["selector"]["matchLabels"] = shard_selector(cx, &shard.to_string());
+            pdb
+        })
+        .collect()
+}
+
 /// Children a previous spec rendered that this one no longer wants (#2603).
 ///
-/// Only the NetworkPolicy qualifies today, and it qualifies because it is the
-/// one conditional child whose *presence* changes runtime behavior rather than
-/// just adding an object. Leaving a stale ServiceMonitor around scrapes a
-/// metric nobody reads; leaving a stale NetworkPolicy around keeps dropping
-/// traffic the spec has stopped asking to drop. Flipping `networkPolicy` to
-/// `false` therefore has to actively remove it, or the field is opt-in only.
+/// The NetworkPolicy qualifies because it is a conditional child whose
+/// *presence* changes runtime behavior rather than just adding an object.
+/// Leaving a stale ServiceMonitor around scrapes a metric nobody reads; leaving
+/// a stale NetworkPolicy around keeps dropping traffic the spec has stopped
+/// asking to drop. Flipping `networkPolicy` to `false` therefore has to
+/// actively remove it, or the field is opt-in only.
 ///
+/// Going from one shard to several also prunes the single-shard StatefulSet and
+/// PDB, which the per-shard objects replace.
 pub fn prunes(lumen: &Lumen) -> Vec<PruneTarget> {
-    if lumen.spec.network_policy {
-        return Vec::new();
+    let mut targets = Vec::new();
+    if lumen.spec.shard_count > 1 {
+        targets.push(PruneTarget::new("apps/v1", "StatefulSet", instance(lumen)));
+        targets.push(PruneTarget::new(
+            "policy/v1",
+            "PodDisruptionBudget",
+            instance(lumen),
+        ));
     }
-    vec![PruneTarget::new(
-        "networking.k8s.io/v1",
-        "NetworkPolicy",
-        // Resolved through the same `instance` helper `render` uses, so this is
-        // the exact inverse of the branch that creates it rather than an
-        // independent guess at the name.
-        instance(lumen),
-    )]
+    if !lumen.spec.network_policy {
+        targets.push(PruneTarget::new(
+            "networking.k8s.io/v1",
+            "NetworkPolicy",
+            // Resolved through the same `instance` helper `render` uses, so this is
+            // the exact inverse of the branch that creates it rather than an
+            // independent guess at the name.
+            instance(lumen),
+        ));
+    }
+    targets
 }
 
 /// The ServiceAccount the serving pods actually run as (#2497, #2876).

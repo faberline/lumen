@@ -259,3 +259,101 @@ pub(super) fn serving_statefulset(
     }
     Ok(sts)
 }
+
+/// The label that names a shard on its pods, selectors and PodDisruptionBudget.
+const SHARD_LABEL: &str = "lumen.dev/shard";
+
+/// The serving fleet as StatefulSets. A single shard keeps today's one object,
+/// named like the instance. Otherwise each shard gets its own StatefulSet named
+/// `<name>-s<k>`, with its own members, its own hard anti-affinity and its own
+/// zone spread, so a shard's replicas never share a node with each other while
+/// two shards may.
+pub(super) fn serving_statefulsets(
+    lumen: &Lumen,
+    cx: &RenderCtx<'_>,
+    headless: &str,
+    profile: Option<&crate::domain::capacity::preflight::ResolvedProfile>,
+) -> Result<Vec<Value>, StatefulInstanceError> {
+    let base = serving_statefulset(lumen, cx, headless, profile)?;
+    if lumen.spec.shard_count <= 1 {
+        return Ok(vec![base]);
+    }
+    Ok((0..lumen.spec.shard_count)
+        .map(|shard| shard_statefulset(base.clone(), lumen, cx, shard))
+        .collect())
+}
+
+/// The selector of one shard: the immutable runtime selector plus the shard
+/// label. Shared by the StatefulSet, its pods' anti-affinity and its PDB.
+pub(super) fn shard_selector(cx: &RenderCtx<'_>, shard: &str) -> Value {
+    let mut selector = cx.selector(COMPONENT);
+    put_shard_label(&mut selector, shard);
+    selector
+}
+
+fn put_shard_label(labels: &mut Value, shard: &str) {
+    labels
+        .as_object_mut()
+        .expect("label map")
+        .insert(SHARD_LABEL.to_string(), json!(shard));
+}
+
+/// Walks `path` into a rendered object. A missing key panics: a per-shard edit
+/// that silently skipped a path would render the wrong shard.
+fn field<'a>(object: &'a mut Value, path: &[&str]) -> &'a mut Value {
+    path.iter().fold(object, |value, key| {
+        value
+            .get_mut(*key)
+            .unwrap_or_else(|| panic!("shard StatefulSet has no `{key}` (path {path:?})"))
+    })
+}
+
+/// One shard's StatefulSet, edited from the base single-shard object.
+fn shard_statefulset(mut sts: Value, lumen: &Lumen, cx: &RenderCtx<'_>, shard: u32) -> Value {
+    let index = shard.to_string();
+    *field(&mut sts, &["metadata", "name"]) = json!(format!("{}-s{shard}", cx.name()));
+    put_shard_label(field(&mut sts, &["metadata", "labels"]), &index);
+    put_shard_label(
+        field(&mut sts, &["spec", "selector", "matchLabels"]),
+        &index,
+    );
+    put_shard_label(
+        field(&mut sts, &["spec", "template", "metadata", "labels"]),
+        &index,
+    );
+    // Only this shard's members: the replica count of the whole runtime is the
+    // sum of the shards, not of this object.
+    *field(&mut sts, &["spec", "replicas"]) = json!(lumen.spec.replicas_per_shard.max(1));
+
+    // The pod learns its shard from its own label, so the serving code reads
+    // one value without the operator passing it per object.
+    sts["spec"]["template"]["spec"]["containers"][0]["env"]
+        .as_array_mut()
+        .expect("serving container env")
+        .push(json!({
+            "name": "LUMEN_SHARD_INDEX",
+            "valueFrom": { "fieldRef": { "fieldPath": "metadata.labels['lumen.dev/shard']" } },
+        }));
+
+    // Same-shard members never share a node; other shards may.
+    *field(&mut sts, &["spec", "template", "spec", "affinity"]) =
+        crate::domain::capacity::placement::shard_data_node_affinity(cx.name(), shard);
+
+    // A three-voter shard must not put two voters into one zone when a zone
+    // can still take one. The runtime-wide spreads stay soft.
+    if lumen.spec.replicas_per_shard >= 3 && lumen.spec.voter_count >= 3 {
+        field(
+            &mut sts,
+            &["spec", "template", "spec", "topologySpreadConstraints"],
+        )
+        .as_array_mut()
+        .expect("spread constraints")
+        .push(json!({
+            "maxSkew": 1,
+            "topologyKey": "topology.kubernetes.io/zone",
+            "whenUnsatisfiable": "DoNotSchedule",
+            "labelSelector": { "matchLabels": shard_selector(cx, &index) },
+        }));
+    }
+    sts
+}
