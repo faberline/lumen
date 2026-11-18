@@ -55,11 +55,39 @@ fn shard_artifact(map: &VirtualBucketShardMap, snapshot: &SnapshotV1, shard: u32
 }
 
 /// A 3-shard set over 12 virtual buckets, map version 7, 24 documents.
-fn three_shard_set() -> (VirtualBucketShardMap, Vec<ShardArtifact>) {
+pub(crate) fn three_shard_set() -> (VirtualBucketShardMap, Vec<ShardArtifact>) {
     let snapshot = snapshot_of(false, 24);
     let map = VirtualBucketShardMap::balanced(7, 12, 3).unwrap();
     let artifacts = (0..3).map(|s| shard_artifact(&map, &snapshot, s)).collect();
     (map, artifacts)
+}
+
+/// The engine the 24 fixture documents were indexed into: the source of the
+/// round-trip comparison in `backup_set_restore`.
+pub(crate) fn original_engine() -> Engine {
+    let engine = Engine::new();
+    let fields =
+        std::collections::BTreeMap::from([("email".to_string(), field(FieldType::Keyword))]);
+    engine
+        .create_collection("users", CreateCollectionRequest { fields })
+        .unwrap();
+    for i in 0..24 {
+        let external_id = format!("doc-{i:02}");
+        engine
+            .index(
+                "users",
+                IndexRequest {
+                    request_id: None,
+                    items: vec![item(
+                        &external_id,
+                        "email",
+                        FieldValue::String(format!("{external_id}@example.com")),
+                    )],
+                },
+            )
+            .unwrap();
+    }
+    engine
 }
 
 fn valid_manifest() -> BackupManifest {
