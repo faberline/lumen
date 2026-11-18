@@ -1,7 +1,7 @@
 use crate::types::document::FieldValue;
 use crate::types::query::{MatchOp, MatchQuery, QueryNode};
 use crate::types::schema::{
-    Analyzer, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
+    Analyzer, FieldCapabilities, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
 };
 
 fn fs(t: FieldType) -> FieldSpec {
@@ -125,6 +125,117 @@ fn field_value_polymorphic() {
 }
 
 #[test]
+fn integer_at_or_below_2_pow_53_stays_number() {
+    for text in ["9007199254740992", "-9007199254740992", "42"] {
+        let v: FieldValue = serde_json::from_str(text).unwrap();
+        assert!(
+            matches!(v, FieldValue::Number(_)),
+            "{text} must stay Number"
+        );
+    }
+    let v: FieldValue = serde_json::from_str("9007199254740992").unwrap();
+    assert!(matches!(v, FieldValue::Number(x) if x == 9007199254740992.0));
+}
+
+#[test]
+fn integer_above_2_pow_53_decodes_to_int64() {
+    let v: FieldValue = serde_json::from_str("9007199254740993").unwrap();
+    assert!(matches!(v, FieldValue::Int64(9007199254740993)));
+    let v: FieldValue = serde_json::from_str("-9007199254740993").unwrap();
+    assert!(matches!(v, FieldValue::Int64(-9007199254740993)));
+}
+
+#[test]
+fn int64_boundaries_decode_exactly() {
+    let v: FieldValue = serde_json::from_str("9223372036854775807").unwrap();
+    assert!(matches!(v, FieldValue::Int64(i64::MAX)));
+    let v: FieldValue = serde_json::from_str("-9223372036854775808").unwrap();
+    assert!(matches!(v, FieldValue::Int64(i64::MIN)));
+}
+
+/// Desk decision A (faberline/aw#556): an integer outside the i64 range stays
+/// `Number` (lossy, as today). It is not refused and it is not `Int64`.
+#[test]
+fn integer_outside_i64_stays_number() {
+    for text in ["9223372036854775808", "-9223372036854775809"] {
+        let v: FieldValue =
+            serde_json::from_str(text).unwrap_or_else(|e| panic!("{text}: unexpected error {e}"));
+        assert!(
+            matches!(v, FieldValue::Number(_)),
+            "{text}: expected Number, got another variant"
+        );
+    }
+}
+
+#[test]
+fn fraction_stays_number() {
+    for text in ["1.5", "9007199254740993.0"] {
+        let v: FieldValue = serde_json::from_str(text).unwrap();
+        assert!(
+            matches!(v, FieldValue::Number(_)),
+            "{text} must stay Number"
+        );
+    }
+}
+
+#[test]
+fn int64_serializes_as_plain_integer() {
+    assert_eq!(
+        serde_json::to_string(&FieldValue::Int64(i64::MAX)).unwrap(),
+        "9223372036854775807"
+    );
+}
+
+#[test]
+fn field_value_arrays_decode_as_before() {
+    let v: FieldValue = serde_json::from_str("[1,2]").unwrap();
+    assert!(matches!(&v, FieldValue::Vector(x) if x == &[1.0f32, 2.0]));
+    let v: FieldValue = serde_json::from_str("[]").unwrap();
+    assert!(matches!(&v, FieldValue::Vector(x) if x.is_empty()));
+    let v: FieldValue = serde_json::from_str(r#"["a"]"#).unwrap();
+    assert!(matches!(&v, FieldValue::StringList(x) if x == &["a".to_string()]));
+    assert!(serde_json::from_str::<FieldValue>(r#"[1,"a"]"#).is_err());
+}
+
+#[test]
+fn int64_field_type_parses_and_has_capabilities() {
+    assert_eq!(
+        serde_json::from_str::<FieldType>("\"int64\"").expect("int64 parses"),
+        FieldType::Int64
+    );
+    assert!(FieldType::ALL.contains(&FieldType::Int64));
+    let caps = FieldType::Int64.capabilities();
+    assert!(caps.exact && caps.range && caps.sort);
+    assert!(!caps.bm25);
+    assert!(!caps.prefix);
+    assert!(!caps.set_membership);
+    assert!(!caps.vector_search);
+    assert!(!caps.hamming);
+}
+
+#[test]
+fn unknown_field_type_name_is_refused() {
+    assert!(serde_json::from_str::<FieldType>("\"int65\"").is_err());
+}
+
+#[test]
+fn number_capabilities_are_unchanged() {
+    assert_eq!(
+        FieldType::Number.capabilities(),
+        FieldCapabilities {
+            bm25: false,
+            exact: true,
+            prefix: false,
+            range: true,
+            sort: true,
+            set_membership: false,
+            vector_search: false,
+            hamming: false,
+        }
+    );
+}
+
+#[test]
 fn facetable_defaults_to_false_and_is_omitted_on_the_wire() {
     let spec: FieldSpec = serde_json::from_str(r#"{"type":"keyword"}"#).unwrap();
     assert!(!spec.facetable);
@@ -140,4 +251,130 @@ fn facetable_true_round_trips() {
     assert_eq!(value["facetable"], serde_json::json!(true));
     let back: FieldSpec = serde_json::from_value(value).unwrap();
     assert_eq!(back, spec);
+}
+
+#[test]
+fn float64_parses_as_number() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"float64"}"#).unwrap();
+    assert_eq!(spec.field_type, FieldType::Number);
+    let value = serde_json::to_value(spec.field_type).unwrap();
+    assert_eq!(value, serde_json::json!("number"));
+    let caps = FieldType::Number.capabilities();
+    assert!(caps.exact && caps.range && caps.sort);
+    assert!(!caps.set_membership && !caps.prefix && !caps.bm25);
+}
+
+#[test]
+fn number_type_still_parses() {
+    let spec: FieldSpec = serde_json::from_str(r#"{"type":"number"}"#).unwrap();
+    assert_eq!(spec.field_type, FieldType::Number);
+}
+
+#[test]
+fn float65_is_refused() {
+    let parsed = serde_json::from_str::<FieldSpec>(r#"{"type":"float65"}"#);
+    assert!(parsed.is_err());
+}
+
+#[test]
+fn field_value_is_missing_for_empty_lists_only() {
+    use crate::types::document::FieldValue;
+    assert!(FieldValue::Vector(vec![]).is_missing());
+    assert!(FieldValue::StringList(vec![]).is_missing());
+    assert!(!FieldValue::Vector(vec![1.0]).is_missing());
+    assert!(!FieldValue::StringList(vec!["a".to_string()]).is_missing());
+    assert!(!FieldValue::String(String::new()).is_missing());
+    assert!(!FieldValue::Number(0.0).is_missing());
+}
+
+#[test]
+fn boolean_field_type_parses_and_is_exact_only() {
+    assert_eq!(
+        serde_json::from_str::<FieldType>("\"boolean\"").expect("boolean parses"),
+        FieldType::Boolean
+    );
+    assert!(FieldType::ALL.contains(&FieldType::Boolean));
+    assert_eq!(FieldType::ALL.len(), 9);
+    assert_eq!(
+        FieldType::Boolean.capabilities(),
+        FieldCapabilities {
+            bm25: false,
+            exact: true,
+            prefix: false,
+            range: false,
+            sort: false,
+            set_membership: false,
+            vector_search: false,
+            hamming: false,
+        }
+    );
+}
+
+#[test]
+fn unknown_field_type_name_is_still_refused_next_to_boolean() {
+    assert!(serde_json::from_str::<FieldType>("\"booleans\"").is_err());
+    assert!(serde_json::from_str::<FieldType>("\"bool\"").is_err());
+}
+
+#[test]
+fn field_spec_storage_type_follows_keyword_multi() {
+    assert_eq!(
+        FieldSpec {
+            multi: Some(true),
+            ..fs(FieldType::Keyword)
+        }
+        .storage_type(),
+        FieldType::Set
+    );
+    assert_eq!(fs(FieldType::Keyword).storage_type(), FieldType::Keyword);
+    assert_eq!(
+        FieldSpec {
+            multi: Some(false),
+            ..fs(FieldType::Keyword)
+        }
+        .storage_type(),
+        FieldType::Keyword
+    );
+    assert_eq!(fs(FieldType::Text).storage_type(), FieldType::Text);
+    assert_eq!(fs(FieldType::Number).storage_type(), FieldType::Number);
+    assert_eq!(fs(FieldType::Set).storage_type(), FieldType::Set);
+    assert_eq!(fs(FieldType::Vector).storage_type(), FieldType::Vector);
+    assert_eq!(fs(FieldType::Hash).storage_type(), FieldType::Hash);
+    assert_eq!(
+        FieldSpec {
+            multi: Some(true),
+            ..fs(FieldType::Number)
+        }
+        .storage_type(),
+        FieldType::Number
+    );
+}
+
+#[test]
+fn date_field_type_parses_with_exact_range_and_sort() {
+    assert_eq!(
+        serde_json::from_str::<FieldType>("\"date\"").expect("date parses"),
+        FieldType::Date
+    );
+    assert!(FieldType::ALL.contains(&FieldType::Date));
+    assert_eq!(FieldType::ALL.len(), 9);
+    assert_eq!(
+        FieldType::Date.capabilities(),
+        FieldCapabilities {
+            bm25: false,
+            exact: true,
+            prefix: false,
+            range: true,
+            sort: true,
+            set_membership: false,
+            vector_search: false,
+            hamming: false,
+        }
+    );
+}
+
+#[test]
+fn unknown_field_type_name_is_still_refused_next_to_date() {
+    assert!(serde_json::from_str::<FieldType>("\"dates\"").is_err());
+    assert!(serde_json::from_str::<FieldType>("\"datetime\"").is_err());
 }

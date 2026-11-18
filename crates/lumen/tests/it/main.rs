@@ -4,6 +4,7 @@
 
 mod support;
 
+mod acceptance_spawn_restart;
 mod access_log_subject;
 mod access_render_cli;
 mod admission_e2e;
@@ -48,6 +49,7 @@ mod control_plane_identity_e2e;
 mod core_pin_is_v0_5_1;
 mod coverage_gaps_e2e;
 mod coverage_pass_e2e;
+mod credential_planes;
 mod current_publication_apply_barrier;
 mod design_trees_stay_retired;
 mod disk_format_bench;
@@ -64,6 +66,7 @@ mod field_query_correctness_contract;
 mod generated_clients_crud_e2e;
 mod generated_hydration;
 mod gke_perf_evidence;
+mod gke_selection;
 mod hash_hamming;
 mod hnsw_ef_recall;
 mod hnsw_shutdown_cache;
@@ -80,6 +83,7 @@ mod legacy_3073_app;
 mod llm_command_template_flags_are_live;
 mod lumen_bench_cli;
 mod merge_cleanup_checkpoint_serialization;
+mod migrate_collection_schema;
 mod native_committed_capacity_progress;
 mod native_oversized_committed_apply;
 mod native_oversized_committed_replace;

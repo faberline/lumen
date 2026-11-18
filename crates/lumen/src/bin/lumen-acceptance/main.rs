@@ -1,6 +1,7 @@
 //! Lumen shared acceptance runner. Slice 1 of #114: the runner skeleton only.
 //! It adds no real functional or performance phase.
 
+mod checkpoint;
 mod cli;
 #[allow(dead_code)] // used by the performance phase of slice 7 (#264)
 mod dataset;
@@ -8,9 +9,12 @@ mod http;
 mod lifecycle;
 #[allow(dead_code)] // used by the performance phase of slice 7 (#264)
 mod load;
+mod metrics;
 mod perf_gate;
 mod report;
+mod restart;
 mod run;
+mod spawn;
 mod visible_version;
 mod writes;
 

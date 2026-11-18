@@ -125,3 +125,174 @@ fn sparse_high_delta_does_not_hide_middle_live_scalar_overlays() {
     hash.forward.insert(2, 2);
     assert_eq!(hash.hash_at(2), Some(2));
 }
+
+#[test]
+fn int64_spec_is_refused_with_not_indexed_yet() {
+    let spec = crate::shared_kernel::types::schema::FieldSpec {
+        field_type: crate::shared_kernel::types::schema::FieldType::Int64,
+        analyzer: None,
+        multi: None,
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let Err(err) = super::FieldIndex::from_spec(&spec) else {
+        panic!("int64 must be refused until #299");
+    };
+    assert!(
+        err.to_string().contains("not indexed yet"),
+        "error should say not indexed yet: {err}"
+    );
+}
+
+#[test]
+fn boolean_schema_is_accepted_by_validate_schema() {
+    use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, FieldType};
+    let mut schema = BTreeMap::new();
+    schema.insert(
+        "flag".to_string(),
+        FieldSpec {
+            field_type: FieldType::Boolean,
+            analyzer: None,
+            multi: None,
+            dim: None,
+            metric: None,
+            backend: None,
+            quantize: None,
+            facetable: false,
+        },
+    );
+    crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect("a boolean field is a valid schema entry");
+    schema.insert(
+        "bad".to_string(),
+        FieldSpec {
+            field_type: FieldType::Boolean,
+            analyzer: Some(Analyzer::WhitespaceLower),
+            multi: None,
+            dim: None,
+            metric: None,
+            backend: None,
+            quantize: None,
+            facetable: false,
+        },
+    );
+    let err = crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect_err("a boolean field with an analyzer is refused");
+    assert!(
+        err.to_string().contains("does not accept an analyzer"),
+        "error should name the analyzer refusal: {err}"
+    );
+}
+
+#[test]
+fn boolean_spec_is_refused_with_not_indexed_yet() {
+    let spec = crate::shared_kernel::types::schema::FieldSpec {
+        field_type: crate::shared_kernel::types::schema::FieldType::Boolean,
+        analyzer: None,
+        multi: None,
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let Err(err) = super::FieldIndex::from_spec(&spec) else {
+        panic!("boolean must be refused until #394");
+    };
+    assert!(
+        err.to_string().contains("not indexed yet"),
+        "error should say not indexed yet: {err}"
+    );
+}
+
+/// Negative control: a keyword + multi spec that skips `normalize` must still
+/// build a `Set` index. An old `from_spec` that reads `field_type` builds `Keyword`.
+#[test]
+fn from_spec_uses_storage_type_for_keyword_multi() {
+    use crate::index::domain::field_index::FieldIndex;
+    use crate::shared_kernel::types::schema::{FieldSpec, FieldType};
+
+    let spec = FieldSpec {
+        field_type: FieldType::Keyword,
+        analyzer: None,
+        multi: Some(true),
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let idx = FieldIndex::from_spec(&spec).unwrap();
+    assert!(matches!(idx, FieldIndex::Set(_)));
+
+    let plain = FieldSpec {
+        multi: None,
+        ..spec
+    };
+    let idx = FieldIndex::from_spec(&plain).unwrap();
+    assert!(matches!(idx, FieldIndex::Keyword(_)));
+}
+
+#[test]
+fn date_schema_is_accepted_by_validate_schema() {
+    use crate::shared_kernel::types::schema::{Analyzer, FieldSpec, FieldType};
+    let mut schema = BTreeMap::new();
+    schema.insert(
+        "when".to_string(),
+        FieldSpec {
+            field_type: FieldType::Date,
+            analyzer: None,
+            multi: None,
+            dim: None,
+            metric: None,
+            backend: None,
+            quantize: None,
+            facetable: false,
+        },
+    );
+    crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect("a date field is a valid schema entry");
+    schema.insert(
+        "bad".to_string(),
+        FieldSpec {
+            field_type: FieldType::Date,
+            analyzer: Some(Analyzer::WhitespaceLower),
+            multi: None,
+            dim: None,
+            metric: None,
+            backend: None,
+            quantize: None,
+            facetable: false,
+        },
+    );
+    let err = crate::index::domain::schema_validation::validate_schema(&schema)
+        .expect_err("a date field with an analyzer is refused");
+    assert!(
+        err.to_string().contains("does not accept an analyzer"),
+        "error should name the analyzer refusal: {err}"
+    );
+}
+
+#[test]
+fn date_spec_is_refused_with_not_indexed_yet() {
+    let spec = crate::shared_kernel::types::schema::FieldSpec {
+        field_type: crate::shared_kernel::types::schema::FieldType::Date,
+        analyzer: None,
+        multi: None,
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let Err(err) = super::FieldIndex::from_spec(&spec) else {
+        panic!("date must be refused until #411");
+    };
+    assert!(
+        err.to_string().contains("not indexed yet"),
+        "error should say not indexed yet: {err}"
+    );
+}

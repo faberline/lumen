@@ -85,6 +85,8 @@ fn run(e: &Engine, query: QueryNode, sort: Option<Vec<SortSpec>>) -> SearchRespo
             sort,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()
@@ -216,5 +218,125 @@ fn ids_matches_doc_with_partial_field_deletion() {
         id_set(&r2),
         ["d1".to_string(), "d2".to_string()].into_iter().collect(),
         "d0 has no live fields left, so it drops out"
+    );
+}
+
+/// #464 rework (review of PR #475): an `Int64` value in a term or terms
+/// query against a number field behaves as `Number(v as f64)`, the same
+/// value an index write stores, so an index-then-query round trip matches.
+fn seed_int64() -> Engine {
+    let e = Engine::new();
+    e.create_collection("c", schema()).unwrap();
+    for (eid, value) in [
+        ("d0", FieldValue::Int64(9007199254740993)),
+        ("d1", FieldValue::Number(10.0)),
+    ] {
+        e.index(
+            "c",
+            IndexRequest {
+                items: vec![IndexItem {
+                    external_id: eid.into(),
+                    field: "price".into(),
+                    value,
+                    version: None,
+                }],
+                request_id: None,
+            },
+        )
+        .unwrap();
+    }
+    e
+}
+
+#[test]
+fn term_int64_matches_number_field() {
+    let e = seed_int64();
+    let r = run(
+        &e,
+        QueryNode::Term(TermQuery {
+            field: "price".into(),
+            value: FieldValue::Int64(9007199254740993),
+        }),
+        None,
+    );
+    assert_eq!(id_set(&r), ["d0".to_string()].into_iter().collect());
+}
+
+#[test]
+fn terms_int64_matches_number_field() {
+    let e = seed_int64();
+    let r = run(
+        &e,
+        QueryNode::Terms(TermsQuery {
+            field: "price".into(),
+            values: vec![FieldValue::Int64(9007199254740993)],
+        }),
+        None,
+    );
+    assert_eq!(id_set(&r), ["d0".to_string()].into_iter().collect());
+}
+
+#[test]
+fn terms_mixed_int64_and_number_match_both() {
+    let e = seed_int64();
+    let r = run(
+        &e,
+        QueryNode::Terms(TermsQuery {
+            field: "price".into(),
+            values: vec![
+                FieldValue::Int64(9007199254740993),
+                FieldValue::Number(10.0),
+            ],
+        }),
+        None,
+    );
+    assert_eq!(
+        id_set(&r),
+        ["d0".to_string(), "d1".to_string()].into_iter().collect()
+    );
+}
+
+#[test]
+fn term_int64_beside_sort_matches() {
+    let e = seed_int64();
+    let r = run(
+        &e,
+        QueryNode::Term(TermQuery {
+            field: "price".into(),
+            value: FieldValue::Int64(9007199254740993),
+        }),
+        Some(vec![SortSpec {
+            field: "price".into(),
+            order: SortOrder::Asc,
+            missing: SortMissing::Exclude,
+        }]),
+    );
+    assert_eq!(id_set(&r), ["d0".to_string()].into_iter().collect());
+}
+
+#[test]
+fn term_int64_on_keyword_field_still_errors() {
+    let e = seed();
+    let res = e.search(
+        "c",
+        SearchRequest {
+            query: QueryNode::Term(TermQuery {
+                field: "status".into(),
+                value: FieldValue::Int64(1),
+            }),
+            limit: 100,
+            offset: 0,
+            cursor: None,
+            routing_key: None,
+            sort: None,
+            track_total: true,
+            collapse: None,
+            scoring: None,
+            filter: None,
+        },
+    );
+    assert!(
+        res.is_err(),
+        "Int64 against a keyword field keeps the type-mismatch error"
     );
 }

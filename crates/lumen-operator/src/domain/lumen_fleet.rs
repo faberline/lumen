@@ -43,13 +43,16 @@
 //!
 //! [`super::reshard_driver`]: crate::application::reshard_driver
 
+pub mod children;
 pub mod plan;
+pub mod status;
 
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::domain::lumen_spec::access::AccessSpec;
 use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::LumenSpec;
 
@@ -136,6 +139,12 @@ pub struct FleetInstance {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(schema_with = "free_form_object")]
     pub spec: Option<Value>,
+    /// The exact ServiceAccounts allowed to call this instance. When present it
+    /// replaces the whole `defaults.access` list (it is never merged with it);
+    /// an explicit empty `allowedServiceAccounts` denies every client.
+    /// Absent means the instance inherits `defaults.access`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<AccessSpec>,
 }
 
 /// What happens to a materialized `Lumen` whose entry leaves the fleet.
@@ -165,6 +174,19 @@ pub struct LumenFleetStatus {
     /// How many were successfully created or applied this pass.
     #[serde(default)]
     pub applied_instances: i32,
+    /// How many entries are materialized: state `Created` or `Applied`.
+    #[serde(default)]
+    pub materialized_instances: i32,
+    /// How many entries the spec rejected (state `Rejected`).
+    #[serde(default)]
+    pub rejected_instances: i32,
+    /// How many materialized `Lumen`s no longer match a declared entry and
+    /// were kept (state `Orphaned`).
+    #[serde(default)]
+    pub orphaned_instances: i32,
+    /// How many orphaned `Lumen`s were deleted under `Delete` (state `Pruned`).
+    #[serde(default)]
+    pub pruned_instances: i32,
     /// Per-entry outcome, so one bad entry is diagnosable without reading
     /// operator logs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -185,6 +207,10 @@ pub struct FleetEntryStatus {
     pub state: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub message: String,
+    /// Lowercase hex SHA-256 of the canonical JSON of the spec the fleet wrote
+    /// for this entry. Set only for `Created` and `Applied`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub spec_hash: String,
 }
 
 /// A `Lumen` the fleet wants to exist, or the reason one entry cannot produce

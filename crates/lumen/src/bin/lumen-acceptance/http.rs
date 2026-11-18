@@ -55,6 +55,42 @@ impl HttpApi {
         Ok((status, value))
     }
 
+    /// Sends one request and drops it after 50 ms, so the client cancels it. The status is
+    /// not read: the server may or may not have answered. Only a bad method is an error.
+    pub(super) fn fire_and_cancel(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<()> {
+        let method = reqwest::Method::from_bytes(method.as_bytes())?;
+        let mut req = self
+            .client
+            .request(method, format!("{}{}", self.base, path));
+        if let Some(body) = body {
+            req = req.json(body);
+        }
+        self.rt.block_on(async {
+            let _ = tokio::time::timeout(Duration::from_millis(50), req.send()).await;
+        });
+        Ok(())
+    }
+
+    /// GET `path` and return the body as text. Fails unless the status is 200.
+    pub(super) fn text(&self, path: &str) -> Result<String> {
+        let req = self.client.get(format!("{}{}", self.base, path));
+        let (status, text) = self.rt.block_on(async {
+            let resp = req.send().await?;
+            let status = resp.status().as_u16();
+            let text = resp.text().await?;
+            Ok::<_, anyhow::Error>((status, text))
+        })?;
+        if status != 200 {
+            bail!("GET {path} returned {status}");
+        }
+        Ok(text)
+    }
+
     /// Like `call`, but fails unless the status is one of `want`. Returns the body.
     pub(super) fn expect(
         &self,
@@ -109,5 +145,50 @@ pub(super) mod tests {
         .expect("join")
         .expect_err("a 404 is not an expected status");
         assert!(format!("{err:#}").contains("returned 404"), "{err:#}");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn fire_and_cancel_returns_ok_and_the_write_lands() {
+        let (_server, url) = serve_for_test();
+        tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+            let api = HttpApi::new(&url)?;
+            let base = "/collections/acceptance-fire-cancel";
+            api.expect(
+                "create",
+                &[200],
+                "PUT",
+                base,
+                Some(&serde_json::json!({"fields": {"kw": {"type": "keyword"}}})),
+            )?;
+            api.fire_and_cancel(
+                "POST",
+                &format!("{base}/index"),
+                Some(&serde_json::json!({"items": [
+                    {"external_id": "doc-1", "field": "kw", "value": "red"}
+                ]})),
+            )?;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            loop {
+                if crate::lifecycle::documents_indexed(&api, base)? == 1 {
+                    return Ok(());
+                }
+                if std::time::Instant::now() >= deadline {
+                    anyhow::bail!("the cancelled write never landed");
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        })
+        .await
+        .expect("join")
+        .expect("the write lands after fire_and_cancel");
+    }
+
+    #[test]
+    fn fire_and_cancel_rejects_a_bad_method() {
+        let api = HttpApi::new("http://127.0.0.1:9").expect("client");
+        let err = api
+            .fire_and_cancel("BAD METHOD", "/x", None)
+            .expect_err("a method with a space is not a valid method");
+        assert!(!format!("{err:#}").is_empty());
     }
 }

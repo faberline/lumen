@@ -18,6 +18,7 @@ The [product README](../README.md) owns the product contract.
 | Authentication and access | [Authentication](authentication.md) |
 | Runtime configuration | [Configuration](configuration.md) |
 | Deployment and operations | [Operations index](operations/README.md) |
+| Data-plane runbook | [Data-plane runbook](runbooks/data-plane.md) |
 | Product plans | [Product guide index](product/README.md) |
 | Contributor workflow and gates | [Contributing](../CONTRIBUTING.md) |
 

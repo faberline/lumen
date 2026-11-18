@@ -93,6 +93,7 @@
 //! [`render::wants_hpa`]: crate::application::render::wants_hpa
 //! [`render::hpa_labels`]: crate::application::render::hpa_labels
 
+pub mod access_policy;
 pub mod auth_delegator;
 pub mod hpa;
 pub mod loops;

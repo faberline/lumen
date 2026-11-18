@@ -42,6 +42,8 @@ fn index_and_term_search_keyword() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -90,6 +92,8 @@ fn match_query_finds_text() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -127,6 +131,8 @@ fn search_result_cache_is_cleared_by_index_write() {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     };
     let first = e.search("users", req.clone()).unwrap();
     assert_eq!(first.total, 1);
@@ -211,6 +217,8 @@ fn and_combines_text_term_range() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
@@ -252,6 +260,8 @@ fn number_exact_term_query_matches_only_that_value() {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();

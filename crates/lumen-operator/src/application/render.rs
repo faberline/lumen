@@ -15,6 +15,7 @@
 //! Stateful data pods are not a direct HPA target. The reconcile loop in [`super::reconcile`]
 //! server-side-applies whatever this returns.
 
+pub mod access;
 pub mod backup;
 pub mod identity;
 pub mod monitoring;
@@ -57,6 +58,10 @@ const BACKUP_COMPONENT: &str = "backup";
 /// that selector match objects the sweep has no business deleting.
 const AUTH_DELEGATION_COMPONENT: &str = "auth-delegation";
 
+/// Component label of the namespaced access Role and RoleBinding; the sweep
+/// in [`super::reconcile`] selects on it.
+const ACCESS_POLICY_COMPONENT: &str = "access-policy";
+
 /// The built-in ClusterRole granting `create` on `tokenreviews` and
 /// `subjectaccessreviews` — the two APIs delegated request auth is made of.
 /// Kubernetes ships and maintains it; lumen binds it rather than copying it.
@@ -66,6 +71,12 @@ const AUTH_DELEGATOR_ROLE: &str = "system:auth-delegator";
 /// label set has no equivalent, and the object has no `metadata.namespace` of
 /// its own to read.
 const OWNER_NAMESPACE_LABEL: &str = "lumen.dev/owner-namespace";
+
+/// The runtime UID label for precise retention decisions (faberline/lumen#31).
+pub const RUNTIME_UID_LABEL: &str = "lumen.dev/runtime-uid";
+
+/// The authority label indicating the operator manager identity (faberline/lumen#31).
+pub const AUTHORITY_LABEL: &str = "lumen.dev/authority";
 
 /// The same owner namespace under Faberline's cross-repository key. The shared
 /// GKE test cluster's teardown and reaper (faberline/aw

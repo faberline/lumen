@@ -39,7 +39,7 @@ impl Engine {
     pub(super) fn replace_one_doc(
         collection_id: &str,
         coll: &mut Collection,
-        item: ReplaceDocItem,
+        mut item: ReplaceDocItem,
         ordinal: usize,
         charge: Option<&crate::ingest::domain::change_budget::RetainedCharge>,
         prepared_text: Option<&crate::index::application::text_preparation::PreparedTextRows>,
@@ -90,6 +90,15 @@ impl Engine {
                 );
             }
         }
+
+        // An empty list is a missing value (not a vector field): the field counts as omitted.
+        item.fields.retain(|name, value| {
+            !(value.is_missing()
+                && !matches!(
+                    coll.fields.get(name.as_str()),
+                    Some(FieldIndex::Vector { .. })
+                ))
+        });
 
         let old_fields: BTreeSet<String> = if new_doc_in_request {
             BTreeSet::new()

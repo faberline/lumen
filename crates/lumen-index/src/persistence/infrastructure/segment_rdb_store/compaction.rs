@@ -63,7 +63,7 @@ pub(in crate::persistence) fn write_compacted_field(
         .get(field)
         .ok_or_else(|| anyhow!("compacted field is absent from schema: {field}"))?;
     if !matches!(
-        spec.field_type,
+        spec.storage_type(),
         FieldType::Keyword
             | FieldType::Number
             | FieldType::Set
@@ -131,7 +131,7 @@ pub(in crate::persistence) fn write_compacted_field(
         (segment_rel, rows_rel, SegmentKind::Delta, last.ordinal)
     };
     let segment_path = confined(root, &segment_rel)?;
-    match spec.field_type {
+    match spec.storage_type() {
         FieldType::Text => {
             stream::text_projection::write_text_stream(&segment_path, sequence, &view)?
         }
@@ -141,6 +141,9 @@ pub(in crate::persistence) fn write_compacted_field(
         FieldType::Set => stream::set::write_set_stream(&segment_path, sequence, &view)?,
         FieldType::Number => stream::number::write_number_stream(&segment_path, sequence, &view)?,
         FieldType::Hash => stream::hash::write_hash_stream(&segment_path, sequence, &view)?,
+        FieldType::Int64 => return Err(anyhow!("field type `int64` is not indexed yet")),
+        FieldType::Boolean => return Err(anyhow!("field type `boolean` is not indexed yet")),
+        FieldType::Date => return Err(anyhow!("field type `date` is not indexed yet")),
         FieldType::Vector => {
             let dim = spec
                 .dim

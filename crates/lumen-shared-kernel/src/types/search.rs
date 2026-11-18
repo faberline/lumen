@@ -61,6 +61,14 @@ pub struct SearchRequest {
     /// collection, collapse by `parent_row_id` → distinct matching parents.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collapse: Option<String>,
+    /// Scoring clause (slice A of #311). Parsed and carried only; the engine
+    /// ignores it until #312 lands.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scoring: Option<QueryNode>,
+    /// Filter clause (slice A of #311). Parsed and carried only; the engine
+    /// ignores it until #312 lands.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<QueryNode>,
 }
 
 fn default_limit() -> u32 {
@@ -210,4 +218,46 @@ pub struct DuplicatesResponse {
     pub groups: Vec<DuplicateGroup>,
     pub truncated: bool,
     pub took_ms: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::query::QueryNode;
+
+    #[test]
+    fn search_request_without_scoring_and_filter_roundtrips_without_new_keys() {
+        let req: SearchRequest =
+            serde_json::from_str(r#"{"query":{"term":{"field":"tags","value":"rust"}}}"#)
+                .expect("query-only SearchRequest must parse");
+        assert!(req.scoring.is_none());
+        assert!(req.filter.is_none());
+        let value = serde_json::to_value(&req).expect("serialize");
+        let obj = value.as_object().expect("object");
+        assert!(!obj.contains_key("scoring"));
+        assert!(!obj.contains_key("filter"));
+    }
+
+    #[test]
+    fn search_request_parses_scoring_and_filter() {
+        let req: SearchRequest = serde_json::from_str(
+            r#"{"query":{"term":{"field":"tags","value":"rust"}},"scoring":{"match":{"field":"bio","text":"engineer"}},"filter":{"term":{"field":"tags","value":"rust"}}}"#,
+        )
+        .expect("SearchRequest with scoring and filter must parse");
+        assert!(matches!(req.scoring, Some(QueryNode::Match(_))));
+        assert!(matches!(req.filter, Some(QueryNode::Term(_))));
+        let value = serde_json::to_value(&req).expect("serialize");
+        let obj = value.as_object().expect("object");
+        assert!(obj.contains_key("scoring"));
+        assert!(obj.contains_key("filter"));
+    }
+
+    #[test]
+    fn search_request_filter_key_is_not_dropped() {
+        let req: SearchRequest = serde_json::from_str(
+            r#"{"query":{"term":{"field":"a","value":"b"}},"filter":{"term":{"field":"a","value":"b"}}}"#,
+        )
+        .expect("SearchRequest with filter must parse");
+        assert!(req.filter.is_some());
+    }
 }

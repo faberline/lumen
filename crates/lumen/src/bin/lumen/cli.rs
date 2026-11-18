@@ -109,6 +109,9 @@ pub(crate) enum Command {
     /// body `lumen spec --shapes` publishes — no interactive REPL. Requires
     /// the `backup` feature (pulled in transitively by `operator`).
     Query(QueryArgs),
+    /// Offline Search v2 migration tools. Read current JSON from stdin, write
+    /// Search v2 JSON plus a report to stdout. They never contact a runtime.
+    Migrate(MigrateArgs),
 }
 
 #[derive(clap::Args)]
@@ -121,6 +124,18 @@ pub(crate) struct DockerfileArgs {
 pub(crate) enum DockerfileCmd {
     /// Render a Dockerfile to stdout or `--out`.
     Render(DockerfileRenderArgs),
+}
+
+#[derive(clap::Args)]
+pub(crate) struct MigrateArgs {
+    #[command(subcommand)]
+    pub(crate) cmd: MigrateCmd,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum MigrateCmd {
+    /// Convert a 0.4 collection schema (stdin) to the 0.5 schema plus a report.
+    CollectionSchema,
 }
 
 #[derive(clap::Args)]

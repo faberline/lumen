@@ -3069,6 +3069,7 @@ dependencies = [
  "sha2 0.10.9",
  "storage-durable",
  "tempfile",
+ "time",
  "tokio",
  "tokio-postgres",
  "toml",
@@ -3096,6 +3097,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3163,6 +3165,7 @@ version = "0.6.2"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "k8s-openapi",
  "kube",
  "lumen-access",
