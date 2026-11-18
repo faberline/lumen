@@ -124,9 +124,10 @@ fn spawn_with_the_default_phase_list_includes_restart_persistence() {
 
     let report = read_report(dir.path());
     let phases = report["phases"].as_array().expect("phases");
-    assert_eq!(phases.len(), 6);
+    assert_eq!(phases.len(), 7);
     assert_eq!(phases[4]["name"], "restart_persistence");
     assert_eq!(phases[5]["name"], "checkpoint_and_merge");
+    assert_eq!(phases[6]["name"], "fail_closed");
     assert!(phases.iter().all(|phase| phase["status"] == "passed"));
     assert_eq!(report["cleanup_complete"], true);
 }
@@ -174,5 +175,34 @@ fn endpoint_mode_rejects_restart_persistence() {
     assert!(
         !status.success(),
         "restart_persistence needs --spawn, so endpoint mode must fail"
+    );
+}
+
+#[test]
+fn spawn_fail_closed_passes_all_five_cases() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let status = acceptance()
+        .args([
+            "functional",
+            "--spawn",
+            env!("CARGO_BIN_EXE_lumen"),
+            "--artifact-dir",
+        ])
+        .arg(dir.path())
+        .args(["--phases", "fail_closed"])
+        .status()
+        .expect("runs");
+    assert!(status.success(), "fail_closed must pass");
+
+    let report = read_report(dir.path());
+    assert!(report["failing_phase"].is_null());
+    assert_eq!(report["cleanup_complete"], true);
+    let phases = report["phases"].as_array().expect("phases");
+    assert_eq!(phases.len(), 1);
+    assert_eq!(phases[0]["name"], "fail_closed");
+    assert_eq!(phases[0]["status"], "passed");
+    assert!(
+        !dir.path().join("spawn-data").exists(),
+        "the cleanup step removes the spawn data dir"
     );
 }
