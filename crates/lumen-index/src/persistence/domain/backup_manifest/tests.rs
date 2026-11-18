@@ -1,0 +1,264 @@
+use std::collections::BTreeSet;
+
+use super::*;
+use crate::index::application::engine::Engine;
+use crate::index::infrastructure::snapshot_v1::SnapshotV1;
+use crate::sharding::domain::snapshot_subset::snapshot_bucket_subset;
+use crate::sharding::domain::tests::{field, item};
+use crate::sharding::domain::virtual_bucket_shard_map::VirtualBucketShardMap;
+use crate::shared_kernel::types::{
+    document::{FieldValue, IndexRequest},
+    schema::{CreateCollectionRequest, FieldType},
+};
+
+/// One engine with collection `users` (field `email`), `docs` documents, and
+/// with an extra field `plan` when `extra_field` is set.
+fn snapshot_of(extra_field: bool, docs: u32) -> SnapshotV1 {
+    let engine = Engine::new();
+    let mut fields =
+        std::collections::BTreeMap::from([("email".to_string(), field(FieldType::Keyword))]);
+    if extra_field {
+        fields.insert("plan".to_string(), field(FieldType::Keyword));
+    }
+    engine
+        .create_collection("users", CreateCollectionRequest { fields })
+        .unwrap();
+    for i in 0..docs {
+        let external_id = format!("doc-{i:02}");
+        engine
+            .index(
+                "users",
+                IndexRequest {
+                    request_id: None,
+                    items: vec![item(
+                        &external_id,
+                        "email",
+                        FieldValue::String(format!("{external_id}@example.com")),
+                    )],
+                },
+            )
+            .unwrap();
+    }
+    engine.snapshot().unwrap()
+}
+
+fn shard_artifact(map: &VirtualBucketShardMap, snapshot: &SnapshotV1, shard: u32) -> ShardArtifact {
+    let buckets: BTreeSet<u32> = (0..12)
+        .filter(|b| map.assignment_for_bucket(*b) == Some(shard))
+        .collect();
+    let subset = snapshot_bucket_subset(snapshot, 12, &buckets).unwrap();
+    ShardArtifact {
+        shard,
+        key: format!("shard-{shard}.json"),
+        bytes: serde_json::to_vec(&subset).unwrap(),
+    }
+}
+
+/// A 3-shard set over 12 virtual buckets, map version 7, 24 documents.
+fn three_shard_set() -> (VirtualBucketShardMap, Vec<ShardArtifact>) {
+    let snapshot = snapshot_of(false, 24);
+    let map = VirtualBucketShardMap::balanced(7, 12, 3).unwrap();
+    let artifacts = (0..3).map(|s| shard_artifact(&map, &snapshot, s)).collect();
+    (map, artifacts)
+}
+
+fn valid_manifest() -> BackupManifest {
+    let (map, artifacts) = three_shard_set();
+    build_backup_manifest(&map, &artifacts).unwrap()
+}
+
+#[test]
+fn manifest_lists_every_shard_once_with_matching_digests() {
+    let (map, artifacts) = three_shard_set();
+    let m = build_backup_manifest(&map, &artifacts).unwrap();
+
+    assert_eq!(
+        m.shards.iter().map(|e| e.shard).collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
+    let dir = tempfile::tempdir().unwrap();
+    for (entry, artifact) in m.shards.iter().zip(&artifacts) {
+        let path = dir.path().join(&entry.key);
+        std::fs::write(&path, &artifact.bytes).unwrap();
+        let read_back = std::fs::read(&path).unwrap();
+        verify_artifact(entry, &read_back).unwrap();
+    }
+    assert_eq!(m.shards.iter().map(|e| e.documents).sum::<u64>(), 24);
+    assert_eq!(
+        m.collections.keys().map(String::as_str).collect::<Vec<_>>(),
+        vec!["users"]
+    );
+    assert_eq!(m.virtual_bucket_count, 12);
+    assert_eq!(m.physical_shard_count, 3);
+    assert_eq!(m.shard_map_version, 7);
+    assert_eq!(m.assignments.len(), 12);
+}
+
+#[test]
+fn manifest_round_trips_through_bytes() {
+    let m = valid_manifest();
+    assert_eq!(read_backup_manifest(&m.to_bytes()), Ok(m));
+}
+
+#[test]
+fn backup_id_is_stable() {
+    let (map, artifacts) = three_shard_set();
+    let first = build_backup_manifest(&map, &artifacts).unwrap().backup_id;
+    let second = build_backup_manifest(&map, &artifacts).unwrap().backup_id;
+    assert_eq!(first, second);
+    assert_eq!(first.len(), 64);
+    assert!(first
+        .bytes()
+        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()));
+}
+
+#[test]
+fn backup_id_changes_when_any_shard_artifact_changes() {
+    let (map, artifacts) = three_shard_set();
+    let original = build_backup_manifest(&map, &artifacts).unwrap().backup_id;
+    let mut ids = Vec::new();
+    for i in 0..3 {
+        let mut changed = artifacts.clone();
+        // A trailing space still parses as the same SnapshotV1 document.
+        changed[i].bytes.push(b' ');
+        let id = build_backup_manifest(&map, &changed).unwrap().backup_id;
+        assert_ne!(id, original, "changing shard {i} must change the id");
+        ids.push(id);
+    }
+    assert_ne!(ids[0], ids[1]);
+    assert_ne!(ids[1], ids[2]);
+    assert_ne!(ids[0], ids[2]);
+}
+
+#[test]
+fn verify_artifact_rejects_a_changed_object() {
+    let (map, artifacts) = three_shard_set();
+    let m = build_backup_manifest(&map, &artifacts).unwrap();
+    let mut bytes = artifacts[1].bytes.clone();
+    bytes[0] ^= 0x01;
+    let err = verify_artifact(&m.shards[1], &bytes).unwrap_err();
+    assert_eq!(
+        err,
+        ManifestError::DigestMismatch {
+            key: "shard-1.json".into()
+        }
+    );
+    assert_eq!(
+        err.to_string(),
+        "artifact shard-1.json does not match the manifest digest"
+    );
+}
+
+#[test]
+fn reader_rejects_a_duplicate_shard_entry() {
+    let mut m = valid_manifest();
+    m.shards[2].shard = 1;
+    let err = read_backup_manifest(&m.to_bytes()).unwrap_err();
+    assert_eq!(err, ManifestError::DuplicateShard(1));
+    assert_eq!(err.to_string(), "shard 1 appears more than once");
+}
+
+#[test]
+fn reader_rejects_a_missing_shard_entry() {
+    let mut m = valid_manifest();
+    m.shards.remove(1);
+    let err = read_backup_manifest(&m.to_bytes()).unwrap_err();
+    assert_eq!(err, ManifestError::MissingShard(1));
+    assert_eq!(err.to_string(), "shard 1 is missing");
+}
+
+#[test]
+fn reader_rejects_a_changed_identity() {
+    let mut m = valid_manifest();
+    m.shards[0].bytes += 1;
+    assert_eq!(
+        read_backup_manifest(&m.to_bytes()),
+        Err(ManifestError::IdentityMismatch)
+    );
+}
+
+#[test]
+fn reader_rejects_unknown_version() {
+    let mut m = valid_manifest();
+    m.version = 2;
+    assert_eq!(
+        read_backup_manifest(&m.to_bytes()),
+        Err(ManifestError::UnsupportedVersion(2))
+    );
+}
+
+#[test]
+fn reader_rejects_bad_topology() {
+    let mut m = valid_manifest();
+    m.assignments.pop();
+    let err = read_backup_manifest(&m.to_bytes()).unwrap_err();
+    assert!(
+        matches!(err, ManifestError::InvalidTopology(_)),
+        "got {err:?}"
+    );
+    assert!(err
+        .to_string()
+        .starts_with("invalid backup manifest topology:"));
+}
+
+#[test]
+fn reader_rejects_garbage() {
+    let err = read_backup_manifest(b"{").unwrap_err();
+    assert!(matches!(err, ManifestError::Malformed(_)), "got {err:?}");
+}
+
+#[test]
+fn builder_rejects_duplicate_missing_and_out_of_range() {
+    let (map, artifacts) = three_shard_set();
+    let (a0, a1, a2) = (
+        artifacts[0].clone(),
+        artifacts[1].clone(),
+        artifacts[2].clone(),
+    );
+
+    assert_eq!(
+        build_backup_manifest(&map, &[a0.clone(), a1.clone(), a1.clone()]).unwrap_err(),
+        ManifestError::DuplicateShard(1)
+    );
+    assert_eq!(
+        build_backup_manifest(&map, &[a0.clone(), a2.clone()]).unwrap_err(),
+        ManifestError::MissingShard(1)
+    );
+    let out_of_range = ShardArtifact {
+        shard: 5,
+        key: "shard-5.json".into(),
+        bytes: a0.bytes.clone(),
+    };
+    assert_eq!(
+        build_backup_manifest(&map, &[a0, a1, out_of_range]).unwrap_err(),
+        ManifestError::ShardOutOfRange { shard: 5, count: 3 }
+    );
+    assert_eq!(
+        build_backup_manifest(&map, &[]).unwrap_err(),
+        ManifestError::NoShards
+    );
+}
+
+#[test]
+fn builder_rejects_a_non_snapshot_artifact() {
+    let (map, artifacts) = three_shard_set();
+    let mut broken = artifacts.clone();
+    broken[1].bytes = b"not json".to_vec();
+    let err = build_backup_manifest(&map, &broken).unwrap_err();
+    assert!(
+        matches!(err, ManifestError::UnreadableArtifact { shard: 1, .. }),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn builder_rejects_schema_drift_between_shards() {
+    let (map, artifacts) = three_shard_set();
+    let drifted = snapshot_of(true, 24);
+    let mut drifted_set = artifacts.clone();
+    drifted_set[2] = shard_artifact(&map, &drifted, 2);
+    assert_eq!(
+        build_backup_manifest(&map, &drifted_set).unwrap_err(),
+        ManifestError::SchemaMismatch(2)
+    );
+}

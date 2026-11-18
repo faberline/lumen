@@ -61,7 +61,7 @@ impl std::fmt::Debug for FieldIndex {
 
 impl FieldIndex {
     pub(in crate::index) fn from_spec(spec: &FieldSpec) -> Result<Self> {
-        Ok(match spec.field_type {
+        Ok(match spec.storage_type() {
             FieldType::Text => FieldIndex::Text {
                 analyzer: spec.analyzer.unwrap_or(Analyzer::WhitespaceLower),
                 idx: TextIndex::default(),
@@ -69,6 +69,8 @@ impl FieldIndex {
             FieldType::Keyword => FieldIndex::Keyword(KeywordIndex::default()),
             FieldType::Number => FieldIndex::Number(NumberIndex::default()),
             FieldType::Int64 => return Err(anyhow!("field type `int64` is not indexed yet")),
+            FieldType::Boolean => return Err(anyhow!("field type `boolean` is not indexed yet")),
+            FieldType::Date => return Err(anyhow!("field type `date` is not indexed yet")),
             FieldType::Set => FieldIndex::Set(SetIndex::default()),
             FieldType::Vector => {
                 let vs = spec

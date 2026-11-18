@@ -151,8 +151,8 @@ pub(super) fn eval_term(coll: &Collection, t: &TermQuery) -> Result<RoaringBitma
                 .map(|c| c.into_owned())
                 .unwrap_or_default()
         }
-        (FieldIndex::Number(n), FieldValue::Number(x)) => {
-            let key = SortableF64::new(*x)?;
+        (FieldIndex::Number(n), v @ (FieldValue::Number(_) | FieldValue::Int64(_))) => {
+            let key = SortableF64::new(v.as_query_number().unwrap_or_default())?;
             // Phase 2h-3: read the exact-match posting through the unified
             // accessor so a sealed field (RAM `values` dropped) serves from
             // the mmap sorted-value index + live tail, identical to the in-RAM
@@ -253,11 +253,11 @@ pub(super) fn eval_terms(coll: &Collection, t: &TermsQuery) -> Result<RoaringBit
                         acc |= set.as_ref();
                     }
                 }
-                (FieldIndex::Number(nx), FieldValue::Number(x)) => {
+                (FieldIndex::Number(nx), v @ (FieldValue::Number(_) | FieldValue::Int64(_))) => {
                     // Phase 2h-3: unified accessor — Borrowed (segment OFF) is
                     // the same by-reference word-wise OR as before; Owned
                     // (segment ON) ORs the decoded sorted-value+tail union in.
-                    let key = SortableF64::new(*x)?;
+                    let key = SortableF64::new(v.as_query_number().unwrap_or_default())?;
                     if let Some(set) = nx.value_postings(key) {
                         acc |= set.as_ref();
                     }

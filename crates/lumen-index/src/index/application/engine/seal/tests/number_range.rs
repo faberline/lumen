@@ -52,6 +52,8 @@ fn req(query: QueryNode) -> SearchRequest {
         sort: None,
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 
@@ -69,6 +71,8 @@ fn req_sort(query: QueryNode, field: &str, order: SortOrder) -> SearchRequest {
         }]),
         track_total: true,
         collapse: None,
+        scoring: None,
+        filter: None,
     }
 }
 

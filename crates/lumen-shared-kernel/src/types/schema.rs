@@ -84,6 +84,12 @@ pub enum FieldType {
     /// MinHash). The caller computes the hash; lumen indexes the bits and
     /// answers Hamming-distance queries. Wire value is a hex string.
     Hash,
+    /// true/false value, exact match only. Its index is not built yet: a schema that
+    /// declares a `boolean` field is refused at index build (see #394).
+    Boolean,
+    /// Calendar date, exact, range and sort. Its index is not built yet: a schema that
+    /// declares a `date` field is refused at index build (see #411).
+    Date,
 }
 
 /// Operations a field type can truthfully expose to clients. This is shared by
@@ -102,7 +108,7 @@ pub struct FieldCapabilities {
 }
 
 impl FieldType {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 9] = [
         Self::Text,
         Self::Keyword,
         Self::Number,
@@ -110,6 +116,8 @@ impl FieldType {
         Self::Set,
         Self::Vector,
         Self::Hash,
+        Self::Boolean,
+        Self::Date,
     ];
 
     pub const fn capabilities(self) -> FieldCapabilities {
@@ -184,6 +192,26 @@ impl FieldType {
                 vector_search: false,
                 hamming: true,
             },
+            Self::Boolean => FieldCapabilities {
+                bm25: false,
+                exact: true,
+                prefix: false,
+                range: false,
+                sort: false,
+                set_membership: false,
+                vector_search: false,
+                hamming: false,
+            },
+            Self::Date => FieldCapabilities {
+                bm25: false,
+                exact: true,
+                prefix: false,
+                range: true,
+                sort: true,
+                set_membership: false,
+                vector_search: false,
+                hamming: false,
+            },
         }
     }
 }
@@ -249,6 +277,16 @@ pub enum Analyzer {
 // ---------------------------------------------------------------------------
 
 impl FieldSpec {
+    /// The storage this field uses: `Set` for `{type: keyword, multi: true}`,
+    /// the declared type otherwise.
+    pub fn storage_type(&self) -> FieldType {
+        if self.field_type == FieldType::Keyword && self.multi == Some(true) {
+            FieldType::Set
+        } else {
+            self.field_type
+        }
+    }
+
     /// Normalize sugar: `{type: "keyword", multi: true}` → `{type: "set"}`.
     /// Sets a default analyzer on `text` if absent. Fills in a default
     /// `hnsw-cpu` backend on a vector field when none is declared.

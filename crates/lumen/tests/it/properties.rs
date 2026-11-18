@@ -104,6 +104,8 @@ fn term_search(e: &Engine, field: &str, value: &str) -> Vec<String> {
             sort: None,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()
@@ -129,6 +131,8 @@ fn match_search(e: &Engine, field: &str, text: &str) -> Vec<String> {
             sort: None,
             track_total: true,
             collapse: None,
+            scoring: None,
+            filter: None,
         },
     )
     .unwrap()

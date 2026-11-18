@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, bail, Result};
 
+use crate::checkpoint::CheckpointAndMerge;
 use crate::cli::RunArgs;
 use crate::lifecycle::CollectionLifecycle;
 use crate::report::{summary, write_report, Mode, PhaseResult, PhaseStatus, Report};
@@ -18,6 +19,17 @@ pub(super) trait Phase {
     fn name(&self) -> &str;
     /// A phase passes when this returns `Ok`.
     fn run(&self, endpoint: &str, artifact_dir: &Path) -> Result<()>;
+    /// The checkpoint and merge counts this phase observed. Most phases observe none.
+    fn observed(&self) -> Observed {
+        Observed::default()
+    }
+}
+
+/// Counts that a phase reads from the server's counter deltas. They are never elapsed time.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct Observed {
+    pub(super) checkpoint_count: u64,
+    pub(super) merge_count: u64,
 }
 
 pub(super) trait Cleanup {
@@ -37,6 +49,8 @@ pub(super) fn run_phases(
     cleanup: &dyn Cleanup,
 ) -> Result<Outcome> {
     let mut results: Vec<PhaseResult> = Vec::new();
+    let mut checkpoint_count: u64 = 0;
+    let mut merge_count: u64 = 0;
     for phase in phases {
         let result = match phase.run(&args.endpoint, &args.artifact_dir) {
             Ok(()) => PhaseResult {
@@ -50,6 +64,9 @@ pub(super) fn run_phases(
                 detail: format!("{err:#}"),
             },
         };
+        let observed = phase.observed();
+        checkpoint_count = checkpoint_count.saturating_add(observed.checkpoint_count);
+        merge_count = merge_count.saturating_add(observed.merge_count);
         results.push(result);
     }
 
@@ -81,9 +98,8 @@ pub(super) fn run_phases(
             memory_limit: args.memory_limit.clone(),
             seed: args.seed,
             load_achieved: 0.0,
-            // Real phases fill these counters in later slices.
-            checkpoint_count: 0,
-            merge_count: 0,
+            checkpoint_count,
+            merge_count,
             failing_phase,
             cleanup_complete,
             phases: results,
@@ -118,7 +134,7 @@ impl Cleanup for NoCleanup {
 }
 
 /// The default phase names of a mode. A spawned child also gets `restart_persistence`,
-/// which needs the child to restart.
+/// which needs the child to restart, and then `checkpoint_and_merge`, which reads the counters.
 fn default_phase_names(mode: Mode, spawned: bool) -> Vec<&'static str> {
     match mode {
         Mode::Functional => {
@@ -130,6 +146,7 @@ fn default_phase_names(mode: Mode, spawned: bool) -> Vec<&'static str> {
             ];
             if spawned {
                 names.push("restart_persistence");
+                names.push("checkpoint_and_merge");
             }
             names
         }
@@ -155,7 +172,7 @@ fn phase_list(
             .collect(),
     };
     if names.is_empty() {
-        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, performance_thresholds");
+        bail!("--phases names no phase; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, checkpoint_and_merge, performance_thresholds");
     }
     names
         .iter()
@@ -173,8 +190,14 @@ fn phase_list(
                 }) as Box<dyn Phase>),
                 None => bail!("phase `restart_persistence` needs --spawn"),
             },
+            "checkpoint_and_merge" => match child {
+                Some(child) => {
+                    Ok(Box::new(CheckpointAndMerge::new(child.clone())) as Box<dyn Phase>)
+                }
+                None => bail!("phase `checkpoint_and_merge` needs --spawn"),
+            },
             other => bail!(
-                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, performance_thresholds"
+                "unknown phase `{other}`; supported: endpoint_configured, collection_lifecycle, writes_and_masking, visible_version, restart_persistence, checkpoint_and_merge, performance_thresholds"
             ),
         })
         .collect()
@@ -231,6 +254,8 @@ mod tests {
     struct FakePhase {
         name: &'static str,
         ok: bool,
+        checkpoints: u64,
+        merges: u64,
     }
 
     impl Phase for FakePhase {
@@ -242,6 +267,12 @@ mod tests {
                 Ok(())
             } else {
                 bail!("fake failure")
+            }
+        }
+        fn observed(&self) -> Observed {
+            Observed {
+                checkpoint_count: self.checkpoints,
+                merge_count: self.merges,
             }
         }
     }
@@ -263,8 +294,58 @@ mod tests {
     fn phases(items: &[(&'static str, bool)]) -> Vec<Box<dyn Phase>> {
         items
             .iter()
-            .map(|&(name, ok)| Box::new(FakePhase { name, ok }) as Box<dyn Phase>)
+            .map(|&(name, ok)| {
+                Box::new(FakePhase {
+                    name,
+                    ok,
+                    checkpoints: 0,
+                    merges: 0,
+                }) as Box<dyn Phase>
+            })
             .collect()
+    }
+
+    #[test]
+    fn report_counts_come_from_the_phase_observations() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let list: Vec<Box<dyn Phase>> = vec![
+            Box::new(FakePhase {
+                name: "a",
+                ok: true,
+                checkpoints: 1,
+                merges: 0,
+            }),
+            Box::new(FakePhase {
+                name: "b",
+                ok: true,
+                checkpoints: 2,
+                merges: 3,
+            }),
+        ];
+        let outcome = run_phases(
+            Mode::Functional,
+            &args(dir.path()),
+            &list,
+            &[],
+            &FakeCleanup { ok: true },
+        )
+        .expect("runs");
+        assert_eq!(outcome.report.checkpoint_count, 3);
+        assert_eq!(outcome.report.merge_count, 3);
+    }
+
+    #[test]
+    fn checkpoint_and_merge_needs_spawn() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut run_args = args(dir.path());
+        run_args.phases = Some("checkpoint_and_merge".into());
+        let err = phase_list(Mode::Functional, &run_args, None)
+            .err()
+            .expect("checkpoint_and_merge without a child is an error");
+        assert!(
+            format!("{err:#}").contains("phase `checkpoint_and_merge` needs --spawn"),
+            "{err:#}"
+        );
     }
 
     fn args(dir: &Path) -> RunArgs {
@@ -400,9 +481,10 @@ mod tests {
             ]
         );
         let with = default_phase_names(Mode::Functional, true);
-        assert_eq!(with.len(), 5);
+        assert_eq!(with.len(), 6);
         assert_eq!(&with[..4], without.as_slice());
         assert_eq!(with[4], "restart_persistence");
+        assert_eq!(with[5], "checkpoint_and_merge");
         assert_eq!(
             default_phase_names(Mode::Performance, false),
             ["endpoint_configured"]

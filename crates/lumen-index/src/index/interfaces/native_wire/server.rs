@@ -118,6 +118,8 @@ fn handle_fast_frame(engine: &Engine, frame: &[u8]) -> Result<Vec<u8>> {
                     sort: None,
                     track_total: true,
                     collapse: None,
+                    scoring: None,
+                    filter: None,
                 },
             )
         }
@@ -152,6 +154,8 @@ fn handle_fast_frame(engine: &Engine, frame: &[u8]) -> Result<Vec<u8>> {
                     sort: None,
                     track_total: true,
                     collapse: None,
+                    scoring: None,
+                    filter: None,
                 },
             )
         }
