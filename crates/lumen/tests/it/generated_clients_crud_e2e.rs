@@ -465,7 +465,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{
             metric: None,
             multi: None,
             quantize: None,
-            type_: "keyword".to_string(),
+            type_: models::FieldType::Keyword,
         }},
     );
     let created = client.create_collection(
