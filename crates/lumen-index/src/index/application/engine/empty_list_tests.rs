@@ -96,6 +96,8 @@ fn search_ids(e: &Engine, query: QueryNode) -> Vec<String> {
                 sort: None,
                 track_total: true,
                 collapse: None,
+                scoring: None,
+                filter: None,
             },
         )
         .unwrap();
