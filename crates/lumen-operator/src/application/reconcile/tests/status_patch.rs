@@ -305,9 +305,7 @@ fn status_patch_for_a_stale_status_equals_the_patch_for_no_status() {
         ..Default::default()
     });
 
-    let ready = ReadyFacts {
-        ready: std::collections::HashMap::new(),
-    };
+    let ready = ReadyFacts::new(std::collections::HashMap::new());
     assert_eq!(stale.status_patch(&ready), fresh.status_patch(&ready));
     assert_eq!(fresh.status_patch(&ready), fresh.status_patch(&ready));
 }

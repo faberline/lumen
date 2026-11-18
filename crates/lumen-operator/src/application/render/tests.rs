@@ -68,7 +68,7 @@ fn serving_mounts(lumen: &Lumen) -> Vec<Value> {
 #[test]
 fn raft_pvc_template_carries_runtime_uid_and_authority_labels() {
     let lumen = single_replica();
-    let objects = render(&lumen);
+    let objects = render(&lumen).expect("render");
     let sts = objects
         .iter()
         .find(|o| o["kind"] == "StatefulSet")
@@ -103,7 +103,7 @@ fn backup_cronjob_and_pod_template_carry_runtime_uid_and_authority_labels() {
         },
         admin_token_secret: None,
     });
-    let objects = render(&lumen);
+    let objects = render(&lumen).expect("render");
     let cron = objects
         .iter()
         .find(|o| o["kind"] == "CronJob")
@@ -156,10 +156,12 @@ fn recreation_and_similar_names_produce_distinct_runtime_uids() {
     cr2.metadata.uid = Some("uid-generation-2".into());
 
     let sts1 = render(&cr1)
+        .expect("render")
         .into_iter()
         .find(|o| o["kind"] == "StatefulSet")
         .unwrap();
     let sts2 = render(&cr2)
+        .expect("render")
         .into_iter()
         .find(|o| o["kind"] == "StatefulSet")
         .unwrap();
@@ -183,10 +185,12 @@ fn recreation_and_similar_names_produce_distinct_runtime_uids() {
     cr_a_bc.metadata.uid = Some("uid-a-bc".into());
 
     let sts_ab_c = render(&cr_ab_c)
+        .expect("render")
         .into_iter()
         .find(|o| o["kind"] == "StatefulSet")
         .unwrap();
     let sts_a_bc = render(&cr_a_bc)
+        .expect("render")
         .into_iter()
         .find(|o| o["kind"] == "StatefulSet")
         .unwrap();
@@ -203,7 +207,7 @@ fn negative_control_omitted_uid_renders_no_runtime_uid_label() {
     let mut cr = single_replica();
     cr.metadata.uid = None;
 
-    let objects = render(&cr);
+    let objects = render(&cr).expect("render");
     let sts = objects.iter().find(|o| o["kind"] == "StatefulSet").unwrap();
     let pvc_labels = &sts["spec"]["volumeClaimTemplates"][0]["metadata"]["labels"];
 
@@ -576,6 +580,7 @@ fn restart_hash_assertion_bites_when_a_field_is_left_out_of_the_input() {
 
 fn serving_statefulset_of(lumen: &Lumen) -> Value {
     render(lumen)
+        .expect("render")
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
         .expect("rendered serving StatefulSet")
@@ -643,7 +648,7 @@ fn one_pod_render_carries_no_ha_claim_in_labels_or_annotations() {
     }
 
     let mut values = Vec::new();
-    for object in render(&single_replica()) {
+    for object in render(&single_replica()).expect("render") {
         string_values(&object["metadata"]["labels"], &mut values);
         string_values(&object["metadata"]["annotations"], &mut values);
         string_values(
@@ -759,7 +764,10 @@ fn assert_operator_independent(objects: &[Value]) {
 #[test]
 fn render_is_a_pure_function_of_the_cr() {
     let lumen = single_replica();
-    assert_eq!(render(&lumen), render(&lumen));
+    assert_eq!(
+        render(&lumen).expect("render"),
+        render(&lumen).expect("render")
+    );
 
     let statefulset = serving_statefulset_of(&lumen);
     let pod_meta = &statefulset["spec"]["template"]["metadata"];
@@ -769,13 +777,13 @@ fn render_is_a_pure_function_of_the_cr() {
 
 #[test]
 fn rendered_objects_never_name_the_operator() {
-    assert_operator_independent(&render(&single_replica()));
+    assert_operator_independent(&render(&single_replica()).expect("render"));
 }
 
 #[test]
 #[should_panic(expected = "names the operator")]
 fn injecting_an_operator_env_var_fails_the_independence_check() {
-    let mut objects = render(&single_replica());
+    let mut objects = render(&single_replica()).expect("render");
     let statefulset = objects
         .iter_mut()
         .find(|object| object["kind"] == "StatefulSet")
