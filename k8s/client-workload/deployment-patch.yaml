@@ -1,0 +1,44 @@
+# Copy this patch next to your application's kustomization and replace every
+# REPLACE_ME__* placeholder. The patch uses an existing ServiceAccount (KSA),
+# turns off the default token mount, projects the Lumen audience token, and
+# mounts the public CA ConfigMap without subPath, so an in-place ConfigMap
+# update reaches the container.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: REPLACE_ME__CLIENT_DEPLOYMENT
+  labels:
+    lumen.axiom.dev/client-template-version: "0.6.2"
+spec:
+  template:
+    metadata:
+      labels:
+        lumen.axiom.dev/client-template-version: "0.6.2"
+    spec:
+      serviceAccountName: REPLACE_ME__CLIENT_KSA
+      automountServiceAccountToken: false
+      volumes:
+        - name: lumen-identity
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: lumen.axiom.dev
+                  expirationSeconds: 3600
+                  path: token
+        - name: lumen-trust
+          configMap:
+            name: REPLACE_ME__RUNTIME_CA_CONFIGMAP
+      containers:
+        - name: REPLACE_ME__CONTAINER
+          env:
+            - name: LUMEN_URL
+              value: https://REPLACE_ME__RUNTIME.REPLACE_ME__NAMESPACE.svc:7373
+            - name: LUMEN_CA_FILE
+              value: /var/run/lumen/trust/ca.crt
+          volumeMounts:
+            - name: lumen-identity
+              mountPath: /var/run/secrets/lumen.axiom.dev
+              readOnly: true
+            - name: lumen-trust
+              mountPath: /var/run/lumen/trust
+              readOnly: true
