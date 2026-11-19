@@ -29,6 +29,7 @@ fn sorted_page_deep_bench_cli_reports_latency_fields() {
             "50",
             "--queries",
             "10",
+            "--no-gate",
         ])
         .output()
         .expect("run lumen-bench");

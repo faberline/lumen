@@ -216,6 +216,63 @@ const DECLARED_CALLS: &[DeclaredCall] = &[
         verb: "bind",
         resource_name: Some("system:auth-delegator"),
     },
+    // RBAC for the access Role and RoleBinding adapter (#51): the operator
+    // applies, lists and prunes them, and holds `use` on lumenruntimes so
+    // RBAC lets it hand that permission out.
+    DeclaredCall {
+        api_group: "rbac.authorization.k8s.io",
+        resource: "roles",
+        verb: "get",
+        resource_name: None,
+    },
+    DeclaredCall {
+        api_group: "rbac.authorization.k8s.io",
+        resource: "roles",
+        verb: "list",
+        resource_name: None,
+    },
+    DeclaredCall {
+        api_group: "rbac.authorization.k8s.io",
+        resource: "roles",
+        verb: "patch",
+        resource_name: None,
+    },
+    DeclaredCall {
+        api_group: "rbac.authorization.k8s.io",
+        resource: "roles",
+        verb: "delete",
+        resource_name: None,
+    },
+    DeclaredCall {
+        api_group: "rbac.authorization.k8s.io",
+        resource: "rolebindings",
+        verb: "get",
+        resource_name: None,
+    },
+    DeclaredCall {
+        api_group: "rbac.authorization.k8s.io",
+        resource: "rolebindings",
+        verb: "list",
+        resource_name: None,
+    },
+    DeclaredCall {
+        api_group: "rbac.authorization.k8s.io",
+        resource: "rolebindings",
+        verb: "patch",
+        resource_name: None,
+    },
+    DeclaredCall {
+        api_group: "rbac.authorization.k8s.io",
+        resource: "rolebindings",
+        verb: "delete",
+        resource_name: None,
+    },
+    DeclaredCall {
+        api_group: "lumen.axiom.dev",
+        resource: "lumenruntimes",
+        verb: "use",
+        resource_name: None,
+    },
 ];
 
 fn render_operator_manifest() -> String {

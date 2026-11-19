@@ -44,6 +44,12 @@ pub(super) struct Observation {
     /// has none (#2890). Same provenance as `auth_delegation`, and empty for
     /// every single-replica instance.
     pub(super) peer_identity: Option<String>,
+    /// Why the access Role or RoleBinding could not converge, if it could not
+    /// (#51). Filled from the reconcile context, never from `observe`.
+    pub(super) access_policy: Option<String>,
+    /// How many ServiceAccounts `spec.access` allows; `None` when `spec.access`
+    /// is absent. Pure spec, so `observe` derives it.
+    pub(super) access_subjects: Option<usize>,
     /// Whether this instance runs a replicated Raft group at all — the one
     /// piece of the peer-identity story `observe` *can* derive, since it is
     /// pure spec.
@@ -87,6 +93,14 @@ impl Observation {
                     self.peer_identity
                         .as_deref()
                         .map(|error| ("PeerIdentityNotConfigured", error))
+                })
+                // #51: after auth delegation and peer identity. Those fail every
+                // request or all replication; this one fails only the declared
+                // clients, so it ranks last.
+                .or_else(|| {
+                    self.access_policy
+                        .as_deref()
+                        .map(|error| ("AccessPolicyNotConverged", error))
                 }),
             replicas_ready,
         ) {
@@ -159,6 +173,30 @@ impl Observation {
                 "PeerTlsSecretProjected",
                 "spec.peerTlsSecret is configured; peer TLS material is required at member startup"
                     .to_string(),
+            ),
+        };
+
+        // #51: the access Role and RoleBinding get a condition of their own, so
+        // a watcher sees which object was refused. An absent `spec.access` is
+        // True: no access objects are managed in that case.
+        let access_policy = match (&self.access_policy, self.access_subjects) {
+            (Some(error), _) => ConditionFact::new(
+                "AccessPolicyReady",
+                ConditionStatus::False,
+                "AccessPolicyApplyFailed",
+                error.clone(),
+            ),
+            (None, Some(count)) => ConditionFact::new(
+                "AccessPolicyReady",
+                ConditionStatus::True,
+                "AccessPolicyConverged",
+                format!("{count} allowed ServiceAccounts bound"),
+            ),
+            (None, None) => ConditionFact::new(
+                "AccessPolicyReady",
+                ConditionStatus::True,
+                "AccessNotDeclared",
+                "spec.access is not set; no access Role or RoleBinding is managed".to_string(),
             ),
         };
 
@@ -298,6 +336,7 @@ impl Observation {
             reshard,
             auth_delegation,
             peer_identity,
+            access_policy,
             writable,
             replication,
             config,
@@ -435,6 +474,14 @@ impl Lumen {
             // is derivable here.
             peer_identity: None,
             peer_identity_required: self.spec.peer_identity_required(),
+            // Filled from the reconcile context, like the verdicts above.
+            access_policy: None,
+            // Pure spec: the number of subjects `spec.access` allows.
+            access_subjects: self
+                .spec
+                .access
+                .as_ref()
+                .map(|a| a.allowed_service_accounts.len()),
             // Pure: the same `validate()` the reconcile runs before any apply.
             config_error: self.spec.validate().err(),
             // Filled from the reconcile context, like the two verdicts above.

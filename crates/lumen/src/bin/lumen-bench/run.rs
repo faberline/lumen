@@ -12,7 +12,7 @@ use lumen::types::{
 };
 
 use crate::cli::{parse_types, RunArgs};
-use crate::report::{print_report, summarize, BenchReport, SORTED_PAGE_BUDGET_US};
+use crate::report::{check_budget, print_report, summarize, BenchReport};
 
 pub(super) fn run(args: RunArgs) -> Result<()> {
     if args.documents == 0 {
@@ -60,13 +60,7 @@ fn run_sorted_page_deep(args: &RunArgs) -> Result<BenchReport> {
     }
 
     let report = summarize("sorted_page_deep", args.documents, target_page + 1, samples);
-    if report.p99_us > SORTED_PAGE_BUDGET_US {
-        bail!(
-            "sorted_page_deep p99 {}us exceeds budget {}us",
-            report.p99_us,
-            SORTED_PAGE_BUDGET_US
-        );
-    }
+    check_budget(&report, !args.no_gate)?;
     Ok(report)
 }
 
