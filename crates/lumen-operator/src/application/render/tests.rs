@@ -1052,7 +1052,7 @@ fn serving_statefulset_with_zones_renders_node_affinity_and_donotschedule() {
         "us-central1-b".into(),
         "us-central1-c".into(),
     ];
-    let objs = render(&lumen);
+    let objs = render(&lumen).expect("render");
     let sts = objs
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
@@ -1095,7 +1095,7 @@ fn serving_statefulset_with_zones_renders_node_affinity_and_donotschedule() {
 #[test]
 fn serving_statefulset_without_zones_renders_no_node_affinity() {
     let lumen = single_replica();
-    let objs = render(&lumen);
+    let objs = render(&lumen).expect("render");
     let sts = objs
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
