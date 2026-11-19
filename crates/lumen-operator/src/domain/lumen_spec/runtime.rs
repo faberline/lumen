@@ -74,3 +74,37 @@ pub const SERVE_OPTION_INVENTORY: &[(&str, OptionClass)] = &[
     ("LUMEN_PERSISTENCE", OptionClass::Reserved),
     ("LUMEN_BOOTSTRAP_SEED_URI", OptionClass::Reserved),
 ];
+
+/// (flag, env name) of every `OptionClass::Reserved` option of `lumen serve`.
+pub const RESERVED_SERVE_FLAGS: &[(&str, &str)] = &[
+    ("--host", "LUMEN_HOST"),
+    ("--port", "LUMEN_PORT"),
+    ("--raft-port", "LUMEN_RAFT_PORT"),
+    ("--raft-data-dir", "LUMEN_RAFT_DATA_DIR"),
+    ("--shard-count", "SHARD_COUNT"),
+    ("--data-dir", "LUMEN_DATA_DIR"),
+    (
+        "--search-shard-segment-dirs",
+        "LUMEN_SEARCH_SHARD_SEGMENT_DIRS",
+    ),
+    ("--wal", "LUMEN_WAL"),
+    ("--persistence", "LUMEN_PERSISTENCE"),
+    ("--bootstrap-seed-uri", "LUMEN_BOOTSTRAP_SEED_URI"),
+];
+
+/// (`RuntimeSettings` JSON field, env name, flag) of every typed runtime option.
+pub const TYPED_RUNTIME_OPTIONS: &[(&str, &str, &str)] = &[
+    ("snapshotSecs", "LUMEN_SNAPSHOT_SECS", "--snapshot-secs"),
+    ("graceSecs", "LUMEN_GRACE_SECS", "--grace-secs"),
+    ("otlpEndpoint", "LUMEN_OTLP_ENDPOINT", "--otlp-endpoint"),
+    (
+        "bootstrapMaxBytesPerSec",
+        "LUMEN_BOOTSTRAP_MAX_BYTES_PER_SEC",
+        "--bootstrap-max-bytes-per-sec",
+    ),
+];
+
+/// The flag name of `arg` without any `=value`: `--port=1` gives `--port`.
+pub fn flag_name(arg: &str) -> &str {
+    arg.split('=').next().unwrap_or(arg)
+}
