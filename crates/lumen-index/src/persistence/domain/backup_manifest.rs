@@ -252,4 +252,4 @@ pub fn verify_artifact(entry: &ShardEntry, bytes: &[u8]) -> Result<(), ManifestE
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
