@@ -2,12 +2,17 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use serde_json::{json, Value};
+use service_k8s::{ConditionStatus, ManagedService};
 
 use crate::application::reconcile::access_policy::{
     apply_access_policy, sweep_stale_access_policy, AccessKind, AccessPolicyControl,
     ManagedAccessObject,
 };
+use crate::application::reconcile::plan_verdicts::{
+    ACCESS_POLICY_CONTEXT_KEY, AUTH_DELEGATION_CONTEXT_KEY,
+};
 use crate::application::reconcile::tests::hpa::hpa_test_lumen;
+use crate::application::reconcile::tests::{condition, ready_facts};
 use crate::application::render;
 use crate::domain::lumen_spec::access::{AccessSpec, ServiceAccountSubject};
 use crate::domain::lumen_spec::Lumen;
@@ -376,4 +381,100 @@ async fn sweep_deletes_nothing_when_the_list_fails() {
     };
     sweep_stale_access_policy(&control, std::slice::from_ref(&live)).await;
     assert!(control.deletes.lock().unwrap().is_empty());
+}
+
+// ---- AccessPolicyReady and readiness (#51) -----------------------------
+
+#[test]
+fn a_failed_access_policy_makes_the_cr_not_ready_and_says_why() {
+    // Every replica is up: without the new `ready` arm this CR would report
+    // `Ready=True` while its access Role is not converged.
+    let mut lumen = hpa_test_lumen("search", "acme-cond-access", 1, 2);
+    lumen.spec.access = Some(access(&[("client-ns", "web")]));
+    let context = json!({
+        ACCESS_POLICY_CONTEXT_KEY: "apply Role acme-cond-access/search-access: forbidden",
+    });
+
+    let facts = lumen.conditions(&ready_facts("search", 2), &context);
+
+    let ready = condition(&facts, "Ready");
+    assert_eq!(ready.status, ConditionStatus::False, "got: {facts:?}");
+    assert_eq!(ready.reason, "AccessPolicyNotConverged");
+    assert!(
+        ready
+            .message
+            .contains("Role acme-cond-access/search-access"),
+        "the Ready message must name the refused object, got: {facts:?}"
+    );
+    let policy = condition(&facts, "AccessPolicyReady");
+    assert_eq!(policy.status, ConditionStatus::False);
+    assert_eq!(policy.reason, "AccessPolicyApplyFailed");
+}
+
+#[test]
+fn access_policy_recovers_on_the_next_tick() {
+    let mut lumen = hpa_test_lumen("search", "acme-cond-access-ok", 1, 2);
+    lumen.spec.access = Some(access(&[("client-ns", "web")]));
+    let failing = json!({ACCESS_POLICY_CONTEXT_KEY: "apply Role acme-cond-access-ok/search-access: forbidden"});
+    let facts = lumen.conditions(&ready_facts("search", 2), &failing);
+    assert_eq!(condition(&facts, "Ready").status, ConditionStatus::False);
+
+    let facts = lumen.conditions(&ready_facts("search", 2), &json!({}));
+    let policy = condition(&facts, "AccessPolicyReady");
+    assert_eq!(policy.status, ConditionStatus::True);
+    assert_eq!(policy.reason, "AccessPolicyConverged");
+    assert_eq!(policy.message, "1 allowed ServiceAccounts bound");
+    assert_eq!(condition(&facts, "Ready").status, ConditionStatus::True);
+}
+
+#[test]
+fn an_undeclared_access_policy_is_true_and_ready() {
+    let lumen = hpa_test_lumen("search", "acme-cond-access-none", 1, 2);
+
+    let facts = lumen.conditions(&ready_facts("search", 2), &json!({}));
+
+    let policy = condition(&facts, "AccessPolicyReady");
+    assert_eq!(policy.status, ConditionStatus::True);
+    assert_eq!(policy.reason, "AccessNotDeclared");
+    assert_eq!(condition(&facts, "Ready").status, ConditionStatus::True);
+}
+
+#[test]
+fn an_empty_allow_list_is_deny_all_and_ready() {
+    let mut lumen = hpa_test_lumen("search", "acme-cond-access-empty", 1, 2);
+    lumen.spec.access = Some(access(&[]));
+
+    let facts = lumen.conditions(&ready_facts("search", 2), &json!({}));
+
+    let policy = condition(&facts, "AccessPolicyReady");
+    assert_eq!(policy.status, ConditionStatus::True);
+    assert_eq!(policy.reason, "AccessPolicyConverged");
+    assert_eq!(policy.message, "0 allowed ServiceAccounts bound");
+    assert_eq!(condition(&facts, "Ready").status, ConditionStatus::True);
+}
+
+#[test]
+fn auth_delegation_still_outranks_the_access_policy() {
+    let mut lumen = hpa_test_lumen("search", "acme-cond-access-order", 1, 2);
+    lumen.spec.access = Some(access(&[("client-ns", "web")]));
+    let context = json!({
+        AUTH_DELEGATION_CONTEXT_KEY: "apply ClusterRoleBinding: forbidden",
+        ACCESS_POLICY_CONTEXT_KEY: "apply Role acme-cond-access-order/search-access: forbidden",
+    });
+
+    let facts = lumen.conditions(&ready_facts("search", 2), &context);
+
+    assert_eq!(
+        condition(&facts, "Ready").reason,
+        "AuthDelegationNotGranted",
+        "got: {facts:?}"
+    );
+    assert_eq!(
+        condition(&facts, "AuthDelegationReady").status,
+        ConditionStatus::False
+    );
+    assert_eq!(
+        condition(&facts, "AccessPolicyReady").status,
+        ConditionStatus::False
+    );
 }

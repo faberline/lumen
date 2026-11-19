@@ -5,9 +5,11 @@ use std::time::Duration;
 
 use kube::Client;
 
+use crate::application::reconcile::access_policy::sweep_stale_access_policy;
 use crate::application::reconcile::auth_delegator::sweep_stale_auth_delegator_bindings;
 use crate::application::reconcile::hpa::prune_stale_hpa;
 use crate::domain::lumen_spec::Lumen;
+use crate::infrastructure::kube_access_policy_control::KubeAccessPolicyControl;
 use crate::infrastructure::kube_auth_delegator_control::KubeAuthDelegatorControl;
 use crate::infrastructure::kube_hpa_control::KubeHpaControl;
 
@@ -94,8 +96,10 @@ pub(super) fn spawn_hpa_handoff_loop(client: Client) {
 /// Background loop (#2876): every [`AUTH_DELEGATOR_SWEEP_POLL_INTERVAL`],
 /// while holding the [`AUTH_DELEGATOR_SWEEP_LEASE_NAME`] Lease, list every
 /// `Lumen` cluster-wide and hand the list to
-/// [`sweep_stale_auth_delegator_bindings`]. Independently leader-gated for the
-/// same reason [`spawn_hpa_handoff_loop`] is: it performs cluster writes.
+/// [`sweep_stale_auth_delegator_bindings`]. It also sweeps the per-runtime
+/// access Roles and RoleBindings with the same list (#51). Independently
+/// leader-gated for the same reason [`spawn_hpa_handoff_loop`] is: it performs
+/// cluster writes.
 pub(super) fn spawn_auth_delegator_sweep_loop(client: Client) {
     let identity = std::env::var("POD_NAME")
         .or_else(|_| std::env::var("HOSTNAME"))
@@ -112,6 +116,9 @@ pub(super) fn spawn_auth_delegator_sweep_loop(client: Client) {
     let control = KubeAuthDelegatorControl {
         client: client.clone(),
     };
+    let access_control = KubeAccessPolicyControl {
+        client: client.clone(),
+    };
     tokio::spawn(async move {
         let api: kube::Api<Lumen> = kube::Api::all(client);
         loop {
@@ -122,6 +129,7 @@ pub(super) fn spawn_auth_delegator_sweep_loop(client: Client) {
                 match api.list(&Default::default()).await {
                     Ok(list) => {
                         sweep_stale_auth_delegator_bindings(&control, &list.items).await;
+                        sweep_stale_access_policy(&access_control, &list.items).await;
                     }
                     Err(err) => {
                         // Deliberately no sweep on a failed list: an empty
