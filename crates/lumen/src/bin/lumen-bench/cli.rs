@@ -38,6 +38,9 @@ pub(super) struct RunArgs {
     /// Page size for sorted cursor walks.
     #[arg(long, default_value_t = DEFAULT_PAGE_SIZE)]
     pub(super) page_size: u32,
+    /// Skip the p99 budget check. Reports are still printed. For tests that check the report shape only.
+    #[arg(long)]
+    pub(super) no_gate: bool,
 }
 
 pub(super) fn parse_types(raw: &str) -> Result<Vec<&'static str>> {
@@ -83,6 +86,7 @@ mod tests {
         assert_eq!(defaults.page_size, DEFAULT_PAGE_SIZE);
         assert_eq!(defaults.queries, DEFAULT_QUERIES);
         assert_eq!(parse_types(&defaults.types).unwrap(), ["sorted_page_deep"]);
+        assert!(!defaults.no_gate);
         let Cli {
             command: Command::Run(explicit),
         } = Cli::try_parse_from([
@@ -96,6 +100,7 @@ mod tests {
             "80",
             "--types",
             "bool_filter",
+            "--no-gate",
         ])
         .unwrap();
         assert_eq!(
@@ -103,6 +108,7 @@ mod tests {
             (40_000, 20, 80)
         );
         assert_eq!(parse_types(&explicit.types).unwrap(), ["bool_filter"]);
+        assert!(explicit.no_gate);
         assert!(Cli::try_parse_from(["lumen-bench", "run", "--queries", "invalid"]).is_err());
     }
 }
