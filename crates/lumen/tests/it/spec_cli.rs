@@ -1920,3 +1920,59 @@ fn dx_field_catalog_lists_boolean_exact_only() {
     assert_eq!(operations["hamming"], false);
     assert_eq!(boolean["queries"], json!(["term"]));
 }
+
+#[test]
+fn dx_field_catalog_describes_keyword_multi_and_legacy_set() {
+    let catalog = dx::field_catalog();
+    let fields = catalog["field_types"]
+        .as_array()
+        .expect("field catalogue is an array");
+
+    let keyword = fields
+        .iter()
+        .find(|entry| entry["type"] == "keyword")
+        .expect("catalogue omits keyword");
+    let keyword_purpose = keyword["purpose"]
+        .as_str()
+        .expect("keyword purpose is a string");
+    assert!(
+        keyword_purpose.contains("multi"),
+        "keyword purpose must mention the multi option: {keyword_purpose}"
+    );
+    assert!(
+        keyword["options"]["multi"].is_string(),
+        "keyword must document the multi option: {}",
+        keyword["options"]
+    );
+
+    let set = fields
+        .iter()
+        .find(|entry| entry["type"] == "set")
+        .expect("catalogue omits set");
+    let set_purpose = set["purpose"].as_str().expect("set purpose is a string");
+    assert!(
+        set_purpose.contains("legacy"),
+        "set purpose must say legacy: {set_purpose}"
+    );
+    assert_eq!(set["legacy"], json!(true));
+    assert_eq!(fields.len(), FieldType::ALL.len());
+}
+
+#[test]
+fn openapi_field_type_describes_keyword_multi_and_legacy_set() {
+    let v: Value = serde_json::from_str(&openapi_json()).expect("openapi is valid JSON");
+    let ft = &v["components"]["schemas"]["FieldType"];
+    let description = ft["description"]
+        .as_str()
+        .expect("FieldType has a description");
+    assert!(
+        description.contains("multi"),
+        "FieldType description must mention multi: {description}"
+    );
+    assert!(
+        description.contains("legacy"),
+        "FieldType description must say set is legacy: {description}"
+    );
+    assert!(ft["enum"].as_array().unwrap().contains(&json!("set")));
+    assert!(ft["enum"].as_array().unwrap().contains(&json!("keyword")));
+}

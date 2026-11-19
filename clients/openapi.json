@@ -2065,7 +2065,7 @@
       },
       "FieldType": {
         "type": "string",
-        "description": "Field type name. `float64` is accepted as an alias of `number`.",
+        "description": "Field type name. `float64` is accepted as an alias of `number`.\n`keyword` takes the option `multi` (a de-duplicated, unordered set of strings).\n`set` is the legacy name of that storage; schemas that use it still load.",
         "enum": [
           "text",
           "keyword",
