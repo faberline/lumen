@@ -18,8 +18,12 @@ use crate::domain::lumen_fleet::{
 };
 use crate::domain::lumen_spec::Lumen;
 
+pub mod control;
 pub mod schedule;
+use control::FleetControl;
 use schedule::{FleetEvent, Scheduler, FLEET_REPAIR_INTERVAL};
+#[cfg(test)]
+mod converge_tests;
 #[cfg(test)]
 mod tests;
 
