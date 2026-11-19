@@ -84,11 +84,17 @@ pub(super) fn serving_statefulset(
     } else {
         "HTTP"
     };
-    let spread = |key: &str| {
+    let zone_when_unsatisfiable =
+        if !lumen.spec.placement.zones.is_empty() && lumen.spec.replicas_per_shard > 1 {
+            "DoNotSchedule"
+        } else {
+            "ScheduleAnyway"
+        };
+    let spread = |key: &str, when_unsatisfiable: &str| {
         json!({
             "maxSkew": 1,
             "topologyKey": key,
-            "whenUnsatisfiable": "ScheduleAnyway",
+            "whenUnsatisfiable": when_unsatisfiable,
             "labelSelector": { "matchLabels": cx.selector(COMPONENT) },
         })
     };
@@ -173,9 +179,14 @@ pub(super) fn serving_statefulset(
         lifecycle: None,
         volumes,
         volume_mounts,
-        affinity: Some(
-            crate::domain::capacity::placement::cross_namespace_dedicated_data_node_affinity(),
-        ),
+        affinity: {
+            let mut aff =
+                crate::domain::capacity::placement::cross_namespace_dedicated_data_node_affinity();
+            if !lumen.spec.placement.zones.is_empty() {
+                aff["nodeAffinity"] = zone_node_affinity(&lumen.spec.placement.zones);
+            }
+            Some(aff)
+        },
         // `profile` supplies the operator-resolved capacity selector and toleration;
         // `spec.placement` layers additional user selectors/tolerations.
         // The cross-namespace anti-affinity above stays operator-owned so data members of any
@@ -206,8 +217,8 @@ pub(super) fn serving_statefulset(
             tols
         },
         topology_spread_constraints: vec![
-            spread("topology.kubernetes.io/zone"),
-            spread("kubernetes.io/hostname"),
+            spread("topology.kubernetes.io/zone", zone_when_unsatisfiable),
+            spread("kubernetes.io/hostname", "ScheduleAnyway"),
         ],
         revision_history_limit: Some(5),
         update_strategy: Some(json!({ "type": "RollingUpdate" })),
@@ -267,6 +278,21 @@ const SHARD_LABEL: &str = "lumen.dev/shard";
 /// `<name>-s<k>`, with its own members, its own hard anti-affinity and its own
 /// zone spread, so a shard's replicas never share a node with each other while
 /// two shards may.
+/// Required node affinity to the configured zones (`spec.placement.zones`).
+fn zone_node_affinity(zones: &[String]) -> Value {
+    json!({
+        "requiredDuringSchedulingIgnoredDuringExecution": {
+            "nodeSelectorTerms": [{
+                "matchExpressions": [{
+                    "key": "topology.kubernetes.io/zone",
+                    "operator": "In",
+                    "values": zones,
+                }],
+            }],
+        },
+    })
+}
+
 pub(super) fn serving_statefulsets(
     lumen: &Lumen,
     cx: &RenderCtx<'_>,
@@ -337,6 +363,11 @@ fn shard_statefulset(mut sts: Value, lumen: &Lumen, cx: &RenderCtx<'_>, shard: u
     // Same-shard members never share a node; other shards may.
     *field(&mut sts, &["spec", "template", "spec", "affinity"]) =
         crate::domain::capacity::placement::shard_data_node_affinity(cx.name, shard);
+    // The zone intent applies to every shard too, not only to the single StatefulSet.
+    if !lumen.spec.placement.zones.is_empty() {
+        field(&mut sts, &["spec", "template", "spec", "affinity"])["nodeAffinity"] =
+            zone_node_affinity(&lumen.spec.placement.zones);
+    }
 
     // A three-voter shard must not put two voters into one zone when a zone
     // can still take one. The runtime-wide spreads stay soft.
