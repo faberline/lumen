@@ -41,22 +41,17 @@ pub struct PeerTlsConfig {
 impl From<peer_tls::PeerTlsConfig> for PeerTlsConfig {
     fn from(cfg: peer_tls::PeerTlsConfig) -> Self {
         Self {
-            cert: cfg.cert,
-            key: cfg.key,
-            ca: cfg.ca,
-            required: cfg.required,
+            cert: cfg.cert().to_path_buf(),
+            key: cfg.key().to_path_buf(),
+            ca: cfg.ca().to_path_buf(),
+            required: cfg.required(),
         }
     }
 }
 
 impl From<PeerTlsConfig> for peer_tls::PeerTlsConfig {
     fn from(cfg: PeerTlsConfig) -> Self {
-        Self {
-            cert: cfg.cert,
-            key: cfg.key,
-            ca: cfg.ca,
-            required: cfg.required,
-        }
+        peer_tls::PeerTlsConfig::new(cfg.cert, cfg.key, cfg.ca, cfg.required)
     }
 }
 

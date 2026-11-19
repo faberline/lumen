@@ -25,15 +25,14 @@ fn attach_identity(value: &mut Value, c: &Config) {
         json!(format!("{}/{}", c.namespace, c.name));
 }
 pub(super) fn build(c: &Config) -> Result<super::ManifestDocuments> {
-    let cx = RenderCtx {
-        app: "lumen",
-        manager: "lumen-standalone",
-        api_version: "v1",
-        kind: "Standalone",
-        name: &c.name,
-        ns: &c.namespace,
-        owner: None,
-    };
+    let cx = RenderCtx::new(
+        "lumen",
+        "lumen-standalone",
+        "v1",
+        "Standalone",
+        &c.name,
+        &c.namespace,
+    );
     let labels = cx
         .selector("serving")
         .as_object()

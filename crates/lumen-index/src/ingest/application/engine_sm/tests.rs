@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use raft_runtime::{HostConfig, Membership, RaftHost, RaftStateMachine, RaftStore};
+use raft_runtime::{HostConfig, Index, Membership, NodeId, RaftHost, RaftStateMachine, RaftStore};
 
 use crate::index::application::engine::{raft_dispatch::ApplyOutcome, Engine};
 use crate::ingest::application::engine_sm::EngineSm;
@@ -34,13 +34,15 @@ async fn engine_applies_through_the_shared_host() {
     let engine = Arc::new(Engine::new());
     let sm = EngineSm::new(engine.clone(), 0);
     let host = RaftHost::spawn(
-        0,
-        Membership {
-            voters: vec![0],
-            learners: vec![],
-        },
+        NodeId::new(0),
+        Membership::new(vec![NodeId::new(0)], vec![]),
         HashMap::new(),
-        RaftStore::open(tmp.to_str().unwrap(), 0, raft_runtime::FsyncPolicy::Os).unwrap(),
+        RaftStore::open(
+            tmp.to_str().unwrap(),
+            NodeId::new(0),
+            raft_runtime::FsyncPolicy::Os,
+        )
+        .unwrap(),
         sm.clone() as Arc<dyn RaftStateMachine>,
         HostConfig::default(),
     );
@@ -55,8 +57,9 @@ async fn engine_applies_through_the_shared_host() {
     .encode()
     .unwrap();
     let idx = host.propose(cmd).await.unwrap();
-    assert_eq!(idx, 1);
-    assert!(matches!(sm.take_outcome(1), Ok(ApplyOutcome::Created(_))));
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+    assert_eq!(idx, Index::new(2));
+    assert!(matches!(sm.take_outcome(2), Ok(ApplyOutcome::Created(_))));
 
     // index a doc → rich Indexed outcome, applied to the real engine.
     let cmd = WalRecord::new(RaftLogEntry::Index {
@@ -74,13 +77,15 @@ async fn engine_applies_through_the_shared_host() {
     .encode()
     .unwrap();
     let idx = host.propose(cmd).await.unwrap();
-    assert_eq!(idx, 2);
-    match sm.take_outcome(2) {
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+    assert_eq!(idx, Index::new(3));
+    match sm.take_outcome(3) {
         Ok(ApplyOutcome::Indexed(r)) => assert_eq!(r.indexed, 1),
         other => panic!("expected Indexed, got {other:?}"),
     }
     // RYW: the engine reflects the applied write immediately.
-    assert_eq!(sm.applied_index(), 2);
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+    assert_eq!(sm.applied_index(), Index::new(3));
     let _ = std::fs::remove_dir_all(&tmp);
 }
 
@@ -114,8 +119,11 @@ fn truncate_control_record_applies_and_survives_a_raft_snapshot() {
     .into_iter()
     .enumerate()
     {
-        sm.apply((index + 1) as u64, &WalRecord::new(entry).encode().unwrap())
-            .unwrap();
+        sm.apply(
+            Index::new((index + 1) as u64),
+            &WalRecord::new(entry).encode().unwrap(),
+        )
+        .unwrap();
     }
     assert!(matches!(
         sm.take_outcome(3),
@@ -128,7 +136,7 @@ fn truncate_control_record_applies_and_survives_a_raft_snapshot() {
     let restored_engine = Arc::new(Engine::new());
     let restored = EngineSm::new(restored_engine.clone(), 0);
     restored.restore(&mut bytes.as_slice()).unwrap();
-    assert_eq!(restored.applied_index(), 3);
+    assert_eq!(restored.applied_index(), Index::new(3));
     assert_eq!(restored_engine.stats("docs").unwrap().documents_indexed, 0);
 }
 
@@ -173,8 +181,11 @@ fn unindex_control_record_applies_and_survives_a_raft_snapshot() {
     .into_iter()
     .enumerate()
     {
-        sm.apply((index + 1) as u64, &WalRecord::new(entry).encode().unwrap())
-            .unwrap();
+        sm.apply(
+            Index::new((index + 1) as u64),
+            &WalRecord::new(entry).encode().unwrap(),
+        )
+        .unwrap();
     }
     assert!(matches!(
         sm.take_outcome(3),
@@ -187,7 +198,7 @@ fn unindex_control_record_applies_and_survives_a_raft_snapshot() {
     let restored_engine = Arc::new(Engine::new());
     let restored = EngineSm::new(restored_engine.clone(), 0);
     restored.restore(&mut bytes.as_slice()).unwrap();
-    assert_eq!(restored.applied_index(), 3);
+    assert_eq!(restored.applied_index(), Index::new(3));
     assert_eq!(restored_engine.stats("docs").unwrap().documents_indexed, 1);
 }
 

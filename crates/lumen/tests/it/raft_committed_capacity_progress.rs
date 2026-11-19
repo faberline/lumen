@@ -82,9 +82,9 @@ const FILLER_FIELD: &str = "filler";
 const TARGET_FIELD: &str = "target";
 const FILLER_ID: &str = "checkpointable-local-predecessor";
 const TARGET_ID: &str = "committed-generic-raft-target";
-const CREATE_SEQUENCE: Index = 1;
-const TARGET_SEQUENCE: Index = 2;
-const MALFORMED_SEQUENCE: Index = 3;
+const CREATE_SEQUENCE: Index = Index::new(1);
+const TARGET_SEQUENCE: Index = Index::new(2);
+const MALFORMED_SEQUENCE: Index = Index::new(3);
 const PENDING_HARD_LIMIT_BYTES: u64 = 256 * 1024 * 1024;
 const MAPPED_ROUTE_MINIMUM_BYTES: usize = 32 * 1024 * 1024;
 const TARGET_TOKEN_BYTES: usize = 2 * 1024 * 1024;
@@ -412,10 +412,10 @@ fn apply_before_caller_checkpoint(
             }
             Err(mpsc::TryRecvError::Empty) => {
                 let cleanup_sequence = store
-                    .save_with_sequence(&engine, CREATE_SEQUENCE)
+                    .save_with_sequence(&engine, CREATE_SEQUENCE.get())
                     .expect("caller cleanup checkpoint must release retained local work");
                 assert_eq!(
-                    cleanup_sequence, CREATE_SEQUENCE,
+                    cleanup_sequence, CREATE_SEQUENCE.get(),
                     "cleanup checkpoint must retain the schema watermark while it only releases local setup work",
                 );
                 let resumed = receiver.recv_timeout(CLEANUP_WAIT).unwrap_or_else(|error| {
@@ -491,10 +491,11 @@ fn checkpoint_and_cold(
     phase: &str,
 ) -> Arc<Engine> {
     let saved = store
-        .save_with_sequence(engine, sequence)
+        .save_with_sequence(engine, sequence.get())
         .unwrap_or_else(|error| panic!("{phase}: real Raft checkpoint failed: {error:#}"));
     assert_eq!(
-        saved, sequence,
+        saved,
+        sequence.get(),
         "{phase}: checkpoint must retain the exact committed Raft watermark",
     );
     let cold = store
@@ -502,7 +503,8 @@ fn checkpoint_and_cold(
         .unwrap_or_else(|error| panic!("{phase}: cold-open CURRENT failed: {error:#}"))
         .unwrap_or_else(|| panic!("{phase}: checkpoint must publish CURRENT"));
     assert_eq!(
-        cold.sequence, sequence,
+        cold.sequence,
+        sequence.get(),
         "{phase}: cold CURRENT must retain the exact committed Raft watermark",
     );
     cold.engine
@@ -532,7 +534,8 @@ async fn run_child(root: PathBuf, handshake: PathBuf) {
         .expect("cold-open schema-only Raft checkpoint")
         .expect("schema-only Raft checkpoint must publish CURRENT");
     assert_eq!(
-        cold.sequence, CREATE_SEQUENCE,
+        cold.sequence,
+        CREATE_SEQUENCE.get(),
         "child must begin exactly after the schema checkpoint",
     );
     assert_eq!(
@@ -546,7 +549,7 @@ async fn run_child(root: PathBuf, handshake: PathBuf) {
 
     let engine = cold.engine;
     let state_machine =
-        EngineSm::new_with_segment_store(engine.clone(), CREATE_SEQUENCE, store.clone());
+        EngineSm::new_with_segment_store(engine.clone(), CREATE_SEQUENCE.get(), store.clone());
     let filler_ordinal = fill_checkpointable_local_work(&engine);
     let free_after_setup = PENDING_HARD_LIMIT_BYTES - pending_total_from_engine(&engine);
     assert!(
@@ -583,7 +586,7 @@ async fn run_child(root: PathBuf, handshake: PathBuf) {
     );
     assert_public_pending_budget(
         engine.clone(),
-        TARGET_SEQUENCE,
+        TARGET_SEQUENCE.get(),
         "live committed Raft capacity progress",
     )
     .await;
@@ -604,7 +607,7 @@ async fn run_child(root: PathBuf, handshake: PathBuf) {
     );
     assert_public_pending_budget(
         final_cold.clone(),
-        TARGET_SEQUENCE,
+        TARGET_SEQUENCE.get(),
         "cold committed Raft capacity progress",
     )
     .await;
@@ -738,10 +741,11 @@ fn create_schema_checkpoint(root: &Path) {
         "schema-only checkpoint setup must not retain a document",
     );
     let saved = store
-        .save_with_sequence(&engine, CREATE_SEQUENCE)
+        .save_with_sequence(&engine, CREATE_SEQUENCE.get())
         .expect("clear schema admission charge before child setup");
     assert_eq!(
-        saved, CREATE_SEQUENCE,
+        saved,
+        CREATE_SEQUENCE.get(),
         "schema-only checkpoint must retain its exact watermark",
     );
 }

@@ -171,7 +171,7 @@ fn a_cr_carrying_a_retired_credential_field_renders_no_credential() {
     ];
 
     for (label, spec) in retired_specs() {
-        let objs = render(&lumen_from(spec.clone()));
+        let objs = render(&lumen_from(spec.clone())).expect("render");
         let all = serde_json::to_string(&objs).expect("rendered objects serialize");
         // Positive control. Every assertion below is an absence, and an
         // absence check over an empty render passes for the wrong reason.
@@ -198,7 +198,7 @@ fn a_cr_carrying_a_retired_credential_field_renders_no_credential() {
 #[test]
 fn no_credential_volume_reaches_the_serving_pod() {
     for (label, spec) in retired_specs() {
-        let objs = render(&lumen_from(spec));
+        let objs = render(&lumen_from(spec)).expect("render");
         for v in pod_volumes(&objs) {
             assert!(
                 v.get("secret").is_none(),

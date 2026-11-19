@@ -42,7 +42,7 @@ pub(super) fn resolve_wal_backend(requested: WalBackend) -> WalBackend {
         return requested;
     }
     #[cfg(feature = "raft-wal")]
-    if raft_runtime::cluster::replica_mode() {
+    if raft_runtime::replica_mode() {
         tracing::info!("wal=auto → raft (StatefulSet REPLICAS_PER_SHARD > 1)");
         return WalBackend::Raft;
     }

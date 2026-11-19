@@ -81,7 +81,7 @@ pub(super) fn render_access_yaml(args: &K8sAccessRenderArgs) -> Result<String> {
     let api_groups = [lumen::auth::API_GROUP];
     let collections = [lumen::auth::COLLECTIONS_RESOURCE];
     let admin = [lumen::auth::ADMIN_RESOURCE];
-    let admin_verbs = [lumen::auth::verb(service_auth::role_map::Role::Admin)];
+    let admin_verbs = [lumen::auth::verb(service_auth::Role::Admin)];
     let grant_names: Vec<[&str; 1]> = grants
         .iter()
         .map(|grant| [grant.collection.as_str()])
@@ -244,9 +244,9 @@ fn parse_grants(specs: &[String]) -> Result<Vec<CollectionGrant>> {
             );
         }
         let level = match level {
-            "read" => service_auth::role_map::Role::Read,
-            "write" => service_auth::role_map::Role::Write,
-            "admin" => service_auth::role_map::Role::Admin,
+            "read" => service_auth::Role::Read,
+            "write" => service_auth::Role::Write,
+            "admin" => service_auth::Role::Admin,
             other => anyhow::bail!(
                 "--grant level must be `read`, `write`, or `admin` — got `{other}` in `{spec}`"
             ),
@@ -272,8 +272,8 @@ fn parse_grants(specs: &[String]) -> Result<Vec<CollectionGrant>> {
 /// cumulative because `Role::covers` is — a writer that could not read the
 /// collection it writes would be denied by the same check that lets it write.
 #[cfg(feature = "operator")]
-fn granted_verbs(level: service_auth::role_map::Role) -> Vec<&'static str> {
-    use service_auth::role_map::Role;
+fn granted_verbs(level: service_auth::Role) -> Vec<&'static str> {
+    use service_auth::Role;
     [Role::Read, Role::Write, Role::Admin]
         .into_iter()
         .filter(|needed| level.covers(*needed))

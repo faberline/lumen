@@ -142,7 +142,7 @@ fn default_cr_resolves_e2_standard_2_through_catalog_with_10gi_pvc_and_cross_ns_
     let catalog: CapacityCatalog = CapacityCatalog::from_json(sample_catalog_json()).unwrap();
     let profile = resolve_machine_type("e2-standard-2", &catalog).expect("resolve e2-standard-2");
     let l = test_lumen("search", "default", "e2-standard-2");
-    let objs = lumen::operator::render::render_with_profile(&l, &profile);
+    let objs = lumen::operator::render::render_with_profile(&l, &profile).expect("render");
     assert!(!objs.is_empty(), "rendered objects should not be empty");
 
     let sts = objs
@@ -192,7 +192,7 @@ fn allowed_direct_machine_type_override_resolves_without_exposing_tier_or_pool_n
     );
 
     let l = test_lumen("search", "prod", "n2-standard-4");
-    let objs = lumen::operator::render::render_with_profile(&l, &resolved);
+    let objs = lumen::operator::render::render_with_profile(&l, &resolved).expect("render");
     let sts = objs
         .iter()
         .find(|o| o["kind"] == "StatefulSet")
@@ -234,7 +234,7 @@ fn three_namespaces_selecting_e2_standard_2_share_pool_selector_and_render_cross
     let profile = resolve_machine_type("e2-standard-2", &catalog).expect("resolve e2-standard-2");
     for ns in ["alpha", "beta", "gamma"] {
         let l = test_lumen("search", ns, "e2-standard-2");
-        let objs = lumen::operator::render::render_with_profile(&l, &profile);
+        let objs = lumen::operator::render::render_with_profile(&l, &profile).expect("render");
         let sts = objs.iter().find(|o| o["kind"] == "StatefulSet").unwrap();
         let pod = &sts["spec"]["template"]["spec"];
         assert_eq!(

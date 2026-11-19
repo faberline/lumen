@@ -16,7 +16,7 @@ use crate::domain::lumen_spec::Lumen;
 /// Like every other child, it is owned by the `Lumen` CR and is garbage
 /// collected with the instance.
 pub(super) fn backup_service_account(cx: &RenderCtx<'_>) -> Value {
-    let name = format!("{}-backup", cx.name);
+    let name = format!("{}-backup", cx.name());
     json!({
         "apiVersion": "v1",
         "kind": "ServiceAccount",
@@ -34,13 +34,14 @@ pub(super) fn backup_service_account(cx: &RenderCtx<'_>) -> Value {
 /// stays manifest-only.
 pub(super) fn backup_cron_job(lumen: &Lumen, cx: &RenderCtx<'_>) -> Option<Value> {
     let policy = lumen.spec.serving.backup.as_ref()?;
-    let cron_name = format!("{}-backup", cx.name);
+    let cron_name = format!("{}-backup", cx.name());
     // Cluster-DNS FQDN of the serving ClusterIP Service (`serving_service`),
     // reachable from any namespace's CronJob pod regardless of the operator's
     // own DNS search suffix.
     let url = format!(
         "http://{}.{}.svc.cluster.local:{CLIENT_PORT}",
-        cx.name, cx.ns
+        cx.name(),
+        cx.ns()
     );
     let mut args = vec![
         "backup".to_string(),

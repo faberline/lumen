@@ -54,8 +54,8 @@ fn reader_rejects_complete_crc_valid_malformed_middle_frame_without_visiting_suf
     let first = cursor.next_frame().unwrap().unwrap();
     let middle = cursor.next_frame().unwrap().unwrap();
     let suffix = cursor.next_frame().unwrap().unwrap();
-    assert_eq!((first.seq, middle.seq, suffix.seq), (1, 2, 3));
-    assert!(decode_payload(&middle.payload).is_err());
+    assert_eq!((first.seq(), middle.seq(), suffix.seq()), (1, 2, 3));
+    assert!(decode_payload(middle.payload()).is_err());
     assert!(cursor.next_frame().unwrap().is_none());
 
     let mut visited = Vec::new();
