@@ -1,0 +1,10 @@
+# CODEGEN-BEGIN
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Optional egress policy for the client workload. Add it only where the CNI
+# enforces NetworkPolicy.
+
+resources:
+  - networkpolicy.yaml
+# CODEGEN-END
