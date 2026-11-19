@@ -364,3 +364,39 @@ fn text_record_cost_uses_the_borrowed_upper_bound_without_normalized_tokens() {
 mod exact_default_ngram;
 
 mod prepared_text;
+
+#[test]
+fn boolean_value_has_a_cost_on_a_boolean_field_and_is_invalid_on_a_keyword_field() {
+    use super::text_representation::{field_cost, FieldCostError};
+    use crate::ingest::domain::change_memory_cost::FieldCost;
+
+    let bool_spec = FieldSpec {
+        field_type: FieldType::Boolean,
+        analyzer: None,
+        multi: None,
+        dim: None,
+        metric: None,
+        backend: None,
+        quantize: None,
+        facetable: false,
+    };
+    let result = field_cost(
+        &bool_spec,
+        &FieldValue::Bool(true),
+        TextRepresentation::Normalized,
+        None,
+    );
+    assert!(matches!(result, Ok(FieldCost::Boolean)));
+
+    let keyword_spec = FieldSpec {
+        field_type: FieldType::Keyword,
+        ..bool_spec
+    };
+    let result = field_cost(
+        &keyword_spec,
+        &FieldValue::Bool(true),
+        TextRepresentation::Normalized,
+        None,
+    );
+    assert!(matches!(result, Err(FieldCostError::Invalid)));
+}
