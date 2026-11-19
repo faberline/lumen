@@ -13,8 +13,7 @@ use crate::domain::lumen_fleet::children::{
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
 use crate::domain::lumen_fleet::status::{project_status, spec_hash, status_patch};
 use crate::domain::lumen_fleet::{
-    FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL, FLEET_MANAGER,
-    FLEET_SEED_MANAGER,
+    FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL,
 };
 use crate::domain::lumen_spec::Lumen;
 
@@ -60,6 +59,7 @@ pub fn spawn_fleet_loop(client: kube::Client) {
     tokio::spawn(async move {
         let fleets: kube::Api<LumenFleet> = kube::Api::all(client.clone());
         let lumens: kube::Api<Lumen> = kube::Api::all(client.clone());
+        let control = crate::infrastructure::kube_fleet_control::KubeFleetControl::new(client.clone());
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<FleetEvent>();
 
         let fleet_watch = fleets.clone();
@@ -134,7 +134,7 @@ pub fn spawn_fleet_loop(client: kube::Client) {
                 match fleets.list(&Default::default()).await {
                     Ok(list) => {
                         for fleet in &list.items {
-                            converge_logged(&client, &fleets, fleet).await;
+                            converge_logged(&control, fleet).await;
                         }
                     }
                     Err(err) => tracing::warn!(error = %err, "fleet: list LumenFleet failed"),
@@ -142,7 +142,7 @@ pub fn spawn_fleet_loop(client: kube::Client) {
             } else {
                 for name in &batch.fleets {
                     match fleets.get_opt(name).await {
-                        Ok(Some(fleet)) => converge_logged(&client, &fleets, &fleet).await,
+                        Ok(Some(fleet)) => converge_logged(&control, &fleet).await,
                         // The fleet is gone; its children stay (prune is per pass).
                         Ok(None) => {}
                         Err(err) => {
@@ -155,12 +155,8 @@ pub fn spawn_fleet_loop(client: kube::Client) {
     });
 }
 
-async fn converge_logged(
-    client: &kube::Client,
-    fleets: &kube::Api<LumenFleet>,
-    fleet: &LumenFleet,
-) {
-    if let Err(err) = converge(client, fleets, fleet).await {
+async fn converge_logged(control: &dyn FleetControl, fleet: &LumenFleet) {
+    if let Err(err) = converge(control, fleet).await {
         tracing::warn!(
             fleet = %fleet.metadata.name.clone().unwrap_or_default(),
             error = %err,
@@ -170,11 +166,11 @@ async fn converge_logged(
 }
 
 /// One convergence pass over a single fleet.
-async fn converge(
-    client: &kube::Client,
-    fleets: &kube::Api<LumenFleet>,
-    fleet: &LumenFleet,
-) -> anyhow::Result<()> {
+///
+/// A failed cluster call sets only its own entry (`ObserveFailed` or
+/// `ApplyFailed`) and the pass goes on. Only a failed status write ends the
+/// pass with an error.
+async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Result<()> {
     use kube::ResourceExt;
 
     let fleet_name = fleet.name_any();
@@ -190,34 +186,42 @@ async fn converge(
                 continue;
             }
         };
+        // Declared before the first cluster call: an `ObserveFailed` entry
+        // must stay declared so that `Delete` never prunes it.
         declared.insert(child_key(&instance.namespace, &instance.name));
 
-        if !namespace_exists(client, &instance.namespace).await? {
-            entries.push(entry(
-                instance,
-                "NamespaceMissing",
-                "the namespace does not exist; the fleet does not create namespaces",
-            ));
-            continue;
+        match control.namespace_exists(&instance.namespace).await {
+            Ok(true) => {}
+            Ok(false) => {
+                entries.push(entry(
+                    instance,
+                    "NamespaceMissing",
+                    "the namespace does not exist; the fleet does not create namespaces",
+                ));
+                continue;
+            }
+            Err(err) => {
+                entries.push(entry(instance, "ObserveFailed", &err.to_string()));
+                continue;
+            }
         }
 
-        let lumens: kube::Api<Lumen> = kube::Api::namespaced(client.clone(), &instance.namespace);
-        let live = lumens.get_opt(&instance.name).await?;
-        let live_label = live
-            .as_ref()
-            .map(|object| object.labels().get(FLEET_LABEL).map(String::as_str));
-        match adoption(live_label, &fleet_name) {
+        let live = match control
+            .lumen_fleet_label(&instance.namespace, &instance.name)
+            .await
+        {
+            Ok(live) => live,
+            Err(err) => {
+                entries.push(entry(instance, "ObserveFailed", &err.to_string()));
+                continue;
+            }
+        };
+        match adoption(live.as_ref().map(|label| label.as_deref()), &fleet_name) {
             Adoption::Create => {
-                let body: Lumen = serde_json::from_value(seed_object(&fleet_name, instance, spec))?;
-                let params = kube::api::PostParams {
-                    field_manager: Some(FLEET_SEED_MANAGER.to_string()),
-                    ..Default::default()
-                };
-                match lumens.create(&params, &body).await {
-                    Ok(_) => entries.push(entry_with_hash(instance, "Created", spec)),
-                    Err(err) => {
-                        entries.push(entry(instance, "ApplyFailed", &err.to_string()));
-                    }
+                let body = seed_object(&fleet_name, instance, spec);
+                match control.create_lumen(body).await {
+                    Ok(()) => entries.push(entry_with_hash(instance, "Created", spec)),
+                    Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
                 }
             }
             // A `Lumen` this fleet did not create is not this fleet's to
@@ -228,54 +232,50 @@ async fn converge(
             }
             Adoption::Apply => {
                 let body = apply_object(&fleet_name, instance, spec);
-                match lumens
-                    .patch(
-                        &instance.name,
-                        &kube::api::PatchParams::apply(FLEET_MANAGER).force(),
-                        &kube::api::Patch::Apply(&body),
-                    )
+                match control
+                    .apply_lumen(&instance.namespace, &instance.name, body)
                     .await
                 {
-                    Ok(_) => entries.push(entry_with_hash(instance, "Applied", spec)),
+                    Ok(()) => entries.push(entry_with_hash(instance, "Applied", spec)),
                     Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
                 }
             }
         }
     }
 
-    entries.extend(prune(client, fleet, &declared).await?);
+    let mut prune_error = None;
+    match prune(control, fleet, &declared).await {
+        Ok(extra) => entries.extend(extra),
+        Err(err) => prune_error = Some(err.to_string()),
+    }
 
-    let status = status_patch(&project_status(
+    let mut projected = project_status(
         &planned,
         entries,
         fleet.metadata.generation.unwrap_or(0),
-    ));
-    fleets
-        .patch_status(
-            &fleet_name,
-            &kube::api::PatchParams::default(),
-            &kube::api::Patch::Merge(&status),
-        )
+    );
+    if let Some(err) = prune_error {
+        projected.message.push_str(&format!("; prune skipped: {err}"));
+    }
+    control
+        .patch_fleet_status(&fleet_name, status_patch(&projected))
         .await?;
     Ok(())
 }
 
 /// Report — and, only under [`PrunePolicy::Delete`](crate::domain::lumen_fleet::PrunePolicy::Delete), remove — instances this
-/// fleet created that its spec no longer declares.
+/// fleet created that its spec no longer declares. Only the list call can
+/// fail the whole prune; a failed delete stays on its own entry.
 async fn prune(
-    client: &kube::Client,
+    control: &dyn FleetControl,
     fleet: &LumenFleet,
     declared: &BTreeSet<ChildKey>,
 ) -> anyhow::Result<Vec<FleetEntryStatus>> {
     use kube::ResourceExt;
 
     let fleet_name = fleet.name_any();
-    let lumens: kube::Api<Lumen> = kube::Api::all(client.clone());
-    let params = kube::api::ListParams::default().labels(&format!("{FLEET_LABEL}={fleet_name}"));
     let mut out = Vec::new();
-    for live in lumens.list(&params).await?.items {
-        let namespace = live.namespace().unwrap_or_default();
-        let name = live.name_any();
+    for (namespace, name) in control.list_fleet_lumens(&fleet_name).await? {
         let key = child_key(&namespace, &name);
         let orphan = PlannedInstance {
             namespace: namespace.clone(),
@@ -287,21 +287,13 @@ async fn prune(
             PruneDecision::Orphaned => {
                 out.push(entry(&orphan, "Orphaned", ORPHAN_RETAINED_MESSAGE));
             }
-            PruneDecision::Pruned => {
-                let scoped: kube::Api<Lumen> = kube::Api::namespaced(client.clone(), &namespace);
-                match scoped.delete(&name, &Default::default()).await {
-                    Ok(_) => out.push(entry(&orphan, "Pruned", "")),
-                    Err(err) => out.push(entry(&orphan, "ApplyFailed", &err.to_string())),
-                }
-            }
+            PruneDecision::Pruned => match control.delete_lumen(&namespace, &name).await {
+                Ok(()) => out.push(entry(&orphan, "Pruned", "")),
+                Err(err) => out.push(entry(&orphan, "ApplyFailed", &err.to_string())),
+            },
         }
     }
     Ok(out)
-}
-
-async fn namespace_exists(client: &kube::Client, namespace: &str) -> anyhow::Result<bool> {
-    let api: kube::Api<k8s_openapi::api::core::v1::Namespace> = kube::Api::all(client.clone());
-    Ok(api.get_opt(namespace).await?.is_some())
 }
 
 pub(crate) fn entry(instance: &PlannedInstance, state: &str, message: &str) -> FleetEntryStatus {

@@ -1257,7 +1257,7 @@ spec:
                       description: Lowercase hex SHA-256 of the canonical JSON of the spec the fleet wrote for this entry. Set only for `Created` and `Applied`.
                       type: string
                     state:
-                      description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `Orphaned` | `Pruned`.'
+                      description: '`Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted` | `ApplyFailed` | `ObserveFailed` | `Orphaned` | `Pruned`.'
                       type: string
                   required:
                   - name
