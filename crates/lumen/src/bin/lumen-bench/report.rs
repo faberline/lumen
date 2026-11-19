@@ -1,6 +1,8 @@
 //! A cell's report: the percentiles `summarize` takes over the measured
 //! samples, the budget it stamps, and the line `print_report` writes.
 
+use anyhow::{bail, Result};
+
 pub(super) const SORTED_PAGE_BUDGET_US: u128 = 5_000;
 
 #[derive(Debug)]
@@ -29,6 +31,19 @@ pub(super) fn print_report(report: BenchReport) {
         report.max_us,
         report.budget_us
     );
+}
+
+/// Fails when `report.p99_us` is over the budget, unless `gate` is false.
+pub(super) fn check_budget(report: &BenchReport, gate: bool) -> Result<()> {
+    if gate && report.p99_us > report.budget_us {
+        bail!(
+            "{} p99 {}us exceeds budget {}us",
+            report.cell,
+            report.p99_us,
+            report.budget_us
+        );
+    }
+    Ok(())
 }
 
 pub(super) fn summarize(
@@ -87,5 +102,22 @@ mod tests {
         assert_eq!(tail.measured_pages, 100);
         assert_eq!(tail.max_us, 10_000);
         assert_eq!(tail.p99_us, 1);
+    }
+
+    #[test]
+    fn check_budget_fails_over_budget_and_passes_when_not_gated() {
+        let over = summarize("sorted_page_deep", 100, 50, vec![9_000]);
+        let err = check_budget(&over, true).expect_err("9000us is over 5000us");
+        assert_eq!(
+            err.to_string(),
+            "sorted_page_deep p99 9000us exceeds budget 5000us"
+        );
+        assert!(check_budget(&over, false).is_ok());
+
+        let under = summarize("sorted_page_deep", 100, 50, vec![4_999]);
+        assert!(check_budget(&under, true).is_ok());
+
+        let equal = summarize("sorted_page_deep", 100, 50, vec![5_000]);
+        assert!(check_budget(&equal, true).is_ok());
     }
 }
