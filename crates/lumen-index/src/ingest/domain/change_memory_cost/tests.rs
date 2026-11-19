@@ -239,3 +239,14 @@ fn checked_overflow_rejects_an_unrepresentable_reservation() {
     let change = Change::index_new_document(usize::MAX, FieldCost::Keyword { value_bytes: 1 });
     assert_eq!(estimate_change(&change), Err(CostError::Overflow));
 }
+
+#[test]
+fn boolean_cost_is_one_map_entry_and_one_roaring_member() {
+    let cost = estimate_change(&Change::index_new_document(8, FieldCost::Boolean)).unwrap();
+    assert!(cost.active >= MAP_ENTRY_BYTES);
+    let hash = estimate_change(&Change::index_new_document(8, FieldCost::Hash)).unwrap();
+    assert!(
+        cost.active <= hash.active,
+        "a boolean costs no more than a hash"
+    );
+}
