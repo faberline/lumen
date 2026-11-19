@@ -1547,7 +1547,7 @@ fn render_topology_1x1_with_zones() {
     spec.placement.zones = vec!["us-central1-a".into()];
     assert!(spec.validate().is_ok());
 
-    let objs = render(&lumen("search", spec));
+    let objs = render(&lumen("search", spec)).expect("render");
     let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
 
     let node_terms = &pod["affinity"]["nodeAffinity"]
@@ -1590,7 +1590,7 @@ fn render_topology_nx1_with_zones() {
     spec.placement.zones = vec!["us-central1-a".into()];
     assert!(spec.validate().is_ok());
 
-    let objs = render(&lumen("search", spec));
+    let objs = render(&lumen("search", spec)).expect("render");
     let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
 
     let node_terms = &pod["affinity"]["nodeAffinity"]
@@ -1626,7 +1626,7 @@ fn render_topology_nx3_three_zones() {
     ];
     assert!(spec.validate().is_ok());
 
-    let objs = render(&lumen("search", spec));
+    let objs = render(&lumen("search", spec)).expect("render");
     let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
 
     let node_terms = &pod["affinity"]["nodeAffinity"]
@@ -1667,7 +1667,7 @@ fn render_topology_two_replica_compatibility_zones_unset() {
     spec.voter_count = 2;
     assert!(spec.validate().is_ok());
 
-    let objs = render(&lumen("search", spec));
+    let objs = render(&lumen("search", spec)).expect("render");
     let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
 
     assert!(pod["affinity"].get("nodeAffinity").is_none());
@@ -1714,7 +1714,7 @@ fn render_never_creates_cluster_or_node_pool_and_zones_rejects_machine_type() {
         "us-central1-b".into(),
         "us-central1-c".into(),
     ];
-    let objs = render(&lumen("search", spec.clone()));
+    let objs = render(&lumen("search", spec.clone())).expect("render");
     for obj in &objs {
         let kind = obj["kind"].as_str().unwrap_or("");
         assert_ne!(kind, "Cluster", "render must never emit a Cluster object");
