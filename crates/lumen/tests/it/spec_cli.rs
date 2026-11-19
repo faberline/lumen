@@ -1446,8 +1446,8 @@ fn dx_llm_composes_library_owned_provider_content() {
     assert_eq!(value["providers"].as_array().unwrap().len(), 1);
     assert_eq!(value["providers"][0]["id"], "openapi-codegen");
     let provider = openapi_codegen::llm::topic();
-    assert_eq!(value["providers"][0]["summary"], provider.summary);
-    let library_body = provider.body;
+    assert_eq!(value["providers"][0]["summary"], provider.summary());
+    let library_body = provider.body();
     assert_eq!(value["providers"][0]["markdown"], library_body);
     let rendered_markdown = value["markdown"].as_str().unwrap();
     assert!(rendered_markdown.contains(library_body));
@@ -1493,7 +1493,7 @@ fn dx_llm_composes_library_owned_provider_content() {
     let raft_provider = raft_runtime::llm::topic();
     assert_eq!(
         release_value["providers"][0]["markdown"],
-        raft_provider.body
+        raft_provider.body()
     );
     let release_markdown = release_value["markdown"].as_str().unwrap();
     for needle in [
@@ -1743,17 +1743,9 @@ fn every_generated_client_takes_a_private_ca_and_the_name_it_verifies() {
 
     for (lang, entry, needles) in expected {
         let target = policy.resolve(lang, None).expect("pinned target");
-        let opts = GenOptions {
-            lang,
-            target: Some(target),
-            spec_path: std::path::PathBuf::new(),
-            out_dir: std::path::PathBuf::new(),
-            client_name: "createClient".to_string(),
-            http_client: HttpClient::Fetch,
-            emit_types: true,
-            emit_client: true,
-            emit_hooks: matches!(lang, Lang::Ts),
-        };
+        let opts = GenOptions::new(lang, "", "", "createClient")
+            .with_target(target)
+            .with_http_client(HttpClient::Fetch);
         let out = generate_for_target(&openapi_json(), &opts, target).expect("generate client");
         let file = out
             .files

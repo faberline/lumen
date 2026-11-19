@@ -75,14 +75,11 @@ fn replay_reserves_capacity_before_decoding_a_complete_frame() {
 #[test]
 fn replay_does_not_fetch_frame_two_before_applying_frame_one() {
     let frames = std::cell::RefCell::new(VecDeque::from([
-        LogFrame {
-            seq: 1,
-            payload: encode_payload(&rec(create_entry("u"))).unwrap(),
-        },
-        LogFrame {
-            seq: 2,
-            payload: encode_payload(&rec(index_entry("u", "u1", "a@x"))).unwrap(),
-        },
+        LogFrame::new(1, encode_payload(&rec(create_entry("u"))).unwrap()),
+        LogFrame::new(
+            2,
+            encode_payload(&rec(index_entry("u", "u1", "a@x"))).unwrap(),
+        ),
     ]));
     let polls = Cell::new(0usize);
     let mut applied = Vec::new();

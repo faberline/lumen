@@ -55,7 +55,7 @@ fn drain(hosts: &mut [Option<DeterministicHost>]) -> Result<()> {
                     .expect("source host is live")
                     .take_next(to)
                     .expect("ready peer has an envelope");
-                let target = usize::try_from(to).context("peer id does not fit usize")?;
+                let target = usize::try_from(to.get()).context("peer id does not fit usize")?;
                 hosts
                     .get_mut(target)
                     .and_then(Option::as_mut)
@@ -121,17 +121,22 @@ fn schema() -> CreateCollectionRequest {
 #[test]
 fn engine_sm_commits_and_recovers_on_the_deterministic_host() -> Result<()> {
     let root = TempDir::new()?;
-    let membership = Membership {
-        voters: (0..NODE_COUNT as NodeId).collect(),
-        learners: Vec::new(),
-    };
+    let membership = Membership::new(
+        (0..NODE_COUNT as u64).map(NodeId::new).collect(),
+        Vec::new(),
+    );
     let mut engines = Vec::with_capacity(NODE_COUNT);
     let mut sms = Vec::with_capacity(NODE_COUNT);
     let mut hosts = Vec::with_capacity(NODE_COUNT);
-    for id in 0..NODE_COUNT as NodeId {
+    for id in 0..NODE_COUNT {
         let engine = Arc::new(Engine::new());
         let sm = EngineSm::new(engine.clone(), 0);
-        hosts.push(Some(open_host(&root, id, &membership, sm.clone())?));
+        hosts.push(Some(open_host(
+            &root,
+            NodeId::new(id as u64),
+            &membership,
+            sm.clone(),
+        )?));
         engines.push(engine);
         sms.push(sm);
     }
@@ -168,7 +173,7 @@ fn engine_sm_commits_and_recovers_on_the_deterministic_host() -> Result<()> {
     let reopened_sm = EngineSm::new(reopened_engine.clone(), 0);
     hosts[follower] = Some(open_host(
         &root,
-        follower as NodeId,
+        NodeId::new(follower as u64),
         &membership,
         reopened_sm.clone(),
     )?);

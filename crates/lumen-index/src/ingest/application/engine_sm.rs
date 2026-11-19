@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
-use raft_runtime::{Index, OutcomeWindow};
+use raft_runtime::OutcomeWindow;
 
 use crate::index::application::admission::record_reservation::RecordReservation;
 use crate::index::application::admission::{RecordAdmissionError, RepriceRecord};
@@ -176,7 +176,7 @@ impl EngineSm {
         })
     }
 
-    fn apply_record(&self, index: Index, mut record: AdmittedRaftRecord) -> Result<()> {
+    fn apply_record(&self, index: u64, mut record: AdmittedRaftRecord) -> Result<()> {
         loop {
             match self
                 .engine

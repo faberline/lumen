@@ -184,6 +184,6 @@ live replica synchronization mechanism.
 "#
     .to_string();
     out.push_str("\n## Shared raft-runtime topology primitive\n");
-    out.push_str(raft_runtime::llm::topic().body);
+    out.push_str(raft_runtime::llm::topic().body());
     out
 }

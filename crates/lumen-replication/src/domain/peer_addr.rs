@@ -38,7 +38,7 @@ impl RaftGroup {
         for replica in 0..cfg.replicas_per_shard {
             // Pod-ordinal math shared with `raft_runtime::cluster::ClusterTopology`
             // (#1002) — no local `%`/`/` peer-DNS arithmetic.
-            let ordinal = raft_runtime::cluster::peer_ordinal(cfg.shard_count, shard, replica);
+            let ordinal = raft_runtime::peer_ordinal(cfg.shard_count, shard, replica);
             let pod_name = format!("{prefix}-{ordinal}");
             let host = format!("{pod_name}.{headless_service}");
             let role = if replica < cfg.voter_count {
@@ -66,7 +66,7 @@ impl RaftGroup {
         // host:port pairs. Useful for running a 3-pod cluster on a
         // single machine; index N maps to replica N in this shard. Parsing
         // is shared with `ClusterTopology::from_env`'s peer override (#1002).
-        let overrides = raft_runtime::cluster::parse_peer_overrides("LUMEN_PEERS");
+        let overrides = raft_runtime::parse_peer_overrides("LUMEN_PEERS");
         for (i, peer) in peers.iter_mut().enumerate() {
             if let Some(addr) = overrides.get(i) {
                 if let Some((host, port)) = addr.rsplit_once(':') {

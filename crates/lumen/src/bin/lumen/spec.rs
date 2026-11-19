@@ -23,21 +23,14 @@ pub(crate) fn spec_gen(args: GenArgs) -> Result<()> {
         GenLang::Rust => Lang::Rust,
     };
     let target = TargetPolicy::from_toml(TARGET_POLICY)?.resolve(lang, args.target.as_deref())?;
-    let opts = GenOptions {
-        lang,
-        target: Some(target),
-        spec_path: PathBuf::new(),
-        out_dir: args.out.clone(),
-        client_name: "createClient".to_string(),
-        http_client: match args.http {
+    // `GenOptions::new` emits types and client, and emits TanStack Query hooks
+    // only for `Lang::Ts` (a TypeScript-only concern).
+    let opts = GenOptions::new(lang, PathBuf::new(), args.out.clone(), "createClient")
+        .with_target(target)
+        .with_http_client(match args.http {
             GenHttp::Fetch => HttpClient::Fetch,
             GenHttp::Axios => HttpClient::Axios,
-        },
-        emit_types: true,
-        emit_client: true,
-        // TanStack Query hooks are a TypeScript-only concern.
-        emit_hooks: matches!(lang, Lang::Ts),
-    };
+        });
     let auth = FileBearerAuth::new(
         "/var/run/secrets/kubernetes.io/serviceaccount/token",
         ".svc.cluster.local",

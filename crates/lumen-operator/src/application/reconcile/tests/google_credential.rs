@@ -39,7 +39,7 @@ fn leaks_google_material(objects: &[Value], serving_sa: &str) -> bool {
 #[test]
 fn rendered_runtime_carries_no_google_credential_material() {
     let lumen = hpa_test_lumen("search", "acme", 1, 1);
-    let objects = render::render(&lumen);
+    let objects = render::render(&lumen).expect("render");
     let serving_sa = render::serving_service_account_name(&lumen);
 
     assert!(
@@ -63,7 +63,7 @@ fn google_annotation_set_by_the_deployer_is_detected_by_the_same_check() {
         "iam.gke.io/gcp-service-account".into(),
         "x@p.iam.gserviceaccount.com".into(),
     );
-    let objects = render::render(&lumen);
+    let objects = render::render(&lumen).expect("render");
     let serving_sa = render::serving_service_account_name(&lumen);
 
     let serving = objects

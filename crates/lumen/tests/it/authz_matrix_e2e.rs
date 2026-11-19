@@ -128,21 +128,14 @@ impl ReviewBackend for Cluster {
         audiences: &[String],
     ) -> Result<TokenReviewOutcome, ReviewError> {
         Ok(match self.tokens.get(token) {
-            Some(username) => TokenReviewOutcome {
-                authenticated: true,
-                identity: ReviewedIdentity {
+            Some(username) => TokenReviewOutcome::authenticated(
+                ReviewedIdentity {
                     username: (*username).to_string(),
                     ..Default::default()
                 },
-                audiences: audiences.to_vec(),
-                error: None,
-            },
-            None => TokenReviewOutcome {
-                authenticated: false,
-                identity: ReviewedIdentity::default(),
-                audiences: Vec::new(),
-                error: Some("unknown token".into()),
-            },
+                audiences.to_vec(),
+            ),
+            None => TokenReviewOutcome::rejected("unknown token"),
         })
     }
 

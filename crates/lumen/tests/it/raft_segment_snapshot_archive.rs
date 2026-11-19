@@ -56,7 +56,7 @@ use lumen::types::{
     VectorMetric,
 };
 use lumen::wal::WalRecord;
-use raft_runtime::RaftStateMachine;
+use raft_runtime::{Index, RaftStateMachine};
 use tempfile::TempDir;
 
 const ARCHIVE_MAGIC: &[u8] = b"LSEGRAFT";
@@ -169,7 +169,7 @@ fn apply(sm: &EngineSm, index: u64, entry: RaftLogEntry) {
     let command = WalRecord::new(entry)
         .encode()
         .expect("encode a valid Raft WAL record");
-    sm.apply(index, &command)
+    sm.apply(Index::new(index), &command)
         .expect("apply a valid Raft WAL record");
 }
 
@@ -314,7 +314,7 @@ fn assert_refused_archive_preserves_receiver(
     );
     assert_eq!(
         receiver.applied_index(),
-        applied_before,
+        Index::new(applied_before),
         "{case}: refusal must retain the receiver Raft watermark"
     );
     assert_safe_receiver_surface(receiver_engine, case);
@@ -356,7 +356,7 @@ fn archive_at(sm: &EngineSm, index: u64) -> Vec<u8> {
         .expect("preflight a segment Raft snapshot")
         .expect("segment mode must prepare an archive snapshot");
     let prepared = preparation
-        .capture_at(index)
+        .capture_at(Index::new(index))
         .expect("capture one exact applied Raft prefix");
     let mut archive = Vec::new();
     prepared
@@ -426,7 +426,7 @@ fn segment_raft_archive_restores_an_exact_cut_and_legacy_rdb() {
         .expect("preflight the segment archive")
         .expect("segment mode must use the archive snapshot path");
     let prepared = preparation
-        .capture_at(SNAPSHOT_INDEX)
+        .capture_at(Index::new(SNAPSHOT_INDEX))
         .expect("capture the requested exact Raft prefix");
     apply(
         &source,
@@ -465,7 +465,7 @@ fn segment_raft_archive_restores_an_exact_cut_and_legacy_rdb() {
 
     assert_eq!(
         receiver.applied_index(),
-        SNAPSHOT_INDEX,
+        Index::new(SNAPSHOT_INDEX),
         "restore must retain the archive's exact applied Raft index"
     );
     assert_pre_capture_surface(&receiver_engine);
@@ -493,7 +493,7 @@ fn segment_raft_archive_restores_an_exact_cut_and_legacy_rdb() {
         .expect("restore legacy RDB bytes unchanged");
     assert_eq!(
         legacy_receiver.applied_index(),
-        SNAPSHOT_INDEX,
+        Index::new(SNAPSHOT_INDEX),
         "legacy RDB restore must retain its applied Raft index"
     );
     assert_pre_capture_surface(&legacy_engine);
@@ -558,7 +558,7 @@ fn segment_raft_archive_refuses_corrupt_input_without_mutating_receiver_state() 
             &receiver_engine,
             &current_path,
             &current_before,
-            applied_before,
+            applied_before.get(),
             &malformed,
             case,
         );
@@ -581,7 +581,7 @@ fn segment_raft_archive_keeps_the_exact_cut_while_export_is_blocked() {
         .expect("preflight the segment archive")
         .expect("segment mode must prepare an archive snapshot");
     let prepared = preparation
-        .capture_at(SNAPSHOT_INDEX)
+        .capture_at(Index::new(SNAPSHOT_INDEX))
         .expect("capture the exact prefix before output begins");
 
     let (started_tx, started_rx) = mpsc::sync_channel(1);
@@ -611,7 +611,7 @@ fn segment_raft_archive_keeps_the_exact_cut_while_export_is_blocked() {
             ))
             .encode()
             .expect("encode post-capture record");
-            let result = source.apply(POST_CAPTURE_INDEX, &command);
+            let result = source.apply(Index::new(POST_CAPTURE_INDEX), &command);
             let _ = apply_done_tx.send(());
             result
         }))
@@ -723,7 +723,7 @@ fn segment_raft_archive_keeps_the_exact_cut_while_export_is_blocked() {
         .expect("restore the archive pinned through the blocked export");
     assert_eq!(
         receiver.applied_index(),
-        SNAPSHOT_INDEX,
+        Index::new(SNAPSHOT_INDEX),
         "the blocked export must still restore its original Raft cut"
     );
     assert_pre_capture_surface(&receiver_engine);
@@ -772,7 +772,7 @@ fn segment_raft_snapshot_entry_point_emits_archive_and_publishes_current() {
         .expect("restore the compatibility entry-point archive");
     assert_eq!(
         receiver.applied_index(),
-        SNAPSHOT_INDEX,
+        Index::new(SNAPSHOT_INDEX),
         "the compatibility entry-point archive must retain its exact Raft cut"
     );
     assert_pre_capture_surface(&receiver_engine);
@@ -831,7 +831,7 @@ fn segment_raft_legacy_rdb_startup_restore_replaces_an_ahead_current() {
     let (receiver_engine, receiver, receiver_store) = segment_sm(&receiver_root);
     assert_eq!(
         receiver.applied_index(),
-        0,
+        Index::new(0),
         "the startup receiver must begin before the legacy Raft snapshot"
     );
 
@@ -849,7 +849,7 @@ fn segment_raft_legacy_rdb_startup_restore_replaces_an_ahead_current() {
 
     assert_eq!(
         receiver.applied_index(),
-        SNAPSHOT_INDEX,
+        Index::new(SNAPSHOT_INDEX),
         "legacy startup restore must install the snapshot's Raft index"
     );
     assert_pre_capture_surface(&receiver_engine);
@@ -873,7 +873,7 @@ fn segment_raft_legacy_rdb_startup_restore_replaces_an_ahead_current() {
     );
     assert_eq!(
         receiver.applied_index(),
-        POST_CAPTURE_INDEX,
+        Index::new(POST_CAPTURE_INDEX),
         "the valid next Raft record must apply after legacy startup restore"
     );
     assert_eq!(

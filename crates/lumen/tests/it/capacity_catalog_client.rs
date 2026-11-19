@@ -112,13 +112,13 @@ async fn reconcile_plan_native_selector_skips_catalog_and_preserves_placement() 
         "native placement must not read the catalog: {seen:?}"
     );
     let statefulset = plan
-        .children
+        .children()
         .iter()
         .find(|child| child["kind"] == "StatefulSet")
         .unwrap_or_else(|| {
             panic!(
                 "native plan did not render a StatefulSet; kinds: {:?}",
-                plan.children
+                plan.children()
                     .iter()
                     .map(|child| child["kind"].clone())
                     .collect::<Vec<_>>()
