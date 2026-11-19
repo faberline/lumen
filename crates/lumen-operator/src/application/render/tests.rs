@@ -1029,3 +1029,74 @@ fn prunes_old_single_statefulset_and_pdb_when_sharded() {
     assert!(has(&targets, "NetworkPolicy", "search"), "{targets:?}");
     assert!(!has(&targets, "StatefulSet", "search"), "{targets:?}");
 }
+
+#[test]
+fn serving_statefulset_with_zones_renders_node_affinity_and_donotschedule() {
+    let mut lumen = single_replica();
+    lumen.spec.replicas_per_shard = 3;
+    lumen.spec.voter_count = 3;
+    lumen.spec.placement.zones = vec![
+        "us-central1-a".into(),
+        "us-central1-b".into(),
+        "us-central1-c".into(),
+    ];
+    let objs = render(&lumen);
+    let sts = objs
+        .into_iter()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet");
+    let pod = &sts["spec"]["template"]["spec"];
+
+    assert_eq!(
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            ["topologyKey"],
+        "kubernetes.io/hostname"
+    );
+
+    let terms = &pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]
+        ["nodeSelectorTerms"];
+    assert_eq!(
+        terms[0]["matchExpressions"][0]["key"],
+        "topology.kubernetes.io/zone"
+    );
+    assert_eq!(terms[0]["matchExpressions"][0]["operator"], "In");
+    assert_eq!(
+        terms[0]["matchExpressions"][0]["values"],
+        json!(["us-central1-a", "us-central1-b", "us-central1-c"])
+    );
+
+    let spreads = pod["topologySpreadConstraints"]
+        .as_array()
+        .expect("spreads");
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .expect("zone spread");
+    assert_eq!(zone_spread["whenUnsatisfiable"], "DoNotSchedule");
+    let host_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "kubernetes.io/hostname")
+        .expect("host spread");
+    assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
+
+#[test]
+fn serving_statefulset_without_zones_renders_no_node_affinity() {
+    let lumen = single_replica();
+    let objs = render(&lumen);
+    let sts = objs
+        .into_iter()
+        .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
+        .expect("rendered serving StatefulSet");
+    let pod = &sts["spec"]["template"]["spec"];
+
+    assert!(pod["affinity"].get("nodeAffinity").is_none());
+    let spreads = pod["topologySpreadConstraints"]
+        .as_array()
+        .expect("spreads");
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .expect("zone spread");
+    assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
