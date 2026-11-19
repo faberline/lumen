@@ -36,8 +36,8 @@ pub struct FieldSpec {
     /// `whitespace_lower` when omitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub analyzer: Option<Analyzer>,
-    /// Convenience flag: `{type: "keyword", multi: true}` is sugar for
-    /// `{type: "set"}`. Normalized at schema-validation time.
+    /// With `type: "keyword"`, the field holds a de-duplicated, unordered set of strings
+    /// (the same storage as `type: "set"`). Kept as declared: `normalize` does not rewrite it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub multi: Option<bool>,
     /// Vector dimensionality. Required when `type == "vector"`,
@@ -287,14 +287,10 @@ impl FieldSpec {
         }
     }
 
-    /// Normalize sugar: `{type: "keyword", multi: true}` → `{type: "set"}`.
+    /// Fill defaults.
     /// Sets a default analyzer on `text` if absent. Fills in a default
     /// `hnsw-cpu` backend on a vector field when none is declared.
     pub fn normalize(mut self) -> Self {
-        if matches!(self.field_type, FieldType::Keyword) && self.multi == Some(true) {
-            self.field_type = FieldType::Set;
-            self.multi = None;
-        }
         if matches!(self.field_type, FieldType::Text) && self.analyzer.is_none() {
             self.analyzer = Some(Analyzer::WhitespaceLower);
         }
