@@ -4,6 +4,10 @@
 pub use crate::persistence::application::backup::{
     fetch_snapshot_bytes, restore_snapshot_bytes, run_backup,
 };
+pub use crate::persistence::application::backup_set_restore::{
+    restore_backup_set, BackupSetSource, DirSource, EngineSet, RestoreError, RestoreOptions,
+    RestoreReport, ShardRestoreTarget,
+};
 pub use crate::persistence::domain::backup_manifest::{
     build_backup_manifest, read_backup_manifest, verify_artifact, BackupManifest, ManifestError,
     ShardArtifact, ShardEntry, BACKUP_MANIFEST_KEY, BACKUP_MANIFEST_VERSION,
