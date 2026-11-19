@@ -1672,7 +1672,7 @@
             }
           }
         ],
-        "description": "One item of a [`BatchSearchRequest`]. Flattened on the wire, so an item\nlooks like `{\"collection\": \"...\", \"query\": {...}, \"limit\": 20, ...}` —\nthe same fields `POST /collections/{id}/search` accepts, plus the\ntarget `collection`."
+        "description": "One item of a [`BatchSearchRequest`]. Flattened on the wire, so an item\nlooks like `{\"collection\": \"...\", \"query\": {...}, \"limit\": 20, ...}` —\nthe same fields `POST /collections/{id}/search` accepts, plus the\ntarget `collection`. An unknown field next to the flattened SearchRequest\nfields is rejected with an error that names it."
       },
       "BatchSearchRequest": {
         "type": "object",
@@ -2946,7 +2946,8 @@
             "type": "boolean",
             "description": "Whether to compute the exact total match count. Defaults to `true`\n(back-compat). When `false`, the planner may early-terminate and\n`total` becomes a lower bound (≥ the returned page size)."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "SearchResponse": {
         "type": "object",
@@ -3016,7 +3017,8 @@
           "order": {
             "$ref": "#/components/schemas/SortOrder"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "StatsResponse": {
         "type": "object",
