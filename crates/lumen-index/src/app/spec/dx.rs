@@ -45,7 +45,7 @@ fn field_entry(field_type: FieldType) -> Value {
         ),
         FieldType::Keyword => (
             "keyword",
-            "varchar-like exact value; byte/lexicographic range and sort",
+            "varchar-like exact value; byte/lexicographic range and sort; option `multi: true` holds a de-duplicated, unordered set of strings",
         ),
         FieldType::Number => ("number", "numeric value; numeric range and sort"),
         FieldType::Int64 => ("int64", "64-bit integer, exact; numeric range and sort"),
@@ -54,7 +54,10 @@ fn field_entry(field_type: FieldType) -> Value {
             "date",
             "calendar date YYYY-MM-DD; exact, range and sort (not indexed yet)",
         ),
-        FieldType::Set => ("set", "multi-valued keyword membership"),
+        FieldType::Set => (
+            "set",
+            "legacy name of keyword with `multi: true`; old schemas with this type still load",
+        ),
         FieldType::Vector => ("vector", "semantic kNN over a caller-supplied embedding"),
         FieldType::Hash => ("hash", "perceptual/structural near-duplicate search"),
     };
@@ -88,6 +91,10 @@ fn field_entry(field_type: FieldType) -> Value {
                 "queries".into(),
                 json!(["term", "terms", "prefix", "range", "sort"]),
             );
+            object.insert(
+                "options".into(),
+                json!({ "multi": "true holds a de-duplicated, unordered set of strings; same storage as the legacy `set` type" }),
+            );
         }
         FieldType::Number => {
             object.insert("queries".into(), json!(["term", "range", "sort"]));
@@ -104,6 +111,7 @@ fn field_entry(field_type: FieldType) -> Value {
         }
         FieldType::Set => {
             object.insert("queries".into(), json!(["term", "terms"]));
+            object.insert("legacy".into(), json!(true));
         }
         FieldType::Vector => {
             object.insert("metrics".into(), json!(["cosine", "dot", "l2"]));
