@@ -230,6 +230,7 @@ mod boolean_tests {
 
     #[test]
     fn boolean_field_spec_is_still_declared_not_indexed() {
-        assert_eq!(bool_field().field_type, FieldType::Boolean);
+        let err = FieldIndex::from_spec(&bool_field()).expect_err("boolean is not indexed yet");
+        assert!(err.to_string().contains("boolean"), "{err}");
     }
 }
