@@ -1,6 +1,7 @@
-//! What the plan hook found — a missing Raft peer identity (#2890) or a refused
-//! auth-delegator binding (#2876) — and the reconcile-context keys that carry
-//! each verdict to the condition projection.
+//! What the plan hook found — a missing Raft peer identity (#2890), a refused
+//! auth-delegator binding (#2876) or an access Role and RoleBinding that did
+//! not converge (#51) — and the reconcile-context keys that carry each verdict
+//! to the condition projection.
 
 use crate::application::render;
 use crate::domain::lumen_spec::Lumen;
@@ -33,6 +34,9 @@ pub(super) fn check_peer_identity(lumen: &Lumen) -> Option<String> {
 ///
 /// [`apply_auth_delegator_binding`]: crate::application::reconcile::auth_delegator::apply_auth_delegator_binding
 pub(super) const AUTH_DELEGATION_CONTEXT_KEY: &str = "authDelegationError";
+
+/// The reconcile-context key carrying `apply_access_policy`'s verdict (#51).
+pub(super) const ACCESS_POLICY_CONTEXT_KEY: &str = "accessPolicyError";
 
 /// The same channel for [`check_peer_identity`]'s verdict (#2890). Same reason:
 /// the check is a Secret read, and `observe` is I/O-free by contract.
@@ -69,6 +73,15 @@ pub(super) fn capacity_error(context: &serde_json::Value) -> Option<String> {
 pub(super) fn auth_delegation_error(context: &serde_json::Value) -> Option<String> {
     context
         .get(AUTH_DELEGATION_CONTEXT_KEY)?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// Read that verdict back out. Absent key = the access policy converged (or is
+/// not declared).
+pub(super) fn access_policy_error(context: &serde_json::Value) -> Option<String> {
+    context
+        .get(ACCESS_POLICY_CONTEXT_KEY)?
         .as_str()
         .map(str::to_string)
 }
