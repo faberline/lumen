@@ -59,7 +59,8 @@ pub fn spawn_fleet_loop(client: kube::Client) {
     tokio::spawn(async move {
         let fleets: kube::Api<LumenFleet> = kube::Api::all(client.clone());
         let lumens: kube::Api<Lumen> = kube::Api::all(client.clone());
-        let control = crate::infrastructure::kube_fleet_control::KubeFleetControl::new(client.clone());
+        let control =
+            crate::infrastructure::kube_fleet_control::KubeFleetControl::new(client.clone());
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<FleetEvent>();
 
         let fleet_watch = fleets.clone();
@@ -249,13 +250,11 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
         Err(err) => prune_error = Some(err.to_string()),
     }
 
-    let mut projected = project_status(
-        &planned,
-        entries,
-        fleet.metadata.generation.unwrap_or(0),
-    );
+    let mut projected = project_status(&planned, entries, fleet.metadata.generation.unwrap_or(0));
     if let Some(err) = prune_error {
-        projected.message.push_str(&format!("; prune skipped: {err}"));
+        projected
+            .message
+            .push_str(&format!("; prune skipped: {err}"));
     }
     control
         .patch_fleet_status(&fleet_name, status_patch(&projected))
