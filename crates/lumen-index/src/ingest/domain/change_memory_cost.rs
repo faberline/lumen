@@ -65,6 +65,7 @@ pub enum FieldCost {
         member_bytes: usize,
     },
     Hash,
+    Boolean,
     Text {
         distinct_terms: usize,
         total_term_bytes: usize,

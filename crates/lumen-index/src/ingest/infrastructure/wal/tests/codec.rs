@@ -365,3 +365,24 @@ fn wal_encode_of_int64_returns_the_explicit_error() {
     let err = rec.encode().expect_err("int64 has no WAL tag yet");
     assert!(err.to_string().contains("int64"), "unexpected error: {err}");
 }
+
+#[test]
+fn wal_encode_of_a_boolean_returns_the_explicit_error() {
+    let rec = WalRecord::new(RaftLogEntry::Index {
+        collection_id: "docs".into(),
+        req: IndexRequest {
+            request_id: None,
+            items: vec![IndexItem {
+                external_id: "doc-1".into(),
+                field: "flag".into(),
+                value: FieldValue::Bool(true),
+                version: None,
+            }],
+        },
+    });
+    let err = rec.encode().expect_err("boolean has no WAL tag yet");
+    assert!(
+        err.to_string().contains("boolean"),
+        "unexpected error: {err}"
+    );
+}

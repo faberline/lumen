@@ -274,12 +274,12 @@ fn one(change: Change) -> Result<RecordCost, NormalizeError> {
     Ok(out)
 }
 
-enum FieldCostError {
+pub(super) enum FieldCostError {
     Overflow,
     Invalid,
 }
 
-fn field_cost(
+pub(super) fn field_cost(
     spec: &FieldSpec,
     value: &FieldValue,
     text_representation: TextRepresentation,
@@ -297,6 +297,7 @@ fn field_cost(
             })?,
         }),
         (FieldType::Hash, FieldValue::String(_)) => Ok(FieldCost::Hash),
+        (FieldType::Boolean, FieldValue::Bool(_)) => Ok(FieldCost::Boolean),
         (FieldType::Text, FieldValue::String(value)) => {
             if matches!(text_representation, TextRepresentation::PreparedRow) {
                 return Ok(FieldCost::Text {

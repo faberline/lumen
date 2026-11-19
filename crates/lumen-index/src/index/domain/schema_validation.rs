@@ -55,8 +55,25 @@ pub(in crate::index) fn value_kind(v: &FieldValue) -> &'static str {
         FieldValue::String(_) => "string",
         FieldValue::Number(_) => "number",
         FieldValue::Int64(_) => "int64",
+        FieldValue::Bool(_) => "boolean",
         FieldValue::Vector(_) => "f32[]",
         FieldValue::StringList(_) => "string[]",
+    }
+}
+
+/// Accepts only a JSON boolean for a boolean field. Any other value is a
+/// typed type mismatch.
+// used by the boolean index slice (#430)
+#[allow(dead_code)]
+pub(in crate::index) fn validate_boolean_value(value: &FieldValue, field_name: &str) -> Result<()> {
+    match value {
+        FieldValue::Bool(_) => Ok(()),
+        other => Err(StorageError::TypeMismatch {
+            field: field_name.to_string(),
+            expected: FieldType::Boolean,
+            got: value_kind(other),
+        }
+        .into()),
     }
 }
 
@@ -133,5 +150,87 @@ mod int64_tests {
     fn keyword_index_refuses_int64() {
         let fi = FieldIndex::Keyword(KeywordIndex::default());
         assert!(validate_value(&fi, &FieldValue::Int64(7), "tag").is_err());
+    }
+}
+
+#[cfg(test)]
+mod boolean_tests {
+    use super::*;
+    use crate::index::domain::keyword_index::KeywordIndex;
+    use crate::index::domain::number_index::NumberIndex;
+
+    fn bool_field() -> FieldSpec {
+        FieldSpec {
+            field_type: FieldType::Boolean,
+            analyzer: None,
+            multi: None,
+            dim: None,
+            metric: None,
+            backend: None,
+            quantize: None,
+            facetable: false,
+        }
+    }
+
+    #[test]
+    fn boolean_accepts_true() {
+        assert!(validate_boolean_value(&FieldValue::Bool(true), "flag").is_ok());
+    }
+
+    #[test]
+    fn boolean_accepts_false() {
+        assert!(validate_boolean_value(&FieldValue::Bool(false), "flag").is_ok());
+    }
+
+    #[test]
+    fn boolean_refuses_the_string_true() {
+        let err = validate_boolean_value(&FieldValue::String("true".into()), "flag")
+            .expect_err("a string is refused");
+        // `expected` is printed with Debug (`Boolean`), so compare lowercased.
+        let msg = err.to_string().to_lowercase();
+        assert!(msg.contains("boolean"), "{msg}");
+        assert!(msg.contains("string"), "{msg}");
+    }
+
+    #[test]
+    fn boolean_refuses_the_number_zero() {
+        let err = validate_boolean_value(&FieldValue::Number(0.0), "flag")
+            .expect_err("a number is refused");
+        assert!(err.to_string().contains("number"));
+    }
+
+    #[test]
+    fn boolean_refuses_the_number_one() {
+        let err = validate_boolean_value(&FieldValue::Number(1.0), "flag")
+            .expect_err("a number is refused");
+        assert!(err.to_string().contains("number"));
+    }
+
+    #[test]
+    fn boolean_refuses_null() {
+        // `null` never reaches validation: it does not decode to a FieldValue.
+        assert!(serde_json::from_str::<FieldValue>("null").is_err());
+    }
+
+    #[test]
+    fn bool_value_is_refused_on_a_keyword_field() {
+        let fi = FieldIndex::Keyword(KeywordIndex::default());
+        let err = validate_value(&fi, &FieldValue::Bool(true), "tag")
+            .expect_err("a bool is refused on keyword");
+        let msg = err.to_string().to_lowercase();
+        assert!(msg.contains("boolean"), "{msg}");
+        assert!(msg.contains("keyword"), "{msg}");
+    }
+
+    #[test]
+    fn bool_value_is_refused_on_a_number_field() {
+        let fi = FieldIndex::Number(NumberIndex::default());
+        assert!(validate_value(&fi, &FieldValue::Bool(false), "count").is_err());
+    }
+
+    #[test]
+    fn boolean_field_spec_is_still_declared_not_indexed() {
+        let err = FieldIndex::from_spec(&bool_field()).expect_err("boolean is not indexed yet");
+        assert!(err.to_string().contains("boolean"), "{err}");
     }
 }
