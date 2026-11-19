@@ -38,6 +38,7 @@ pub(super) fn field_cost(
             add(strings, entries)?
         }
         FieldCost::Hash => add(MAP_ENTRY_BYTES, add(ROARING_MEMBER_BYTES, 8)?)?,
+        FieldCost::Boolean => add(MAP_ENTRY_BYTES, ROARING_MEMBER_BYTES)?,
         FieldCost::Text {
             distinct_terms,
             total_term_bytes,

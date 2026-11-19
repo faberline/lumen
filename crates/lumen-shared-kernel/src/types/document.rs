@@ -54,7 +54,7 @@ pub struct IndexItem {
 ///
 /// On the wire, `Vector` is a plain JSON `[f32]` array — `serde(untagged)`
 /// resolves the variant by JSON shape (string vs number vs list-of-string
-/// vs list-of-number).
+/// vs list-of-number). `true`/`false` is a boolean.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(untagged)]
 pub enum FieldValue {
@@ -65,6 +65,8 @@ pub enum FieldValue {
     /// An integer beyond 2^53 that fits `i64`, kept exact. Decoded by the
     /// hand-written [`Deserialize`] below; never produced for smaller integers.
     Int64(i64),
+    /// A JSON boolean. Only a boolean field accepts it.
+    Bool(bool),
 }
 
 /// Largest magnitude an integer may have and still decode as `Number(f64)`.
@@ -136,7 +138,9 @@ impl<'de> Deserialize<'de> for FieldValue {
             type Value = FieldValue;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a string, number, or homogeneous array of strings or numbers")
+                formatter.write_str(
+                    "a string, number, boolean, or homogeneous array of strings or numbers",
+                )
             }
 
             fn visit_str<E: de::Error>(self, value: &str) -> Result<FieldValue, E> {
@@ -149,6 +153,10 @@ impl<'de> Deserialize<'de> for FieldValue {
 
             fn visit_f64<E: de::Error>(self, value: f64) -> Result<FieldValue, E> {
                 Ok(FieldValue::Number(value))
+            }
+
+            fn visit_bool<E: de::Error>(self, value: bool) -> Result<FieldValue, E> {
+                Ok(FieldValue::Bool(value))
             }
 
             fn visit_i64<E: de::Error>(self, value: i64) -> Result<FieldValue, E> {
@@ -199,7 +207,10 @@ impl FieldValue {
         match self {
             FieldValue::Vector(v) => v.is_empty(),
             FieldValue::StringList(v) => v.is_empty(),
-            FieldValue::String(_) | FieldValue::Number(_) | FieldValue::Int64(_) => false,
+            FieldValue::String(_)
+            | FieldValue::Number(_)
+            | FieldValue::Int64(_)
+            | FieldValue::Bool(_) => false,
         }
     }
 
