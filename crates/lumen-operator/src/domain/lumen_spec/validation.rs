@@ -82,6 +82,15 @@ impl LumenSpec {
             if arg.chars().any(char::is_whitespace) {
                 return Err(format!("extraArgs[{i}] must not contain whitespace"));
             }
+            let flag = crate::domain::lumen_spec::runtime::flag_name(arg);
+            if crate::domain::lumen_spec::runtime::RESERVED_SERVE_FLAGS
+                .iter()
+                .any(|(reserved, _)| *reserved == flag)
+            {
+                return Err(format!(
+                    "extraArgs[{i}] ({flag}) is a flag the operator owns"
+                ));
+            }
         }
         Ok(())
     }
