@@ -1,7 +1,7 @@
 //! Engine::search end to end: term, match and range queries, the result cache,
 //! the Exists and Duplicated leaves, the scoring order, query evaluation and
 //! validation, sorted and keyset pagination, the offset cursor a sort rejects,
-//! and a has_child query under a sort.
+//! and a has_child query under a sort. Keyword multi and legacy set schemas.
 
 use crate::shared_kernel::types::search::SearchHit;
 
@@ -16,6 +16,7 @@ mod eval;
 mod exists_duplicated;
 mod float64;
 mod has_child_sort;
+mod keyword_multi;
 mod offset_sort_guard;
 mod pagination;
 mod queries;

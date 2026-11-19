@@ -18,14 +18,15 @@ fn fs(t: FieldType) -> FieldSpec {
 }
 
 #[test]
-fn field_spec_keyword_multi_becomes_set() {
+fn keyword_multi_stays_keyword() {
     let spec = FieldSpec {
         multi: Some(true),
         ..fs(FieldType::Keyword)
     }
     .normalize();
-    assert_eq!(spec.field_type, FieldType::Set);
-    assert!(spec.multi.is_none());
+    assert_eq!(spec.field_type, FieldType::Keyword);
+    assert_eq!(spec.multi, Some(true));
+    assert_eq!(spec.storage_type(), FieldType::Set);
 }
 
 #[test]

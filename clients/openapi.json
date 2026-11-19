@@ -2016,7 +2016,7 @@
           },
           "multi": {
             "type": "boolean",
-            "description": "Convenience flag: `{type: \"keyword\", multi: true}` is sugar for\n`{type: \"set\"}`. Normalized at schema-validation time.",
+            "description": "With `type: \"keyword\"`, the field holds a de-duplicated, unordered set of strings\n(the same storage as `type: \"set\"`). Kept as declared: `normalize` does not rewrite it.",
             "nullable": true
           },
           "quantize": {
