@@ -164,3 +164,11 @@ fn scaled_integers_keep_decimal_order() {
         "not ascending: {keys:?}"
     );
 }
+
+#[test]
+fn decimal_refuses_a_bool() {
+    assert!(matches!(
+        parse_decimal_value(&FieldValue::Bool(true), 10, 2),
+        Err(DecimalError::NotAString("boolean"))
+    ));
+}

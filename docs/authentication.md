@@ -199,6 +199,8 @@ Secret, or Kubernetes cluster.
 
 ## Planned RBAC and readiness
 
+The Direct `Lumen.spec.access` path is implemented by #51; the Fleet path is planned.
+
 **Planned.** The operator creates one namespaced Role and the required
 RoleBindings for each runtime. The subject of a RoleBinding can name a client
 ServiceAccount from another namespace.

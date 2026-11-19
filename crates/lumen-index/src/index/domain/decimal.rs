@@ -88,6 +88,7 @@ pub fn parse_decimal_value(
         FieldValue::Vector(_) => Err(DecimalError::NotAString("vector")),
         FieldValue::StringList(_) => Err(DecimalError::NotAString("string list")),
         FieldValue::Int64(_) => Err(DecimalError::NotAString("integer")),
+        FieldValue::Bool(_) => Err(DecimalError::NotAString("boolean")),
     }
 }
 

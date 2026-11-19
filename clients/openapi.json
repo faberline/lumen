@@ -2104,9 +2104,13 @@
             "type": "integer",
             "format": "int64",
             "description": "An integer beyond 2^53 that fits `i64`, kept exact. Decoded by the\nhand-written [`Deserialize`] below; never produced for smaller integers."
+          },
+          {
+            "type": "boolean",
+            "description": "A JSON boolean. Only a boolean field accepts it."
           }
         ],
-        "description": "Polymorphic field value. Validated against the declared `FieldType`\nat index time; mismatches return 422.\n\nOn the wire, `Vector` is a plain JSON `[f32]` array — `serde(untagged)`\nresolves the variant by JSON shape (string vs number vs list-of-string\nvs list-of-number)."
+        "description": "Polymorphic field value. Validated against the declared `FieldType`\nat index time; mismatches return 422.\n\nOn the wire, `Vector` is a plain JSON `[f32]` array — `serde(untagged)`\nresolves the variant by JSON shape (string vs number vs list-of-string\nvs list-of-number). `true`/`false` is a boolean."
       },
       "HammingQuery": {
         "type": "object",

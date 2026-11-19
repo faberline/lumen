@@ -378,3 +378,38 @@ fn unknown_field_type_name_is_still_refused_next_to_date() {
     assert!(serde_json::from_str::<FieldType>("\"dates\"").is_err());
     assert!(serde_json::from_str::<FieldType>("\"datetime\"").is_err());
 }
+
+#[test]
+fn bool_json_decodes_to_field_value_bool() {
+    assert!(matches!(
+        serde_json::from_str::<FieldValue>("true"),
+        Ok(FieldValue::Bool(true))
+    ));
+    assert!(matches!(
+        serde_json::from_str::<FieldValue>("false"),
+        Ok(FieldValue::Bool(false))
+    ));
+    assert!(matches!(
+        serde_json::from_str::<FieldValue>(r#""true""#),
+        Ok(FieldValue::String(_))
+    ));
+    assert!(matches!(
+        serde_json::from_str::<FieldValue>("1"),
+        Ok(FieldValue::Number(_))
+    ));
+    assert!(matches!(
+        serde_json::from_str::<FieldValue>("0"),
+        Ok(FieldValue::Number(_))
+    ));
+    assert!(serde_json::from_str::<FieldValue>("null").is_err());
+    // A bool inside an array stays refused.
+    assert!(serde_json::from_str::<FieldValue>("[true]").is_err());
+}
+
+#[test]
+fn field_value_bool_is_plain_json_on_the_way_out() {
+    assert_eq!(
+        serde_json::to_string(&FieldValue::Bool(true)).expect("serializes"),
+        "true"
+    );
+}

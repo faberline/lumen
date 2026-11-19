@@ -372,3 +372,164 @@ fn validate_error_never_contains_the_value() {
         .expect_err("invalid name");
     assert!(!err.contains("SENTINEL-LITERAL-7731"), "{err}");
 }
+
+// Reserved flags and the typed-versus-patch overlap (issue #40).
+
+#[test]
+fn reserved_flag_table_covers_every_reserved_option() {
+    use crate::domain::lumen_spec::runtime::{
+        OptionClass, RESERVED_SERVE_FLAGS, SERVE_OPTION_INVENTORY,
+    };
+    let table: std::collections::BTreeSet<&str> =
+        RESERVED_SERVE_FLAGS.iter().map(|(_, env)| *env).collect();
+    let inventory: std::collections::BTreeSet<&str> = SERVE_OPTION_INVENTORY
+        .iter()
+        .filter(|(_, class)| matches!(class, OptionClass::Reserved))
+        .map(|(env, _)| *env)
+        .collect();
+    assert_eq!(table, inventory);
+}
+
+#[test]
+fn validate_rejects_every_reserved_flag() {
+    use crate::domain::lumen_spec::runtime::RESERVED_SERVE_FLAGS;
+    for (flag, _) in RESERVED_SERVE_FLAGS {
+        for arg in [flag.to_string(), format!("{flag}=SENTINEL-FLAG-4410")] {
+            let mut spec = test_spec();
+            spec.extra_args = vec![arg.clone()];
+            let err = spec.validate().expect_err(&arg);
+            assert!(err.contains(flag), "{err}");
+            assert!(err.contains("flag the operator owns"), "{err}");
+            assert!(!err.contains("SENTINEL-FLAG-4410"), "{err}");
+        }
+    }
+}
+
+#[test]
+fn validate_rejects_every_reserved_env_name_in_the_inventory() {
+    use crate::domain::lumen_spec::runtime::{OptionClass, SERVE_OPTION_INVENTORY};
+    for (env, class) in SERVE_OPTION_INVENTORY {
+        if !matches!(class, OptionClass::Reserved) {
+            continue;
+        }
+        let spec = spec_with_env(vec![literal_entry(env, "SENTINEL-ENV-4411")]);
+        let err = spec.validate().expect_err(env);
+        assert!(err.contains(env), "{err}");
+        assert!(err.contains("operator owns"), "{err}");
+        assert!(!err.contains("SENTINEL-ENV-4411"), "{err}");
+    }
+}
+
+#[test]
+fn typed_runtime_options_table_matches_runtime_settings() {
+    use crate::domain::lumen_spec::runtime::{
+        OptionClass, RuntimeSettings, SERVE_OPTION_INVENTORY, TYPED_RUNTIME_OPTIONS,
+    };
+    let settings = RuntimeSettings {
+        snapshot_secs: Some(60),
+        grace_secs: Some(9),
+        otlp_endpoint: Some("http://collector:4317".into()),
+        bootstrap_max_bytes_per_sec: Some(1000),
+    };
+    let value = serde_json::to_value(&settings).unwrap();
+    let mut keys: Vec<&str> = value
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort();
+    let mut table: Vec<&str> = TYPED_RUNTIME_OPTIONS
+        .iter()
+        .map(|(field, _, _)| *field)
+        .collect();
+    table.sort();
+    assert_eq!(keys, table);
+    for (_, env, _) in TYPED_RUNTIME_OPTIONS {
+        assert!(
+            SERVE_OPTION_INVENTORY
+                .iter()
+                .any(|(name, class)| name == env && matches!(class, OptionClass::Typed)),
+            "{env} is not a typed option"
+        );
+    }
+}
+
+#[test]
+fn non_reserved_flags_stay_accepted() {
+    for arg in ["--snapshot-secs=5", "--ok"] {
+        let mut spec = test_spec();
+        spec.extra_args = vec![arg.to_string()];
+        assert!(spec.validate().is_ok(), "{arg} must stay accepted");
+    }
+}
+
+#[test]
+fn validate_accepts_valid_zones() {
+    let mut spec = test_spec();
+    spec.placement.zones = vec!["us-central1-a".into()];
+    assert!(spec.validate().is_ok());
+
+    spec.replicas_per_shard = 3;
+    spec.placement.zones = vec![
+        "us-central1-a".into(),
+        "us-central1-b".into(),
+        "us-central1-c".into(),
+    ];
+    assert!(spec.validate().is_ok());
+}
+
+#[test]
+fn validate_rejects_empty_or_blank_zone() {
+    let mut spec = test_spec();
+    for empty in ["", "  ", "\t"] {
+        spec.placement.zones = vec![empty.into()];
+        let err = spec.validate().expect_err("expected error");
+        assert!(
+            err.contains("placement.zones"),
+            "error message should name placement.zones: {err}"
+        );
+    }
+}
+
+#[test]
+fn validate_rejects_duplicate_zones() {
+    let mut spec = test_spec();
+    spec.placement.zones = vec!["us-central1-a".into(), "us-central1-a".into()];
+    let err = spec.validate().expect_err("expected error");
+    assert!(
+        err.contains("placement.zones"),
+        "error message should name placement.zones: {err}"
+    );
+}
+
+#[test]
+fn validate_rejects_insufficient_zones_for_multi_replica() {
+    let mut spec = test_spec();
+    spec.replicas_per_shard = 3;
+    spec.placement.zones = vec!["us-central1-a".into(), "us-central1-b".into()];
+    let err = spec.validate().expect_err("expected error");
+    assert!(
+        err.contains("placement.zones"),
+        "error message should name placement.zones: {err}"
+    );
+
+    spec.replicas_per_shard = 2;
+    spec.placement.zones = vec!["us-central1-a".into()];
+    let err = spec.validate().expect_err("expected error");
+    assert!(
+        err.contains("placement.zones"),
+        "error message should name placement.zones: {err}"
+    );
+}
+
+#[test]
+fn validate_rejects_machine_type_in_zones() {
+    let mut spec = test_spec();
+    spec.placement.zones = vec!["e2-standard-2".into()];
+    let err = spec.validate().expect_err("expected error");
+    assert!(
+        err.contains("placement.zones"),
+        "error message should name placement.zones: {err}"
+    );
+}

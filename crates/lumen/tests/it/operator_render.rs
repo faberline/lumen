@@ -152,6 +152,18 @@ fn find<'a>(objs: &'a [Value], kind: &str, name: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("missing {kind}/{name} in render; got: {:?}", kinds(objs)))
 }
 
+/// The serving StatefulSet of an instance: the single object, or shard 0 when
+/// the spec shards the runtime (one StatefulSet per shard, `<name>-s<k>`).
+fn serving<'a>(objs: &'a [Value], name: &str) -> &'a Value {
+    let single = objs
+        .iter()
+        .any(|o| o["kind"] == "StatefulSet" && o["metadata"]["name"] == name);
+    if single {
+        return find(objs, "StatefulSet", name);
+    }
+    find(objs, "StatefulSet", &format!("{name}-s0"))
+}
+
 fn kinds(objs: &[Value]) -> Vec<String> {
     objs.iter()
         .map(|o| {
@@ -245,7 +257,7 @@ fn unset_service_account_name_renders_and_uses_operator_owned_sa() {
         "expected operator-owned workload ServiceAccount/search; got {:?}",
         kinds(&objs)
     );
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = serving(&objs, "search");
     assert_eq!(
         sts["spec"]["template"]["spec"]["serviceAccountName"],
         "search"
@@ -273,7 +285,7 @@ fn set_service_account_name_omits_workload_sa_and_uses_external_name() {
         kinds(&objs)
     );
 
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = serving(&objs, "search");
     assert_eq!(
         sts["spec"]["template"]["spec"]["serviceAccountName"],
         "external-sa"
@@ -343,7 +355,7 @@ fn auth_delegator_binding_follows_an_externally_managed_service_account() {
     assert_eq!(binding["subjects"][0]["name"], "external-sa");
     assert_eq!(
         binding["subjects"][0]["name"],
-        find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"]["serviceAccountName"],
+        serving(&objs, "search")["spec"]["template"]["spec"]["serviceAccountName"],
         "the bound subject and the identity the pods run as are one answer"
     );
 }
@@ -448,7 +460,7 @@ fn the_auth_delegator_binding_is_never_one_of_the_namespaced_children() {
 fn statefulset_wires_serving_contract_single_member() {
     let l = lumen("search", dev_spec());
     let objs = render(&l);
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = serving(&objs, "search");
 
     // replicasPerShard is the apply-time floor; StatefulSet-native rollout knobs.
     assert_eq!(sts["spec"]["replicas"], 1);
@@ -618,8 +630,10 @@ fn multi_shard_single_replica_is_fixed_storage_topology_not_hpa() {
     let l = lumen("search", spec);
     let objs = render(&l);
 
-    let sts = find(&objs, "StatefulSet", "search");
-    assert_eq!(sts["spec"]["replicas"], 4);
+    // One StatefulSet per shard, each with one member.
+    assert!(!has(&objs, "StatefulSet", "search"));
+    let sts = find(&objs, "StatefulSet", "search-s0");
+    assert_eq!(sts["spec"]["replicas"], 1);
     assert!(
         !has(&objs, "HorizontalPodAutoscaler", "search"),
         "HPA must not change multi-shard storage ownership"
@@ -664,7 +678,7 @@ fn single_member_storage_pod_count_clamps_to_one() {
 
     let l = lumen("search", default_spec);
     let objs = render(&l);
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = serving(&objs, "search");
     assert_eq!(sts["spec"]["replicas"], 1);
     assert!(!has(&objs, "HorizontalPodAutoscaler", "search"));
 }
@@ -686,7 +700,7 @@ fn prod_wires_auth_and_observability() {
     let objs = render(&l);
 
     // auth=required without registry projection (retired phase 1).
-    let dep = find(&objs, "StatefulSet", "lumen");
+    let dep = serving(&objs, "lumen");
     let c = &dep["spec"]["template"]["spec"]["containers"][0];
     assert_eq!(c["image"], "registry.example.com/lumen:1.2.3");
     assert_eq!(c["imagePullPolicy"], "Always");
@@ -1164,7 +1178,7 @@ fn shard_map_assignments_are_exposed_to_serving_config() {
     // reference SHARD_MAP_ASSIGNMENTS too (not just the ConfigMap), so a pod
     // started/restarted after this commits actually routes by it via
     // `lumen::config::shard_map_from_env`.
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = serving(&objs, "search");
     let c = &sts["spec"]["template"]["spec"]["containers"][0];
     let names = env_names(c);
     for required in [
@@ -1203,20 +1217,21 @@ fn raft_ha_renders_serving_statefulset() {
     let l = lumen("search", spec);
     let objs = render(&l);
 
-    // The serving fleet is now a StatefulSet + headless Service; no Deployment/HPA.
+    // The serving fleet is now a StatefulSet per shard + headless Service; no Deployment/HPA.
     assert!(
-        has(&objs, "StatefulSet", "search"),
+        has(&objs, "StatefulSet", "search-s0") && has(&objs, "StatefulSet", "search-s1"),
         "got {:?}",
         kinds(&objs)
     );
+    assert!(!has(&objs, "StatefulSet", "search"));
     assert!(has(&objs, "Service", "search-headless"));
     assert!(!has(&objs, "Deployment", "search"));
     assert!(!has(&objs, "HorizontalPodAutoscaler", "search"));
 
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = serving(&objs, "search");
     assert_eq!(sts["spec"]["serviceName"], "search-headless");
     assert_eq!(sts["spec"]["podManagementPolicy"], "Parallel");
-    assert_eq!(sts["spec"]["replicas"], 6); // shard_count(2) × replicasPerShard(3)
+    assert_eq!(sts["spec"]["replicas"], 3); // one shard's members: replicasPerShard(3)
 
     // Exactly the env `raft_runtime::cluster::ClusterTopology::from_env` reads.
     let env = env_names(&sts["spec"]["template"]["spec"]["containers"][0]);
@@ -1377,9 +1392,10 @@ fn placement_names_a_node_pool_without_replacing_the_anti_affinity() {
             effect: Some("NoSchedule".into()),
             toleration_seconds: None,
         }],
+        zones: Vec::new(),
     };
     let objs = render(&lumen("search", spec));
-    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
 
     assert_eq!(
         pod["nodeSelector"]["cloud.google.com/gke-nodepool"],
@@ -1397,24 +1413,25 @@ fn placement_names_a_node_pool_without_replacing_the_anti_affinity() {
         "kubernetes.io/hostname",
         "naming a node pool must not cost the one-replica-per-host constraint"
     );
-    assert_eq!(
+    assert!(
         pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-            ["namespaceSelector"],
-        serde_json::json!({}),
-        "anti-affinity must match cross-namespace"
+            .get("namespaceSelector")
+            .is_none(),
+        "a shard's anti-affinity stays inside the pod's own namespace"
     );
 }
 
-/// A default CR renders cross-namespace anti-affinity.
+/// A default CR renders same-shard anti-affinity, scoped to its own namespace.
 #[test]
-fn default_placement_renders_cross_namespace_anti_affinity() {
+fn default_placement_renders_same_shard_anti_affinity() {
     let objs = render(&lumen("search", prod_spec()));
-    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
-    assert_eq!(
-        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-            ["namespaceSelector"],
-        serde_json::json!({}),
-        "anti-affinity must match cross-namespace"
+    let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
+    let rule =
+        &pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0];
+    assert_eq!(rule["labelSelector"]["matchLabels"]["lumen.dev/shard"], "0");
+    assert!(
+        rule.get("namespaceSelector").is_none(),
+        "anti-affinity must not match other namespaces"
     );
     assert_eq!(
         pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
@@ -1436,7 +1453,7 @@ fn render_with_profile_sets_capacity_profile_node_selector_and_toleration() {
     };
     let objs =
         lumen::operator::render::render_with_profile(&lumen("search", prod_spec()), &profile);
-    let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
     assert_eq!(
         pod["nodeSelector"]["lumen.axiom.dev/capacity-profile"],
         "e2-standard-2"
@@ -1450,25 +1467,26 @@ fn render_with_profile_sets_capacity_profile_node_selector_and_toleration() {
 }
 
 #[test]
-fn three_namespaces_share_same_pool_selector_and_cross_namespace_anti_affinity() {
+fn three_namespaces_share_same_pool_selector_and_same_shard_anti_affinity() {
     for ns in ["alpha", "beta", "gamma"] {
         let mut l = lumen("search", prod_spec());
         l.metadata.namespace = Some(ns.to_string());
         let objs = render(&l);
-        let pod = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+        let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
         assert_eq!(
             pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
                 ["labelSelector"]["matchLabels"],
             serde_json::json!({
                 "app.kubernetes.io/name": "lumen",
                 "app.kubernetes.io/component": "server",
+                "app.kubernetes.io/instance": "search",
+                "lumen.dev/shard": "0",
             })
         );
-        assert_eq!(
-            pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
-                ["namespaceSelector"],
-            serde_json::json!({})
-        );
+        assert!(pod["affinity"]["podAntiAffinity"]
+            ["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            .get("namespaceSelector")
+            .is_none());
     }
 }
 
@@ -1503,6 +1521,9 @@ fn the_crd_accepts_placement() {
         );
     }
 
+    assert_eq!(props["zones"]["type"], "array");
+    assert_eq!(props["zones"]["items"]["type"], "string");
+
     // The whole point of the narrow surface: `affinity` stays operator-owned,
     // so there is no CR field that can replace the anti-affinity.
     assert!(
@@ -1511,6 +1532,203 @@ fn the_crd_accepts_placement() {
             .is_none(),
         "exposing spec.affinity would let a deployer drop the anti-affinity"
     );
+}
+
+#[test]
+fn render_topology_1x1_with_zones() {
+    let mut spec = prod_spec();
+    spec.shard_count = 1;
+    spec.replicas_per_shard = 1;
+    spec.voter_count = 1;
+    spec.placement.zones = vec!["us-central1-a".into()];
+    assert!(spec.validate().is_ok());
+
+    let objs = render(&lumen("search", spec));
+    let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
+
+    let node_terms = &pod["affinity"]["nodeAffinity"]
+        ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["key"],
+        "topology.kubernetes.io/zone"
+    );
+    assert_eq!(node_terms[0]["matchExpressions"][0]["operator"], "In");
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["values"],
+        serde_json::json!(["us-central1-a"])
+    );
+
+    assert_eq!(
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            ["topologyKey"],
+        "kubernetes.io/hostname"
+    );
+
+    let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .unwrap();
+    assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
+    let host_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "kubernetes.io/hostname")
+        .unwrap();
+    assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
+
+#[test]
+fn render_topology_nx1_with_zones() {
+    let mut spec = prod_spec();
+    spec.shard_count = 3;
+    spec.replicas_per_shard = 1;
+    spec.voter_count = 1;
+    spec.placement.zones = vec!["us-central1-a".into()];
+    assert!(spec.validate().is_ok());
+
+    let objs = render(&lumen("search", spec));
+    let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
+
+    let node_terms = &pod["affinity"]["nodeAffinity"]
+        ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["key"],
+        "topology.kubernetes.io/zone"
+    );
+    assert_eq!(node_terms[0]["matchExpressions"][0]["operator"], "In");
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["values"],
+        serde_json::json!(["us-central1-a"])
+    );
+
+    let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .unwrap();
+    assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
+
+#[test]
+fn render_topology_nx3_three_zones() {
+    let mut spec = prod_spec();
+    spec.shard_count = 2;
+    spec.replicas_per_shard = 3;
+    spec.voter_count = 3;
+    spec.placement.zones = vec![
+        "us-central1-a".into(),
+        "us-central1-b".into(),
+        "us-central1-c".into(),
+    ];
+    assert!(spec.validate().is_ok());
+
+    let objs = render(&lumen("search", spec));
+    let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
+
+    let node_terms = &pod["affinity"]["nodeAffinity"]
+        ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"];
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["key"],
+        "topology.kubernetes.io/zone"
+    );
+    assert_eq!(node_terms[0]["matchExpressions"][0]["operator"], "In");
+    assert_eq!(
+        node_terms[0]["matchExpressions"][0]["values"],
+        serde_json::json!(["us-central1-a", "us-central1-b", "us-central1-c"])
+    );
+
+    assert_eq!(
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            ["topologyKey"],
+        "kubernetes.io/hostname"
+    );
+
+    let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .unwrap();
+    assert_eq!(zone_spread["whenUnsatisfiable"], "DoNotSchedule");
+    let host_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "kubernetes.io/hostname")
+        .unwrap();
+    assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
+
+#[test]
+fn render_topology_two_replica_compatibility_zones_unset() {
+    let mut spec = prod_spec();
+    spec.replicas_per_shard = 2;
+    spec.voter_count = 2;
+    assert!(spec.validate().is_ok());
+
+    let objs = render(&lumen("search", spec));
+    let pod = &serving(&objs, "search")["spec"]["template"]["spec"];
+
+    assert!(pod["affinity"].get("nodeAffinity").is_none());
+    assert_eq!(
+        pod["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+            ["topologyKey"],
+        "kubernetes.io/hostname"
+    );
+
+    let spreads = pod["topologySpreadConstraints"].as_array().unwrap();
+    let zone_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "topology.kubernetes.io/zone")
+        .unwrap();
+    assert_eq!(zone_spread["whenUnsatisfiable"], "ScheduleAnyway");
+    let host_spread = spreads
+        .iter()
+        .find(|s| s["topologyKey"] == "kubernetes.io/hostname")
+        .unwrap();
+    assert_eq!(host_spread["whenUnsatisfiable"], "ScheduleAnyway");
+}
+
+#[test]
+fn render_topology_nx3_missing_zones_rejected() {
+    let mut spec = prod_spec();
+    spec.shard_count = 2;
+    spec.replicas_per_shard = 3;
+    spec.voter_count = 3;
+    spec.placement.zones = vec!["us-central1-a".into(), "us-central1-b".into()];
+
+    let err = spec
+        .validate()
+        .expect_err("Nx3 with 2 zones must be rejected");
+    assert!(err.contains("placement.zones"));
+}
+
+#[test]
+fn render_never_creates_cluster_or_node_pool_and_zones_rejects_machine_type() {
+    let mut spec = prod_spec();
+    spec.replicas_per_shard = 3;
+    spec.voter_count = 3;
+    spec.placement.zones = vec![
+        "us-central1-a".into(),
+        "us-central1-b".into(),
+        "us-central1-c".into(),
+    ];
+    let objs = render(&lumen("search", spec.clone()));
+    for obj in &objs {
+        let kind = obj["kind"].as_str().unwrap_or("");
+        assert_ne!(kind, "Cluster", "render must never emit a Cluster object");
+        assert_ne!(kind, "NodePool", "render must never emit a NodePool object");
+        assert_ne!(kind, "Node", "render must never emit a Node object");
+    }
+
+    let mut bad_spec = spec;
+    bad_spec.placement.zones = vec![
+        "e2-standard-2".into(),
+        "us-central1-b".into(),
+        "us-central1-c".into(),
+    ];
+    let err = bad_spec
+        .validate()
+        .expect_err("machine type in placement.zones must be rejected");
+    assert!(err.contains("placement.zones"));
+    assert!(err.contains("machine type"));
 }
 
 /// A private registry needs a pull secret on every pod that pulls `spec.image`.
@@ -1531,7 +1749,7 @@ fn image_pull_secrets_reach_every_pod_that_pulls_the_image() {
         admin_token_secret: None,
     });
     let objs = render(&lumen("search", spec));
-    let sts = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    let sts = &serving(&objs, "search")["spec"]["template"]["spec"];
     assert_eq!(
         sts["imagePullSecrets"],
         serde_json::json!([{ "name": "ghcr-pull" }])
@@ -1549,7 +1767,7 @@ fn image_pull_secrets_reach_every_pod_that_pulls_the_image() {
 #[test]
 fn no_image_pull_secrets_renders_no_key() {
     let objs = render(&lumen("search", prod_spec()));
-    let sts = &find(&objs, "StatefulSet", "search")["spec"]["template"]["spec"];
+    let sts = &serving(&objs, "search")["spec"]["template"]["spec"];
     assert!(sts.get("imagePullSecrets").is_none(), "{sts:#}");
 }
 
@@ -1753,7 +1971,7 @@ fn bootstrap_seed_policy_wires_serving_env() {
     });
     let l = lumen("search", spec);
     let objs = render(&l);
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = serving(&objs, "search");
     let env = sts["spec"]["template"]["spec"]["containers"][0]["env"]
         .as_array()
         .unwrap();
@@ -1784,7 +2002,7 @@ fn admission_spec_wires_serving_env() {
     });
     let l = lumen("search", spec);
     let objs = render(&l);
-    let sts = find(&objs, "StatefulSet", "search");
+    let sts = serving(&objs, "search");
     let env = sts["spec"]["template"]["spec"]["containers"][0]["env"]
         .as_array()
         .unwrap();
@@ -1816,7 +2034,7 @@ fn admission_spec_absent_renders_no_admission_env() {
     for spec in [dev_spec(), prod_spec()] {
         let l = lumen("search", spec);
         let objs = render(&l);
-        let sts = find(&objs, "StatefulSet", "search");
+        let sts = serving(&objs, "search");
         let names = env_names(&sts["spec"]["template"]["spec"]["containers"][0]);
         for absent in [
             "LUMEN_ADMISSION_READ_CAPACITY",
@@ -1851,7 +2069,7 @@ fn network_policy_off_prunes_the_policy_render_no_longer_emits() {
         "networkPolicy=true must render the policy"
     );
     assert!(
-        prunes(&on).is_empty(),
+        prunes(&on).iter().all(|t| t.kind != "NetworkPolicy"),
         "a CR that still wants the policy must never nominate it for deletion"
     );
 
@@ -1861,8 +2079,12 @@ fn network_policy_off_prunes_the_policy_render_no_longer_emits() {
         !has(&render(&off), "NetworkPolicy", "search"),
         "networkPolicy=false must stop rendering the policy"
     );
+    let policy_targets: Vec<PruneTarget> = prunes(&off)
+        .into_iter()
+        .filter(|t| t.kind == "NetworkPolicy")
+        .collect();
     assert_eq!(
-        prunes(&off),
+        policy_targets,
         vec![PruneTarget {
             api_version: "networking.k8s.io/v1",
             kind: "NetworkPolicy",
@@ -1892,7 +2114,10 @@ fn pruned_network_policy_name_matches_the_rendered_one() {
             .expect("networkPolicy=true renders one");
 
         spec.network_policy = false;
-        let targets = prunes(&lumen(name, spec));
+        let targets: Vec<PruneTarget> = prunes(&lumen(name, spec))
+            .into_iter()
+            .filter(|t| t.kind == "NetworkPolicy")
+            .collect();
         assert_eq!(targets.len(), 1);
         assert_eq!(
             Value::from(targets[0].name.clone()),
@@ -1928,7 +2153,7 @@ fn replicated_spec(secret: Option<&str>) -> LumenSpec {
 
 /// The pod template of the rendered serving StatefulSet.
 fn pod_spec(objs: &[Value]) -> Value {
-    find(objs, "StatefulSet", "search")["spec"]["template"]["spec"].clone()
+    serving(objs, "search")["spec"]["template"]["spec"].clone()
 }
 
 fn env_value(container: &Value, name: &str) -> Option<String> {
@@ -2679,7 +2904,7 @@ fn every_configmap_key_is_consumed_by_the_serving_container() {
         let l = lumen(name, spec);
         let objs = render(&l);
         let cm = find(&objs, "ConfigMap", &format!("{name}-config"));
-        let sts = find(&objs, "StatefulSet", name);
+        let sts = serving(&objs, name);
         let c = &sts["spec"]["template"]["spec"]["containers"][0];
 
         let mut written: Vec<String> = cm["data"].as_object().unwrap().keys().cloned().collect();
@@ -2712,7 +2937,7 @@ fn serving_container_env_names_are_unique() {
     for spec in [dev_spec(), prod_spec(), routed] {
         let l = lumen("search", spec);
         let objs = render(&l);
-        let sts = find(&objs, "StatefulSet", "search");
+        let sts = serving(&objs, "search");
         let c = &sts["spec"]["template"]["spec"]["containers"][0];
         let names = env_names(c);
         let unique: std::collections::BTreeSet<&String> = names.iter().collect();

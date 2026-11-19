@@ -30,6 +30,34 @@ impl LumenSpec {
                 ));
             }
         }
+        if !self.placement.zones.is_empty() {
+            let mut seen = std::collections::BTreeSet::new();
+            for zone in &self.placement.zones {
+                if zone.trim().is_empty() {
+                    return Err(format!(
+                        "placement.zones entry cannot be empty or blank: {zone:?}"
+                    ));
+                }
+                if crate::domain::capacity::is_valid_direct_gce_machine_type(zone) {
+                    return Err(format!(
+                        "placement.zones entry `{zone}` is a machine type; machine types are not allowed in placement.zones"
+                    ));
+                }
+                if !seen.insert(zone) {
+                    return Err(format!("placement.zones contains duplicate zone: `{zone}`"));
+                }
+            }
+            if self.replicas_per_shard > 1 {
+                let required = std::cmp::min(self.replicas_per_shard as usize, 3);
+                if seen.len() < required {
+                    return Err(format!(
+                        "placement.zones specifies {} distinct zone(s), but replicasPerShard ({}) requires at least {required}",
+                        seen.len(),
+                        self.replicas_per_shard
+                    ));
+                }
+            }
+        }
         if let Some(access) = &self.access {
             for subject in &access.allowed_service_accounts {
                 crate::domain::lumen_spec::access::validate_subject(subject)?;
@@ -81,6 +109,15 @@ impl LumenSpec {
             }
             if arg.chars().any(char::is_whitespace) {
                 return Err(format!("extraArgs[{i}] must not contain whitespace"));
+            }
+            let flag = crate::domain::lumen_spec::runtime::flag_name(arg);
+            if crate::domain::lumen_spec::runtime::RESERVED_SERVE_FLAGS
+                .iter()
+                .any(|(reserved, _)| *reserved == flag)
+            {
+                return Err(format!(
+                    "extraArgs[{i}] ({flag}) is a flag the operator owns"
+                ));
             }
         }
         Ok(())

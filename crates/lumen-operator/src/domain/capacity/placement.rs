@@ -212,3 +212,24 @@ pub fn cross_namespace_dedicated_data_node_affinity() -> serde_json::Value {
         }
     })
 }
+
+/// The hard one-member-per-node rule of one shard of one runtime: pods of the
+/// same shard of the same instance never share a node, in the pod's own
+/// namespace only. Pods of other shards or other runtimes may share a node.
+pub fn shard_data_node_affinity(instance: &str, shard: u32) -> serde_json::Value {
+    serde_json::json!({
+        "podAntiAffinity": {
+            "requiredDuringSchedulingIgnoredDuringExecution": [{
+                "labelSelector": {
+                    "matchLabels": {
+                        "app.kubernetes.io/name": "lumen",
+                        "app.kubernetes.io/component": "server",
+                        "app.kubernetes.io/instance": instance,
+                        "lumen.dev/shard": shard.to_string(),
+                    }
+                },
+                "topologyKey": "kubernetes.io/hostname",
+            }]
+        }
+    })
+}

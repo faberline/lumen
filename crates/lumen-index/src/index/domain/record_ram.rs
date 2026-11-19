@@ -176,6 +176,7 @@ fn value(field_value: &FieldValue) -> Result<usize, RecordRamError> {
         FieldValue::String(value) => string(value),
         FieldValue::Number(_) => Ok(0),
         FieldValue::Int64(_) => Ok(0),
+        FieldValue::Bool(_) => Ok(0),
         FieldValue::Vector(values) => vec(values),
         FieldValue::StringList(values) => {
             let mut total = vec(values)?;

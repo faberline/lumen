@@ -220,9 +220,12 @@ Interpret request failures as follows:
 | `403` | TokenReview accepted the ServiceAccount, but SubjectAccessReview denied the current per-collection or instance-admin resource. |
 | `503` from an auth decision | Kubernetes review transport or response validation failed. Lumen does not fall back to anonymous. |
 
-`AccessPolicyReady` does not exist yet. The planned whole-runtime
-`lumenruntimes/use` Role and RoleBinding are also not implemented. Do not use a
-missing future condition to diagnose current access. See
+For a `Lumen` with `spec.access`, `AccessPolicyReady=True`
+(`AccessPolicyConverged`) means the Role and RoleBinding match the list. An
+empty list is deny-all and is `True`. `AccessPolicyReady=False`
+(`AccessPolicyApplyFailed`) names the refused or conflicting object and keeps
+`Ready` `False` with reason `AccessPolicyNotConverged`. Without `spec.access`
+the reason is `AccessNotDeclared`. Fleet defaults are still planned. See
 [authentication](../authentication.md) for current resource mapping and the
 planned contract.
 
