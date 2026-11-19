@@ -1,0 +1,22 @@
+# Egress policy for the client workload. It allows DNS, and TCP 7373 to the
+# Lumen runtime pods. Replace REPLACE_ME__CLIENT_APP with the label value of
+# the client pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lumen-client-egress
+spec:
+  podSelector:
+    matchLabels: {app: REPLACE_ME__CLIENT_APP}
+  policyTypes: [Egress]
+  egress:
+    # DNS over both transports.
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    # The Lumen runtime, on its serving port.
+    - to:
+        - podSelector:
+            matchLabels: {app: lumen}
+      ports:
+        - {protocol: TCP, port: 7373}
