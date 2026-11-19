@@ -6,8 +6,9 @@ use std::collections::BTreeSet;
 use serde_json::{json, Value};
 
 use crate::domain::lumen_fleet::{
-    LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL, FLEET_MANAGER,
+    FleetInstance, LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL, FLEET_MANAGER,
 };
+use crate::domain::lumen_spec::runtime::{flag_name, TYPED_RUNTIME_OPTIONS};
 use crate::domain::lumen_spec::LumenSpec;
 
 /// Spec paths the reshard driver owns at runtime; see the module docs.
@@ -65,6 +66,17 @@ pub fn plan(fleet: &LumenFleet) -> Vec<PlannedInstance> {
             continue;
         }
 
+        // A typed `runtime` field and a `spec` patch that writes the same option would
+        // disagree silently: the patch wins in the merge. Refuse this instance instead.
+        if let Some(reason) = typed_patch_overlap(entry, &namespace, &name) {
+            planned.push(PlannedInstance {
+                namespace,
+                name,
+                outcome: PlanOutcome::Rejected(reason),
+            });
+            continue;
+        }
+
         let mut merged = defaults.clone();
         if let Some(instance_runtime) = &entry.runtime {
             let base = fleet.spec.defaults.runtime.clone().unwrap_or_default();
@@ -90,6 +102,51 @@ pub fn plan(fleet: &LumenFleet) -> Vec<PlannedInstance> {
         });
     }
     planned
+}
+
+/// A rejection reason when the typed `runtime` of `entry` and its `spec` patch write the
+/// same option, else `None`. The reason names the instance, the field and both sources. It
+/// never names a value.
+fn typed_patch_overlap(entry: &FleetInstance, namespace: &str, name: &str) -> Option<String> {
+    let patch = entry.spec.as_ref()?;
+    let typed = serde_json::to_value(entry.runtime.as_ref()?).ok()?;
+    let typed = typed.as_object()?;
+    let patch_runtime = patch.get("runtime");
+    let patch_env = patch.get("extraEnv").and_then(Value::as_array);
+    let patch_args = patch.get("extraArgs").and_then(Value::as_array);
+    for &(field, env, flag) in TYPED_RUNTIME_OPTIONS {
+        if !typed.contains_key(field) {
+            continue;
+        }
+        let runtime_writes = match patch_runtime {
+            Some(Value::Object(map)) => map.contains_key(field),
+            Some(_) => true,
+            None => false,
+        };
+        let source = if runtime_writes {
+            Some(format!("instances[].spec.runtime.{field}"))
+        } else if patch_env.is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| item.get("name").and_then(Value::as_str) == Some(env))
+        }) {
+            Some(format!("instances[].spec.extraEnv ({env})"))
+        } else if patch_args.is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| item.as_str().is_some_and(|arg| flag_name(arg) == flag))
+        }) {
+            Some(format!("instances[].spec.extraArgs ({flag})"))
+        } else {
+            None
+        };
+        if let Some(source) = source {
+            return Some(format!(
+                "{namespace}/{name}: option `{field}` is set in both instances[].runtime and {source}; set it in one place"
+            ));
+        }
+    }
+    None
 }
 
 /// Deserialize the merged document into a `LumenSpec` and prove nothing in it

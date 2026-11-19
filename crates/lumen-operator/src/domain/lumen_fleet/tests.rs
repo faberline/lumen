@@ -845,3 +845,108 @@ fn an_empty_pass_clears_the_old_entries() {
     assert_eq!(patch["status"]["entries"], json!([]));
     assert_eq!(patch["status"]["message"], json!("0/0 instances converged"));
 }
+
+// A typed runtime field that the spec patch also writes is refused for that instance
+// (issue #40). The patch would otherwise win silently.
+
+#[test]
+fn a_typed_runtime_field_also_in_the_patch_is_rejected() {
+    let mut tenant = instance("team-a", Some(json!({"runtime": {"snapshotSecs": 5}})));
+    tenant.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(60),
+        ..Default::default()
+    });
+    let planned = plan(&fleet(vec![tenant]));
+    let reason = rejection(&planned[0]);
+    assert!(reason.contains("team-a/search"), "{reason}");
+    assert!(reason.contains("snapshotSecs"), "{reason}");
+    assert!(reason.contains("instances[].runtime"), "{reason}");
+    assert!(
+        reason.contains("instances[].spec.runtime.snapshotSecs"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn a_typed_runtime_field_also_in_extra_env_is_rejected() {
+    let mut tenant = instance(
+        "team-a",
+        Some(
+            json!({"extraEnv": [{"name": "LUMEN_SNAPSHOT_SECS", "value": "SENTINEL-OVERLAP-4412"}]}),
+        ),
+    );
+    tenant.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(60),
+        ..Default::default()
+    });
+    let planned = plan(&fleet(vec![tenant]));
+    let reason = rejection(&planned[0]);
+    assert!(reason.contains("snapshotSecs"), "{reason}");
+    assert!(reason.contains("instances[].spec.extraEnv"), "{reason}");
+    assert!(!reason.contains("SENTINEL-OVERLAP-4412"), "{reason}");
+}
+
+#[test]
+fn a_typed_runtime_field_also_in_extra_args_is_rejected() {
+    let mut tenant = instance(
+        "team-a",
+        Some(json!({"extraArgs": ["--snapshot-secs=SENTINEL-OVERLAP-4413"]})),
+    );
+    tenant.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(60),
+        ..Default::default()
+    });
+    let planned = plan(&fleet(vec![tenant]));
+    let reason = rejection(&planned[0]);
+    assert!(reason.contains("snapshotSecs"), "{reason}");
+    assert!(reason.contains("instances[].spec.extraArgs"), "{reason}");
+    assert!(!reason.contains("SENTINEL-OVERLAP-4413"), "{reason}");
+}
+
+#[test]
+fn a_conflict_rejects_only_that_instance() {
+    let mut team_c = instance("team-c", Some(json!({"runtime": {"snapshotSecs": 5}})));
+    team_c.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(60),
+        ..Default::default()
+    });
+    let planned = plan(&fleet(vec![
+        instance("team-a", None),
+        instance("team-b", None),
+        team_c,
+    ]));
+    ready(&planned[0]);
+    ready(&planned[1]);
+    rejection(&planned[2]);
+}
+
+/// Negative control: when `typed_patch_overlap` is always `None`, the three rejection
+/// tests above fail.
+#[test]
+fn different_options_in_runtime_and_patch_do_not_conflict() {
+    let mut tenant = instance("team-a", Some(json!({"runtime": {"graceSecs": 9}})));
+    tenant.runtime = Some(RuntimeSettings {
+        snapshot_secs: Some(60),
+        ..Default::default()
+    });
+    let planned = plan(&fleet(vec![tenant]));
+    assert_eq!(
+        ready(&planned[0])["runtime"],
+        json!({"snapshotSecs": 60, "graceSecs": 9})
+    );
+}
+
+#[test]
+fn a_reserved_flag_in_the_patch_is_rejected_for_that_instance_only() {
+    let planned = plan(&fleet(vec![
+        instance(
+            "team-a",
+            Some(json!({"extraArgs": ["--port=SENTINEL-FLAG-4414"]})),
+        ),
+        instance("team-b", None),
+    ]));
+    let reason = rejection(&planned[0]);
+    assert!(reason.contains("--port"), "{reason}");
+    assert!(!reason.contains("SENTINEL-FLAG-4414"), "{reason}");
+    ready(&planned[1]);
+}
