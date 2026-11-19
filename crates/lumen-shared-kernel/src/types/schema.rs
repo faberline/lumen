@@ -68,6 +68,8 @@ fn is_false(v: &bool) -> bool {
 }
 
 /// Field type name. `float64` is accepted as an alias of `number`.
+/// `keyword` takes the option `multi` (a de-duplicated, unordered set of strings).
+/// `set` is the legacy name of that storage; schemas that use it still load.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum FieldType {
