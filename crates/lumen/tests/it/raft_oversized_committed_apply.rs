@@ -71,8 +71,10 @@ const FIELD: &str = "keyword";
 const ITEM_COUNT: usize = 1_000;
 const VALUE_BYTES: usize = 270 * 1024;
 const PENDING_HARD_LIMIT_BYTES: u64 = 256 * 1024 * 1024;
-const CREATE_INDEX: Index = Index::new(1);
-const INDEX_RECORD: Index = Index::new(2);
+// core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+const CREATE_INDEX: Index = Index::new(2);
+// core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+const INDEX_RECORD: Index = Index::new(3);
 const REPLAY_WATCHDOG: Duration = Duration::from_secs(30);
 // This only avoids treating a 264 MiB durable fixture write as a product
 // latency assertion. The contract's observable watchdog is below.

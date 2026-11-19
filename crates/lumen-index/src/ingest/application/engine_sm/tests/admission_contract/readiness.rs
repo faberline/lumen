@@ -22,7 +22,8 @@ async fn real_leader_readiness_does_not_append_apply_or_reserve() {
     );
     assert!(is_leader);
     assert_eq!(leader, Some(NodeId::new(0)));
-    assert_eq!(last_index, 0, "setup must not prime the log with a write");
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+    assert_eq!(last_index, 1, "setup must not prime the log with a write");
     assert_eq!(applied, Index::new(0));
     assert_eq!(before.reserved, 0);
     assert_eq!(after.reserved, 0);

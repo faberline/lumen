@@ -57,8 +57,9 @@ async fn engine_applies_through_the_shared_host() {
     .encode()
     .unwrap();
     let idx = host.propose(cmd).await.unwrap();
-    assert_eq!(idx, Index::new(1));
-    assert!(matches!(sm.take_outcome(1), Ok(ApplyOutcome::Created(_))));
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+    assert_eq!(idx, Index::new(2));
+    assert!(matches!(sm.take_outcome(2), Ok(ApplyOutcome::Created(_))));
 
     // index a doc → rich Indexed outcome, applied to the real engine.
     let cmd = WalRecord::new(RaftLogEntry::Index {
@@ -76,13 +77,15 @@ async fn engine_applies_through_the_shared_host() {
     .encode()
     .unwrap();
     let idx = host.propose(cmd).await.unwrap();
-    assert_eq!(idx, Index::new(2));
-    match sm.take_outcome(2) {
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+    assert_eq!(idx, Index::new(3));
+    match sm.take_outcome(3) {
         Ok(ApplyOutcome::Indexed(r)) => assert_eq!(r.indexed, 1),
         other => panic!("expected Indexed, got {other:?}"),
     }
     // RYW: the engine reflects the applied write immediately.
-    assert_eq!(sm.applied_index(), Index::new(2));
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+    assert_eq!(sm.applied_index(), Index::new(3));
     let _ = std::fs::remove_dir_all(&tmp);
 }
 

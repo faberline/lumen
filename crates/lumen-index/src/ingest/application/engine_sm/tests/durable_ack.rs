@@ -93,7 +93,8 @@ async fn raft_acknowledged_write_is_applied_and_survives_a_cold_restart() {
     sink.submit(index_entry("u2")).await.unwrap();
 
     // Acknowledged means committed and applied before submit returned.
-    assert_eq!(sm.applied_index(), Index::new(3));
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+    assert_eq!(sm.applied_index(), Index::new(4));
     assert_eq!(engine.stats("docs").unwrap().documents_indexed, 2);
 
     host.shutdown().await.unwrap();
@@ -102,7 +103,8 @@ async fn raft_acknowledged_write_is_applied_and_survives_a_cold_restart() {
 
     let (restarted, host, restarted_sm) =
         open_node(dir.path(), vec![0], vec![], Duration::from_secs(10));
-    assert_eq!(restarted_sm.applied_index(), Index::new(3));
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+    assert_eq!(restarted_sm.applied_index(), Index::new(4));
     assert_eq!(restarted.stats("docs").unwrap().documents_indexed, 2);
     host.shutdown().await.unwrap();
 }

@@ -383,7 +383,8 @@ async fn cancelled_raft_submit_keeps_reservation_through_actual_apply() {
     gate.release();
     let submit_joined = tokio::time::timeout(TEST_LIMIT, &mut submit).await;
     let applied = tokio::time::timeout(TEST_LIMIT, async {
-        while inner.applied_index() != Index::new(1) {
+        // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
+        while inner.applied_index() != Index::new(2) {
             tokio::task::yield_now().await;
         }
     })
@@ -391,8 +392,9 @@ async fn cancelled_raft_submit_keeps_reservation_through_actual_apply() {
     let reserved_after_apply = budget.snapshot().reserved;
     host.shutdown().await.unwrap();
 
+    // core v0.5.1 appends a leader Noop entry at index 1 before the first client write.
     assert_eq!(
-        before_submit_index, 0,
+        before_submit_index, 1,
         "readiness must not append a command"
     );
     assert_eq!(
