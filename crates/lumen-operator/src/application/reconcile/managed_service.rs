@@ -5,13 +5,16 @@ use kube::ResourceExt;
 use serde_json::json;
 use service_k8s::{ConditionFact, ManagedService, ReadinessTarget, ReadyFacts};
 
+use crate::application::reconcile::access_policy::apply_access_policy;
 use crate::application::reconcile::auth_delegator::apply_auth_delegator_binding;
 use crate::application::reconcile::plan_verdicts::{
-    auth_delegation_error, capacity_error, check_peer_identity, peer_identity_error,
-    AUTH_DELEGATION_CONTEXT_KEY, PEER_IDENTITY_CONTEXT_KEY,
+    access_policy_error, auth_delegation_error, capacity_error, check_peer_identity,
+    peer_identity_error, ACCESS_POLICY_CONTEXT_KEY, AUTH_DELEGATION_CONTEXT_KEY,
+    PEER_IDENTITY_CONTEXT_KEY,
 };
 use crate::application::render;
 use crate::domain::lumen_spec::Lumen;
+use crate::infrastructure::kube_access_policy_control::KubeAccessPolicyControl;
 use crate::infrastructure::kube_auth_delegator_control::KubeAuthDelegatorControl;
 
 /// lumen's contribution to the shared operator.
@@ -56,6 +59,18 @@ impl ManagedService for Lumen {
             if let Some(error) = apply_auth_delegator_binding(&control, &lumen).await {
                 context.insert(
                     AUTH_DELEGATION_CONTEXT_KEY.to_string(),
+                    serde_json::Value::String(error),
+                );
+            }
+            // #51: the namespaced access Role and RoleBinding. Its verdict goes
+            // through the context, like the binding above, so a refused write
+            // does not stop the status patch.
+            let access_control = KubeAccessPolicyControl {
+                client: client.clone(),
+            };
+            if let Some(error) = apply_access_policy(&access_control, &lumen).await {
+                context.insert(
+                    ACCESS_POLICY_CONTEXT_KEY.to_string(),
                     serde_json::Value::String(error),
                 );
             }
@@ -146,6 +161,8 @@ impl ManagedService for Lumen {
         // #2890 R4: same channel, same reason — the peer-identity verdict is a
         // Secret read, and `observe` does no I/O.
         observation.peer_identity = peer_identity_error(context);
+        // #51: the access Role and RoleBinding verdict, same channel again.
+        observation.access_policy = access_policy_error(context);
         // The capacity verdict rides the same channel. `reconcile_plan` still
         // refuses an unresolvable profile with `Err`; this only projects it.
         observation.capacity_error = capacity_error(context);

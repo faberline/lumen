@@ -478,7 +478,7 @@ log.
 The planned Managed contract declares exact allowed client ServiceAccounts in
 `Lumen.spec.access`, `LumenFleet.spec.defaults.access`, or the replacing
 `instances[].access` list. The operator then converges whole-runtime Roles and
-RoleBindings. This contract and `AccessPolicyReady` are not implemented.
+RoleBindings. Direct `Lumen.spec.access` convergence of the whole-runtime Role and RoleBinding and the `AccessPolicyReady` condition are implemented. The `LumenFleet` defaults and the replacing `instances[].access` list are not implemented yet.
 
 Fleet will not create a client ServiceAccount, namespace, Deployment, token
 Secret, or TokenRequest issuer grant. The application or platform must still
