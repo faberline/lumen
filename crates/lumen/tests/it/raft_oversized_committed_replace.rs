@@ -108,13 +108,13 @@ const UPDATED_SET_VALUE: &str = "replace-updated-set";
 const BASE_NUMBER: f64 = 1.0;
 const GIANT_NUMBER_BASE: f64 = 1000.0;
 const UPDATED_NUMBER: f64 = 9999.0;
-const CREATE_SEQUENCE: Index = 1;
-const BASE_SEQUENCE: Index = 2;
-const GIANT_SEQUENCE: Index = 3;
-const UPDATE_SEQUENCE: Index = 4;
-const STALE_SEQUENCE: Index = 5;
-const DELETE_SEQUENCE: Index = 6;
-const MALFORMED_SEQUENCE: Index = 7;
+const CREATE_SEQUENCE: Index = Index::new(1);
+const BASE_SEQUENCE: Index = Index::new(2);
+const GIANT_SEQUENCE: Index = Index::new(3);
+const UPDATE_SEQUENCE: Index = Index::new(4);
+const STALE_SEQUENCE: Index = Index::new(5);
+const DELETE_SEQUENCE: Index = Index::new(6);
+const MALFORMED_SEQUENCE: Index = Index::new(7);
 const BASE_VERSION: u64 = 10;
 const GIANT_VERSION: u64 = 20;
 const UPDATED_VERSION: u64 = 30;
@@ -810,10 +810,11 @@ fn checkpoint_and_cold(
     phase: &str,
 ) -> Arc<Engine> {
     let saved = store
-        .save_with_sequence(engine, sequence)
+        .save_with_sequence(engine, sequence.get())
         .unwrap_or_else(|error| panic!("{phase}: real Raft checkpoint failed: {error:#}"));
     assert_eq!(
-        saved, sequence,
+        saved,
+        sequence.get(),
         "{phase}: checkpoint must retain the exact committed Raft watermark",
     );
     let cold = store
@@ -821,7 +822,8 @@ fn checkpoint_and_cold(
         .unwrap_or_else(|error| panic!("{phase}: cold-open CURRENT failed: {error:#}"))
         .unwrap_or_else(|| panic!("{phase}: checkpoint must publish CURRENT"));
     assert_eq!(
-        cold.sequence, sequence,
+        cold.sequence,
+        sequence.get(),
         "{phase}: cold CURRENT must retain the exact committed Raft watermark",
     );
     cold.engine
@@ -888,7 +890,7 @@ async fn run_foreign_committed_replace_child(root: PathBuf, handshake: PathBuf) 
     assert_oversized_state(&engine, "live oversized foreign committed ReplaceDocs");
     assert_public_pending_budget(
         engine.clone(),
-        GIANT_SEQUENCE,
+        GIANT_SEQUENCE.get(),
         "live oversized foreign committed ReplaceDocs",
     )
     .await;
@@ -901,7 +903,7 @@ async fn run_foreign_committed_replace_child(root: PathBuf, handshake: PathBuf) 
     assert_oversized_state(&giant_cold, "cold oversized foreign committed ReplaceDocs");
     assert_public_pending_budget(
         giant_cold.clone(),
-        GIANT_SEQUENCE,
+        GIANT_SEQUENCE.get(),
         "cold oversized foreign committed ReplaceDocs",
     )
     .await;
@@ -930,7 +932,7 @@ async fn run_foreign_committed_replace_child(root: PathBuf, handshake: PathBuf) 
     assert_tail_state(&engine, "live Raft version/stale/delete suffix");
     assert_public_pending_budget(
         engine.clone(),
-        DELETE_SEQUENCE,
+        DELETE_SEQUENCE.get(),
         "live Raft version/stale/delete suffix",
     )
     .await;
@@ -943,7 +945,7 @@ async fn run_foreign_committed_replace_child(root: PathBuf, handshake: PathBuf) 
     assert_tail_state(&final_cold, "cold Raft version/stale/delete suffix");
     assert_public_pending_budget(
         final_cold.clone(),
-        DELETE_SEQUENCE,
+        DELETE_SEQUENCE.get(),
         "cold Raft version/stale/delete suffix",
     )
     .await;

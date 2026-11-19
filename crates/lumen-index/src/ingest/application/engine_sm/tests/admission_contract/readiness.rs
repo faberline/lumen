@@ -8,7 +8,7 @@ async fn real_leader_readiness_does_not_append_apply_or_reserve() {
     let before = budget.snapshot();
     let (_dir, host, sm) = single_node(engine);
 
-    let ready = wait_for_raft_leader(&host, HostConfig::default().propose_timeout).await;
+    let ready = wait_for_raft_leader(&host, HostConfig::default().propose_timeout()).await;
     let is_leader = host.is_leader().await;
     let leader = host.leader().await;
     let last_index = raft_last_index(&host).await;
@@ -21,9 +21,9 @@ async fn real_leader_readiness_does_not_append_apply_or_reserve() {
         "readiness must observe the real host becoming leader"
     );
     assert!(is_leader);
-    assert_eq!(leader, Some(0));
+    assert_eq!(leader, Some(NodeId::new(0)));
     assert_eq!(last_index, 0, "setup must not prime the log with a write");
-    assert_eq!(applied, 0);
+    assert_eq!(applied, Index::new(0));
     assert_eq!(before.reserved, 0);
     assert_eq!(after.reserved, 0);
     assert_eq!(after.active, before.active);
@@ -38,15 +38,12 @@ async fn real_learner_cannot_satisfy_leader_readiness_or_admit_work() {
     let sm = EngineSm::new(engine, 0);
     let dir = tempfile::tempdir().unwrap();
     let host = RaftHost::spawn(
-        0,
-        Membership {
-            voters: vec![1],
-            learners: vec![0],
-        },
+        NodeId::new(0),
+        Membership::new(vec![NodeId::new(1)], vec![NodeId::new(0)]),
         HashMap::new(),
         RaftStore::open(
             dir.path().to_str().unwrap(),
-            0,
+            NodeId::new(0),
             raft_runtime::FsyncPolicy::Os,
         )
         .unwrap(),
@@ -67,7 +64,7 @@ async fn real_learner_cannot_satisfy_leader_readiness_or_admit_work() {
     );
     assert!(!is_leader);
     assert_eq!(last_index, 0);
-    assert_eq!(applied, 0);
+    assert_eq!(applied, Index::new(0));
     assert_eq!(before.reserved, 0);
     assert_eq!(after.reserved, 0);
     assert_eq!(after.active, before.active);

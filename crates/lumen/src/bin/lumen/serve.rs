@@ -172,8 +172,8 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
             )
             .context("raft: cluster topology from env")?;
             tracing::info!(
-                node_id = topo.node_id,
-                voters = ?topo.membership.voters,
+                node_id = topo.node_id.get(),
+                voters = ?topo.membership.voters(),
                 peers = ?topo.peers.keys().collect::<Vec<_>>(),
                 data_dir = %args.raft_data_dir,
                 "wal=raft (raft_core; multi-pod)"
@@ -196,10 +196,8 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
                 ),
                 None => lumen::raft_sm::EngineSm::new(engine.clone(), 0),
             };
-            let host_config = raft_runtime::HostConfig {
-                snapshot: raft_runtime::SnapshotPolicy::External,
-                ..Default::default()
-            };
+            let host_config = raft_runtime::HostConfig::default()
+                .with_snapshot(raft_runtime::SnapshotPolicy::External);
             let host = Arc::new(raft_runtime::RaftHost::spawn_with_peer_transport(
                 topo.node_id,
                 topo.membership,
@@ -671,8 +669,11 @@ pub(crate) async fn serve(args: ServeArgs) -> Result<()> {
                 // Start each interval after the previous attempt completes.
                 tokio::time::sleep(period).await;
                 match host.snapshot_and_compact().await {
-                    Ok(idx) if idx > 0 => {
-                        tracing::info!(snapshot_index = idx, "raft snapshot taken + log compacted")
+                    Ok(idx) if idx.get() > 0 => {
+                        tracing::info!(
+                            snapshot_index = idx.get(),
+                            "raft snapshot taken + log compacted"
+                        )
                     }
                     Ok(_) => {}
                     Err(e) => {

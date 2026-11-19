@@ -19,7 +19,7 @@ async fn close_raft_peer_listener_within(
     deadline: server_lifecycle::ShutdownDeadline,
 ) {
     let _ = peer_server.shutdown_tx.send(());
-    match tokio::time::timeout_at(deadline.expires_at, &mut peer_server.task).await {
+    match tokio::time::timeout_at(deadline.expires_at(), &mut peer_server.task).await {
         Ok(Ok(Ok(()))) => tracing::info!(
             event = "raft_peer_listener_closed",
             message = "raft_peer_listener_closed",
@@ -76,7 +76,7 @@ pub(super) async fn shutdown_raft_within(
     use crate::shutdown::RaftShutdownCoordinator;
 
     let report = host.shutdown_within(deadline).await;
-    let event = RaftShutdownCoordinator::event(&report, deadline.total.as_millis() as u64);
+    let event = RaftShutdownCoordinator::event(&report, deadline.total().as_millis() as u64);
     tracing::info!(
         event = "raft_shutdown",
         message = "raft_shutdown",
@@ -142,7 +142,7 @@ pub(super) fn spawn_cluster_state_poller(
             };
             let prev = cluster.role();
             cluster.set_role(role);
-            cluster.set_leader_index(leader.map(|n| n as u32));
+            cluster.set_leader_index(leader.map(|n| n.get() as u32));
             // #2475: publish `lumen_raft_leader_known{shard}` off the same
             // live election read `enforce_read_consistency` trusts, so
             // `render::prometheus_rule`'s `LumenRaftLeaderAbsent` alerts on
@@ -158,9 +158,10 @@ pub(super) fn spawn_cluster_state_poller(
                 },
                 std::sync::atomic::Ordering::Relaxed,
             );
-            cluster
-                .applied_index
-                .store(*applied_rx.borrow(), std::sync::atomic::Ordering::Relaxed);
+            cluster.applied_index.store(
+                applied_rx.borrow().get(),
+                std::sync::atomic::Ordering::Relaxed,
+            );
             if role != prev {
                 tracing::info!(pod = %cluster.pod_name, from = ?prev, to = ?role, "raft role changed");
             }

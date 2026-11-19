@@ -61,7 +61,8 @@ use lumen::types::{
 };
 use lumen::wal::WalRecord;
 use raft_runtime::{
-    FsyncPolicy, HostConfig, Index, Membership, RaftHost, RaftStateMachine, RaftStatus, RaftStore,
+    FsyncPolicy, HostConfig, Index, Membership, NodeId, RaftHost, RaftStateMachine, RaftStatus,
+    RaftStore, StateMachineError,
 };
 use tower::ServiceExt as _;
 
@@ -70,8 +71,8 @@ const FIELD: &str = "keyword";
 const ITEM_COUNT: usize = 1_000;
 const VALUE_BYTES: usize = 270 * 1024;
 const PENDING_HARD_LIMIT_BYTES: u64 = 256 * 1024 * 1024;
-const CREATE_INDEX: Index = 1;
-const INDEX_RECORD: Index = 2;
+const CREATE_INDEX: Index = Index::new(1);
+const INDEX_RECORD: Index = Index::new(2);
 const REPLAY_WATCHDOG: Duration = Duration::from_secs(30);
 // This only avoids treating a 264 MiB durable fixture write as a product
 // latency assertion. The contract's observable watchdog is below.
@@ -273,35 +274,35 @@ impl RecordingStateMachine {
 }
 
 impl RaftStateMachine for RecordingStateMachine {
-    fn apply(&self, index: Index, _: &[u8]) -> anyhow::Result<()> {
-        self.applied.store(index, Ordering::Release);
+    fn apply(&self, index: Index, _: &[u8]) -> Result<(), StateMachineError> {
+        self.applied.store(index.get(), Ordering::Release);
         Ok(())
     }
 
-    fn snapshot(&self, writer: &mut dyn Write) -> anyhow::Result<()> {
-        writer.write_all(&self.applied.load(Ordering::Acquire).to_le_bytes())?;
+    fn snapshot(&self, writer: &mut dyn Write) -> Result<(), StateMachineError> {
+        writer
+            .write_all(&self.applied.load(Ordering::Acquire).to_le_bytes())
+            .map_err(anyhow::Error::from)?;
         Ok(())
     }
 
-    fn restore(&self, reader: &mut dyn Read) -> anyhow::Result<()> {
+    fn restore(&self, reader: &mut dyn Read) -> Result<(), StateMachineError> {
         let mut bytes = [0_u8; std::mem::size_of::<u64>()];
-        reader.read_exact(&mut bytes)?;
+        reader.read_exact(&mut bytes).map_err(anyhow::Error::from)?;
         self.applied
             .store(u64::from_le_bytes(bytes), Ordering::Release);
         Ok(())
     }
 
     fn applied_index(&self) -> Index {
-        self.applied.load(Ordering::Acquire)
+        Index::new(self.applied.load(Ordering::Acquire))
     }
 }
 
 fn host_config() -> HostConfig {
-    HostConfig {
-        tick: Duration::from_millis(5),
-        propose_timeout: FIXTURE_PROPOSE_TIMEOUT,
-        ..HostConfig::default()
-    }
+    HostConfig::default()
+        .with_tick(Duration::from_millis(5))
+        .with_propose_timeout(FIXTURE_PROPOSE_TIMEOUT)
 }
 
 fn panic_payload_text(payload: Box<dyn Any + Send>) -> String {
@@ -318,7 +319,7 @@ async fn cold_host_readiness_diagnostic(host: &RaftHost) -> String {
     let persistence = host.store().persistence_stats();
     let applied_watch = host.applied_watch();
     let applied_index = *applied_watch.borrow();
-    let route_timeout = host_config().rpc_timeout;
+    let route_timeout = host_config().rpc_timeout();
     let raftz = tokio::time::timeout(route_timeout, async {
         let response = host
             .router()
@@ -365,15 +366,12 @@ async fn wait_for_leader(host: &RaftHost) {
 async fn retain_commands_in_real_raft_store(root: &std::path::Path) {
     let recording = RecordingStateMachine::new();
     let host = Arc::new(RaftHost::spawn(
-        0,
-        Membership {
-            voters: vec![0],
-            learners: Vec::new(),
-        },
+        NodeId::new(0),
+        Membership::new(vec![NodeId::new(0)], Vec::new()),
         HashMap::new(),
         RaftStore::open(
             root.to_str().expect("UTF-8 retained Raft root"),
-            0,
+            NodeId::new(0),
             FsyncPolicy::Always,
         )
         .expect("open retained Raft store"),
@@ -425,15 +423,12 @@ async fn cold_replay_retained_store(
             // rather than accepting a worker-thread panic as the contract red.
             let host = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 Arc::new(RaftHost::spawn(
-                    0,
-                    Membership {
-                        voters: vec![0],
-                        learners: Vec::new(),
-                    },
+                    NodeId::new(0),
+                    Membership::new(vec![NodeId::new(0)], Vec::new()),
                     HashMap::new(),
                     RaftStore::open(
                         root.to_str().expect("UTF-8 cold Raft root"),
-                        0,
+                        NodeId::new(0),
                         FsyncPolicy::Always,
                     )
                     .expect("open retained Raft store for Lumen cold replay"),
@@ -556,7 +551,7 @@ async fn retained_oversized_fast_index_replays_atomically_within_budget_and_cold
         .await
         .expect("stop cold replay host before standalone checkpoint");
     segment_store
-        .save(&engine, INDEX_RECORD)
+        .save(&engine, INDEX_RECORD.get())
         .expect("checkpoint the fully applied oversized committed record");
     assert_public_pending_budget(engine.clone(), writer).await;
     let cold = segment_store
@@ -564,7 +559,8 @@ async fn retained_oversized_fast_index_replays_atomically_within_budget_and_cold
         .expect("open segment CURRENT after oversized committed replay")
         .expect("oversized committed checkpoint must publish CURRENT");
     assert_eq!(
-        cold.sequence, INDEX_RECORD,
+        cold.sequence,
+        INDEX_RECORD.get(),
         "checkpoint must retain the committed Raft watermark",
     );
     assert_every_keyword_is_present(&cold.engine, "cold segment reopen");

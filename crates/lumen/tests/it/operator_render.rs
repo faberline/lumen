@@ -1872,7 +1872,7 @@ fn network_policy_off_prunes_the_policy_render_no_longer_emits() {
         "networkPolicy=true must render the policy"
     );
     assert!(
-        prunes(&on).iter().all(|t| t.kind != "NetworkPolicy"),
+        prunes(&on).iter().all(|t| t.kind() != "NetworkPolicy"),
         "a CR that still wants the policy must never nominate it for deletion"
     );
 
@@ -1884,15 +1884,15 @@ fn network_policy_off_prunes_the_policy_render_no_longer_emits() {
     );
     let policy_targets: Vec<PruneTarget> = prunes(&off)
         .into_iter()
-        .filter(|t| t.kind == "NetworkPolicy")
+        .filter(|t| t.kind() == "NetworkPolicy")
         .collect();
     assert_eq!(
         policy_targets,
-        vec![PruneTarget {
-            api_version: "networking.k8s.io/v1",
-            kind: "NetworkPolicy",
-            name: "search".to_string(),
-        }],
+        vec![PruneTarget::new(
+            "networking.k8s.io/v1",
+            "NetworkPolicy",
+            "search",
+        )],
         "networkPolicy=false must nominate exactly the policy for deletion"
     );
 }
@@ -1919,20 +1919,20 @@ fn pruned_network_policy_name_matches_the_rendered_one() {
         spec.network_policy = false;
         let targets: Vec<PruneTarget> = prunes(&lumen(name, spec))
             .into_iter()
-            .filter(|t| t.kind == "NetworkPolicy")
+            .filter(|t| t.kind() == "NetworkPolicy")
             .collect();
         assert_eq!(targets.len(), 1);
         assert_eq!(
-            Value::from(targets[0].name.clone()),
+            Value::from(targets[0].name().to_string()),
             policy["metadata"]["name"],
             "prune must target the name render actually uses"
         );
         assert_eq!(
-            Value::from(targets[0].api_version),
+            Value::from(targets[0].api_version()),
             policy["apiVersion"],
             "prune must target the apiVersion render actually uses"
         );
-        assert_eq!(Value::from(targets[0].kind), policy["kind"]);
+        assert_eq!(Value::from(targets[0].kind()), policy["kind"]);
     }
 }
 
@@ -2084,7 +2084,7 @@ fn an_instance_without_peer_tls_secret_renders_no_peer_volume_or_env() {
 fn ready_facts(name: &str, count: i64) -> ReadyFacts {
     let mut ready = std::collections::HashMap::new();
     ready.insert(name.to_string(), count);
-    ReadyFacts { ready }
+    ReadyFacts::new(ready)
 }
 
 fn condition<'a>(facts: &'a [ConditionFact], type_: &str) -> &'a ConditionFact {

@@ -3,7 +3,8 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use raft_runtime::{
-    AdmissionPermit, HostConfig, Index, Membership, RaftHost, RaftStateMachine, RaftStore,
+    AdmissionPermit, HostConfig, Index, Membership, NodeId, RaftHost, RaftStateMachine, RaftStore,
+    StateMachineError,
 };
 use tower::ServiceExt;
 
@@ -62,15 +63,12 @@ fn single_node(engine: Arc<Engine>) -> (tempfile::TempDir, Arc<RaftHost>, Arc<En
     let dir = tempfile::tempdir().unwrap();
     let sm = EngineSm::new(engine, 0);
     let host = Arc::new(RaftHost::spawn(
-        0,
-        Membership {
-            voters: vec![0],
-            learners: vec![],
-        },
+        NodeId::new(0),
+        Membership::new(vec![NodeId::new(0)], vec![]),
         HashMap::new(),
         RaftStore::open(
             dir.path().to_str().unwrap(),
-            0,
+            NodeId::new(0),
             raft_runtime::FsyncPolicy::Os,
         )
         .unwrap(),
@@ -167,7 +165,11 @@ async fn raft_full_local_admission_refuses_before_append_or_apply() {
         "one final raft pre-publication refusal increments once"
     );
     assert_eq!(appended, 0, "429 refusal must precede Raft append");
-    assert_eq!(applied, 0, "429 refusal must precede state-machine apply");
+    assert_eq!(
+        applied,
+        Index::new(0),
+        "429 refusal must precede state-machine apply"
+    );
     assert_eq!(budget.snapshot().reserved, 0);
 }
 
@@ -208,7 +210,7 @@ async fn committed_raft_head_waits_without_holding_capture_barrier() {
 
     let applying = {
         let sm = sm.clone();
-        tokio::task::spawn_blocking(move || sm.apply(1, &command))
+        tokio::task::spawn_blocking(move || sm.apply(Index::new(1), &command))
     };
     let waiter_seen = wait_for_capacity_waiter(&budget);
     let owner_started = engine.layer_maintenance.owner().is_some();
@@ -248,9 +250,9 @@ async fn committed_raft_head_waits_without_holding_capture_barrier() {
         0,
         "capture must complete while committed admission waits"
     );
-    assert_eq!(applied_before_release, 0);
+    assert_eq!(applied_before_release, Index::new(0));
     assert!(apply_result.unwrap().unwrap().is_ok());
-    assert_eq!(applied_after_release, 1);
+    assert_eq!(applied_after_release, Index::new(1));
     assert_eq!(
         capture_cut, 1,
         "record state and watermark share one interval"
@@ -305,7 +307,7 @@ struct GatedSm {
 }
 
 impl RaftStateMachine for GatedSm {
-    fn admit_proposal(&self, command: &[u8]) -> anyhow::Result<Option<AdmissionPermit>> {
+    fn admit_proposal(&self, command: &[u8]) -> Result<Option<AdmissionPermit>, StateMachineError> {
         self.inner.admit_proposal(command)
     }
     fn apply_admitted(
@@ -313,17 +315,17 @@ impl RaftStateMachine for GatedSm {
         index: Index,
         command: &[u8],
         permit: Option<AdmissionPermit>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), StateMachineError> {
         self.gate.block_apply();
         self.inner.apply_admitted(index, command, permit)
     }
-    fn apply(&self, index: Index, command: &[u8]) -> anyhow::Result<()> {
+    fn apply(&self, index: Index, command: &[u8]) -> Result<(), StateMachineError> {
         self.apply_admitted(index, command, None)
     }
-    fn snapshot(&self, writer: &mut dyn std::io::Write) -> anyhow::Result<()> {
+    fn snapshot(&self, writer: &mut dyn std::io::Write) -> Result<(), StateMachineError> {
         self.inner.snapshot(writer)
     }
-    fn restore(&self, reader: &mut dyn std::io::Read) -> anyhow::Result<()> {
+    fn restore(&self, reader: &mut dyn std::io::Read) -> Result<(), StateMachineError> {
         self.inner.restore(reader)
     }
     fn applied_index(&self) -> Index {
@@ -341,15 +343,12 @@ async fn cancelled_raft_submit_keeps_reservation_through_actual_apply() {
     let gate = Arc::new(ApplyGate::default());
     let dir = tempfile::tempdir().unwrap();
     let host = Arc::new(RaftHost::spawn(
-        0,
-        Membership {
-            voters: vec![0],
-            learners: vec![],
-        },
+        NodeId::new(0),
+        Membership::new(vec![NodeId::new(0)], vec![]),
         HashMap::new(),
         RaftStore::open(
             dir.path().to_str().unwrap(),
-            0,
+            NodeId::new(0),
             raft_runtime::FsyncPolicy::Os,
         )
         .unwrap(),
@@ -361,7 +360,7 @@ async fn cancelled_raft_submit_keeps_reservation_through_actual_apply() {
     ));
     let sink = Arc::new(RaftWriteSink::new(host.clone(), inner.clone()));
 
-    let ready = wait_for_raft_leader(&host, HostConfig::default().propose_timeout).await;
+    let ready = wait_for_raft_leader(&host, HostConfig::default().propose_timeout()).await;
     if !ready {
         host.shutdown().await.unwrap();
     }
@@ -384,7 +383,7 @@ async fn cancelled_raft_submit_keeps_reservation_through_actual_apply() {
     gate.release();
     let submit_joined = tokio::time::timeout(TEST_LIMIT, &mut submit).await;
     let applied = tokio::time::timeout(TEST_LIMIT, async {
-        while inner.applied_index() != 1 {
+        while inner.applied_index() != Index::new(1) {
             tokio::task::yield_now().await;
         }
     })
@@ -397,7 +396,8 @@ async fn cancelled_raft_submit_keeps_reservation_through_actual_apply() {
         "readiness must not append a command"
     );
     assert_eq!(
-        before_submit_applied, 0,
+        before_submit_applied,
+        Index::new(0),
         "readiness must not apply a command"
     );
     assert_eq!(

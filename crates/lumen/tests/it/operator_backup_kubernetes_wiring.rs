@@ -298,15 +298,14 @@ fn operator_cli_renders_requested_immutable_image_and_preserves_default() {
         String::from_utf8(output.stdout).expect("operator YAML is utf8")
     };
 
-    let default_yaml = render(&[]).expect("render");
+    let default_yaml = render(&[]);
     assert!(default_yaml.contains(&format!(
         "image: ghcr.io/faberline/lumen:{}",
         env!("CARGO_PKG_VERSION")
     )));
 
     let immutable = "asia-east1-docker.pkg.dev/axiom/lumen/lumen@sha256:0123456789abcdef";
-    let immutable_yaml =
-        render(&["--namespace", "lumen-live", "--image", immutable]).expect("render");
+    let immutable_yaml = render(&["--namespace", "lumen-live", "--image", immutable]);
     assert!(immutable_yaml.contains("namespace: lumen-live"));
     assert!(immutable_yaml.contains(&format!("image: {immutable}")));
     assert!(!immutable_yaml.contains(&format!(

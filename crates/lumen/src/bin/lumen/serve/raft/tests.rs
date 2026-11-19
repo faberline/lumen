@@ -37,11 +37,11 @@ async fn abort_after_report_aborts_peer_without_graceful_close_before_deadline()
     )
     .await;
 
-    let graceful_exit = tokio::time::timeout_at(deadline.expires_at, closed_rx)
+    let graceful_exit = tokio::time::timeout_at(deadline.expires_at(), closed_rx)
         .await
         .expect("aborted listener cleanup must finish within the positive deadline");
     assert!(
-        tokio::time::Instant::now() < deadline.expires_at,
+        tokio::time::Instant::now() < deadline.expires_at(),
         "the abort action must finish before timer expiry"
     );
     assert!(
@@ -86,7 +86,7 @@ async fn close_after_report_closes_peer_normally_before_deadline() {
 
     closed_rx.await.expect("listener must finish normally");
     assert!(
-        tokio::time::Instant::now() < deadline.expires_at,
+        tokio::time::Instant::now() < deadline.expires_at(),
         "normal close must finish before the positive deadline"
     );
 }
@@ -117,14 +117,15 @@ async fn cluster_state_poller_converges_role_to_live_election_result() {
     let _ = std::fs::create_dir_all(&tmp);
     let sm = lumen::raft_sm::EngineSm::new(Arc::new(Engine::new()), 0);
     let host = Arc::new(raft_runtime::RaftHost::spawn(
-        0,
-        raft_runtime::Membership {
-            voters: vec![0],
-            learners: vec![],
-        },
+        raft_runtime::NodeId::new(0),
+        raft_runtime::Membership::new(vec![raft_runtime::NodeId::new(0)], vec![]),
         std::collections::HashMap::new(),
-        raft_runtime::RaftStore::open(tmp.to_str().unwrap(), 0, raft_runtime::FsyncPolicy::Os)
-            .unwrap(),
+        raft_runtime::RaftStore::open(
+            tmp.to_str().unwrap(),
+            raft_runtime::NodeId::new(0),
+            raft_runtime::FsyncPolicy::Os,
+        )
+        .unwrap(),
         sm.clone() as Arc<dyn raft_runtime::RaftStateMachine>,
         raft_runtime::HostConfig::default(),
     ));

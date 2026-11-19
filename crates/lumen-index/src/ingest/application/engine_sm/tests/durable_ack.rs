@@ -8,7 +8,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
-use raft_runtime::{FsyncPolicy, HostConfig, Membership, RaftHost, RaftStateMachine, RaftStore};
+use raft_runtime::{
+    FsyncPolicy, HostConfig, Index, Membership, NodeId, RaftHost, RaftStateMachine, RaftStore,
+};
 
 use crate::index::application::engine::Engine;
 use crate::ingest::application::engine_sm::write_sink::RaftWriteSink;
@@ -67,15 +69,15 @@ fn open_node(
     let engine = Arc::new(Engine::new());
     let sm = EngineSm::new(engine.clone(), 0);
     let host = Arc::new(RaftHost::spawn(
-        0,
-        Membership { voters, learners },
+        NodeId::new(0),
+        Membership::new(
+            voters.into_iter().map(NodeId::new).collect(),
+            learners.into_iter().map(NodeId::new).collect(),
+        ),
         HashMap::new(),
-        RaftStore::open(dir.to_str().unwrap(), 0, FsyncPolicy::Always).unwrap(),
+        RaftStore::open(dir.to_str().unwrap(), NodeId::new(0), FsyncPolicy::Always).unwrap(),
         sm.clone() as Arc<dyn RaftStateMachine>,
-        HostConfig {
-            propose_timeout,
-            ..HostConfig::default()
-        },
+        HostConfig::default().with_propose_timeout(propose_timeout),
     ));
     (engine, host, sm)
 }
@@ -91,7 +93,7 @@ async fn raft_acknowledged_write_is_applied_and_survives_a_cold_restart() {
     sink.submit(index_entry("u2")).await.unwrap();
 
     // Acknowledged means committed and applied before submit returned.
-    assert_eq!(sm.applied_index(), 3);
+    assert_eq!(sm.applied_index(), Index::new(3));
     assert_eq!(engine.stats("docs").unwrap().documents_indexed, 2);
 
     host.shutdown().await.unwrap();
@@ -100,7 +102,7 @@ async fn raft_acknowledged_write_is_applied_and_survives_a_cold_restart() {
 
     let (restarted, host, restarted_sm) =
         open_node(dir.path(), vec![0], vec![], Duration::from_secs(10));
-    assert_eq!(restarted_sm.applied_index(), 3);
+    assert_eq!(restarted_sm.applied_index(), Index::new(3));
     assert_eq!(restarted.stats("docs").unwrap().documents_indexed, 2);
     host.shutdown().await.unwrap();
 }
@@ -114,7 +116,7 @@ async fn raft_uncommitted_write_is_rejected_and_absent_after_a_cold_restart() {
 
     let error = sink.submit(index_entry("lost")).await.unwrap_err();
     assert!(!error.to_string().is_empty());
-    assert_eq!(sm.applied_index(), 0);
+    assert_eq!(sm.applied_index(), Index::new(0));
     assert!(engine.stats("docs").is_err());
 
     host.shutdown().await.unwrap();
@@ -123,7 +125,7 @@ async fn raft_uncommitted_write_is_rejected_and_absent_after_a_cold_restart() {
 
     let (restarted, host, restarted_sm) =
         open_node(dir.path(), vec![1], vec![0], Duration::from_millis(300));
-    assert_eq!(restarted_sm.applied_index(), 0);
+    assert_eq!(restarted_sm.applied_index(), Index::new(0));
     assert!(restarted.stats("docs").is_err());
     host.shutdown().await.unwrap();
 }
