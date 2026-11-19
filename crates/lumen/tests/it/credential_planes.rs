@@ -39,22 +39,15 @@ impl ReviewBackend for Reviewer {
         audiences: &[String],
     ) -> Result<TokenReviewOutcome, ReviewError> {
         Ok(if token == KSA_TOKEN {
-            TokenReviewOutcome {
-                authenticated: true,
-                identity: ReviewedIdentity {
+            TokenReviewOutcome::authenticated(
+                ReviewedIdentity {
                     username: KSA_USER.into(),
                     ..Default::default()
                 },
-                audiences: audiences.to_vec(),
-                error: None,
-            }
+                audiences.to_vec(),
+            )
         } else {
-            TokenReviewOutcome {
-                authenticated: false,
-                identity: ReviewedIdentity::default(),
-                audiences: Vec::new(),
-                error: Some("unknown token".into()),
-            }
+            TokenReviewOutcome::rejected("unknown token")
         })
     }
 

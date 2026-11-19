@@ -23,7 +23,12 @@ impl ManagedService for Lumen {
     const MANAGER: &'static str = "lumen-operator";
 
     fn render(&self) -> Vec<serde_json::Value> {
-        render::render(self)
+        // The trait signature is infallible. `reconcile_plan` below is the real
+        // path and propagates the error; this is not called by the controller.
+        render::render(self).unwrap_or_else(|error| {
+            tracing::error!(%error, "lumen render failed");
+            Vec::new()
+        })
     }
 
     /// #2678 R7: reject a spec that names two credential sources before any
@@ -89,7 +94,7 @@ impl ManagedService for Lumen {
                 && lumen.spec.placement.initial_machine_type
                     == crate::domain::capacity::DEFAULT_INITIAL_MACHINE_TYPE;
             let children = if native_placement {
-                render::render(&lumen)
+                render::render(&lumen).map_err(|error| anyhow::anyhow!(error))?
             } else {
                 // Empty selectors, tolerations-only placement, and an explicit
                 // non-default machine type retain legacy catalog behavior.
@@ -106,12 +111,13 @@ impl ManagedService for Lumen {
                 )
                 .map_err(|rejection| anyhow::anyhow!(rejection.message))?;
                 render::render_with_profile(&lumen, &profile)
+                    .map_err(|error| anyhow::anyhow!(error))?
             };
 
-            Ok(service_k8s::service::ReconcilePlan {
+            Ok(service_k8s::service::ReconcilePlan::new(
                 children,
-                context: serde_json::Value::Object(context),
-            })
+                serde_json::Value::Object(context),
+            ))
         }
     }
 
@@ -123,10 +129,7 @@ impl ManagedService for Lumen {
         // The serving fleet is always a StatefulSet (render::render), whether
         // or not raft consensus (`replicasPerShard > 1`) is active.
         let name = self.name_any();
-        vec![ReadinessTarget {
-            kind: "StatefulSet",
-            name,
-        }]
+        vec![ReadinessTarget::new("StatefulSet", name)]
     }
 
     fn status_patch(&self, ready: &ReadyFacts) -> serde_json::Value {

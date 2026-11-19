@@ -21,9 +21,7 @@ fn status_patch_surfaces_oversize_block_as_distinct_reshard_condition() {
         },
     );
 
-    let ready = ReadyFacts {
-        ready: std::collections::HashMap::new(),
-    };
+    let ready = ReadyFacts::new(std::collections::HashMap::new());
     let patch = lumen.status_patch(&ready);
     let reshard = &patch["status"]["reshard"];
     let blocking = reshard["blockingConditions"]
@@ -47,9 +45,7 @@ fn status_patch_surfaces_oversize_block_as_distinct_reshard_condition() {
 #[test]
 fn status_patch_has_no_oversize_condition_when_none_recorded() {
     let lumen = hpa_test_lumen("search", "acme-status-clean", 2, 1);
-    let ready = ReadyFacts {
-        ready: std::collections::HashMap::new(),
-    };
+    let ready = ReadyFacts::new(std::collections::HashMap::new());
     let patch = lumen.status_patch(&ready);
     let reshard = &patch["status"]["reshard"];
     let blocking = reshard["blockingConditions"].as_array();
@@ -89,9 +85,7 @@ fn status_patch_is_clean_for_a_recreated_cr_with_a_stale_cached_uid() {
     let mut lumen = hpa_test_lumen(name, namespace, 2, 1);
     lumen.metadata.uid = Some("new-uid".to_string());
 
-    let ready = ReadyFacts {
-        ready: std::collections::HashMap::new(),
-    };
+    let ready = ReadyFacts::new(std::collections::HashMap::new());
     let patch = lumen.status_patch(&ready);
     let reshard = &patch["status"]["reshard"];
     let blocking = reshard["blockingConditions"].as_array();
@@ -130,9 +124,7 @@ pub(super) fn cutover_pending_convergence_lumen(name: &str, ns: &str, map_versio
 #[test]
 fn status_patch_reports_awaiting_convergence_without_a_stall_condition_before_the_budget() {
     let lumen = cutover_pending_convergence_lumen("search", "acme-convergence-fresh", 1);
-    let ready = ReadyFacts {
-        ready: std::collections::HashMap::new(),
-    };
+    let ready = ReadyFacts::new(std::collections::HashMap::new());
     let patch = lumen.status_patch(&ready);
     let reshard = &patch["status"]["reshard"];
     let blocking = reshard["blockingConditions"]
@@ -185,9 +177,7 @@ fn status_patch_surfaces_topology_convergence_stall_as_distinct_condition() {
         .workflow
         .convergence_wait_started_at = Some(test_now_epoch_secs().saturating_sub(stall_budget + 1));
 
-    let ready = ReadyFacts {
-        ready: std::collections::HashMap::new(),
-    };
+    let ready = ReadyFacts::new(std::collections::HashMap::new());
     let patch = lumen.status_patch(&ready);
     let reshard = &patch["status"]["reshard"];
     let blocking = reshard["blockingConditions"]
@@ -249,9 +239,7 @@ fn status_patch_stalled_condition_survives_a_fresh_process_seeing_the_cr_for_the
     // this namespace/name — `status_patch` (called by whichever operator
     // replica happens to reconcile this CR next) must still report the
     // stall purely from `lumen.spec` above.
-    let ready = ReadyFacts {
-        ready: std::collections::HashMap::new(),
-    };
+    let ready = ReadyFacts::new(std::collections::HashMap::new());
     let patch = lumen.status_patch(&ready);
     let reshard = &patch["status"]["reshard"];
     let blocking = reshard["blockingConditions"]
@@ -285,9 +273,7 @@ fn status_patch_never_reports_awaiting_convergence_for_a_manually_authored_map_v
     let mut lumen = hpa_test_lumen("search", "acme-convergence-manual", 2, 1);
     lumen.spec.shard_map.version = 5;
     // last_cutover_shard_map_version left at its default (None).
-    let ready = ReadyFacts {
-        ready: std::collections::HashMap::new(),
-    };
+    let ready = ReadyFacts::new(std::collections::HashMap::new());
     let patch = lumen.status_patch(&ready);
     let reshard = &patch["status"]["reshard"];
     let blocking = reshard["blockingConditions"].as_array();
@@ -319,9 +305,7 @@ fn status_patch_for_a_stale_status_equals_the_patch_for_no_status() {
         ..Default::default()
     });
 
-    let ready = ReadyFacts {
-        ready: std::collections::HashMap::new(),
-    };
+    let ready = ReadyFacts::new(std::collections::HashMap::new());
     assert_eq!(stale.status_patch(&ready), fresh.status_patch(&ready));
     assert_eq!(fresh.status_patch(&ready), fresh.status_patch(&ready));
 }

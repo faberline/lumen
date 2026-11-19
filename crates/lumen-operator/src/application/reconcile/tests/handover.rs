@@ -27,9 +27,7 @@ fn n_minus_1_lumen_json() -> serde_json::Value {
 }
 
 fn ready_none() -> ReadyFacts {
-    ReadyFacts {
-        ready: HashMap::new(),
-    }
+    ReadyFacts::new(HashMap::new())
 }
 
 #[test]

@@ -64,6 +64,7 @@ fn fixture(replicas_per_shard: u32) -> Lumen {
 
 fn serving_container(lumen: &Lumen) -> Value {
     render(lumen)
+        .expect("render")
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
         .unwrap_or_else(|| panic!("rendered objects have no serving StatefulSet"))["spec"]

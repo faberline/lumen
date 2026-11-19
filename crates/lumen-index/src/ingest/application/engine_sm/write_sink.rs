@@ -103,10 +103,10 @@ impl WriteSink for RaftWriteSink {
                 return Err(e);
             }
         };
-        self.sm.take_outcome(index)
+        self.sm.take_outcome(index.get())
     }
     fn applied_seq(&self) -> u64 {
-        self.sm.applied_index()
+        self.sm.applied_index().get()
     }
     fn restart_required(&self) -> bool {
         self.sm.failed.load(Ordering::Acquire)

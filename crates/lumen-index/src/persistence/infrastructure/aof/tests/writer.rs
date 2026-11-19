@@ -65,8 +65,8 @@ fn append_raw_payload_keeps_the_validated_wire_bytes() {
     writer.sync().unwrap();
     let mut cursor = FramedLogCursor::open(&path).unwrap();
     let frame = cursor.next_frame().unwrap().unwrap();
-    assert_eq!(frame.seq, 9);
-    assert_eq!(frame.payload, payload);
+    assert_eq!(frame.seq(), 9);
+    assert_eq!(frame.payload(), payload);
 }
 
 #[test]

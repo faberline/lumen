@@ -43,13 +43,13 @@ pub(super) fn replay_frames(
 ) -> Result<u64> {
     let mut max_seq = 0u64;
     while let Some(frame) = next_frame()? {
-        if frame.seq <= from_seq {
+        if frame.seq() <= from_seq {
             continue;
         }
-        let rec = decode_payload(&frame.payload)
-            .with_context(|| format!("decode complete AOF frame at sequence {}", frame.seq))?;
-        apply(frame.seq, rec);
-        max_seq = max_seq.max(frame.seq);
+        let rec = decode_payload(frame.payload())
+            .with_context(|| format!("decode complete AOF frame at sequence {}", frame.seq()))?;
+        apply(frame.seq(), rec);
+        max_seq = max_seq.max(frame.seq());
     }
     Ok(max_seq)
 }

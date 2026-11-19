@@ -55,6 +55,7 @@ fn single_replica() -> Lumen {
 
 fn serving_mounts(lumen: &Lumen) -> Vec<Value> {
     render(lumen)
+        .expect("render")
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
         .expect("rendered serving StatefulSet")["spec"]["template"]["spec"]["containers"][0]
@@ -67,7 +68,7 @@ fn serving_mounts(lumen: &Lumen) -> Vec<Value> {
 #[test]
 fn raft_pvc_template_carries_runtime_uid_and_authority_labels() {
     let lumen = single_replica();
-    let objects = render(&lumen);
+    let objects = render(&lumen).expect("render");
     let sts = objects
         .iter()
         .find(|o| o["kind"] == "StatefulSet")
@@ -102,7 +103,7 @@ fn backup_cronjob_and_pod_template_carry_runtime_uid_and_authority_labels() {
         },
         admin_token_secret: None,
     });
-    let objects = render(&lumen);
+    let objects = render(&lumen).expect("render");
     let cron = objects
         .iter()
         .find(|o| o["kind"] == "CronJob")
@@ -155,10 +156,12 @@ fn recreation_and_similar_names_produce_distinct_runtime_uids() {
     cr2.metadata.uid = Some("uid-generation-2".into());
 
     let sts1 = render(&cr1)
+        .expect("render")
         .into_iter()
         .find(|o| o["kind"] == "StatefulSet")
         .unwrap();
     let sts2 = render(&cr2)
+        .expect("render")
         .into_iter()
         .find(|o| o["kind"] == "StatefulSet")
         .unwrap();
@@ -182,10 +185,12 @@ fn recreation_and_similar_names_produce_distinct_runtime_uids() {
     cr_a_bc.metadata.uid = Some("uid-a-bc".into());
 
     let sts_ab_c = render(&cr_ab_c)
+        .expect("render")
         .into_iter()
         .find(|o| o["kind"] == "StatefulSet")
         .unwrap();
     let sts_a_bc = render(&cr_a_bc)
+        .expect("render")
         .into_iter()
         .find(|o| o["kind"] == "StatefulSet")
         .unwrap();
@@ -202,7 +207,7 @@ fn negative_control_omitted_uid_renders_no_runtime_uid_label() {
     let mut cr = single_replica();
     cr.metadata.uid = None;
 
-    let objects = render(&cr);
+    let objects = render(&cr).expect("render");
     let sts = objects.iter().find(|o| o["kind"] == "StatefulSet").unwrap();
     let pvc_labels = &sts["spec"]["volumeClaimTemplates"][0]["metadata"]["labels"];
 
@@ -276,6 +281,7 @@ fn embedded_data_is_an_exact_child_of_the_raft_pvc_mount() {
 
 fn serving_container(lumen: &Lumen) -> Value {
     render(lumen)
+        .expect("render")
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
         .expect("rendered serving StatefulSet")["spec"]["template"]["spec"]["containers"][0]
@@ -365,7 +371,7 @@ fn sentinel_secret_value_never_in_rendered_output() {
         }),
         ..Default::default()
     }];
-    let rendered = serde_json::to_string(&render(&lumen)).expect("rendered json");
+    let rendered = serde_json::to_string(&render(&lumen).expect("render")).expect("rendered json");
     assert!(rendered.contains("sentinel-secret"));
     assert!(!rendered.contains("SENTINEL-SECRET-VALUE-7731"));
 }
@@ -378,7 +384,7 @@ fn literal_env_value_is_rendered() {
         value: Some("SENTINEL-LITERAL-7731".into()),
         ..Default::default()
     }];
-    let rendered = serde_json::to_string(&render(&lumen)).expect("rendered json");
+    let rendered = serde_json::to_string(&render(&lumen).expect("render")).expect("rendered json");
     assert!(rendered.contains("SENTINEL-LITERAL-7731"));
 }
 
@@ -404,8 +410,8 @@ fn two_namespaces_render_independent_inputs() {
         }),
         ..Default::default()
     }];
-    let rendered_a = serde_json::to_string(&render(&a)).expect("rendered json");
-    let rendered_b = serde_json::to_string(&render(&b)).expect("rendered json");
+    let rendered_a = serde_json::to_string(&render(&a).expect("render")).expect("rendered json");
+    let rendered_b = serde_json::to_string(&render(&b).expect("render")).expect("rendered json");
     assert!(rendered_a.contains(r#""secretKeyRef":{"name":"secret-a","key":"k"}"#));
     assert!(!rendered_a.contains("secret-b"));
     assert!(rendered_b.contains(r#""secretKeyRef":{"name":"secret-b","key":"k"}"#));
@@ -539,6 +545,7 @@ fn restart_hash_ignores_tls_certificate_content_but_not_the_reference() {
 fn restart_hash_annotation_is_on_the_serving_pod_template() {
     let lumen = single_replica();
     let statefulset = render(&lumen)
+        .expect("render")
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
         .expect("rendered serving StatefulSet");
@@ -573,6 +580,7 @@ fn restart_hash_assertion_bites_when_a_field_is_left_out_of_the_input() {
 
 fn serving_statefulset_of(lumen: &Lumen) -> Value {
     render(lumen)
+        .expect("render")
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
         .expect("rendered serving StatefulSet")
@@ -640,7 +648,7 @@ fn one_pod_render_carries_no_ha_claim_in_labels_or_annotations() {
     }
 
     let mut values = Vec::new();
-    for object in render(&single_replica()) {
+    for object in render(&single_replica()).expect("render") {
         string_values(&object["metadata"]["labels"], &mut values);
         string_values(&object["metadata"]["annotations"], &mut values);
         string_values(
@@ -756,7 +764,10 @@ fn assert_operator_independent(objects: &[Value]) {
 #[test]
 fn render_is_a_pure_function_of_the_cr() {
     let lumen = single_replica();
-    assert_eq!(render(&lumen), render(&lumen));
+    assert_eq!(
+        render(&lumen).expect("render"),
+        render(&lumen).expect("render")
+    );
 
     let statefulset = serving_statefulset_of(&lumen);
     let pod_meta = &statefulset["spec"]["template"]["metadata"];
@@ -766,13 +777,13 @@ fn render_is_a_pure_function_of_the_cr() {
 
 #[test]
 fn rendered_objects_never_name_the_operator() {
-    assert_operator_independent(&render(&single_replica()));
+    assert_operator_independent(&render(&single_replica()).expect("render"));
 }
 
 #[test]
 #[should_panic(expected = "names the operator")]
 fn injecting_an_operator_env_var_fails_the_independence_check() {
-    let mut objects = render(&single_replica());
+    let mut objects = render(&single_replica()).expect("render");
     let statefulset = objects
         .iter_mut()
         .find(|object| object["kind"] == "StatefulSet")
@@ -800,6 +811,7 @@ fn sharded(shards: u32, replicas: u32, voters: u32) -> Lumen {
 
 fn objs_of(lumen: &Lumen, kind: &str) -> Vec<Value> {
     render(lumen)
+        .expect("render")
         .into_iter()
         .filter(|object| object["kind"] == kind)
         .collect()
@@ -1007,7 +1019,7 @@ fn pdb_per_shard_uses_quorum_safe_max_unavailable() {
 #[test]
 fn prunes_old_single_statefulset_and_pdb_when_sharded() {
     let has = |targets: &[service_k8s::service::PruneTarget], kind: &str, name: &str| {
-        targets.iter().any(|t| t.kind == kind && t.name == name)
+        targets.iter().any(|t| t.kind() == kind && t.name() == name)
     };
 
     let mut sharded_policy = sharded(2, 1, 1);
@@ -1040,7 +1052,7 @@ fn serving_statefulset_with_zones_renders_node_affinity_and_donotschedule() {
         "us-central1-b".into(),
         "us-central1-c".into(),
     ];
-    let objs = render(&lumen);
+    let objs = render(&lumen).expect("render");
     let sts = objs
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")
@@ -1083,7 +1095,7 @@ fn serving_statefulset_with_zones_renders_node_affinity_and_donotschedule() {
 #[test]
 fn serving_statefulset_without_zones_renders_no_node_affinity() {
     let lumen = single_replica();
-    let objs = render(&lumen);
+    let objs = render(&lumen).expect("render");
     let sts = objs
         .into_iter()
         .find(|object| object["kind"] == "StatefulSet" && object["metadata"]["name"] == "search")

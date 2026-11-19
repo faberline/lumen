@@ -34,6 +34,7 @@ use crate::application::render::monitoring::{prometheus_rule, service_monitor};
 use crate::application::render::serving_config::{serving_configmap, serving_network_policy};
 use crate::application::render::serving_statefulset::{serving_statefulsets, shard_selector};
 use crate::domain::lumen_spec::Lumen;
+use service_k8s::render::stateful_instance::StatefulInstanceError;
 
 const APP: &str = "lumen";
 
@@ -155,15 +156,7 @@ fn namespace(lumen: &Lumen) -> String {
 
 /// lumen's render identity for the shared [`service_k8s::render`] helpers.
 fn ctx<'a>(lumen: &Lumen, name: &'a str, ns: &'a str) -> RenderCtx<'a> {
-    RenderCtx {
-        app: APP,
-        manager: MANAGER,
-        api_version: API_VERSION,
-        kind: KIND,
-        name,
-        ns,
-        owner: owner_ref(lumen),
-    }
+    RenderCtx::new(APP, MANAGER, API_VERSION, KIND, name, ns).with_owner(owner_ref(lumen))
 }
 
 /// The owner reference that ties a child to its `Lumen` CR, enabling
@@ -214,7 +207,7 @@ pub(crate) fn hpa_labels(lumen: &Lumen) -> std::collections::BTreeMap<String, St
 /// of `replicasPerShard`. No topology renders a direct HPA: single-member
 /// scale-out would create uncoordinated copies, while raft-HA needs a
 /// membership-aware whole-layer transition before changing pod count.
-pub fn render(lumen: &Lumen) -> Vec<Value> {
+pub fn render(lumen: &Lumen) -> Result<Vec<Value>, StatefulInstanceError> {
     render_with_profile_opt(lumen, None)
 }
 
@@ -222,14 +215,14 @@ pub fn render(lumen: &Lumen) -> Vec<Value> {
 pub fn render_with_profile(
     lumen: &Lumen,
     profile: &crate::domain::capacity::preflight::ResolvedProfile,
-) -> Vec<Value> {
+) -> Result<Vec<Value>, StatefulInstanceError> {
     render_with_profile_opt(lumen, Some(profile))
 }
 
 fn render_with_profile_opt(
     lumen: &Lumen,
     profile: Option<&crate::domain::capacity::preflight::ResolvedProfile>,
-) -> Vec<Value> {
+) -> Result<Vec<Value>, StatefulInstanceError> {
     let name = instance(lumen);
     let ns = namespace(lumen);
     let cx = ctx(lumen, &name, &ns);
@@ -247,7 +240,7 @@ fn render_with_profile_opt(
     attach_service_account_annotations(&mut bsa, &lumen.spec.service_account_annotations);
     out.push(bsa);
     out.push(serving_configmap(lumen, &cx));
-    out.extend(serving_statefulsets(lumen, &cx, &headless, profile));
+    out.extend(serving_statefulsets(lumen, &cx, &headless, profile)?);
     out.extend([
         render::headless_service_with_ports(
             &cx,
@@ -272,7 +265,7 @@ fn render_with_profile_opt(
     if let Some(cj) = backup_cron_job(lumen, &cx) {
         out.push(cj);
     }
-    out
+    Ok(out)
 }
 
 /// The PodDisruptionBudgets of the serving fleet.
@@ -311,26 +304,22 @@ fn serving_pdbs(lumen: &Lumen, cx: &RenderCtx<'_>, name: &str) -> Vec<Value> {
 pub fn prunes(lumen: &Lumen) -> Vec<PruneTarget> {
     let mut targets = Vec::new();
     if lumen.spec.shard_count > 1 {
-        targets.push(PruneTarget {
-            api_version: "apps/v1",
-            kind: "StatefulSet",
-            name: instance(lumen),
-        });
-        targets.push(PruneTarget {
-            api_version: "policy/v1",
-            kind: "PodDisruptionBudget",
-            name: instance(lumen),
-        });
+        targets.push(PruneTarget::new("apps/v1", "StatefulSet", instance(lumen)));
+        targets.push(PruneTarget::new(
+            "policy/v1",
+            "PodDisruptionBudget",
+            instance(lumen),
+        ));
     }
     if !lumen.spec.network_policy {
-        targets.push(PruneTarget {
-            api_version: "networking.k8s.io/v1",
-            kind: "NetworkPolicy",
+        targets.push(PruneTarget::new(
+            "networking.k8s.io/v1",
+            "NetworkPolicy",
             // Resolved through the same `instance` helper `render` uses, so this is
             // the exact inverse of the branch that creates it rather than an
             // independent guess at the name.
-            name: instance(lumen),
-        });
+            instance(lumen),
+        ));
     }
     targets
 }

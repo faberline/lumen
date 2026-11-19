@@ -367,14 +367,18 @@ fn apply_during_pause(
     let ordinary = ordinary_overlay_command();
     let tombstone = delete_command();
     for (index, command, label) in [
-        (capture_index + 1, oversized, "newer oversized scalar layer"),
         (
-            capture_index + 2,
+            capture_index.saturating_add(1),
+            oversized,
+            "newer oversized scalar layer",
+        ),
+        (
+            capture_index.saturating_add(2),
             ordinary.as_slice(),
             "ordinary scalar overlay",
         ),
         (
-            capture_index + 3,
+            capture_index.saturating_add(3),
             tombstone.as_slice(),
             "full-document tombstone",
         ),
@@ -382,7 +386,7 @@ fn apply_during_pause(
         state_machine
             .apply(index, command)
             .map_err(|error| format!("{label} at Raft index {index} was refused: {error:#}"))?;
-        state_machine.take_outcome(index).map_err(|error| {
+        state_machine.take_outcome(index.get()).map_err(|error| {
             format!("{label} at Raft index {index} had a failed business outcome: {error:#}")
         })?;
         if state_machine.applied_index() != index {
@@ -504,8 +508,18 @@ fn run_case(setup: Setup) {
     let engine = Arc::new(Engine::new());
     let state_machine = EngineSm::new_with_segment_store(engine.clone(), 0, store.clone());
 
-    assert_committed_apply(state_machine.as_ref(), 1, &create_command(), setup.name());
-    assert_committed_apply(state_machine.as_ref(), 2, &seed_command(), setup.name());
+    assert_committed_apply(
+        state_machine.as_ref(),
+        Index::new(1),
+        &create_command(),
+        setup.name(),
+    );
+    assert_committed_apply(
+        state_machine.as_ref(),
+        Index::new(2),
+        &seed_command(),
+        setup.name(),
+    );
 
     let mut oversized = oversized_fast_index_command();
     let capture_index = match setup {
@@ -525,7 +539,7 @@ fn run_case(setup: Setup) {
             );
             assert_committed_apply(
                 state_machine.as_ref(),
-                3,
+                Index::new(3),
                 &oversized,
                 "reused setup captured oversized committed apply",
             );
@@ -570,7 +584,8 @@ fn run_case(setup: Setup) {
     let apply_thread = thread::Builder::new()
         .name(format!("lumen-private-layer-apply-{}", setup.name()))
         .spawn(move || {
-            let result = apply_during_pause(apply_sm.as_ref(), capture_index, &oversized);
+            let result =
+                apply_during_pause(apply_sm.as_ref(), Index::new(capture_index), &oversized);
             let _ = apply_done_tx.send(result);
         })
         .expect("start post-cut committed apply worker");
@@ -650,7 +665,7 @@ fn run_case(setup: Setup) {
     let final_index = capture_index + 3;
     assert_eq!(
         state_machine.applied_index(),
-        final_index,
+        Index::new(final_index),
         "{} live state machine retains every post-cut committed index",
         setup.name(),
     );

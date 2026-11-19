@@ -1,6 +1,7 @@
 //! The serving StatefulSet, layered on the shared workload primitive.
 
 use serde_json::{json, Value};
+use service_k8s::render::stateful_instance::StatefulInstanceError;
 use service_k8s::render::{self, RenderCtx, ServiceStatefulSet, WorkloadVolumeClaim};
 
 use std::collections::BTreeMap;
@@ -27,7 +28,7 @@ pub(super) fn serving_statefulset(
     cx: &RenderCtx<'_>,
     headless: &str,
     profile: Option<&crate::domain::capacity::preflight::ResolvedProfile>,
-) -> Value {
+) -> Result<Value, StatefulInstanceError> {
     let s = &lumen.spec.serving;
     let sa_name = serving_service_account_name(lumen);
     let res = render::requested_resources(&s.cpu, &s.memory);
@@ -130,7 +131,7 @@ pub(super) fn serving_statefulset(
     }
     let serving_plan = ServiceStatefulSet {
         cx,
-        name: cx.name,
+        name: cx.name(),
         component: COMPONENT,
         image: lumen.spec.image.as_str(),
         image_pull_policy,
@@ -231,7 +232,7 @@ pub(super) fn serving_statefulset(
     };
     // Keep Kubernetes' legacy Service env injection from replacing the
     // ConfigMap-backed numeric `LUMEN_PORT` with a `tcp://...` value.
-    let mut sts = render::service_statefulset_with_service_links(serving_plan, false);
+    let mut sts = render::service_statefulset_with_service_links(serving_plan, false)?;
     if !lumen.spec.image_pull_secrets.is_empty() {
         sts["spec"]["template"]["spec"]["imagePullSecrets"] = json!(lumen.spec.image_pull_secrets);
     }
@@ -267,7 +268,7 @@ pub(super) fn serving_statefulset(
             });
         }
     }
-    sts
+    Ok(sts)
 }
 
 /// The label that names a shard on its pods, selectors and PodDisruptionBudget.
@@ -298,14 +299,14 @@ pub(super) fn serving_statefulsets(
     cx: &RenderCtx<'_>,
     headless: &str,
     profile: Option<&crate::domain::capacity::preflight::ResolvedProfile>,
-) -> Vec<Value> {
-    let base = serving_statefulset(lumen, cx, headless, profile);
+) -> Result<Vec<Value>, StatefulInstanceError> {
+    let base = serving_statefulset(lumen, cx, headless, profile)?;
     if lumen.spec.shard_count <= 1 {
-        return vec![base];
+        return Ok(vec![base]);
     }
-    (0..lumen.spec.shard_count)
+    Ok((0..lumen.spec.shard_count)
         .map(|shard| shard_statefulset(base.clone(), lumen, cx, shard))
-        .collect()
+        .collect())
 }
 
 /// The selector of one shard: the immutable runtime selector plus the shard
@@ -336,7 +337,7 @@ fn field<'a>(object: &'a mut Value, path: &[&str]) -> &'a mut Value {
 /// One shard's StatefulSet, edited from the base single-shard object.
 fn shard_statefulset(mut sts: Value, lumen: &Lumen, cx: &RenderCtx<'_>, shard: u32) -> Value {
     let index = shard.to_string();
-    *field(&mut sts, &["metadata", "name"]) = json!(format!("{}-s{shard}", cx.name));
+    *field(&mut sts, &["metadata", "name"]) = json!(format!("{}-s{shard}", cx.name()));
     put_shard_label(field(&mut sts, &["metadata", "labels"]), &index);
     put_shard_label(
         field(&mut sts, &["spec", "selector", "matchLabels"]),
@@ -362,7 +363,7 @@ fn shard_statefulset(mut sts: Value, lumen: &Lumen, cx: &RenderCtx<'_>, shard: u
 
     // Same-shard members never share a node; other shards may.
     *field(&mut sts, &["spec", "template", "spec", "affinity"]) =
-        crate::domain::capacity::placement::shard_data_node_affinity(cx.name, shard);
+        crate::domain::capacity::placement::shard_data_node_affinity(cx.name(), shard);
     // The zone intent applies to every shard too, not only to the single StatefulSet.
     if !lumen.spec.placement.zones.is_empty() {
         field(&mut sts, &["spec", "template", "spec", "affinity"])["nodeAffinity"] =

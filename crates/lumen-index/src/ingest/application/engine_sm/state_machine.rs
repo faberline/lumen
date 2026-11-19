@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 use anyhow::Result;
 use raft_runtime::{
     AdmissionPermit, Index, PreparedSnapshot, ProposalBackpressure, RaftStateMachine,
-    SnapshotPreparation,
+    SnapshotPreparation, StateMachineError,
 };
 
 use crate::index::application::admission::RecordAdmissionError;
@@ -16,25 +16,28 @@ use crate::ingest::application::engine_sm::{AdmittedRaftRecord, EngineSm};
 use crate::persistence::infrastructure::rdb::RdbSnapshot;
 
 impl RaftStateMachine for EngineSm {
-    fn admit_proposal(&self, command: &[u8]) -> Result<Option<AdmissionPermit>> {
-        match self.decode_admitted(command, true) {
-            Ok(record) => Ok(Some(Box::new(record))),
-            Err(error) => {
-                if let Some(pending) = error.downcast_ref::<RecordAdmissionError>().and_then(
-                    crate::ingest::domain::change_admission::PendingChangeCapacity::from_record_prepublication,
-                ) {
-                    return Err(ProposalBackpressure {
-                        reason: pending.to_string(),
-                        retry_after_seconds: 1,
+    fn admit_proposal(&self, command: &[u8]) -> Result<Option<AdmissionPermit>, StateMachineError> {
+        (|| -> Result<Option<AdmissionPermit>> {
+            match self.decode_admitted(command, true) {
+                Ok(record) => Ok(Some(Box::new(record))),
+                Err(error) => {
+                    if let Some(pending) = error.downcast_ref::<RecordAdmissionError>().and_then(
+                        crate::ingest::domain::change_admission::PendingChangeCapacity::from_record_prepublication,
+                    ) {
+                        return Err(ProposalBackpressure {
+                            reason: pending.to_string(),
+                            retry_after_seconds: 1,
+                        }
+                        .into());
                     }
-                    .into());
+                    Err(error)
                 }
-                Err(error)
             }
-        }
+        })()
+        .map_err(StateMachineError::from)
     }
 
-    fn apply(&self, index: Index, command: &[u8]) -> Result<()> {
+    fn apply(&self, index: Index, command: &[u8]) -> Result<(), StateMachineError> {
         self.apply_admitted(index, command, None)
     }
 
@@ -43,11 +46,14 @@ impl RaftStateMachine for EngineSm {
         index: Index,
         command: &[u8],
         permit: Option<AdmissionPermit>,
-    ) -> Result<()> {
+    ) -> Result<(), StateMachineError> {
         if self.failed.load(Ordering::Acquire) {
-            anyhow::bail!("Raft apply requires restart after an unresolved record");
+            return Err(StateMachineError::from(anyhow::anyhow!(
+                "Raft apply requires restart after an unresolved record"
+            )));
         }
         let result = (|| {
+            let index = index.get();
             // Retained oversized fast-Index input must not enter the owned
             // decoder. Its scalar values can be projected from the pinned
             // command into private immutable files before the apply interval.
@@ -107,10 +113,12 @@ impl RaftStateMachine for EngineSm {
             self.failed.store(true, Ordering::Release);
             self.engine.capture_barrier.apply().mark_uncertain();
         }
-        result
+        result.map_err(StateMachineError::from)
     }
 
-    fn preflight_snapshot(&self) -> Result<Option<Box<dyn SnapshotPreparation>>> {
+    fn preflight_snapshot(
+        &self,
+    ) -> Result<Option<Box<dyn SnapshotPreparation>>, StateMachineError> {
         self.segment_store
             .as_ref()
             .map(|store| {
@@ -119,53 +127,62 @@ impl RaftStateMachine for EngineSm {
                     .map(|preparation| Box::new(preparation) as Box<dyn SnapshotPreparation>)
             })
             .transpose()
+            .map_err(StateMachineError::from)
     }
 
-    fn snapshot(&self, writer: &mut dyn std::io::Write) -> Result<()> {
-        if let Some(preparation) = self.preflight_snapshot()? {
-            return preparation
-                .capture_at(self.applied_index())?
-                .write_to(writer);
-        }
-        let capture = self
-            .engine
-            .capture_barrier
-            .capture(self.applied_index())
-            .map_err(|error| anyhow::anyhow!(error))?;
-        let snapshot = self.engine.snapshot()?;
-        let up_to_seq = capture.stamp().sequence;
-        drop(capture);
-        let bytes = RdbSnapshot {
-            up_to_seq,
-            snapshot,
-        }
-        .encode()?;
-        writer.write_all(&bytes)?;
-        Ok(())
+    fn snapshot(&self, writer: &mut dyn std::io::Write) -> Result<(), StateMachineError> {
+        (|| -> Result<()> {
+            if let Some(preparation) = self.preflight_snapshot()? {
+                preparation
+                    .capture_at(self.applied_index())?
+                    .write_to(writer)?;
+                return Ok(());
+            }
+            let capture = self
+                .engine
+                .capture_barrier
+                .capture(self.applied_index().get())
+                .map_err(|error| anyhow::anyhow!(error))?;
+            let snapshot = self.engine.snapshot()?;
+            let up_to_seq = capture.stamp().sequence;
+            drop(capture);
+            let bytes = RdbSnapshot {
+                up_to_seq,
+                snapshot,
+            }
+            .encode()?;
+            writer.write_all(&bytes)?;
+            Ok(())
+        })()
+        .map_err(StateMachineError::from)
     }
 
-    fn validate_snapshot(&self, reader: &mut dyn Read) -> Result<()> {
-        let mut prefix = Vec::with_capacity(8);
-        reader.take(8).read_to_end(&mut prefix)?;
-        let mut input = prefix.as_slice().chain(reader);
-        if prefix == crate::persistence::infrastructure::segment_rdb_store::raft_archive::MAGIC {
-            let store = self
-                .segment_store
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("segment archive needs a segment snapshot store"))?;
-            store.validate_raft_archive(&mut input)
-        } else {
-            let rdb = read_legacy_snapshot(&mut input)?;
-            Engine::new().restore(rdb.snapshot)
-        }
-    }
-
-    fn restore(&self, reader: &mut dyn Read) -> Result<()> {
-        let mut prefix = Vec::with_capacity(8);
-        reader.take(8).read_to_end(&mut prefix)?;
-        let mut input = prefix.as_slice().chain(reader);
-        let sequence =
+    fn validate_snapshot(&self, reader: &mut dyn Read) -> Result<(), StateMachineError> {
+        (|| -> Result<()> {
+            let mut prefix = Vec::with_capacity(8);
+            reader.take(8).read_to_end(&mut prefix)?;
+            let mut input = prefix.as_slice().chain(reader);
             if prefix == crate::persistence::infrastructure::segment_rdb_store::raft_archive::MAGIC
+            {
+                let store = self.segment_store.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("segment archive needs a segment snapshot store")
+                })?;
+                store.validate_raft_archive(&mut input)
+            } else {
+                let rdb = read_legacy_snapshot(&mut input)?;
+                Engine::new().restore(rdb.snapshot)
+            }
+        })()
+        .map_err(StateMachineError::from)
+    }
+
+    fn restore(&self, reader: &mut dyn Read) -> Result<(), StateMachineError> {
+        (|| -> Result<()> {
+            let mut prefix = Vec::with_capacity(8);
+            reader.take(8).read_to_end(&mut prefix)?;
+            let mut input = prefix.as_slice().chain(reader);
+            let sequence = if prefix
+                == crate::persistence::infrastructure::segment_rdb_store::raft_archive::MAGIC
             {
                 let store = self.segment_store.as_ref().ok_or_else(|| {
                     anyhow::anyhow!("segment archive needs a segment snapshot store")
@@ -187,33 +204,39 @@ impl RaftStateMachine for EngineSm {
                     rdb.up_to_seq
                 }
             };
-        self.applied.store(sequence, Ordering::Release);
-        Ok(())
+            self.applied.store(sequence, Ordering::Release);
+            Ok(())
+        })()
+        .map_err(StateMachineError::from)
     }
 
     fn applied_index(&self) -> Index {
-        self.applied.load(Ordering::Acquire)
+        Index::new(self.applied.load(Ordering::Acquire))
     }
 }
 
 impl SnapshotPreparation
     for crate::persistence::infrastructure::segment_rdb_store::raft_capture::SegmentRaftPreparation
 {
-    fn capture_at(self: Box<Self>, index: Index) -> Result<Box<dyn PreparedSnapshot>> {
-        Ok(Box::new((*self).capture_at(index)?))
+    fn capture_at(
+        self: Box<Self>,
+        index: Index,
+    ) -> Result<Box<dyn PreparedSnapshot>, StateMachineError> {
+        Ok(Box::new((*self).capture_at(index.get())?))
     }
 }
 
 impl PreparedSnapshot
     for crate::persistence::infrastructure::segment_rdb_store::raft_capture::SegmentRaftCapture
 {
-    fn write_to(self: Box<Self>, writer: &mut dyn std::io::Write) -> Result<()> {
+    fn write_to(self: Box<Self>, writer: &mut dyn std::io::Write) -> Result<(), StateMachineError> {
         let generation = (*self).publish()?;
         crate::persistence::infrastructure::segment_rdb_store::raft_archive::write_archive(
             generation.path(),
             generation.sequence(),
             writer,
         )
+        .map_err(StateMachineError::from)
     }
 }
 

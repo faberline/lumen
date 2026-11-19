@@ -451,8 +451,8 @@ they want — the fix here is this guidance, not new API surface.
 "#
     .to_string();
     out.push_str("\n## Shared backup primitive\n");
-    out.push_str(service_backup::llm::topic().body);
+    out.push_str(service_backup::llm::topic().body());
     out.push_str("\n## Shared raft-runtime primitive\n");
-    out.push_str(raft_runtime::llm::topic().body);
+    out.push_str(raft_runtime::llm::topic().body());
     out
 }

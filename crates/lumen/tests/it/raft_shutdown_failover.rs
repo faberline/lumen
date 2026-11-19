@@ -28,8 +28,8 @@ use lumen::types::{
 };
 use lumen::wal::WalRecord;
 use raft_runtime::{
-    FsyncPolicy, HostConfig, LeadershipHandoff, Membership, NodeId, PhaseStatus, ProposalOutcome,
-    RaftHost, RaftStateMachine, RaftStore,
+    FsyncPolicy, HostConfig, Index, LeadershipHandoff, Membership, NodeId, PhaseStatus,
+    ProposalOutcome, RaftHost, RaftStateMachine, RaftStore,
 };
 use serde_json::{json, Value};
 use server_lifecycle::ShutdownDeadline;
@@ -113,10 +113,7 @@ fn keyword_total(engine: &Engine) -> u64 {
 }
 
 fn host_config() -> HostConfig {
-    HostConfig {
-        tick: Duration::from_millis(10),
-        ..HostConfig::default()
-    }
+    HostConfig::default().with_tick(Duration::from_millis(10))
 }
 
 struct LumenRaftNode {
@@ -137,19 +134,16 @@ async fn real_lumen_cluster(size: u64) -> Vec<LumenRaftNode> {
             .expect("bind real Raft peer listener");
         let port = listener.local_addr().expect("peer listener address").port();
         listeners.push(listener);
-        addresses.push((id, format!("http://127.0.0.1:{port}")));
+        addresses.push((NodeId::new(id), format!("http://127.0.0.1:{port}")));
     }
 
-    let membership = Membership {
-        voters: (0..size).collect(),
-        learners: Vec::new(),
-    };
+    let membership = Membership::new((0..size).map(NodeId::new).collect(), Vec::new());
     let config = host_config();
     listeners
         .into_iter()
         .enumerate()
         .map(|(position, listener)| {
-            let id = position as NodeId;
+            let id = NodeId::new(position as u64);
             let engine = Arc::new(Engine::new());
             let sm = EngineSm::new(engine.clone(), 0);
             let data = TempDir::new().expect("temporary Raft data directory");
@@ -217,7 +211,10 @@ async fn await_leader(nodes: &[LumenRaftNode], excluded: Option<usize>) -> usize
 async fn wait_for_applied(nodes: &[LumenRaftNode], index: u64) {
     let deadline = Instant::now() + TEST_WATCHDOG;
     loop {
-        if nodes.iter().all(|node| node.sm.applied_index() >= index) {
+        if nodes
+            .iter()
+            .all(|node| node.sm.applied_index() >= Index::new(index))
+        {
             return;
         }
         assert!(
@@ -246,12 +243,12 @@ async fn real_raft_hosts_keep_an_acknowledged_lumen_write_through_failover_and_c
         .propose(index_command())
         .await
         .expect("acknowledge Lumen write through Raft");
-    wait_for_applied(&nodes, acknowledged_index).await;
+    wait_for_applied(&nodes, acknowledged_index.get()).await;
 
     let config = host_config();
     let report = leader_host
         .shutdown_within(
-            ShutdownDeadline::from_now(config.rpc_timeout + config.rpc_timeout, Duration::ZERO)
+            ShutdownDeadline::from_now(config.rpc_timeout() + config.rpc_timeout(), Duration::ZERO)
                 .expect("valid Raft shutdown deadline"),
         )
         .await;
@@ -299,10 +296,10 @@ async fn real_raft_hosts_keep_an_acknowledged_lumen_write_through_failover_and_c
     let cold_sm = EngineSm::new(cold_engine.clone(), 0);
     let cold_host = RaftHost::spawn(
         stopped_id,
-        Membership {
-            voters: vec![0, 1, 2],
-            learners: Vec::new(),
-        },
+        Membership::new(
+            vec![NodeId::new(0), NodeId::new(1), NodeId::new(2)],
+            Vec::new(),
+        ),
         HashMap::new(),
         RaftStore::open(
             stopped_data.to_str().expect("UTF-8 cold Raft path"),
@@ -584,15 +581,12 @@ fn cold_recover_process_write(raft_data: &Path) {
     let engine = Arc::new(Engine::new());
     let sm = EngineSm::new(engine.clone(), 0);
     let host = RaftHost::spawn(
-        0,
-        Membership {
-            voters: vec![0],
-            learners: Vec::new(),
-        },
+        NodeId::new(0),
+        Membership::new(vec![NodeId::new(0)], Vec::new()),
         HashMap::new(),
         RaftStore::open(
             raft_data.to_str().expect("UTF-8 process Raft path"),
-            0,
+            NodeId::new(0),
             FsyncPolicy::Always,
         )
         .expect("cold open the process Raft store"),
@@ -600,7 +594,7 @@ fn cold_recover_process_write(raft_data: &Path) {
         host_config(),
     );
     assert!(
-        sm.applied_index() >= 2,
+        sm.applied_index() >= Index::new(2),
         "cold process store must replay the write"
     );
     assert_eq!(

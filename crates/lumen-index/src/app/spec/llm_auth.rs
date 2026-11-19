@@ -203,6 +203,6 @@ token provider.
 "#,
     );
     out.push_str("\n## Shared auth primitive\n");
-    out.push_str(service_auth::llm::topic().body);
+    out.push_str(service_auth::llm::topic().body());
     out
 }
