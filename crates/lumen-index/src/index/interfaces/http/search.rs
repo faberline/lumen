@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use axum::extract::{Extension, Path, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::Json;
 
 use crate::access::application::authorization::{AuthContext, Role};
@@ -15,7 +15,8 @@ use crate::app::http::{
     guards::{enforce_read_consistency, read_consistency_from},
 };
 use crate::shared_kernel::types::search::{
-    SearchAllRequest, SearchAllResponse, SearchRequest, SearchResponse,
+    SearchAllRequest, SearchAllResponse, SearchRequest, SearchResponse, MAX_SEARCH_LIMIT,
+    MAX_SEARCH_OFFSET,
 };
 
 #[cfg(doc)]
@@ -36,9 +37,38 @@ pub(crate) async fn search(
     Path(collection_id): Path<String>,
     Json(req): Json<SearchRequest>,
 ) -> Result<Json<SearchResponse>, ApiErr> {
+    validate_page_bounds(&req)?;
     Ok(Json(
         search_core(&state, &auth, &headers, &collection_id, req).await?,
     ))
+}
+
+/// Refuse a page larger than the caps before any work starts. Called only by
+/// the single-collection search routes (`POST .../search` and its `QUERY`
+/// twin). `search_all` and the core search stay uncapped: `search_all` asks
+/// for every match, and the shard fan-out sends `offset + limit` to each shard.
+pub(super) fn validate_page_bounds(req: &SearchRequest) -> Result<(), ApiErr> {
+    if req.limit > MAX_SEARCH_LIMIT {
+        return Err(ApiErr::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_pagination",
+            format!(
+                "limit {} exceeds the maximum of {MAX_SEARCH_LIMIT}",
+                req.limit
+            ),
+        ));
+    }
+    if req.offset > MAX_SEARCH_OFFSET {
+        return Err(ApiErr::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_pagination",
+            format!(
+                "offset {} exceeds the maximum of {MAX_SEARCH_OFFSET}",
+                req.offset
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// Export every matching external id in one explicit full-materialization

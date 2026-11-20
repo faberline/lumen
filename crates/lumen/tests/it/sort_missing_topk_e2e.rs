@@ -153,7 +153,7 @@ async fn sealed_sparse_keyword_sort_preserves_full_contract_and_cache() {
     for order in ["asc", "desc"] {
         for missing in ["first", "last", "exclude"] {
             let oracle = expected(&rows, order, missing);
-            for limit in [0u32, 1, 80, 2_000] {
+            for limit in [0u32, 1, 80, 1_000] {
                 for track_total in [true, false] {
                     let response: Value = server
                         .post("/collections/docs/search")

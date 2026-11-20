@@ -3365,17 +3365,18 @@ async fn scale_preflight_fixture(client: &reqwest::Client, base: &str, documents
     );
 
     let range = scale_search_json(client, base, scale_lumen_query("range", None)).await;
-    let expected_range: Vec<String> = (0..documents)
+    let mut expected_range: Vec<String> = (0..documents)
         .filter_map(|document| {
             let mut rng = Lcg::for_doc(document);
             let doc = gen_doc(document, &mut rng);
             (doc.city == "taipei" && (30..40).contains(&doc.age)).then_some(doc.eid)
         })
-        .take(10)
         .collect();
-    // Current 0.4 constant-score filters use posting/internal-docid order. This
-    // fixture indexes d0..dN sequentially, so document ordinal is the stable
-    // hard oracle. External-id ordering is a separate Search v2 target contract.
+    // Unsorted requests now take the ranked path: equal scores break by
+    // external ID ascending (byte order), so the oracle is the first ten
+    // matching external IDs in that order.
+    expected_range.sort();
+    expected_range.truncate(10);
     assert_eq!(
         scale_response_ids(&range, "range"),
         expected_range,

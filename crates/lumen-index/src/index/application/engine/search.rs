@@ -385,7 +385,11 @@ impl Engine {
         // A score keyset bypasses the planner and the bounded top-k fast paths
         // (they collect top-(k) of the WHOLE set; the keyset page is the top of
         // the strictly-after-cursor subset).
-        let planned = if score_after.is_some() {
+        // An unsorted request also skips the posting-order planners: a
+        // posting's docid order is insert order, not external-ID order, so the
+        // ranked path (score desc, then external ID asc) is the one that gives
+        // equal-score hits a stable order.
+        let planned = if score_after.is_some() || req.sort.is_none() {
             None
         } else {
             try_plan(coll, &req, offset, sort_after.as_ref())?
