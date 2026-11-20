@@ -253,7 +253,6 @@ async fn one_failing_entry_does_not_stop_the_others() {
         .with_namespace("observe")
         .with_live("conflict", "lumen", Some("f"))
         .fail("lumen_fleet_label", "denied/lumen", "forbidden: 403")
-        .fail("apply_lumen", "conflict/lumen", "conflict: 409")
         .fail("namespace_exists", "observe", "timeout reading namespace");
     let mut fleet = fleet(
         ["ok", "missing", "denied", "conflict", "observe"]
@@ -274,12 +273,12 @@ async fn one_failing_entry_does_not_stop_the_others() {
             "Created",
             "NamespaceMissing",
             "ObserveFailed",
-            "ApplyFailed",
+            "Waiting",
             "ObserveFailed"
         ]
     );
     assert!(message_of(&patches[0], "denied").contains("403"));
-    assert!(message_of(&patches[0], "conflict").contains("409"));
+    assert!(message_of(&patches[0], "conflict").contains("waiting for ok/lumen"));
     assert!(message_of(&patches[0], "observe").contains("timeout"));
     assert_eq!(patches[0]["status"]["appliedInstances"], json!(1));
     assert_eq!(patches[0]["status"]["desiredInstances"], json!(5));
@@ -498,6 +497,17 @@ async fn a_child_with_no_status_is_not_ready() {
     assert_eq!(status["notReadyInstances"], 1);
 }
 
+/// A live `Lumen` as JSON with the given generation, observed generation and Ready flag.
+fn lumen_json(generation: i64, observed: i64, ready: bool) -> Value {
+    json!({
+        "metadata": { "generation": generation },
+        "status": {
+            "observedGeneration": observed,
+            "conditions": [{ "type": "Ready", "status": if ready { "True" } else { "False" } }]
+        }
+    })
+}
+
 /// Three declared namespaces, each with a live `Lumen` of this fleet, so each
 /// instance needs an apply.
 fn three_live() -> FakeControl {
@@ -595,4 +605,111 @@ async fn a_failed_spec_read_is_an_observe_failure() {
     let patches = fake.patches();
     assert_eq!(states(&patches[0]), ["ObserveFailed"]);
     assert!(!fake.calls().iter().any(|call| call.starts_with("apply:")));
+}
+
+/// An apply failure stays on its own entry (the 409 coverage that the test
+/// above no longer carries, since the gate holds that entry).
+#[tokio::test]
+async fn an_apply_failure_stays_on_its_own_entry() {
+    let fake = FakeControl::default()
+        .with_namespace("conflict")
+        .with_live("conflict", "lumen", Some("f"))
+        .fail("apply_lumen", "conflict/lumen", "conflict: 409");
+    let fleet = fleet(vec![instance_in("conflict")], PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["ApplyFailed"]);
+    assert!(message_of(&patches[0], "conflict").contains("409"));
+    assert_eq!(patches[0]["status"]["appliedInstances"], json!(0));
+}
+
+/// Two namespaces `a` and `b`, both with a live `Lumen` of this fleet. `a` is
+/// settled (it takes no slot); `b` needs a write.
+fn settled_a_and_writing_b() -> FakeControl {
+    FakeControl::default()
+        .with_namespace("a")
+        .with_namespace("b")
+        .with_live("a", "lumen", Some("f"))
+        .with_live("b", "lumen", Some("f"))
+        .with_spec("a", "lumen", serde_json::to_value(defaults()).unwrap())
+}
+
+#[tokio::test]
+async fn a_stale_child_holds_the_next_write() {
+    let fake = settled_a_and_writing_b().with_live_json("a", "lumen", lumen_json(2, 1, true));
+    let fleet = fleet(["a", "b"].map(instance_in).into(), PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["Applied", "Waiting"]);
+    assert_eq!(fake.calls(), ["apply:a/lumen"]);
+    let message = message_of(&patches[0], "b");
+    assert!(message.contains("waiting for a/lumen"), "{message}");
+    assert!(
+        message.contains("stale generation (observed 1 of 2)"),
+        "{message}"
+    );
+    assert_eq!(patches[0]["status"]["appliedInstances"], json!(1));
+}
+
+#[tokio::test]
+async fn a_not_ready_child_holds_the_next_write() {
+    let fake = settled_a_and_writing_b().with_live_json("a", "lumen", lumen_json(2, 2, false));
+    let fleet = fleet(["a", "b"].map(instance_in).into(), PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["Applied", "Waiting"]);
+    assert!(message_of(&patches[0], "b").contains("waiting for a/lumen: not Ready"));
+}
+
+#[tokio::test]
+async fn a_caught_up_ready_child_lets_the_next_write_proceed() {
+    let fake = settled_a_and_writing_b().with_live_json("a", "lumen", lumen_json(2, 2, true));
+    let fleet = fleet(["a", "b"].map(instance_in).into(), PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["Applied", "Applied"]);
+    assert_eq!(fake.calls(), ["apply:a/lumen", "apply:b/lumen"]);
+}
+
+#[tokio::test]
+async fn a_created_instance_holds_the_next_write() {
+    let fake = FakeControl::default()
+        .with_namespace("a")
+        .with_namespace("b");
+    let mut fleet = fleet(["a", "b"].map(instance_in).into(), PrunePolicy::Retain);
+    fleet.spec.rollout_policy.max_concurrent = 2;
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["Created", "Waiting"]);
+    assert_eq!(fake.calls(), ["create:a/lumen"]);
+    assert!(message_of(&patches[0], "b").contains("waiting for a/lumen"));
+    assert_eq!(patches[0]["status"]["appliedInstances"], json!(1));
+}
+
+#[tokio::test]
+async fn a_waiting_entry_does_not_stop_later_skips_or_the_status_write() {
+    let fake = FakeControl::default()
+        .with_namespace("a")
+        .with_namespace("c");
+    let mut fleet = fleet(["a", "b", "c"].map(instance_in).into(), PrunePolicy::Retain);
+    fleet.spec.rollout_policy.max_concurrent = 3;
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(patches.len(), 1);
+    assert_eq!(
+        states(&patches[0]),
+        ["Created", "NamespaceMissing", "Waiting"]
+    );
 }

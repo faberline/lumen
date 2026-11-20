@@ -45,6 +45,7 @@
 
 pub mod aggregate;
 pub mod children;
+pub mod gate;
 pub mod plan;
 pub mod rollout;
 pub mod status;
