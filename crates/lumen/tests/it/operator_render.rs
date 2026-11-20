@@ -848,7 +848,7 @@ fn prometheus_rule_covers_backup_failure_and_crash_looping() {
     let no_ready_pods_expr = no_ready_pods["expr"].as_str().unwrap();
     assert!(no_ready_pods_expr.contains("kube_statefulset_status_replicas_ready"));
     assert!(!no_ready_pods_expr.contains("kube_deployment_status_replicas_available"));
-    assert!(no_ready_pods_expr.contains("statefulset=\"lumen\""));
+    assert!(no_ready_pods_expr.contains("statefulset=~\"lumen(-s[0-9]+)?\""));
     assert!(no_ready_pods_expr.contains("namespace=\"acme\""));
 
     let backup = rules
@@ -924,7 +924,7 @@ fn prometheus_rule_covers_raft_reshard_pvc_and_auth_failure_modes() {
     assert!(pvc_expr.contains("kubelet_volume_stats_available_bytes"));
     assert!(pvc_expr.contains("kubelet_volume_stats_capacity_bytes"));
     assert!(pvc_expr.contains("namespace=\"acme\""));
-    assert!(pvc_expr.contains("persistentvolumeclaim=~\"^raft-lumen-[0-9]+$\""));
+    assert!(pvc_expr.contains("persistentvolumeclaim=~\"^raft-lumen(-s[0-9]+)?-[0-9]+$\""));
 
     // #2871 retired the bearer/identity registry, so the counter
     // `LumenAuthRegistryReloadFailing` read no longer exists. No alert may
@@ -2971,5 +2971,38 @@ fn serving_container_env_names_are_unique() {
             "exactly one SHARD_COUNT; have {names:?}"
         );
     }
+}
+
+#[test]
+fn prometheus_rule_matches_per_shard_sets() {
+    let mut spec = dev_spec();
+    spec.shard_count = 2;
+    spec.replicas_per_shard = 1;
+    spec.observability = true;
+    let l = lumen("search", spec);
+    let objs = render(&l).expect("render");
+    let rule = find(&objs, "PrometheusRule", "search");
+    let rules = rule["spec"]["groups"][0]["rules"].as_array().unwrap();
+
+    let no_ready_pods = rules
+        .iter()
+        .find(|r| r["alert"] == "LumenNoReadyServingPods")
+        .unwrap();
+    let no_ready_expr = no_ready_pods["expr"].as_str().unwrap();
+    assert!(no_ready_expr.contains("statefulset=~\"search(-s[0-9]+)?\""));
+    assert!(!no_ready_expr.contains("statefulset=\"search\""));
+
+    let pvc_near_full = rules
+        .iter()
+        .find(|r| r["alert"] == "LumenPvcNearFull")
+        .unwrap();
+    let pvc_expr = pvc_near_full["expr"].as_str().unwrap();
+    assert_eq!(
+        pvc_expr
+            .matches("persistentvolumeclaim=~\"^raft-search(-s[0-9]+)?-[0-9]+$\"")
+            .count(),
+        2,
+        "the PVC regex must match per-shard claims in both series: {pvc_expr}"
+    );
 }
 // CODEGEN-END

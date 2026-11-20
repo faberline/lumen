@@ -102,8 +102,8 @@ pub fn peer_profile(lumen: &Lumen, trust_domain: &str) -> Result<CertificateProf
         format!("{headless}.{ns}.{CLUSTER_DOMAIN}"),
         format!("{headless}.{ns}.svc"),
     ];
-    for ordinal in 0..member_count(lumen) {
-        dns_names.push(format!("{name}-{ordinal}.{headless}.{ns}.{CLUSTER_DOMAIN}"));
+    for pod in member_pod_names(lumen) {
+        dns_names.push(format!("{pod}.{headless}.{ns}.{CLUSTER_DOMAIN}"));
     }
     CertificateProfile::new(
         &scope(lumen, trust_domain),
@@ -122,12 +122,32 @@ pub fn peer_profile(lumen: &Lumen, trust_domain: &str) -> Result<CertificateProf
     )
 }
 
-/// Every StatefulSet ordinal the declared topology can produce.
+/// The pod names the declared topology can produce.
 ///
-/// `shardCount * replicasPerShard`, because each shard is its own StatefulSet
-/// slice of the same fleet. Saturating rather than wrapping: a spec that
-/// overflows this should produce a certificate request the CA refuses on size,
-/// not a certificate for member zero alone.
+/// With `shardCount > 1` each shard is its own StatefulSet `<name>-s<k>`, so
+/// the pods are `<name>-s<k>-<ordinal>`. Otherwise the single StatefulSet gives
+/// `<name>-<ordinal>`.
+fn member_pod_names(lumen: &Lumen) -> Vec<String> {
+    let name = instance(lumen);
+    if lumen.spec.shard_count > 1 {
+        let per_shard = lumen.spec.replicas_per_shard.max(1);
+        (0..lumen.spec.shard_count)
+            .flat_map(|shard| (0..per_shard).map(move |ordinal| (shard, ordinal)))
+            .map(|(shard, ordinal)| format!("{name}-s{shard}-{ordinal}"))
+            .collect()
+    } else {
+        (0..member_count(lumen))
+            .map(|ordinal| format!("{name}-{ordinal}"))
+            .collect()
+    }
+}
+
+/// Every StatefulSet ordinal of the single-set layout: `replicasPerShard`.
+///
+/// The `shardCount * replicasPerShard` product is the total fleet size, used
+/// by the single-set branch of [`member_pod_names`]. Saturating rather than
+/// wrapping: a spec that overflows this should produce a certificate request
+/// the CA refuses on size, not a certificate for member zero alone.
 fn member_count(lumen: &Lumen) -> u32 {
     lumen
         .spec
@@ -220,16 +240,48 @@ mod tests {
 
     #[test]
     fn the_peer_leaf_names_every_member_the_topology_can_produce() {
-        let profile = peer_profile(&lumen(2, 3), TRUST_DOMAIN).expect("peer profile");
+        let profile = peer_profile(&lumen(1, 3), TRUST_DOMAIN).expect("peer profile");
         let names = &profile.identity().dns_names;
-        for ordinal in 0..6 {
+        for ordinal in 0..3 {
             let expected = format!("lumen-{ordinal}.lumen-headless.lumen.svc.cluster.local");
             assert!(names.contains(&expected), "missing {expected}: {names:?}");
         }
         assert!(
-            !names.iter().any(|name| name.contains("lumen-6.")),
+            !names.iter().any(|name| name.contains("lumen-3.")),
             "certified a member the topology cannot produce: {names:?}"
         );
+    }
+
+    #[test]
+    fn the_peer_leaf_names_every_per_shard_member() {
+        let profile = peer_profile(&lumen(2, 3), TRUST_DOMAIN).expect("peer profile");
+        let names = &profile.identity().dns_names;
+        for shard in 0..2 {
+            for ordinal in 0..3 {
+                let expected =
+                    format!("lumen-s{shard}-{ordinal}.lumen-headless.lumen.svc.cluster.local");
+                assert!(names.contains(&expected), "missing {expected}: {names:?}");
+            }
+        }
+        assert!(
+            !names.iter().any(|name| name.contains("lumen-s2-0.")),
+            "certified a shard the topology cannot produce: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|name| name.contains("lumen-s0-3.")),
+            "certified a member the topology cannot produce: {names:?}"
+        );
+    }
+
+    #[test]
+    fn the_peer_leaf_keeps_old_names_for_one_shard_with_one_replica() {
+        let profile = peer_profile(&lumen(1, 1), TRUST_DOMAIN).expect("peer profile");
+        let names = &profile.identity().dns_names;
+        assert!(
+            names.contains(&"lumen-0.lumen-headless.lumen.svc.cluster.local".to_string()),
+            "{names:?}"
+        );
+        assert!(!names.iter().any(|name| name.contains("-s0-")), "{names:?}");
     }
 
     #[test]
