@@ -52,18 +52,19 @@ fn run_search_request(args: MigrateSearchRequestArgs) -> Result<()> {
         }
     };
     let value: Value = serde_json::from_str(&input).context("input is not valid JSON")?;
-    let (request, changes) = match convert_search_request(&value) {
-        Ok(converted) => converted,
-        Err(refusals) => bail!("refused: {}", refusals.join("; ")),
+    let (changes, refusals, converted) = match convert_search_request(&value) {
+        Ok((request, changes)) => (changes, Vec::new(), Some(request)),
+        Err(refusals) => (Vec::new(), refusals, None),
     };
 
     let change_rows: Vec<Value> = changes
         .iter()
         .map(|c| json!({"path": c.path, "from": c.from, "to": c.to}))
         .collect();
+    // A refused request still writes its report, with the refusals named by path.
     let mut report = serde_json::to_string_pretty(&json!({
         "changes": change_rows,
-        "refusals": [],
+        "refusals": refusals,
     }))?;
     report.push('\n');
     match &args.report {
@@ -71,6 +72,10 @@ fn run_search_request(args: MigrateSearchRequestArgs) -> Result<()> {
         None => eprint!("{report}"),
     }
 
+    // A refusal fails with nothing on stdout and no --out file.
+    let Some(request) = converted else {
+        bail!("refused: {}", refusals.join("; "));
+    };
     let mut text = serde_json::to_string_pretty(&request)?;
     text.push('\n');
     match &args.out {
