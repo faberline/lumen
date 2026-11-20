@@ -7,6 +7,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use kube::runtime::{watcher, WatchStreamExt};
 
+use crate::domain::lumen_fleet::aggregate::{aggregate, live_child_from_json, DeclaredEntry};
 use crate::domain::lumen_fleet::children::{
     adoption, child_key, prune_decision, Adoption, ChildKey, PruneDecision, ORPHAN_RETAINED_MESSAGE,
 };
@@ -250,7 +251,39 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
         Err(err) => prune_error = Some(err.to_string()),
     }
 
+    // Conditions and counts: read each declared child once, then fold them.
+    let mut declared_entries: Vec<DeclaredEntry> = Vec::new();
+    for e in &entries {
+        if e.state == "Orphaned" || e.state == "Pruned" {
+            continue;
+        }
+        let keep = e.state == "Rejected" || declared.contains(&child_key(&e.namespace, &e.name));
+        if !keep {
+            continue;
+        }
+        let child = if e.state == "Created" || e.state == "Applied" {
+            match control.lumen_live(&e.namespace, &e.name).await {
+                Ok(Some(live)) => Some(live_child_from_json(&live)),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        declared_entries.push(DeclaredEntry {
+            namespace: e.namespace.clone(),
+            name: e.name.clone(),
+            state: e.state.clone(),
+            child,
+        });
+    }
+    let orphaned = entries.iter().filter(|e| e.state == "Orphaned").count() as i32;
+    let agg = aggregate(&declared_entries, orphaned);
+
     let mut projected = project_status(&planned, entries, fleet.metadata.generation.unwrap_or(0));
+    projected.ready_instances = agg.ready_instances;
+    projected.degraded_instances = agg.degraded_instances;
+    projected.not_ready_instances = agg.not_ready_instances;
+    projected.conditions = agg.conditions;
     if let Some(err) = prune_error {
         projected
             .message
