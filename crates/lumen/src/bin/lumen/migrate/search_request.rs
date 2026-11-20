@@ -210,12 +210,14 @@ fn classify(node: &Value, path: &str, refusals: &mut Vec<String>) -> Option<Kind
                 ));
                 return None;
             }
-            // Every child is classified, so every refusal is reported.
-            let kinds: Option<Vec<Kind>> = children
+            // Every child is classified, so every refusal is reported. The first
+            // collect runs every `classify`; only the second may short-circuit.
+            let kinds: Vec<Option<Kind>> = children
                 .iter()
                 .enumerate()
                 .map(|(i, child)| classify(child, &format!("{path}.{key}[{i}]"), refusals))
                 .collect();
+            let kinds: Option<Vec<Kind>> = kinds.into_iter().collect();
             Some(combine_kinds(&kinds?))
         }
         _ => {
@@ -588,6 +590,19 @@ mod tests {
             vec![
                 refusal_mix("query.and[0]", "or"),
                 refusal_mix("query.and[1]", "not"),
+            ]
+        );
+    }
+
+    #[test]
+    fn every_invalid_node_is_reported() {
+        let query = json!({"and": [{"foo": 1}, m(), {"or": [t(), 5]}]});
+        let errs = refused(json!({"query": query}));
+        assert_eq!(
+            errs,
+            vec![
+                "query.and[0]: not a query node".to_string(),
+                "query.and[2].or[1]: not a query node".to_string(),
             ]
         );
     }
