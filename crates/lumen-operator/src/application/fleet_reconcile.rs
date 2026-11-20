@@ -12,6 +12,9 @@ use crate::domain::lumen_fleet::children::{
     adoption, child_key, prune_decision, Adoption, ChildKey, PruneDecision, ORPHAN_RETAINED_MESSAGE,
 };
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
+use crate::domain::lumen_fleet::rollout::{
+    decide, held_message, is_settled, Need, RolloutDecision,
+};
 use crate::domain::lumen_fleet::status::{project_status, spec_hash, status_patch};
 use crate::domain::lumen_fleet::{
     FleetEntryStatus, LumenFleet, PlanOutcome, PlannedInstance, FLEET_LABEL,
@@ -157,6 +160,25 @@ pub fn spawn_fleet_loop(client: kube::Client) {
     });
 }
 
+/// What Phase A found for one planned instance.
+struct Probe {
+    need: Need,
+    /// True when the `Lumen` already exists (an apply, not a create).
+    exists: bool,
+    /// The entry this instance already has; set only for `Need::Skip`.
+    early: Option<FleetEntryStatus>,
+}
+
+impl Probe {
+    fn skip(early: FleetEntryStatus) -> Self {
+        Self {
+            need: Need::Skip,
+            exists: false,
+            early: Some(early),
+        }
+    }
+}
+
 async fn converge_logged(control: &dyn FleetControl, fleet: &LumenFleet) {
     if let Err(err) = converge(control, fleet).await {
         tracing::warn!(
@@ -180,11 +202,13 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
     let mut entries = Vec::new();
     let mut declared: BTreeSet<ChildKey> = BTreeSet::new();
 
+    // Phase A: reads only. Each instance gets what it needs in this pass.
+    let mut probes: Vec<Probe> = Vec::new();
     for instance in &planned {
         let spec = match &instance.outcome {
             PlanOutcome::Ready(spec) => spec,
             PlanOutcome::Rejected(reason) => {
-                entries.push(entry(instance, "Rejected", reason));
+                probes.push(Probe::skip(entry(instance, "Rejected", reason)));
                 continue;
             }
         };
@@ -195,15 +219,19 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
         match control.namespace_exists(&instance.namespace).await {
             Ok(true) => {}
             Ok(false) => {
-                entries.push(entry(
+                probes.push(Probe::skip(entry(
                     instance,
                     "NamespaceMissing",
                     "the namespace does not exist; the fleet does not create namespaces",
-                ));
+                )));
                 continue;
             }
             Err(err) => {
-                entries.push(entry(instance, "ObserveFailed", &err.to_string()));
+                probes.push(Probe::skip(entry(
+                    instance,
+                    "ObserveFailed",
+                    &err.to_string(),
+                )));
                 continue;
             }
         }
@@ -214,33 +242,93 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
         {
             Ok(live) => live,
             Err(err) => {
-                entries.push(entry(instance, "ObserveFailed", &err.to_string()));
+                probes.push(Probe::skip(entry(
+                    instance,
+                    "ObserveFailed",
+                    &err.to_string(),
+                )));
                 continue;
             }
         };
         match adoption(live.as_ref().map(|label| label.as_deref()), &fleet_name) {
-            Adoption::Create => {
-                let body = seed_object(&fleet_name, instance, spec);
-                match control.create_lumen(body).await {
-                    Ok(()) => entries.push(entry_with_hash(instance, "Created", spec)),
-                    Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
-                }
-            }
+            Adoption::Create => probes.push(Probe {
+                need: Need::Write,
+                exists: false,
+                early: None,
+            }),
             // A `Lumen` this fleet did not create is not this fleet's to
             // overwrite: a hand-authored instance at the same name would
             // otherwise be silently replaced by the fleet's defaults.
             Adoption::NotAdopted { message } => {
-                entries.push(entry(instance, "NotAdopted", &message));
+                probes.push(Probe::skip(entry(instance, "NotAdopted", &message)));
             }
             Adoption::Apply => {
-                let body = apply_object(&fleet_name, instance, spec);
-                match control
-                    .apply_lumen(&instance.namespace, &instance.name, body)
+                let need = match control
+                    .lumen_spec(&instance.namespace, &instance.name)
                     .await
                 {
-                    Ok(()) => entries.push(entry_with_hash(instance, "Applied", spec)),
-                    Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
-                }
+                    Err(err) => {
+                        probes.push(Probe::skip(entry(
+                            instance,
+                            "ObserveFailed",
+                            &err.to_string(),
+                        )));
+                        continue;
+                    }
+                    Ok(None) => Need::Write,
+                    Ok(Some(live_spec)) => {
+                        let planned_spec =
+                            apply_object(&fleet_name, instance, spec)["spec"].clone();
+                        if is_settled(&planned_spec, &live_spec) {
+                            Need::Settled
+                        } else {
+                            Need::Write
+                        }
+                    }
+                };
+                probes.push(Probe {
+                    need,
+                    exists: true,
+                    early: None,
+                });
+            }
+        }
+    }
+
+    // Phase B: the only phase that creates or patches. The rollout policy
+    // decides which writes this pass makes.
+    let needs: Vec<Need> = probes.iter().map(|probe| probe.need).collect();
+    let decisions = decide(&fleet.spec.rollout_policy, &needs);
+    for ((instance, probe), decision) in planned.iter().zip(&probes).zip(decisions) {
+        if let Some(early) = &probe.early {
+            entries.push(early.clone());
+            continue;
+        }
+        if decision == RolloutDecision::Held {
+            entries.push(entry(
+                instance,
+                "Held",
+                held_message(&fleet.spec.rollout_policy),
+            ));
+            continue;
+        }
+        let PlanOutcome::Ready(spec) = &instance.outcome else {
+            continue;
+        };
+        if probe.exists {
+            let body = apply_object(&fleet_name, instance, spec);
+            match control
+                .apply_lumen(&instance.namespace, &instance.name, body)
+                .await
+            {
+                Ok(()) => entries.push(entry_with_hash(instance, "Applied", spec)),
+                Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
+            }
+        } else {
+            let body = seed_object(&fleet_name, instance, spec);
+            match control.create_lumen(body).await {
+                Ok(()) => entries.push(entry_with_hash(instance, "Created", spec)),
+                Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
             }
         }
     }
@@ -318,6 +406,13 @@ async fn prune(
             PruneDecision::Keep => continue,
             PruneDecision::Orphaned => {
                 out.push(entry(&orphan, "Orphaned", ORPHAN_RETAINED_MESSAGE));
+            }
+            PruneDecision::Pruned if fleet.spec.rollout_policy.paused => {
+                out.push(entry(
+                    &orphan,
+                    "Orphaned",
+                    "no longer declared by this fleet; rollout is paused, so it was not deleted",
+                ));
             }
             PruneDecision::Pruned => match control.delete_lumen(&namespace, &name).await {
                 Ok(()) => out.push(entry(&orphan, "Pruned", "")),

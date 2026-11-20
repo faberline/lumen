@@ -46,6 +46,7 @@
 pub mod aggregate;
 pub mod children;
 pub mod plan;
+pub mod rollout;
 pub mod status;
 
 use kube::CustomResource;
@@ -103,6 +104,37 @@ pub struct LumenFleetSpec {
     /// [`Self::instances`].
     #[serde(default)]
     pub prune_policy: PrunePolicy,
+
+    /// How fast one pass may change instances, and a manual freeze.
+    #[serde(default)]
+    pub rollout_policy: RolloutPolicy,
+}
+
+/// How fast one pass may change instances, and a manual freeze.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RolloutPolicy {
+    /// Most instances one pass may create or apply when they need a write.
+    /// Default 1, minimum 1.
+    #[serde(default = "default_max_concurrent")]
+    #[schemars(range(min = 1))]
+    pub max_concurrent: u32,
+    /// When true no instance is created, applied or deleted. Default false.
+    #[serde(default)]
+    pub paused: bool,
+}
+
+impl Default for RolloutPolicy {
+    fn default() -> Self {
+        Self {
+            max_concurrent: 1,
+            paused: false,
+        }
+    }
+}
+
+fn default_max_concurrent() -> u32 {
+    1
 }
 
 /// One data plane the fleet declares.
@@ -232,7 +264,7 @@ pub struct FleetEntryStatus {
     pub namespace: String,
     pub name: String,
     /// `Created` | `Applied` | `Rejected` | `NamespaceMissing` | `NotAdopted`
-    /// | `ApplyFailed` | `ObserveFailed` | `Orphaned` | `Pruned`.
+    /// | `ApplyFailed` | `ObserveFailed` | `Orphaned` | `Pruned` | `Held`.
     pub state: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub message: String,

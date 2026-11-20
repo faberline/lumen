@@ -6,14 +6,18 @@ use serde_json::{json, Value};
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
 use crate::domain::lumen_fleet::{
     FleetInstance, LumenFleet, LumenFleetSpec, PlanOutcome, PlannedInstance, PrunePolicy,
-    FLEET_LABEL,
+    RolloutPolicy, FLEET_LABEL,
 };
 use crate::domain::lumen_spec::access::{AccessSpec, ServiceAccountSubject};
 use crate::domain::lumen_spec::runtime::RuntimeSettings;
 use crate::domain::lumen_spec::LumenSpec;
 
+use crate::domain::lumen_fleet::rollout::{
+    decide, held_message, is_settled, Need, RolloutDecision,
+};
 use crate::domain::lumen_fleet::status::{canonical_json, project_status, spec_hash, status_patch};
 use crate::domain::lumen_fleet::{FleetEntryStatus, LumenFleetStatus};
+use RolloutDecision::{Held, Proceed, Skip};
 
 fn defaults() -> LumenSpec {
     serde_json::from_value(json!({
@@ -31,6 +35,7 @@ fn fleet(instances: Vec<FleetInstance>) -> LumenFleet {
             defaults: defaults(),
             instances,
             prune_policy: PrunePolicy::default(),
+            rollout_policy: RolloutPolicy::default(),
         },
     );
     fleet.metadata.generation = Some(1);
@@ -103,6 +108,7 @@ fn a_null_override_clears_an_inherited_field() {
             .unwrap(),
             instances: vec![instance("team-c", Some(json!({ "logLevel": null })))],
             prune_policy: PrunePolicy::default(),
+            rollout_policy: RolloutPolicy::default(),
         },
     );
     let planned = plan(&with_log_level);
@@ -250,6 +256,7 @@ fn fleet_with_runtime_defaults(
             defaults: defaults_spec,
             instances,
             prune_policy: PrunePolicy::default(),
+            rollout_policy: RolloutPolicy::default(),
         },
     )
 }
@@ -971,4 +978,162 @@ fn status_serializes_conditions_and_counts() {
 
     let empty = serde_json::to_value(LumenFleetStatus::default()).unwrap();
     assert!(empty.get("conditions").is_none(), "{empty}");
+}
+
+#[test]
+fn rollout_policy_defaults_when_absent() {
+    let spec: LumenFleetSpec =
+        serde_json::from_value(json!({"defaults":{"image":"i"}})).expect("parse");
+    assert_eq!(
+        spec.rollout_policy,
+        RolloutPolicy {
+            max_concurrent: 1,
+            paused: false
+        }
+    );
+}
+
+#[test]
+fn explicit_max_concurrent_two_over_four_writes() {
+    let policy = RolloutPolicy {
+        max_concurrent: 2,
+        paused: false,
+    };
+    assert_eq!(
+        decide(&policy, &[Need::Write; 4]),
+        [Proceed, Proceed, Held, Held]
+    );
+}
+
+#[test]
+fn default_policy_lets_one_write_proceed() {
+    assert_eq!(
+        decide(&RolloutPolicy::default(), &[Need::Write; 3]),
+        [Proceed, Held, Held]
+    );
+}
+
+#[test]
+fn settled_instances_use_no_slot() {
+    let needs = [Need::Settled, Need::Settled, Need::Write, Need::Write];
+    assert_eq!(
+        decide(&RolloutPolicy::default(), &needs),
+        [Proceed, Proceed, Proceed, Held]
+    );
+}
+
+#[test]
+fn skip_entries_use_no_slot() {
+    let needs = [Need::Skip, Need::Write, Need::Write];
+    assert_eq!(
+        decide(&RolloutPolicy::default(), &needs),
+        [Skip, Proceed, Held]
+    );
+}
+
+#[test]
+fn paused_holds_everything_but_skip() {
+    let policy = RolloutPolicy {
+        max_concurrent: 5,
+        paused: true,
+    };
+    let needs = [Need::Settled, Need::Write, Need::Skip];
+    assert_eq!(decide(&policy, &needs), [Held, Held, Skip]);
+    assert!(held_message(&policy).contains("paused"));
+}
+
+#[test]
+fn held_message_names_the_slot_when_not_paused() {
+    assert!(held_message(&RolloutPolicy::default()).contains("rollout slot"));
+}
+
+#[test]
+fn zero_max_concurrent_is_safe() {
+    let policy = RolloutPolicy {
+        max_concurrent: 0,
+        paused: false,
+    };
+    assert_eq!(
+        decide(&policy, &[Need::Write, Need::Write]),
+        [Proceed, Held]
+    );
+}
+
+#[test]
+fn a_fleet_of_three_converges_in_three_passes_at_max_concurrent_one() {
+    // Negative control: a `decide` that ignored `Settled` would write the
+    // settled index again and never reach the empty pass.
+    let policy = RolloutPolicy::default();
+    let mut converged: BTreeSet<usize> = BTreeSet::new();
+    let mut passes: Vec<Vec<usize>> = Vec::new();
+    for _ in 0..3 {
+        let needs: Vec<Need> = (0..3)
+            .map(|i| {
+                if converged.contains(&i) {
+                    Need::Settled
+                } else {
+                    Need::Write
+                }
+            })
+            .collect();
+        let decisions = decide(&policy, &needs);
+        let mut written = Vec::new();
+        for (i, (need, decision)) in needs.iter().zip(&decisions).enumerate() {
+            if *need == Need::Write && *decision == Proceed {
+                written.push(i);
+            }
+        }
+        converged.extend(written.iter().copied());
+        passes.push(written);
+    }
+    assert_eq!(passes, vec![vec![0], vec![1], vec![2]]);
+    assert_eq!(converged.len(), 3);
+
+    let needs = [Need::Settled; 3];
+    let decisions = decide(&policy, &needs);
+    assert!(needs.iter().all(|n| *n != Need::Write));
+    assert!(decisions.iter().all(|d| *d != Held));
+}
+
+#[test]
+fn settled_when_planned_and_live_are_equal() {
+    assert!(is_settled(&json!({"image":"i"}), &json!({"image":"i"})));
+}
+
+#[test]
+fn settled_when_live_has_serde_defaults_the_plan_lacks() {
+    assert!(is_settled(
+        &json!({"image":"i"}),
+        &json!({"image":"i","shardCount":1,"replicasPerShard":1})
+    ));
+}
+
+#[test]
+fn settled_after_a_reshard_changed_shard_count() {
+    // Negative control: without removing the driver-owned paths from both
+    // sides, the live `shardCount` makes this pair unequal.
+    assert!(is_settled(
+        &json!({"image":"i"}),
+        &json!({"image":"i","shardCount":3})
+    ));
+}
+
+#[test]
+fn not_settled_when_a_field_differs() {
+    assert!(!is_settled(&json!({"image":"i"}), &json!({"image":"j"})));
+}
+
+#[test]
+fn not_settled_when_a_planned_field_is_missing_in_live() {
+    let planned = json!({"image":"i","serving":{"cpu":"2","memory":"8Gi","raftStorage":"50Gi"}});
+    assert!(!is_settled(&planned, &json!({"image":"i"})));
+    assert!(!is_settled(
+        &planned,
+        &json!({"image":"i","serving":{"cpu":"8","memory":"8Gi","raftStorage":"50Gi"}})
+    ));
+}
+
+#[test]
+fn an_invalid_planned_spec_is_not_settled() {
+    assert!(!is_settled(&json!({"nope":1}), &json!({"nope":1})));
 }
