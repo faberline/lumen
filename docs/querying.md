@@ -152,6 +152,42 @@ generation returns `409 stale_cursor`. An expired PIT returns
 `up_to(10000)`. A returned total uses a decimal string and an `eq` or `gte`
 relation. When totals are disabled, the total is `null`.
 
+### Search v2 request forms
+
+These request forms are frozen. `lumen migrate search-request` writes them.
+
+The `track_total` request value is one of three forms:
+
+```json
+{"track_total": "none"}
+```
+
+```json
+{"track_total": {"up_to": 10000}}
+```
+
+```json
+{"track_total": "exact"}
+```
+
+A legacy Boolean `true` becomes `"exact"`. A legacy `false` becomes `"none"`. An absent value stays absent, and the default is `up_to(10000)`.
+
+The request uses the top-level keys `scoring` and `filter`. `query` is only the 0.4 compatibility alias on input; the migration tool never writes it:
+
+```json
+{"scoring": {"match": {"field": "bio", "text": "rust"}}, "filter": {"term": {"field": "status", "value": "active"}}}
+```
+
+The collapse request is an object with one `field`:
+
+```json
+{"collapse": {"field": "category"}}
+```
+
+The response carries `collapse_key` on each hit and `collapsed_total`.
+
+A sort key states its missing behavior as `"first"` or `"last"`. The legacy default `exclude` has no 0.5 form: the migration tool refuses it and asks the caller to choose `first` or `last`.
+
 ### Search v2 collapse
 
 Collapse is result de-duplication. It does not change source identity.

@@ -512,6 +512,60 @@ async fn batch_search_with_routing_key_matches_the_keyless_request() {
 }
 
 #[tokio::test]
+async fn search_rejects_an_unknown_request_field() {
+    let s = server();
+    s.put("/collections/users")
+        .json(&json!({ "fields": { "email": { "type": "keyword" } } }))
+        .await
+        .assert_status_ok();
+    let query = json!({ "term": { "field": "email", "value": "a@x.com" } });
+
+    let resp = s
+        .post("/collections/users/search")
+        .json(&json!({ "query": query, "frobnicate": 1 }))
+        .await;
+    assert!(
+        resp.status_code().is_client_error(),
+        "unknown field accepted: {}",
+        resp.status_code()
+    );
+
+    s.post("/collections/users/search")
+        .json(&json!({ "query": query }))
+        .await
+        .assert_status_ok();
+}
+
+#[tokio::test]
+async fn batch_search_rejects_an_unknown_item_field() {
+    let s = server();
+    s.put("/collections/users")
+        .json(&json!({ "fields": { "email": { "type": "keyword" } } }))
+        .await
+        .assert_status_ok();
+    let query = json!({ "term": { "field": "email", "value": "a@x.com" } });
+
+    let resp = s
+        .post("/collections:search")
+        .json(&json!({ "searches": [
+            { "collection": "users", "query": query, "frobnicate": 1 }
+        ]}))
+        .await;
+    assert!(
+        resp.status_code().is_client_error(),
+        "unknown item field accepted: {}",
+        resp.status_code()
+    );
+
+    s.post("/collections:search")
+        .json(&json!({ "searches": [
+            { "collection": "users", "query": query }
+        ]}))
+        .await
+        .assert_status_ok();
+}
+
+#[tokio::test]
 async fn search_shard_map_from_env_falls_back_to_balanced_when_unset() {
     let _g = SHARD_MAP_ENV_LOCK.lock().await;
     clear_shard_map_env();

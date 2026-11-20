@@ -6,7 +6,10 @@ use std::io::{Read, Write};
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Map, Value};
 
-use crate::cli::{MigrateArgs, MigrateCmd};
+use crate::cli::{MigrateArgs, MigrateCmd, MigrateSearchRequestArgs};
+
+mod search_request;
+use search_request::convert_search_request;
 
 const SHAPE_REFUSAL: &str = r#"schema must be an object with a "fields" object"#;
 const FACETABLE_NOTE: &str = "facetable is not set; enabling it later needs a shadow rebuild";
@@ -31,7 +34,50 @@ pub(crate) fn dispatch(args: MigrateArgs) -> Result<()> {
                 Err(refusals) => bail!("refused: {}", refusals.join("; ")),
             }
         }
+        MigrateCmd::SearchRequest(args) => run_search_request(args),
     }
+}
+
+/// `lumen migrate search-request`: a refused request writes nothing to stdout,
+/// `--out` or `--report`.
+fn run_search_request(args: MigrateSearchRequestArgs) -> Result<()> {
+    let input = match &args.input {
+        Some(path) => std::fs::read_to_string(path).context("cannot read --in file")?,
+        None => {
+            let mut text = String::new();
+            std::io::stdin()
+                .read_to_string(&mut text)
+                .context("read stdin")?;
+            text
+        }
+    };
+    let value: Value = serde_json::from_str(&input).context("input is not valid JSON")?;
+    let (request, changes) = match convert_search_request(&value) {
+        Ok(converted) => converted,
+        Err(refusals) => bail!("refused: {}", refusals.join("; ")),
+    };
+
+    let change_rows: Vec<Value> = changes
+        .iter()
+        .map(|c| json!({"path": c.path, "from": c.from, "to": c.to}))
+        .collect();
+    let mut report = serde_json::to_string_pretty(&json!({
+        "changes": change_rows,
+        "refusals": [],
+    }))?;
+    report.push('\n');
+    match &args.report {
+        Some(path) => std::fs::write(path, report).context("cannot write --report file")?,
+        None => eprint!("{report}"),
+    }
+
+    let mut text = serde_json::to_string_pretty(&request)?;
+    text.push('\n');
+    match &args.out {
+        Some(path) => std::fs::write(path, text).context("cannot write --out file")?,
+        None => std::io::stdout().write_all(text.as_bytes())?,
+    }
+    Ok(())
 }
 
 /// Pure transform from a 0.4 collection schema to the 0.5 schema plus report.
