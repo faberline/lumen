@@ -2288,6 +2288,15 @@ fn ready_facts(name: &str, count: i64) -> ReadyFacts {
     ReadyFacts::new(ready)
 }
 
+/// `ReadyFacts` for the per-shard sets of `name`: the set `<name>-s<k>` reports `counts[k]` ready pods.
+fn sharded_ready_facts(name: &str, counts: &[i64]) -> ReadyFacts {
+    let mut ready = std::collections::HashMap::new();
+    for (k, count) in counts.iter().enumerate() {
+        ready.insert(format!("{name}-s{k}"), *count);
+    }
+    ReadyFacts::new(ready)
+}
+
 fn condition<'a>(facts: &'a [ConditionFact], type_: &str) -> &'a ConditionFact {
     facts
         .iter()
@@ -2314,8 +2323,11 @@ fn a_replicated_cr_with_no_peer_secret_named_is_not_ready_and_says_which_keys_it
         lumen::operator::reconcile::PEER_IDENTITY_CONTEXT_KEY: expected_msg,
     });
 
-    // 6 shards x 3 replicas: every serving pod is up.
-    let facts = l.conditions(&ready_facts("search", 18), &context);
+    // 6 shards x 3 replicas: every serving pod is up, so the verdict is the peer identity and not a replica shortfall.
+    let facts = l.conditions(
+        &sharded_ready_facts("search", &[3, 3, 3, 3, 3, 3]),
+        &context,
+    );
 
     let ready = condition(&facts, "Ready");
     assert_eq!(ready.status, ConditionStatus::False, "got: {facts:?}");
@@ -2352,7 +2364,10 @@ fn a_replicated_cr_with_no_peer_secret_named_is_not_ready_and_says_which_keys_it
 fn a_replicated_cr_with_peer_material_leaves_readiness_to_the_workload() {
     let l = lumen("search", replicated_spec(Some("search-peer-tls")));
 
-    let facts = l.conditions(&ready_facts("search", 18), &serde_json::json!({}));
+    let facts = l.conditions(
+        &sharded_ready_facts("search", &[3, 3, 3, 3, 3, 3]),
+        &serde_json::json!({}),
+    );
 
     let peer = condition(&facts, "PeerIdentityReady");
     assert_eq!(peer.status, ConditionStatus::True);
