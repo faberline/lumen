@@ -76,6 +76,19 @@ pub trait ClusterControl: Send + Sync {
     /// [`run_migration_pass`]: crate::application::reshard_driver::migration::run_migration_pass
     fn shard_base_url(&self, namespace: &str, name: &str, shard: u32) -> String;
 
+    /// Like [`Self::shard_base_url`], for the rendered layout: `shard_count` is
+    /// `lumen.spec.shard_count`. Above 1 each shard is its own StatefulSet
+    /// `<name>-s<k>`. The default ignores the layout.
+    fn shard_base_url_in_layout(
+        &self,
+        namespace: &str,
+        name: &str,
+        shard: u32,
+        _shard_count: u32,
+    ) -> String {
+        self.shard_base_url(namespace, name, shard)
+    }
+
     /// TTL (seconds) [`advance_catching_up`]/[`advance_catching_up_fenced`]
     /// arm/re-arm the write-pause fence with (#1443 R1). Defaults to
     /// [`WRITE_FENCE_TTL_SECS`] — production behavior is unchanged; this

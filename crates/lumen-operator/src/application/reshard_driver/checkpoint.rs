@@ -146,7 +146,7 @@ pub(super) async fn checkpoint_shards(
             last_armed_at,
         )
         .await?;
-        let url = control.shard_base_url(namespace, name, shard);
+        let url = control.shard_base_url_in_layout(namespace, name, shard, lumen.spec.shard_count);
         checkpoint_shard(http, &url, token.as_ref().map(ProjectedToken::expose)).await?;
     }
     Ok(())

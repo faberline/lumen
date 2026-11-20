@@ -70,7 +70,7 @@ pub(super) async fn set_write_fence(
     let token = control.admin_token(namespace, lumen).await?;
     let mut armed_urls: Vec<String> = Vec::new();
     for shard in 0..current.physical_shard_count() {
-        let url = control.shard_base_url(namespace, name, shard);
+        let url = control.shard_base_url_in_layout(namespace, name, shard, lumen.spec.shard_count);
         if let Err(err) = reshard_fence_call(
             http,
             &url,

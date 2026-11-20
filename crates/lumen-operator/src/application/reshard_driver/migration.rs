@@ -102,7 +102,8 @@ pub(super) async fn run_migration_pass_impl(
             &mut last_armed_at,
         )
         .await?;
-        let source_url = control.shard_base_url(namespace, name, from_shard);
+        let source_url =
+            control.shard_base_url_in_layout(namespace, name, from_shard, lumen.spec.shard_count);
         let snapshot = fetch_scoped_backup(
             http,
             &source_url,
@@ -126,7 +127,12 @@ pub(super) async fn run_migration_pass_impl(
             max_batch_bytes,
         )?;
         for batch in &batches {
-            let dest_url = control.shard_base_url(namespace, name, batch.to_shard);
+            let dest_url = control.shard_base_url_in_layout(
+                namespace,
+                name,
+                batch.to_shard,
+                lumen.spec.shard_count,
+            );
             if let Err(err) = apply_reshard_batch(
                 http,
                 &dest_url,
@@ -205,7 +211,12 @@ pub(super) async fn run_migration_pass_impl(
                         chunk.bucket
                     );
                 };
-                let dest_url = control.shard_base_url(namespace, name, to_shard);
+                let dest_url = control.shard_base_url_in_layout(
+                    namespace,
+                    name,
+                    to_shard,
+                    lumen.spec.shard_count,
+                );
                 apply_reshard_prune_chunk(
                     http,
                     &dest_url,
@@ -273,7 +284,7 @@ pub(super) async fn evict_old_shards(
             last_armed_at,
         )
         .await?;
-        let url = control.shard_base_url(namespace, name, shard);
+        let url = control.shard_base_url_in_layout(namespace, name, shard, lumen.spec.shard_count);
         evict_shard(
             http,
             &url,
