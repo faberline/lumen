@@ -23,5 +23,6 @@ The [product README](../README.md) owns the product contract.
 | Contributor workflow and gates | [Contributing](../CONTRIBUTING.md) |
 
 Migration guides describe a version boundary.
-See [Search v2](migration-search-v2.md) and
-[serving autoscaling retirement](migration-2680-retire-serving-autoscaling.md).
+See [Search v2](migration-search-v2.md),
+[serving autoscaling retirement](migration-2680-retire-serving-autoscaling.md) and
+[per-shard StatefulSets](migration-per-shard-statefulsets.md).
