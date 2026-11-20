@@ -10,15 +10,25 @@ use crate::types::query::{QueryNode, SortSpec};
 // Search
 // ---------------------------------------------------------------------------
 
+/// Largest `limit` a `/search` request may ask for. A larger value is rejected
+/// with HTTP 400 `invalid_pagination`.
+pub const MAX_SEARCH_LIMIT: u32 = 1_000;
+
+/// Largest `offset` a `/search` request may ask for. A larger value is rejected
+/// with HTTP 400 `invalid_pagination`.
+pub const MAX_SEARCH_OFFSET: u64 = 10_000;
+
 /// `POST /collections/{id}/search` body.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SearchRequest {
     pub query: QueryNode,
+    /// At most 1000; a larger value is rejected with 400 `invalid_pagination`.
     #[serde(default = "default_limit")]
     pub limit: u32,
     /// Zero-based deep-page jump applied after filtering and global
-    /// score/field ordering. Defaults to zero. `offset` and `cursor` are
+    /// score/field ordering. Defaults to zero. At most 10000; a larger value is
+    /// rejected with 400 `invalid_pagination`. `offset` and `cursor` are
     /// mutually exclusive; use an offset for a direct jump, then issue another
     /// offset request or restart cursor pagination from the first page.
     #[serde(default)]
