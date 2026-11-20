@@ -33,6 +33,96 @@ const FILTER_ROOTS: [&str; 8] = [
     "duplicated",
 ];
 const SORT_KEYS: [&str; 3] = ["field", "order", "missing"];
+const DUPLICATES_KEYS: [&str; 4] = ["field", "min_group_size", "limit", "offset"];
+/// Same limit as `MAX_BATCH_SEARCH_SIZE` in `lumen-shared-kernel`.
+const MAX_BATCH_ITEMS: usize = 32;
+const CURSOR_REFUSAL: &str = "cursor: a 0.4 cursor is not portable to 0.5 and cannot continue a 0.5 query; drop it and start from the first page of the 0.5 request";
+const COLLAPSE_REFUSAL: &str = "collapse: must be a non-empty field name string (a 0.4 value)";
+const DUPLICATES_REFUSAL: &str = "duplicates: the 0.4 /duplicates request has no Search v2 form; Search v2 removes /duplicates, so use a terms facet and then a term filter for each selected value (terms facets are a later milestone item, see docs/migration-search-v2.md)";
+
+/// Converts one input of the command: a batch, a single request, or a refused
+/// legacy duplicates request. `Err` holds every refusal.
+pub(crate) fn convert_input(input: &Value) -> Result<(Value, Vec<Change>), Vec<String>> {
+    let Some(top) = input.as_object() else {
+        return Err(vec!["request must be a JSON object".to_string()]);
+    };
+    if top.contains_key("searches") {
+        return convert_batch(top);
+    }
+    let is_duplicates = top.contains_key("field")
+        && !top.contains_key("query")
+        && top
+            .keys()
+            .all(|key| DUPLICATES_KEYS.contains(&key.as_str()));
+    if is_duplicates {
+        return Err(vec![DUPLICATES_REFUSAL.to_string()]);
+    }
+    convert_search_request(input)
+}
+
+/// A batch of `collections:search` items. Each item converts with the single
+/// request rules. One refused item refuses the batch, and nothing is written.
+fn convert_batch(top: &Map<String, Value>) -> Result<(Value, Vec<Change>), Vec<String>> {
+    let mut refusals = Vec::new();
+    let mut names: Vec<&String> = top.keys().filter(|key| *key != "searches").collect();
+    names.sort();
+    for name in names {
+        refusals.push(format!("unknown field \"{name}\""));
+    }
+
+    let Some(items) = top["searches"].as_array() else {
+        refusals.push("searches: must be an array".to_string());
+        return Err(refusals);
+    };
+    if items.len() > MAX_BATCH_ITEMS {
+        refusals.push(format!("searches: at most {MAX_BATCH_ITEMS} items"));
+        return Err(refusals);
+    }
+
+    let mut converted = Vec::new();
+    let mut changes = Vec::new();
+    for (index, item) in items.iter().enumerate() {
+        let prefix = format!("searches[{index}].");
+        let Some(obj) = item.as_object() else {
+            refusals.push(format!("searches[{index}]: not an object"));
+            continue;
+        };
+        let Some(collection) = obj.get("collection").filter(|v| v.is_string()) else {
+            refusals.push(format!(
+                "searches[{index}]: collection is missing or not a string"
+            ));
+            continue;
+        };
+        // The item is a single request: its `collection` is not a request key.
+        let mut rest = obj.clone();
+        rest.remove("collection");
+        match convert_search_request(&Value::Object(rest)) {
+            Ok((request, rows)) => {
+                let mut out = Map::new();
+                out.insert("collection".to_string(), collection.clone());
+                if let Value::Object(fields) = request {
+                    out.extend(fields);
+                }
+                converted.push(Value::Object(out));
+                changes.extend(rows.into_iter().map(|row| Change {
+                    path: format!("{prefix}{}", row.path),
+                    from: row.from,
+                    to: row.to,
+                }));
+            }
+            Err(messages) => {
+                refusals.extend(messages.into_iter().map(|m| format!("{prefix}{m}")));
+            }
+        }
+    }
+
+    if !refusals.is_empty() {
+        return Err(refusals);
+    }
+    let mut root = Map::new();
+    root.insert("searches".to_string(), Value::Array(converted));
+    Ok((Value::Object(root), changes))
+}
 
 /// Converts one 0.4 request. `Err` holds every refusal, in rule order.
 pub(crate) fn convert_search_request(input: &Value) -> Result<(Value, Vec<Change>), Vec<String>> {
@@ -85,13 +175,9 @@ pub(crate) fn convert_search_request(input: &Value) -> Result<(Value, Vec<Change
         }
     }
 
-    // Rule 5: slice #349.
-    for key in ["cursor", "collapse"] {
-        if top.contains_key(key) {
-            refusals.push(format!(
-                "{key} is not supported by this version of the tool"
-            ));
-        }
+    // Rule 5: cursor. A JSON null is the same as absent; any other value is refused.
+    if top.get("cursor").is_some_and(|cursor| !cursor.is_null()) {
+        refusals.push(CURSOR_REFUSAL.to_string());
     }
 
     // Rule 7: sort. Inserted here so the output key order is fixed.
@@ -115,6 +201,21 @@ pub(crate) fn convert_search_request(input: &Value) -> Result<(Value, Vec<Change
             }
             None => refusals.push("track_total: must be true or false (a 0.4 value)".to_string()),
         }
+    }
+
+    // Rule 8: collapse. A non-empty string s becomes {"field": s}; null is absent.
+    match top.get("collapse") {
+        None | Some(Value::Null) => {}
+        Some(Value::String(field)) if !field.is_empty() => {
+            let to = json!({"field": field});
+            changes.push(Change {
+                path: "collapse".to_string(),
+                from: top["collapse"].clone(),
+                to: to.clone(),
+            });
+            out.insert("collapse".to_string(), to);
+        }
+        Some(_) => refusals.push(COLLAPSE_REFUSAL.to_string()),
     }
 
     if refusals.is_empty() {
@@ -347,8 +448,12 @@ fn convert_sort(sort: &Value, refusals: &mut Vec<String>) -> Option<Vec<Value>> 
 
 #[cfg(test)]
 mod tests {
-    use super::convert_search_request;
+    use super::{convert_input, convert_search_request};
     use serde_json::{json, Value};
+
+    const CURSOR_MSG: &str = "cursor: a 0.4 cursor is not portable to 0.5 and cannot continue a 0.5 query; drop it and start from the first page of the 0.5 request";
+    const COLLAPSE_MSG: &str = "collapse: must be a non-empty field name string (a 0.4 value)";
+    const DUP_MSG: &str = "duplicates: the 0.4 /duplicates request has no Search v2 form; Search v2 removes /duplicates, so use a terms facet and then a term filter for each selected value (terms facets are a later milestone item, see docs/migration-search-v2.md)";
 
     fn q() -> Value {
         json!({"match": {"field": "bio", "text": "rust"}})
@@ -658,10 +763,10 @@ mod tests {
     }
 
     #[test]
-    fn cursor_collapse_and_unknown_keys_are_refused_together() {
-        let errs = refused(json!({"query": q(), "cursor": "x", "collapse": "f", "zzz": 1}));
-        assert!(errs.contains(&"cursor is not supported by this version of the tool".to_string()));
-        assert!(errs.contains(&"collapse is not supported by this version of the tool".to_string()));
+    fn cursor_and_unknown_keys_are_refused_together() {
+        let errs = refused(json!({"query": q(), "cursor": "x", "zzz": 1}));
+        assert_eq!(errs.len(), 2);
+        assert!(errs.contains(&CURSOR_MSG.to_string()));
         assert!(errs.contains(&r#"unknown field "zzz""#.to_string()));
     }
 
@@ -708,5 +813,191 @@ mod tests {
             refused(json!([])),
             vec!["request must be a JSON object".to_string()]
         );
+    }
+
+    fn input_ok(input: Value) -> (Value, Vec<super::Change>) {
+        convert_input(&input).expect("conversion should succeed")
+    }
+
+    fn input_refused(input: Value) -> Vec<String> {
+        convert_input(&input).expect_err("conversion should be refused")
+    }
+
+    fn or_mix() -> Value {
+        json!({"or": [m(), t()]})
+    }
+
+    fn batch(items: Vec<Value>) -> Value {
+        json!({"searches": items})
+    }
+
+    fn three_items() -> Vec<Value> {
+        vec![
+            json!({"collection": "a", "query": m(), "track_total": true}),
+            json!({"collection": "b", "query": t(), "limit": 5}),
+            json!({"collection": "c", "query": {"and": [m(), t()]}, "collapse": "k"}),
+        ]
+    }
+
+    #[test]
+    fn legacy_cursor_is_refused_with_the_reason() {
+        assert_eq!(
+            input_refused(json!({"query": q(), "cursor": "abc"})),
+            vec![CURSOR_MSG.to_string()]
+        );
+    }
+
+    #[test]
+    fn null_cursor_and_null_collapse_are_ignored() {
+        let (out, _) = input_ok(json!({"query": q(), "cursor": null, "collapse": null}));
+        assert!(out.get("cursor").is_none());
+        assert!(out.get("collapse").is_none());
+    }
+
+    #[test]
+    fn collapse_string_becomes_an_object() {
+        let (out, changes) = input_ok(json!({"query": q(), "collapse": "category"}));
+        assert_eq!(out["collapse"], json!({"field": "category"}));
+        let row = changes
+            .iter()
+            .find(|c| c.path == "collapse")
+            .expect("a collapse change row");
+        assert_eq!(row.from, json!("category"));
+        assert_eq!(row.to, json!({"field": "category"}));
+        let last = out.as_object().unwrap().keys().next_back().cloned();
+        assert_eq!(last.as_deref(), Some("collapse"));
+    }
+
+    #[test]
+    fn collapse_bad_values_are_refused() {
+        for bad in [json!(""), json!(5), json!({"field": "x"}), json!(true)] {
+            assert_eq!(
+                input_refused(json!({"query": q(), "collapse": bad})),
+                vec![COLLAPSE_MSG.to_string()]
+            );
+        }
+    }
+
+    #[test]
+    fn duplicates_request_is_refused_with_the_note() {
+        assert_eq!(
+            input_refused(
+                json!({"field": "email", "min_group_size": 2, "limit": 100, "offset": 0})
+            ),
+            vec![DUP_MSG.to_string()]
+        );
+        assert_eq!(
+            input_refused(json!({"field": "email"})),
+            vec![DUP_MSG.to_string()]
+        );
+    }
+
+    #[test]
+    fn a_search_request_with_a_field_key_is_not_a_duplicates_request() {
+        assert_eq!(
+            input_refused(json!({"field": "email", "query": m()})),
+            vec![r#"unknown field "field""#.to_string()]
+        );
+    }
+
+    #[test]
+    fn batch_of_three_all_convert() {
+        let (out, changes) = input_ok(batch(three_items()));
+        let items = out["searches"].as_array().expect("searches is an array");
+        assert_eq!(items.len(), 3);
+        assert_eq!(
+            items[0],
+            json!({"collection": "a", "scoring": m(), "track_total": "exact"})
+        );
+        assert_eq!(
+            items[1],
+            json!({"collection": "b", "filter": t(), "limit": 5})
+        );
+        assert_eq!(items[2]["scoring"], m());
+        assert_eq!(items[2]["filter"], t());
+        assert_eq!(items[2]["collapse"], json!({"field": "k"}));
+        for item in items {
+            let first = item.as_object().unwrap().keys().next().cloned();
+            assert_eq!(first.as_deref(), Some("collection"));
+        }
+        let paths: Vec<&str> = changes.iter().map(|c| c.path.as_str()).collect();
+        assert!(paths.contains(&"searches[0].track_total"));
+        assert!(paths.contains(&"searches[2].collapse"));
+    }
+
+    #[test]
+    fn batch_with_one_refused_item_refuses_the_whole_batch() {
+        let mut items = three_items();
+        items[1] = json!({"collection": "b", "query": or_mix()});
+        let result = convert_input(&batch(items));
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            vec![refusal_mix("searches[1].query", "or")]
+        );
+    }
+
+    #[test]
+    fn batch_reports_every_refused_item() {
+        let items = vec![
+            json!({"collection": "a", "query": or_mix()}),
+            json!({"collection": "b", "query": t()}),
+            json!({"collection": "c", "query": m(), "cursor": "x"}),
+        ];
+        let errs = input_refused(batch(items));
+        assert_eq!(errs.len(), 2);
+        assert!(errs[0].starts_with("searches[0].query:"), "{errs:?}");
+        assert!(errs[1].starts_with("searches[2].cursor:"), "{errs:?}");
+    }
+
+    #[test]
+    fn batch_bad_shapes_are_refused() {
+        assert_eq!(
+            input_refused(json!({"searches": 5})),
+            vec!["searches: must be an array".to_string()]
+        );
+        assert_eq!(
+            input_refused(json!({"searches": [5]})),
+            vec!["searches[0]: not an object".to_string()]
+        );
+        assert_eq!(
+            input_refused(json!({"searches": [{"query": m()}]})),
+            vec!["searches[0]: collection is missing or not a string".to_string()]
+        );
+        assert_eq!(
+            input_refused(json!({"searches": [], "x": 1})),
+            vec![r#"unknown field "x""#.to_string()]
+        );
+    }
+
+    #[test]
+    fn batch_of_more_than_32_items_is_refused() {
+        let items = |n: usize| -> Vec<Value> {
+            (0..n)
+                .map(|i| json!({"collection": format!("c{i}"), "query": m()}))
+                .collect()
+        };
+        assert_eq!(
+            input_refused(batch(items(33))),
+            vec!["searches: at most 32 items".to_string()]
+        );
+        let (out, _) = input_ok(batch(items(32)));
+        assert_eq!(out["searches"].as_array().unwrap().len(), 32);
+    }
+
+    #[test]
+    fn batch_item_order_is_kept() {
+        let items: Vec<Value> = ["c", "a", "b"]
+            .iter()
+            .map(|c| json!({"collection": c, "query": m()}))
+            .collect();
+        let (out, _) = input_ok(batch(items));
+        let names: Vec<&str> = out["searches"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i["collection"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["c", "a", "b"]);
     }
 }

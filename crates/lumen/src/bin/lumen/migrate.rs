@@ -9,7 +9,7 @@ use serde_json::{json, Map, Value};
 use crate::cli::{MigrateArgs, MigrateCmd, MigrateSearchRequestArgs};
 
 mod search_request;
-use search_request::convert_search_request;
+use search_request::convert_input;
 
 const SHAPE_REFUSAL: &str = r#"schema must be an object with a "fields" object"#;
 const FACETABLE_NOTE: &str = "facetable is not set; enabling it later needs a shadow rebuild";
@@ -52,7 +52,7 @@ fn run_search_request(args: MigrateSearchRequestArgs) -> Result<()> {
         }
     };
     let value: Value = serde_json::from_str(&input).context("input is not valid JSON")?;
-    let (changes, refusals, converted) = match convert_search_request(&value) {
+    let (changes, refusals, converted) = match convert_input(&value) {
         Ok((request, changes)) => (changes, Vec::new(), Some(request)),
         Err(refusals) => (Vec::new(), refusals, None),
     };

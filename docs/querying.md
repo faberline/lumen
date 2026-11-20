@@ -190,6 +190,8 @@ The response carries `collapse_key` on each hit and `collapsed_total`.
 
 A sort key states its missing behavior as `"first"` or `"last"`. The legacy default `exclude` has no 0.5 form: the migration tool refuses it and asks the caller to choose `first` or `last`.
 
+A legacy cursor is not portable. A 0.4 cursor cannot continue a 0.5 query, so the migration tool refuses it and the caller starts again from the first page. The tool converts a legacy `collapse` string to `{"collapse":{"field":"<string>"}}`. It refuses a legacy `/duplicates` request: Search v2 removes `/duplicates`, and the replacement is a terms facet followed by a term filter for each selected value. The tool converts each item of a `collections:search` batch with the same rules. One refused item refuses the whole batch, and the refusal names the item index.
+
 ### Search v2 collapse
 
 Collapse is result de-duplication. It does not change source identity.
