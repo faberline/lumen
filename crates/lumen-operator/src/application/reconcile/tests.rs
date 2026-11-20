@@ -9,6 +9,15 @@ fn ready_facts(name: &str, count: i64) -> ReadyFacts {
     ReadyFacts::new(ready)
 }
 
+/// `ReadyFacts` for the per-shard sets of `name`: the set `<name>-s<k>` reports `counts[k]` ready pods.
+fn sharded_ready_facts(name: &str, counts: &[i64]) -> ReadyFacts {
+    let mut ready = std::collections::HashMap::new();
+    for (k, count) in counts.iter().enumerate() {
+        ready.insert(format!("{name}-s{k}"), *count);
+    }
+    ReadyFacts::new(ready)
+}
+
 fn condition<'a>(facts: &'a [ConditionFact], type_: &str) -> &'a ConditionFact {
     facts
         .iter()

@@ -56,3 +56,29 @@ fn single_shard_status_reads_the_unsuffixed_set() {
     let patch = lumen.status_patch(&facts(&[("search", 1)]));
     assert_eq!(patch["status"]["servingReadyReplicas"], 1);
 }
+
+#[test]
+fn conditions_read_each_shard_set() {
+    use crate::application::reconcile::tests::{condition, sharded_ready_facts};
+    use service_k8s::ConditionStatus;
+
+    let lumen = hpa_test_lumen("search", "ns", 2, 1);
+
+    let partial = lumen.conditions(
+        &sharded_ready_facts("search", &[1, 0]),
+        &serde_json::Value::Null,
+    );
+    let ready = condition(&partial, "Ready");
+    assert_eq!(ready.status, ConditionStatus::False, "got: {partial:?}");
+    assert!(ready.message.contains("1/2"), "got: {ready:?}");
+
+    let full = lumen.conditions(
+        &sharded_ready_facts("search", &[1, 1]),
+        &serde_json::Value::Null,
+    );
+    assert_eq!(
+        condition(&full, "Ready").status,
+        ConditionStatus::True,
+        "got: {full:?}"
+    );
+}

@@ -8,7 +8,7 @@ use crate::application::reconcile::tests::hpa::hpa_test_lumen;
 use crate::application::reconcile::tests::status_patch::{
     cutover_pending_convergence_lumen, test_now_epoch_secs,
 };
-use crate::application::reconcile::tests::{condition, ready_facts};
+use crate::application::reconcile::tests::{condition, ready_facts, sharded_ready_facts};
 
 #[test]
 fn a_fully_ready_default_cr_reports_ready_true() {
@@ -17,7 +17,10 @@ fn a_fully_ready_default_cr_reports_ready_true() {
     // on that list would leave every install that never opted into
     // auto-splitting permanently not-ready.
     let lumen = hpa_test_lumen("search", "acme-cond-ready", 2, 1);
-    let facts = lumen.conditions(&ready_facts("search", 2), &serde_json::Value::Null);
+    let facts = lumen.conditions(
+        &sharded_ready_facts("search", &[1, 1]),
+        &serde_json::Value::Null,
+    );
 
     let ready = condition(&facts, "Ready");
     assert_eq!(ready.status, ConditionStatus::True, "got: {facts:?}");
@@ -37,7 +40,10 @@ fn a_fully_ready_default_cr_reports_ready_true() {
 #[test]
 fn short_replicas_report_ready_false_and_progressing_true() {
     let lumen = hpa_test_lumen("search", "acme-cond-short", 2, 1);
-    let facts = lumen.conditions(&ready_facts("search", 1), &serde_json::Value::Null);
+    let facts = lumen.conditions(
+        &sharded_ready_facts("search", &[1, 0]),
+        &serde_json::Value::Null,
+    );
 
     let ready = condition(&facts, "Ready");
     assert_eq!(ready.status, ConditionStatus::False, "got: {facts:?}");
@@ -71,7 +77,10 @@ fn a_reshard_wedge_degrades_writable_but_not_ready() {
         },
     );
 
-    let facts = lumen.conditions(&ready_facts(name, 2), &serde_json::Value::Null);
+    let facts = lumen.conditions(
+        &sharded_ready_facts(name, &[1, 1]),
+        &serde_json::Value::Null,
+    );
     crate::application::reshard_driver::oversize::clear_oversize_block(namespace, name);
 
     let ready = condition(&facts, "Ready");
@@ -95,7 +104,10 @@ fn the_post_cutover_fence_reports_reshard_in_progress_at_phase_complete() {
     // `awaitingTopologyConvergence` happens *at* phase `Complete`, which is
     // why `reshard_active` cannot be a phase comparison alone.
     let lumen = cutover_pending_convergence_lumen("search", "acme-cond-fence", 1);
-    let facts = lumen.conditions(&ready_facts("search", 2), &serde_json::Value::Null);
+    let facts = lumen.conditions(
+        &sharded_ready_facts("search", &[1, 1]),
+        &serde_json::Value::Null,
+    );
 
     let reshard = condition(&facts, "ReshardInProgress");
     assert_eq!(reshard.status, ConditionStatus::True, "got: {facts:?}");
@@ -124,7 +136,10 @@ fn a_stalled_fence_degrades_writable_but_not_ready() {
         .workflow
         .convergence_wait_started_at = Some(test_now_epoch_secs().saturating_sub(stall_budget + 1));
 
-    let facts = lumen.conditions(&ready_facts("search", 2), &serde_json::Value::Null);
+    let facts = lumen.conditions(
+        &sharded_ready_facts("search", &[1, 1]),
+        &serde_json::Value::Null,
+    );
     assert_eq!(
         condition(&facts, "Ready").status,
         ConditionStatus::True,
@@ -166,7 +181,10 @@ fn a_healthy_default_cr_has_all_planes_healthy() {
 #[test]
 fn an_armed_fence_pauses_writable_without_touching_ready() {
     let lumen = cutover_pending_convergence_lumen("search", "acme-cond-fence-w", 1);
-    let facts = lumen.conditions(&ready_facts("search", 2), &serde_json::Value::Null);
+    let facts = lumen.conditions(
+        &sharded_ready_facts("search", &[1, 1]),
+        &serde_json::Value::Null,
+    );
     let writable = condition(&facts, "Writable");
     assert_eq!(writable.status, ConditionStatus::False, "got: {facts:?}");
     assert_eq!(writable.reason, "WritePauseFenceArmed");
@@ -213,7 +231,10 @@ fn a_missing_peer_identity_fails_replication_ready() {
 fn an_invalid_spec_fails_config_ready_only() {
     let mut lumen = hpa_test_lumen("search", "acme-cond-cfg", 2, 1);
     lumen.spec.body_limit_bytes = Some(1);
-    let facts = lumen.conditions(&ready_facts("search", 2), &serde_json::Value::Null);
+    let facts = lumen.conditions(
+        &sharded_ready_facts("search", &[1, 1]),
+        &serde_json::Value::Null,
+    );
 
     let config = condition(&facts, "ConfigReady");
     assert_eq!(config.status, ConditionStatus::False, "got: {facts:?}");
@@ -233,7 +254,7 @@ fn an_invalid_spec_fails_config_ready_only() {
 fn a_capacity_refusal_fails_capacity_ready_only() {
     let lumen = hpa_test_lumen("search", "acme-cond-capacity", 2, 1);
     let context = json!({ CAPACITY_CONTEXT_KEY: "catalog ConfigMap missing" });
-    let facts = lumen.conditions(&ready_facts("search", 2), &context);
+    let facts = lumen.conditions(&sharded_ready_facts("search", &[1, 1]), &context);
 
     let capacity = condition(&facts, "CapacityReady");
     assert_eq!(capacity.status, ConditionStatus::False, "got: {facts:?}");
