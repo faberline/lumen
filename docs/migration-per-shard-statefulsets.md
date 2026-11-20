@@ -41,6 +41,6 @@ The headless Service stays `search-headless`. The client Service `search` is unc
 
 2. **Plan for the data.** The PVCs of the old StatefulSet are not reused by the per-shard StatefulSets. Rebuild the data from the source of truth, or restore it from a backup.
 
-3. **Update names that point at pods and claims.** Update every alert, dashboard or script that names `search-<n>` pods, `raft-search-<n>` claims or `statefulset="search"`. The built-in `LumenPvcNearFull` rule matches only `raft-<name>-<ordinal>` claims. It does not see per-shard claims yet.
+3. **Update names that point at pods and claims.** Update every alert, dashboard or script that names `search-<n>` pods, `raft-search-<n>` claims or `statefulset="search"`. The built-in `LumenPvcNearFull` rule matches both `raft-<name>-<ordinal>` and per-shard `raft-<name>-s<k>-<ordinal>` claims; it needs no change.
 
 4. **Clients need no change.** Clients use the Service `search`, not pod names.
