@@ -12,6 +12,7 @@ use crate::types::query::{QueryNode, SortSpec};
 
 /// `POST /collections/{id}/search` body.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SearchRequest {
     pub query: QueryNode,
     #[serde(default = "default_limit")]
@@ -156,12 +157,33 @@ pub struct BatchSearchRequest {
 /// One item of a [`BatchSearchRequest`]. Flattened on the wire, so an item
 /// looks like `{"collection": "...", "query": {...}, "limit": 20, ...}` —
 /// the same fields `POST /collections/{id}/search` accepts, plus the
-/// target `collection`.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+/// target `collection`. An unknown field next to the flattened SearchRequest
+/// fields is rejected with an error that names it.
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct BatchSearchItem {
     pub collection: String,
     #[serde(flatten)]
     pub request: SearchRequest,
+}
+
+impl<'de> Deserialize<'de> for BatchSearchItem {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let mut map = serde_json::Map::<String, serde_json::Value>::deserialize(deserializer)?;
+        let collection = match map.remove("collection") {
+            Some(serde_json::Value::String(name)) => name,
+            Some(_) => return Err(serde::de::Error::custom("`collection` must be a string")),
+            None => return Err(serde::de::Error::missing_field("collection")),
+        };
+        let request = serde_json::from_value::<SearchRequest>(serde_json::Value::Object(map))
+            .map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            collection,
+            request,
+        })
+    }
 }
 
 /// `POST /collections:search` response: one [`BatchSearchResult`] per

@@ -1,8 +1,9 @@
 use crate::types::document::FieldValue;
-use crate::types::query::{MatchOp, MatchQuery, QueryNode};
+use crate::types::query::{MatchOp, MatchQuery, QueryNode, SortSpec};
 use crate::types::schema::{
     Analyzer, FieldCapabilities, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
 };
+use crate::types::search::{BatchSearchItem, SearchRequest};
 
 fn fs(t: FieldType) -> FieldSpec {
     FieldSpec {
@@ -412,5 +413,129 @@ fn field_value_bool_is_plain_json_on_the_way_out() {
     assert_eq!(
         serde_json::to_string(&FieldValue::Bool(true)).expect("serializes"),
         "true"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Search request wire strictness (unknown fields are refused)
+// ---------------------------------------------------------------------------
+
+fn term_query() -> serde_json::Value {
+    serde_json::json!({"term": {"field": "email", "value": "a@x.com"}})
+}
+
+#[test]
+fn search_request_rejects_an_unknown_top_level_field() {
+    let err = serde_json::from_value::<SearchRequest>(
+        serde_json::json!({"query": term_query(), "frobnicate": 1}),
+    )
+    .expect_err("unknown top-level field must be refused");
+    assert!(err.to_string().contains("frobnicate"), "{err}");
+
+    let err = serde_json::from_value::<SearchRequest>(
+        serde_json::json!({"query": term_query(), "mode": "v2"}),
+    )
+    .expect_err("unknown top-level field must be refused");
+    assert!(err.to_string().contains("mode"), "{err}");
+}
+
+#[test]
+fn search_request_known_fields_round_trip_unchanged() {
+    let input = serde_json::json!({
+        "query": term_query(),
+        "limit": 7,
+        "offset": 3,
+        "routing_key": "k",
+        "sort": [{"field": "n", "order": "desc", "missing": "last"}],
+        "track_total": false,
+        "collapse": "parent_row_id",
+        "scoring": term_query(),
+        "filter": term_query()
+    });
+    let parsed: SearchRequest = serde_json::from_value(input.clone()).expect("known fields parse");
+    let back = serde_json::to_value(&parsed).expect("serialize");
+    assert_eq!(back, input);
+}
+
+#[test]
+fn search_request_cursor_field_is_known() {
+    let parsed: SearchRequest =
+        serde_json::from_value(serde_json::json!({"query": term_query(), "cursor": "abc"}))
+            .expect("cursor is a known field");
+    assert_eq!(parsed.cursor, Some("abc".to_string()));
+}
+
+#[test]
+fn search_request_minimal_body_keeps_defaults() {
+    let parsed: SearchRequest =
+        serde_json::from_value(serde_json::json!({"query": term_query()})).expect("minimal body");
+    assert_eq!(parsed.limit, 20);
+    assert_eq!(parsed.offset, 0);
+    assert!(parsed.track_total);
+    assert!(parsed.cursor.is_none());
+    assert!(parsed.routing_key.is_none());
+    assert!(parsed.sort.is_none());
+    assert!(parsed.collapse.is_none());
+}
+
+#[test]
+fn sort_spec_rejects_an_unknown_field() {
+    let err =
+        serde_json::from_value::<SortSpec>(serde_json::json!({"field": "n", "direction": "up"}))
+            .expect_err("unknown sort field must be refused");
+    assert!(err.to_string().contains("direction"), "{err}");
+
+    let ok = serde_json::from_value::<SortSpec>(serde_json::json!({"field": "n"}))
+        .expect("defaults are kept");
+    assert_eq!(ok.field, "n");
+}
+
+#[test]
+fn search_request_rejects_an_unknown_field_inside_a_sort_entry() {
+    let result = serde_json::from_value::<SearchRequest>(
+        serde_json::json!({"query": term_query(), "sort": [{"field": "n", "bogus": 1}]}),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn batch_search_item_rejects_an_unknown_field() {
+    let err = serde_json::from_value::<BatchSearchItem>(
+        serde_json::json!({"collection": "users", "query": term_query(), "frobnicate": 1}),
+    )
+    .expect_err("unknown item field must be refused");
+    assert!(err.to_string().contains("frobnicate"), "{err}");
+}
+
+#[test]
+fn batch_search_item_known_shape_round_trips() {
+    let input = serde_json::json!({
+        "collection": "users",
+        "query": term_query(),
+        "limit": 10,
+        "offset": 0,
+        "routing_key": "k",
+        "track_total": false
+    });
+    let item: BatchSearchItem = serde_json::from_value(input.clone()).expect("known shape parses");
+    assert_eq!(item.collection, "users");
+    assert_eq!(item.request.limit, 10);
+    assert_eq!(serde_json::to_value(&item).expect("serialize"), input);
+}
+
+#[test]
+fn batch_search_item_requires_a_string_collection() {
+    let missing =
+        serde_json::from_value::<BatchSearchItem>(serde_json::json!({"query": term_query()}))
+            .expect_err("collection is required");
+    assert!(missing.to_string().contains("collection"), "{missing}");
+
+    let wrong_type = serde_json::from_value::<BatchSearchItem>(
+        serde_json::json!({"collection": 5, "query": term_query()}),
+    )
+    .expect_err("collection must be a string");
+    assert!(
+        wrong_type.to_string().contains("collection"),
+        "{wrong_type}"
     );
 }

@@ -8,6 +8,7 @@ use crate::types::search::default_min_group_size;
 
 /// One sort key. `order` defaults to ascending.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SortSpec {
     pub field: String,
     #[serde(default)]
