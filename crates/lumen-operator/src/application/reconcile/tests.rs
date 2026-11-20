@@ -29,6 +29,7 @@ mod handover;
 mod hpa;
 
 mod peer_identity;
+mod readiness_targets;
 
 mod shard_usage;
 

@@ -1,7 +1,6 @@
 //! Lumen's `ManagedService` impl: what the shared controller renders, polls and
 //! reports.
 
-use kube::ResourceExt;
 use serde_json::json;
 use service_k8s::{ConditionFact, ManagedService, ReadinessTarget, ReadyFacts};
 
@@ -126,10 +125,13 @@ impl ManagedService for Lumen {
     }
 
     fn readiness_targets(&self) -> Vec<ReadinessTarget> {
-        // The serving fleet is always a StatefulSet (render::render), whether
-        // or not raft consensus (`replicasPerShard > 1`) is active.
-        let name = self.name_any();
-        vec![ReadinessTarget::new("StatefulSet", name)]
+        // The serving fleet is always StatefulSets (render::render), whether
+        // or not raft consensus (`replicasPerShard > 1`) is active: one set
+        // with one shard, one set per shard otherwise.
+        render::serving_set_names(self)
+            .into_iter()
+            .map(|name| ReadinessTarget::new("StatefulSet", name))
+            .collect()
     }
 
     fn status_patch(&self, ready: &ReadyFacts) -> serde_json::Value {

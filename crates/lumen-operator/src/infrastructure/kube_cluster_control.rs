@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use kube::api::{Api, ApiResource, DynamicObject, Patch, PatchParams};
+use kube::api::{Api, ApiResource, DynamicObject, ListParams, Patch, PatchParams};
 use kube::Client;
 use serde_json::json;
 use service_auth::k8s::{ProjectedToken, ProjectedTokenFile};
@@ -43,6 +43,31 @@ impl KubeClusterControl {
     /// deliberately not an environment variable, because an env var is a
     /// production-reachable way to redirect a control-plane credential at a
     /// file an attacker chose.
+    /// The serving StatefulSets of `base`: the single set `base`, or one set
+    /// per shard `<base>-s<k>` (see `render::serving_set_names`).
+    async fn serving_sets(&self, namespace: &str, base: &str) -> Result<Vec<DynamicObject>> {
+        let ar = statefulset_api_resource();
+        let api: Api<DynamicObject> = Api::namespaced_with(self.client.clone(), namespace, &ar);
+        let sets = api
+            .list(&ListParams::default())
+            .await
+            .context("list serving StatefulSets")?;
+        Ok(sets
+            .items
+            .into_iter()
+            .filter(|set| {
+                set.metadata
+                    .name
+                    .as_deref()
+                    .is_some_and(|candidate| is_serving_set(base, candidate))
+            })
+            .collect())
+    }
+
+    /// Read the operator's credential from somewhere else. Test seam only —
+    /// deliberately not an environment variable, because an env var is a
+    /// production-reachable way to redirect a control-plane credential at a
+    /// file an attacker chose.
     pub fn with_token_file(mut self, token_file: ProjectedTokenFile) -> Self {
         self.token_file = token_file;
         self
@@ -57,6 +82,49 @@ fn statefulset_api_resource() -> ApiResource {
         kind: "StatefulSet".to_string(),
         plural: "statefulsets".to_string(),
     }
+}
+
+/// True when `candidate` is the single serving set `base`, or one of its
+/// per-shard sets `<base>-s<k>` with `k` one or more ASCII digits.
+fn is_serving_set(base: &str, candidate: &str) -> bool {
+    if candidate == base {
+        return true;
+    }
+    match candidate
+        .strip_prefix(base)
+        .and_then(|rest| rest.strip_prefix("-s"))
+    {
+        Some(digits) => !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()),
+        None => false,
+    }
+}
+
+/// True when every serving set has converged on its update revision and the
+/// ready and updated totals reach `desired_replicas`. `sets` are the `status`
+/// objects. No set is never converged.
+fn sets_converged(sets: &[serde_json::Value], desired_replicas: i64) -> bool {
+    if sets.is_empty() {
+        return false;
+    }
+    // A rollout still in flight has distinct current/update revisions; once
+    // it completes, k8s converges them onto the same value. Absent fields
+    // (any StatefulSet old enough not to report them) fail this check open on
+    // the safe side — never assumed identical.
+    let revisions_converged = sets.iter().all(|status| {
+        matches!(
+            (status["currentRevision"].as_str(), status["updateRevision"].as_str()),
+            (Some(current), Some(update)) if current == update
+        )
+    });
+    let ready: i64 = sets
+        .iter()
+        .map(|status| status["readyReplicas"].as_i64().unwrap_or(0))
+        .sum();
+    let updated: i64 = sets
+        .iter()
+        .map(|status| status["updatedReplicas"].as_i64().unwrap_or(0))
+        .sum();
+    revisions_converged && ready >= desired_replicas && updated >= desired_replicas
 }
 
 #[async_trait]
@@ -75,18 +143,18 @@ impl ClusterControl for KubeClusterControl {
     }
 
     async fn statefulset_ready_replicas(&self, namespace: &str, name: &str) -> Result<i64> {
-        let ar = statefulset_api_resource();
-        let api: Api<DynamicObject> = Api::namespaced_with(self.client.clone(), namespace, &ar);
-        let ready = api
-            .get_opt(name)
-            .await
-            .context("read serving StatefulSet")?
-            .and_then(|o| o.data["status"]["readyReplicas"].as_i64())
-            .unwrap_or(0);
-        Ok(ready)
+        let sets = self.serving_sets(namespace, name).await?;
+        Ok(sets
+            .iter()
+            .map(|set| set.data["status"]["readyReplicas"].as_i64().unwrap_or(0))
+            .sum())
     }
 
     async fn trigger_rolling_restart(&self, namespace: &str, name: &str) -> Result<()> {
+        let sets = self.serving_sets(namespace, name).await?;
+        if sets.is_empty() {
+            anyhow::bail!("no serving StatefulSet found for {name}");
+        }
         let ar = statefulset_api_resource();
         let api: Api<DynamicObject> = Api::namespaced_with(self.client.clone(), namespace, &ar);
         let now = SystemTime::now()
@@ -104,9 +172,12 @@ impl ClusterControl for KubeClusterControl {
                 }
             }
         });
-        api.patch(name, &PatchParams::default(), &Patch::Merge(&patch))
-            .await
-            .context("trigger serving StatefulSet rolling restart")?;
+        for set in sets {
+            let set_name = set.metadata.name.clone().unwrap_or_default();
+            api.patch(&set_name, &PatchParams::default(), &Patch::Merge(&patch))
+                .await
+                .context("trigger serving StatefulSet rolling restart")?;
+        }
         Ok(())
     }
 
@@ -140,31 +211,16 @@ impl ClusterControl for KubeClusterControl {
         name: &str,
         desired_replicas: i64,
     ) -> Result<bool> {
-        let ar = statefulset_api_resource();
-        let api: Api<DynamicObject> = Api::namespaced_with(self.client.clone(), namespace, &ar);
-        let Some(sts) = api
-            .get_opt(name)
+        // No StatefulSet yet is not "converged" — the caller keeps treating
+        // this as pending rather than assuming success (`sets_converged`).
+        let statuses: Vec<serde_json::Value> = self
+            .serving_sets(namespace, name)
             .await
-            .context("read serving StatefulSet for topology convergence")?
-        else {
-            // No StatefulSet yet is not "converged" — the caller keeps
-            // treating this as pending rather than assuming success.
-            return Ok(false);
-        };
-        let status = &sts.data["status"];
-        let ready_replicas = status["readyReplicas"].as_i64().unwrap_or(0);
-        let updated_replicas = status["updatedReplicas"].as_i64().unwrap_or(0);
-        // A rollout still in flight has distinct current/update revisions;
-        // once it completes, k8s converges them onto the same value. Absent
-        // fields (any StatefulSet old enough not to report them) fail this
-        // check open on the safe side — never assumed identical.
-        let current_revision = status["currentRevision"].as_str();
-        let update_revision = status["updateRevision"].as_str();
-        let revisions_converged =
-            matches!((current_revision, update_revision), (Some(c), Some(u)) if c == u);
-        Ok(revisions_converged
-            && ready_replicas >= desired_replicas
-            && updated_replicas >= desired_replicas)
+            .context("read serving StatefulSets for topology convergence")?
+            .into_iter()
+            .map(|set| set.data["status"].clone())
+            .collect();
+        Ok(sets_converged(&statuses, desired_replicas))
     }
 
     async fn serving_pods_report_map_version(
@@ -199,5 +255,56 @@ impl ClusterControl for KubeClusterControl {
             }
         }
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{is_serving_set, sets_converged};
+
+    #[test]
+    fn is_serving_set_matches_base_and_shard_suffix() {
+        assert!(is_serving_set("search", "search"));
+        assert!(is_serving_set("search", "search-s0"));
+        assert!(is_serving_set("search", "search-s12"));
+        assert!(!is_serving_set("search", "search-s"));
+        assert!(!is_serving_set("search", "search-sx"));
+        assert!(!is_serving_set("search", "search-headless"));
+        assert!(!is_serving_set("search", "search2"));
+        assert!(!is_serving_set("search", "other-s0"));
+    }
+
+    #[test]
+    fn sets_converged_needs_every_set_converged() {
+        // Negative control: the second set is still rolling (revisions differ).
+        let rolling = [
+            json!({"readyReplicas": 1, "updatedReplicas": 1,
+                   "currentRevision": "a", "updateRevision": "a"}),
+            json!({"readyReplicas": 1, "updatedReplicas": 1,
+                   "currentRevision": "a", "updateRevision": "b"}),
+        ];
+        assert!(!sets_converged(&rolling, 2));
+
+        let converged = [
+            json!({"readyReplicas": 1, "updatedReplicas": 1,
+                   "currentRevision": "a", "updateRevision": "a"}),
+            json!({"readyReplicas": 1, "updatedReplicas": 1,
+                   "currentRevision": "b", "updateRevision": "b"}),
+        ];
+        assert!(sets_converged(&converged, 2));
+    }
+
+    #[test]
+    fn sets_converged_is_false_without_sets() {
+        assert!(!sets_converged(&[], 1));
+    }
+
+    #[test]
+    fn sets_converged_needs_the_ready_total() {
+        let short = [json!({"readyReplicas": 1, "updatedReplicas": 2,
+                            "currentRevision": "a", "updateRevision": "a"})];
+        assert!(!sets_converged(&short, 2));
     }
 }

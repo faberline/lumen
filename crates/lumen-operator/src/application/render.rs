@@ -135,6 +135,18 @@ pub fn serving_dns_names(lumen: &Lumen) -> Vec<String> {
     ]
 }
 
+/// The StatefulSet names that serve this instance: the single set `instance`
+/// with one shard, else one set per shard `<instance>-s<k>` (see `render`).
+pub fn serving_set_names(lumen: &Lumen) -> Vec<String> {
+    let name = instance(lumen);
+    if lumen.spec.shard_count <= 1 {
+        return vec![name];
+    }
+    (0..lumen.spec.shard_count)
+        .map(|shard| format!("{name}-s{shard}"))
+        .collect()
+}
+
 /// Resolve the instance name (defaults to `lumen` only when metadata is absent,
 /// which never happens for a real CR).
 fn instance(lumen: &Lumen) -> String {
