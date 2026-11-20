@@ -136,6 +136,21 @@ pub(crate) struct MigrateArgs {
 pub(crate) enum MigrateCmd {
     /// Convert a 0.4 collection schema (stdin) to the 0.5 schema plus a report.
     CollectionSchema,
+    /// Convert a 0.4 search request (stdin or --in) to the 0.5 request plus a report.
+    SearchRequest(MigrateSearchRequestArgs),
+}
+
+#[derive(clap::Args)]
+pub(crate) struct MigrateSearchRequestArgs {
+    /// Read the 0.4 request from this file instead of stdin.
+    #[arg(long = "in")]
+    pub(crate) input: Option<PathBuf>,
+    /// Write the 0.5 request to this file instead of stdout.
+    #[arg(long)]
+    pub(crate) out: Option<PathBuf>,
+    /// Write the report JSON to this file instead of stderr.
+    #[arg(long)]
+    pub(crate) report: Option<PathBuf>,
 }
 
 #[derive(clap::Args)]
