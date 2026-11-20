@@ -178,6 +178,8 @@ The request uses the top-level keys `scoring` and `filter`. `query` is only the 
 {"scoring": {"match": {"field": "bio", "text": "rust"}}, "filter": {"term": {"field": "status", "value": "active"}}}
 ```
 
+The migration tool splits a legacy `query` tree by node kind. The scoring nodes are `match`, `knn`, `rrf` and `hamming`. The filter nodes are `term`, `terms`, `prefix`, `ids`, `range`, `has_child`, `exists` and `duplicated`. An `and` of both kinds is split into `scoring` and `filter`. An `or` or a `not` over both kinds changes the result set or the score when it is split, so the tool refuses it and names the node path.
+
 The collapse request is an object with one `field`:
 
 ```json
