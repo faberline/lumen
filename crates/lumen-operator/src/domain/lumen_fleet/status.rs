@@ -86,11 +86,15 @@ pub fn project_status(
         observed_generation: generation,
         desired_instances: desired,
         applied_instances: materialized,
+        ready_instances: 0,
+        degraded_instances: 0,
+        not_ready_instances: 0,
         materialized_instances: materialized,
         rejected_instances: rejected,
         orphaned_instances: orphaned,
         pruned_instances: pruned,
         entries,
+        conditions: Vec::new(),
         message,
     }
 }
