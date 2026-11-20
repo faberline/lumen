@@ -11,6 +11,7 @@ use crate::domain::lumen_fleet::aggregate::{aggregate, live_child_from_json, Dec
 use crate::domain::lumen_fleet::children::{
     adoption, child_key, prune_decision, Adoption, ChildKey, PruneDecision, ORPHAN_RETAINED_MESSAGE,
 };
+use crate::domain::lumen_fleet::gate::{child_progress, ChildProgress, GateDecision, RolloutGate};
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
 use crate::domain::lumen_fleet::rollout::{
     decide, held_message, is_settled, Need, RolloutDecision,
@@ -167,6 +168,8 @@ struct Probe {
     exists: bool,
     /// The entry this instance already has; set only for `Need::Skip`.
     early: Option<FleetEntryStatus>,
+    /// The live child's progress, read in Phase A when the child exists.
+    progress: Option<ChildProgress>,
 }
 
 impl Probe {
@@ -175,6 +178,7 @@ impl Probe {
             need: Need::Skip,
             exists: false,
             early: Some(early),
+            progress: None,
         }
     }
 }
@@ -255,6 +259,7 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
                 need: Need::Write,
                 exists: false,
                 early: None,
+                progress: None,
             }),
             // A `Lumen` this fleet did not create is not this fleet's to
             // overwrite: a hand-authored instance at the same name would
@@ -263,7 +268,7 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
                 probes.push(Probe::skip(entry(instance, "NotAdopted", &message)));
             }
             Adoption::Apply => {
-                let need = match control
+                let (need, progress) = match control
                     .lumen_spec(&instance.namespace, &instance.name)
                     .await
                 {
@@ -275,14 +280,30 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
                         )));
                         continue;
                     }
-                    Ok(None) => Need::Write,
+                    Ok(None) => (Need::Write, None),
                     Ok(Some(live_spec)) => {
                         let planned_spec =
                             apply_object(&fleet_name, instance, spec)["spec"].clone();
-                        if is_settled(&planned_spec, &live_spec) {
+                        let need = if is_settled(&planned_spec, &live_spec) {
                             Need::Settled
                         } else {
                             Need::Write
+                        };
+                        // The gate needs the live child's progress, settled or not.
+                        match control
+                            .lumen_live(&instance.namespace, &instance.name)
+                            .await
+                        {
+                            Err(err) => {
+                                probes.push(Probe::skip(entry(
+                                    instance,
+                                    "ObserveFailed",
+                                    &err.to_string(),
+                                )));
+                                continue;
+                            }
+                            Ok(None) => (need, None),
+                            Ok(Some(live)) => (need, Some(child_progress(&live))),
                         }
                     }
                 };
@@ -290,6 +311,7 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
                     need,
                     exists: true,
                     early: None,
+                    progress,
                 });
             }
         }
@@ -299,7 +321,10 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
     // decides which writes this pass makes.
     let needs: Vec<Need> = probes.iter().map(|probe| probe.need).collect();
     let decisions = decide(&fleet.spec.rollout_policy, &needs);
+    // The gate: a write waits until the nearest earlier child is caught up and Ready.
+    let mut rollout = RolloutGate::new();
     for ((instance, probe), decision) in planned.iter().zip(&probes).zip(decisions) {
+        let id = format!("{}/{}", instance.namespace, instance.name);
         if let Some(early) = &probe.early {
             entries.push(early.clone());
             continue;
@@ -310,24 +335,56 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
                 "Held",
                 held_message(&fleet.spec.rollout_policy),
             ));
+            if let Some(progress) = &probe.progress {
+                rollout.record(&id, progress.clone());
+            }
             continue;
         }
         let PlanOutcome::Ready(spec) = &instance.outcome else {
             continue;
         };
+        if probe.need == Need::Settled {
+            // A settled child never holds the gate; it is read and recorded below.
+            let _ = rollout.check(false);
+        } else if let GateDecision::Hold(message) = rollout.check(true) {
+            entries.push(entry(instance, "Waiting", &message));
+            if let Some(progress) = &probe.progress {
+                rollout.record(&id, progress.clone());
+            }
+            continue;
+        }
         if probe.exists {
             let body = apply_object(&fleet_name, instance, spec);
             match control
                 .apply_lumen(&instance.namespace, &instance.name, body)
                 .await
             {
-                Ok(()) => entries.push(entry_with_hash(instance, "Applied", spec)),
-                Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
+                Ok(()) => {
+                    entries.push(entry_with_hash(instance, "Applied", spec));
+                    // A written child is not caught up yet; a settled one is recorded from its live read.
+                    let after = if probe.need == Need::Settled {
+                        probe.progress.clone()
+                    } else {
+                        Some(ChildProgress::just_written())
+                    };
+                    if let Some(progress) = after {
+                        rollout.record(&id, progress);
+                    }
+                }
+                Err(err) => {
+                    entries.push(entry(instance, "ApplyFailed", &err.to_string()));
+                    if let Some(progress) = &probe.progress {
+                        rollout.record(&id, progress.clone());
+                    }
+                }
             }
         } else {
             let body = seed_object(&fleet_name, instance, spec);
             match control.create_lumen(body).await {
-                Ok(()) => entries.push(entry_with_hash(instance, "Created", spec)),
+                Ok(()) => {
+                    entries.push(entry_with_hash(instance, "Created", spec));
+                    rollout.record(&id, ChildProgress::just_written());
+                }
                 Err(err) => entries.push(entry(instance, "ApplyFailed", &err.to_string())),
             }
         }
