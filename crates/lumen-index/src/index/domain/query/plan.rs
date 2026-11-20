@@ -95,7 +95,7 @@ pub(in crate::index) fn try_plan(
                     total += 1;
                     if page.len() < want {
                         page.push((id, v as f32));
-                    } else if !req.track_total {
+                    } else if !req.track_total.is_exact() {
                         return Ok(false);
                     }
                     Ok(true)
@@ -118,7 +118,7 @@ pub(in crate::index) fn try_plan(
                                 total += 1;
                                 if page.len() < want {
                                     page.push((id, v.to_f64() as f32));
-                                } else if !req.track_total {
+                                } else if !req.track_total.is_exact() {
                                     break 'asc;
                                 }
                             }
@@ -138,7 +138,7 @@ pub(in crate::index) fn try_plan(
                                 total += 1;
                                 if page.len() < want {
                                     page.push((id, v.to_f64() as f32));
-                                } else if !req.track_total {
+                                } else if !req.track_total.is_exact() {
                                     break 'desc;
                                 }
                             }
@@ -146,7 +146,7 @@ pub(in crate::index) fn try_plan(
                     }
                 }
             }
-            if !req.track_total {
+            if !req.track_total.is_exact() {
                 total = total.max(page.len() as u64);
             }
             return Ok(Some((page, total, PlanKind::SortedField)));
@@ -158,7 +158,7 @@ pub(in crate::index) fn try_plan(
                 n,
                 descending,
                 want,
-                req.track_total,
+                req.track_total.is_exact(),
             )? {
                 return Ok(Some((out.0, out.1, PlanKind::SortedField)));
             }
@@ -177,7 +177,7 @@ pub(in crate::index) fn try_plan(
         // only touches (and caches) the first few values' postings.
         if let Some(seg) = n.segment_ref() {
             let q = &req.query;
-            let track_total = req.track_total;
+            let track_total = req.track_total.is_exact();
             n.sorted_walk_segment(seg.as_ref(), descending, after_bits, |v, id| {
                 if !past_cursor(SortableF64::new(v).map(|s| s.bits()).unwrap_or(0), id) {
                     return Ok(true);
@@ -192,7 +192,7 @@ pub(in crate::index) fn try_plan(
                 }
                 Ok(true)
             })?;
-            if !req.track_total {
+            if !req.track_total.is_exact() {
                 total = total.max(page.len() as u64);
             }
             return Ok(Some((page, total, PlanKind::SortedField)));
@@ -222,7 +222,7 @@ pub(in crate::index) fn try_plan(
                             total += 1;
                             if page.len() < want {
                                 page.push((id, v.to_f64() as f32));
-                            } else if !req.track_total {
+                            } else if !req.track_total.is_exact() {
                                 break 'asc;
                             }
                         }
@@ -244,7 +244,7 @@ pub(in crate::index) fn try_plan(
                             total += 1;
                             if page.len() < want {
                                 page.push((id, v.to_f64() as f32));
-                            } else if !req.track_total {
+                            } else if !req.track_total.is_exact() {
                                 break 'desc;
                             }
                         }
@@ -252,7 +252,7 @@ pub(in crate::index) fn try_plan(
                 }
             }
         }
-        if !req.track_total {
+        if !req.track_total.is_exact() {
             total = total.max(page.len() as u64);
         }
         return Ok(Some((page, total, PlanKind::SortedField)));
@@ -305,7 +305,7 @@ pub(in crate::index) fn try_plan(
         let mut total: u64 = 0;
         if let Some(seg) = n.segment_ref() {
             let (page, total) =
-                n.range_page_segment(seg.as_ref(), lo, hi, want, req.track_total)?;
+                n.range_page_segment(seg.as_ref(), lo, hi, want, req.track_total.is_exact())?;
             return Ok(Some((page, total, PlanKind::Posting)));
         }
 
@@ -321,7 +321,7 @@ pub(in crate::index) fn try_plan(
                         break;
                     }
                 }
-            } else if !req.track_total {
+            } else if !req.track_total.is_exact() {
                 break;
             }
         }

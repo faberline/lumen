@@ -87,7 +87,7 @@ fn three_key_sort_orders() {
                 cursor: None,
                 routing_key: None,
                 sort: Some(sort_asc(&["a", "b", "c"])),
-                track_total: true,
+                track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
                 collapse: None,
                 scoring: None,
                 filter: None,
@@ -115,7 +115,7 @@ fn over_four_keys_rejected() {
                 cursor: None,
                 routing_key: None,
                 sort: Some(sort_asc(&["a", "b", "c", "a", "b"])), // 5 keys
-                track_total: true,
+                track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
                 collapse: None,
                 scoring: None,
                 filter: None,

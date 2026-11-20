@@ -3,7 +3,7 @@ use crate::types::query::{MatchOp, MatchQuery, QueryNode, SortSpec};
 use crate::types::schema::{
     Analyzer, FieldCapabilities, FieldSpec, FieldType, VectorBackend, VectorMetric, VectorQuantize,
 };
-use crate::types::search::{BatchSearchItem, SearchRequest};
+use crate::types::search::{BatchSearchItem, SearchRequest, TrackTotal};
 
 fn fs(t: FieldType) -> FieldSpec {
     FieldSpec {
@@ -447,7 +447,7 @@ fn search_request_known_fields_round_trip_unchanged() {
         "offset": 3,
         "routing_key": "k",
         "sort": [{"field": "n", "order": "desc", "missing": "last"}],
-        "track_total": false,
+        "track_total": {"mode": "none"},
         "collapse": "parent_row_id",
         "scoring": term_query(),
         "filter": term_query()
@@ -471,7 +471,7 @@ fn search_request_minimal_body_keeps_defaults() {
         serde_json::from_value(serde_json::json!({"query": term_query()})).expect("minimal body");
     assert_eq!(parsed.limit, 20);
     assert_eq!(parsed.offset, 0);
-    assert!(parsed.track_total);
+    assert_eq!(parsed.track_total, TrackTotal::UpTo { limit: 10_000 });
     assert!(parsed.cursor.is_none());
     assert!(parsed.routing_key.is_none());
     assert!(parsed.sort.is_none());
@@ -515,7 +515,7 @@ fn batch_search_item_known_shape_round_trips() {
         "limit": 10,
         "offset": 0,
         "routing_key": "k",
-        "track_total": false
+        "track_total": {"mode": "none"}
     });
     let item: BatchSearchItem = serde_json::from_value(input.clone()).expect("known shape parses");
     assert_eq!(item.collection, "users");

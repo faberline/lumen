@@ -259,7 +259,7 @@ fn match_hits(engine: &Engine, text: &str, limit: u32) -> Vec<SearchHit> {
                 cursor: None,
                 routing_key: None,
                 sort: None,
-                track_total: true,
+                track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
                 collapse: None,
                 scoring: None,
                 filter: None,

@@ -211,7 +211,7 @@ fn search_req(sort: Option<Vec<crate::shared_kernel::types::query::SortSpec>>) -
         cursor: None,
         routing_key: None,
         sort,
-        track_total: true,
+        track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
         collapse: None,
         scoring: None,
         filter: None,
