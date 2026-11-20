@@ -1237,6 +1237,34 @@ spec:
                 description: How many were successfully created or applied this pass.
                 format: int32
                 type: integer
+              conditions:
+                description: Aggregated conditions of the last pass.
+                items:
+                  description: One condition of the fleet status.
+                  properties:
+                    message:
+                      description: Names the first blocking instance, or the count.
+                      type: string
+                    reason:
+                      description: A short CamelCase reason.
+                      type: string
+                    status:
+                      description: '`"True"` or `"False"`.'
+                      type: string
+                    type:
+                      description: '`Ready` | `Degraded` | `Orphaned`.'
+                      type: string
+                  required:
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              degradedInstances:
+                default: 0
+                description: How many declared instances are degraded.
+                format: int32
+                type: integer
               desiredInstances:
                 default: 0
                 description: How many instances the spec declares.
@@ -1274,6 +1302,11 @@ spec:
                 default: ''
                 description: Human-readable summary of the last pass.
                 type: string
+              notReadyInstances:
+                default: 0
+                description: How many declared instances are not ready.
+                format: int32
+                type: integer
               observedGeneration:
                 default: 0
                 description: The `.metadata.generation` this status reflects.
@@ -1287,6 +1320,11 @@ spec:
               prunedInstances:
                 default: 0
                 description: How many orphaned `Lumen`s were deleted under `Delete` (state `Pruned`).
+                format: int32
+                type: integer
+              readyInstances:
+                default: 0
+                description: How many declared instances are ready.
                 format: int32
                 type: integer
               rejectedInstances:

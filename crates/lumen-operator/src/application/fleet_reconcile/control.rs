@@ -19,6 +19,13 @@ pub trait FleetControl: Send + Sync {
         name: &str,
     ) -> anyhow::Result<Option<Option<String>>>;
 
+    /// The whole live `Lumen` as JSON (for its `status`): `Ok(None)` = object absent.
+    async fn lumen_live(
+        &self,
+        namespace: &str,
+        name: &str,
+    ) -> anyhow::Result<Option<serde_json::Value>>;
+
     /// Create with field manager `FLEET_SEED_MANAGER`. `body` is `seed_object(..)`.
     async fn create_lumen(&self, body: serde_json::Value) -> anyhow::Result<()>;
 

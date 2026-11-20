@@ -46,6 +46,8 @@ struct State {
     namespaces: BTreeSet<String>,
     /// `(namespace, name)` -> the live object's `lumen.dev/fleet` label.
     live: BTreeMap<(String, String), Option<String>>,
+    /// `(namespace, name)` -> the whole live `Lumen` as JSON.
+    lives: BTreeMap<(String, String), Value>,
     listed: Vec<(String, String)>,
     /// `(method, key)` -> the error text the call returns.
     failures: BTreeMap<(String, String), String>,
@@ -74,6 +76,15 @@ impl FakeControl {
             .unwrap()
             .live
             .insert((namespace.into(), name.into()), label.map(str::to_string));
+        self
+    }
+
+    fn with_live_json(self, namespace: &str, name: &str, lumen: Value) -> Self {
+        self.state
+            .lock()
+            .unwrap()
+            .lives
+            .insert((namespace.to_string(), name.to_string()), lumen);
         self
     }
 
@@ -140,6 +151,17 @@ impl FleetControl for FakeControl {
             .lock()
             .unwrap()
             .live
+            .get(&(namespace.to_string(), name.to_string()))
+            .cloned())
+    }
+
+    async fn lumen_live(&self, namespace: &str, name: &str) -> anyhow::Result<Option<Value>> {
+        self.check("lumen_live", &format!("{namespace}/{name}"))?;
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .lives
             .get(&(namespace.to_string(), name.to_string()))
             .cloned())
     }
@@ -341,4 +363,111 @@ async fn a_foreign_child_is_not_adopted_and_an_orphan_is_retained() {
         .calls()
         .iter()
         .any(|call| call.starts_with("apply:") || call.starts_with("delete:")));
+}
+
+fn condition(status: &Value, kind: &str) -> Value {
+    status["conditions"]
+        .as_array()
+        .expect("conditions")
+        .iter()
+        .find(|c| c["type"] == kind)
+        .cloned()
+        .expect("condition present")
+}
+
+#[tokio::test]
+async fn a_ready_child_makes_the_fleet_ready() {
+    let fake = FakeControl::default()
+        .with_namespace("a")
+        .with_live("a", "lumen", Some("f"))
+        .with_live_json(
+            "a",
+            "lumen",
+            json!({"status": {"phase": "Ready", "conditions": [{"type": "Ready", "status": "True"}]}}),
+        );
+    let fleet = fleet(vec![instance_in("a")], PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let status = &fake.patches()[0]["status"];
+    assert_eq!(status["readyInstances"], 1);
+    assert_eq!(condition(status, "Ready")["status"], "True");
+    assert_eq!(condition(status, "Degraded")["status"], "False");
+    assert_eq!(condition(status, "Orphaned")["status"], "False");
+}
+
+#[tokio::test]
+async fn a_degraded_child_is_reported_and_blocks_ready() {
+    let fake = FakeControl::default()
+        .with_namespace("a")
+        .with_live("a", "lumen", Some("f"))
+        .with_live_json(
+            "a",
+            "lumen",
+            json!({"status": {"phase": "Degraded", "conditions": [{"type": "Ready", "status": "False"}]}}),
+        );
+    let fleet = fleet(vec![instance_in("a")], PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let status = &fake.patches()[0]["status"];
+    assert_eq!(status["degradedInstances"], 1);
+    let ready = condition(status, "Ready");
+    assert_eq!(ready["status"], "False");
+    assert_eq!(ready["message"], "a/lumen: Degraded");
+    assert_eq!(condition(status, "Degraded")["status"], "True");
+}
+
+#[tokio::test]
+async fn a_retained_orphan_does_not_fail_ready() {
+    let fake = FakeControl::default()
+        .with_namespace("a")
+        .with_live("a", "lumen", Some("f"))
+        .with_listed("old", "lumen")
+        .with_live_json(
+            "a",
+            "lumen",
+            json!({"status": {"phase": "Ready", "conditions": [{"type": "Ready", "status": "True"}]}}),
+        );
+    let fleet = fleet(vec![instance_in("a")], PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let status = &fake.patches()[0]["status"];
+    assert_eq!(condition(status, "Ready")["status"], "True");
+    assert_eq!(condition(status, "Orphaned")["status"], "True");
+    assert_eq!(status["readyInstances"], 1);
+}
+
+#[tokio::test]
+async fn a_failed_child_read_is_not_ready_and_does_not_fail_the_pass() {
+    let fake = FakeControl::default()
+        .with_namespace("a")
+        .with_live("a", "lumen", Some("f"))
+        .fail("lumen_live", "a/lumen", "forbidden: 403");
+    let fleet = fleet(vec![instance_in("a")], PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let status = &fake.patches()[0]["status"];
+    let ready = condition(status, "Ready");
+    assert_eq!(ready["status"], "False");
+    assert_eq!(ready["message"], "a/lumen: no status yet");
+    assert_eq!(status["notReadyInstances"], 1);
+}
+
+#[tokio::test]
+async fn a_child_with_no_status_is_not_ready() {
+    let fake = FakeControl::default()
+        .with_namespace("a")
+        .with_live("a", "lumen", Some("f"));
+    let fleet = fleet(vec![instance_in("a")], PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let status = &fake.patches()[0]["status"];
+    let ready = condition(status, "Ready");
+    assert_eq!(ready["status"], "False");
+    assert_eq!(ready["message"], "a/lumen: no status yet");
+    assert_eq!(status["notReadyInstances"], 1);
 }

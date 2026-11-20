@@ -950,3 +950,25 @@ fn a_reserved_flag_in_the_patch_is_rejected_for_that_instance_only() {
     assert!(!reason.contains("SENTINEL-FLAG-4414"), "{reason}");
     ready(&planned[1]);
 }
+
+#[test]
+fn status_serializes_conditions_and_counts() {
+    use crate::domain::lumen_fleet::FleetCondition;
+
+    let status = LumenFleetStatus {
+        ready_instances: 1,
+        conditions: vec![FleetCondition {
+            type_: "Ready".into(),
+            status: "True".into(),
+            reason: "AllInstancesReady".into(),
+            message: String::new(),
+        }],
+        ..Default::default()
+    };
+    let json = serde_json::to_value(&status).unwrap();
+    assert_eq!(json["conditions"][0]["type"], "Ready");
+    assert_eq!(json["readyInstances"], 1);
+
+    let empty = serde_json::to_value(LumenFleetStatus::default()).unwrap();
+    assert!(empty.get("conditions").is_none(), "{empty}");
+}

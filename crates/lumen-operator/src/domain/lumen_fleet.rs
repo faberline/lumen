@@ -43,6 +43,7 @@
 //!
 //! [`super::reshard_driver`]: crate::application::reshard_driver
 
+pub mod aggregate;
 pub mod children;
 pub mod plan;
 pub mod status;
@@ -174,6 +175,15 @@ pub struct LumenFleetStatus {
     /// How many were successfully created or applied this pass.
     #[serde(default)]
     pub applied_instances: i32,
+    /// How many declared instances are ready.
+    #[serde(default)]
+    pub ready_instances: i32,
+    /// How many declared instances are degraded.
+    #[serde(default)]
+    pub degraded_instances: i32,
+    /// How many declared instances are not ready.
+    #[serde(default)]
+    pub not_ready_instances: i32,
     /// How many entries are materialized: state `Created` or `Applied`.
     #[serde(default)]
     pub materialized_instances: i32,
@@ -191,8 +201,27 @@ pub struct LumenFleetStatus {
     /// operator logs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entries: Vec<FleetEntryStatus>,
+    /// Aggregated conditions of the last pass.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<FleetCondition>,
     /// Human-readable summary of the last pass.
     #[serde(default)]
+    pub message: String,
+}
+
+/// One condition of the fleet status.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FleetCondition {
+    /// `Ready` | `Degraded` | `Orphaned`.
+    #[serde(rename = "type")]
+    pub type_: String,
+    /// `"True"` or `"False"`.
+    pub status: String,
+    /// A short CamelCase reason.
+    pub reason: String,
+    /// Names the first blocking instance, or the count.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub message: String,
 }
 

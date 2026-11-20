@@ -45,6 +45,18 @@ impl FleetControl for KubeFleetControl {
             .map(|live| live.labels().get(FLEET_LABEL).cloned()))
     }
 
+    async fn lumen_live(
+        &self,
+        namespace: &str,
+        name: &str,
+    ) -> anyhow::Result<Option<serde_json::Value>> {
+        let api: Api<Lumen> = Api::namespaced(self.client.clone(), namespace);
+        match api.get_opt(name).await? {
+            Some(live) => Ok(Some(serde_json::to_value(&live)?)),
+            None => Ok(None),
+        }
+    }
+
     async fn create_lumen(&self, body: serde_json::Value) -> anyhow::Result<()> {
         let lumen = seed_lumen(body)?;
         let namespace = lumen.namespace().unwrap_or_default();
