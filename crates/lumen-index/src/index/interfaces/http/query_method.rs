@@ -17,7 +17,7 @@ use axum::response::{IntoResponse, Json};
 use crate::access::application::authorization::AuthContext;
 use crate::app::http::app_state::AppState;
 use crate::index::interfaces::http::batch_search::batch_search_core;
-use crate::index::interfaces::http::search::search_core;
+use crate::index::interfaces::http::search::{search_core, validate_page_bounds};
 use crate::shared_kernel::types::search::{BatchSearchRequest, SearchRequest};
 
 /// `true` for the RFC 10008 QUERY method. `http::Method` has no `QUERY`
@@ -76,10 +76,15 @@ pub(crate) async fn collection_id_query_dispatch(
     }
     let headers = request.headers().clone();
     match Json::<SearchRequest>::from_request(request, &state).await {
-        Ok(Json(req)) => match search_core(&state, &auth, &headers, &collection_id, req).await {
-            Ok(resp) => Json(resp).into_response(),
-            Err(e) => e.into_response(),
-        },
+        Ok(Json(req)) => {
+            if let Err(e) = validate_page_bounds(&req) {
+                return e.into_response();
+            }
+            match search_core(&state, &auth, &headers, &collection_id, req).await {
+                Ok(resp) => Json(resp).into_response(),
+                Err(e) => e.into_response(),
+            }
+        }
         Err(rejection) => rejection.into_response(),
     }
 }

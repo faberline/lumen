@@ -2909,12 +2909,13 @@
           "limit": {
             "type": "integer",
             "format": "int32",
+            "description": "At most 1000; a larger value is rejected with 400 `invalid_pagination`.",
             "minimum": 0
           },
           "offset": {
             "type": "integer",
             "format": "int64",
-            "description": "Zero-based deep-page jump applied after filtering and global\nscore/field ordering. Defaults to zero. `offset` and `cursor` are\nmutually exclusive; use an offset for a direct jump, then issue another\noffset request or restart cursor pagination from the first page.",
+            "description": "Zero-based deep-page jump applied after filtering and global\nscore/field ordering. Defaults to zero. At most 10000; a larger value is\nrejected with 400 `invalid_pagination`. `offset` and `cursor` are\nmutually exclusive; use an offset for a direct jump, then issue another\noffset request or restart cursor pagination from the first page.",
             "default": 0,
             "minimum": 0
           },
