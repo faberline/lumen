@@ -122,6 +122,7 @@ mod retired_credential_surface;
 mod rig_stateful_adapter;
 mod routed_shard_e2e;
 mod search_all_e2e;
+mod search_page_bounds_e2e;
 mod search_responsiveness_e2e;
 mod segment_backpressure_metric;
 mod segment_checkpoint_vector_sidecar;
