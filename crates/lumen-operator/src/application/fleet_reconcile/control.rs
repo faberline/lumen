@@ -19,6 +19,13 @@ pub trait FleetControl: Send + Sync {
         name: &str,
     ) -> anyhow::Result<Option<Option<String>>>;
 
+    /// The live `Lumen`'s `spec` as JSON: `Ok(None)` = object absent.
+    async fn lumen_spec(
+        &self,
+        namespace: &str,
+        name: &str,
+    ) -> anyhow::Result<Option<serde_json::Value>>;
+
     /// The whole live `Lumen` as JSON (for its `status`): `Ok(None)` = object absent.
     async fn lumen_live(
         &self,

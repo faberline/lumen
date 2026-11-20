@@ -28,6 +28,7 @@ fn retired_serving_autoscaling_override_is_rejected_at_the_fleet() {
                 })),
             }],
             prune_policy: Default::default(),
+            rollout_policy: Default::default(),
         },
     );
     let planned = plan(&fleet);
@@ -71,6 +72,7 @@ fn retired_serving_autoscaling_individual_knobs_are_rejected_at_the_fleet() {
                     spec: Some(knob),
                 }],
                 prune_policy: Default::default(),
+                rollout_policy: Default::default(),
             },
         );
         let planned = plan(&fleet);
@@ -114,6 +116,7 @@ fn supported_serving_cpu_override_is_admitted_at_the_fleet() {
                 })),
             }],
             prune_policy: Default::default(),
+            rollout_policy: Default::default(),
         },
     );
     let planned = plan(&fleet);
@@ -151,6 +154,7 @@ fn supported_serving_resources_override_is_admitted_at_the_fleet() {
                 })),
             }],
             prune_policy: Default::default(),
+            rollout_policy: Default::default(),
         },
     );
     let planned = plan(&fleet);
