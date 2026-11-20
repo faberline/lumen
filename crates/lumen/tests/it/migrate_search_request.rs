@@ -117,7 +117,7 @@ fn unsupported_input_exits_nonzero_with_empty_stdout() {
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
     assert!(
-        stderr(&output).contains("not supported by this version of the tool"),
+        stderr(&output).contains("a 0.4 cursor is not portable"),
         "{}",
         stderr(&output)
     );
@@ -326,4 +326,117 @@ fn migrate_help_lists_search_request() {
         .expect("run lumen migrate --help");
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stdout).contains("search-request"));
+}
+
+const OR_MIX: &str = r#"{"or":[{"match":{"field":"bio","text":"rust"}},{"term":{"field":"status","value":"active"}}]}"#;
+
+/// The three-item batch of the unit test `batch_of_three_all_convert`.
+fn three_item_batch(middle_query: &str) -> String {
+    format!(
+        r#"{{"searches":[{{"collection":"a","query":{MATCH},"track_total":true}},{{"collection":"b","query":{middle_query},"limit":5}},{{"collection":"c","query":{{"and":[{MATCH},{TERM}]}},"collapse":"k"}}]}}"#
+    )
+}
+
+#[test]
+fn legacy_cursor_is_refused() {
+    let input = format!(r#"{{"query":{MATCH},"cursor":"abc"}}"#);
+    let output = run(&[], &input);
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let text = stderr(&output);
+    assert!(text.contains("refused:"), "{text}");
+    assert!(text.contains("a 0.4 cursor is not portable"), "{text}");
+}
+
+#[test]
+fn collapse_string_is_converted() {
+    let input = format!(r#"{{"query":{MATCH},"collapse":"category"}}"#);
+    let output = run(&[], &input);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(
+        stdout_json(&output)["collapse"],
+        serde_json::json!({"field": "category"})
+    );
+    assert_eq!(change(&output, "collapse")["path"], "collapse");
+}
+
+#[test]
+fn duplicates_request_is_refused_with_the_note() {
+    let output = run(&[], r#"{"field":"email"}"#);
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let text = stderr(&output);
+    assert!(text.contains("terms facet"), "{text}");
+    assert!(text.contains("term filter"), "{text}");
+}
+
+#[test]
+fn batch_of_three_converts() {
+    let output = run(&[], &three_item_batch(TERM));
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let request = stdout_json(&output);
+    let items = request["searches"]
+        .as_array()
+        .expect("searches is an array");
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[2]["collapse"], serde_json::json!({"field": "k"}));
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(text.ends_with('\n'), "{text}");
+    assert!(!text.contains("\"query\""), "{text}");
+}
+
+#[test]
+fn batch_with_a_refused_item_names_the_index() {
+    let output = run(&[], &three_item_batch(OR_MIX));
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let text = stderr(&output);
+    assert!(text.contains("searches[1].query"), "{text}");
+    assert!(text.contains("refused:"), "{text}");
+}
+
+#[test]
+fn a_refused_batch_item_is_never_dropped_silently() {
+    let out_refused = temp_path("out-batch-refused");
+    let out_fixed = temp_path("out-batch-fixed");
+    let _ = std::fs::remove_file(&out_refused);
+    let _ = std::fs::remove_file(&out_fixed);
+
+    let refused = run(
+        &["--out", out_refused.to_str().unwrap()],
+        &three_item_batch(OR_MIX),
+    );
+    assert!(!refused.status.success());
+    assert!(!out_refused.exists());
+
+    let fixed = run(
+        &["--out", out_fixed.to_str().unwrap()],
+        &three_item_batch(TERM),
+    );
+    assert!(fixed.status.success(), "stderr: {}", stderr(&fixed));
+    let request: Value =
+        serde_json::from_str(&std::fs::read_to_string(&out_fixed).unwrap()).unwrap();
+    assert_eq!(request["searches"].as_array().unwrap().len(), 3);
+
+    for path in [out_refused, out_fixed] {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+#[test]
+fn batch_refusal_report_names_each_index() {
+    let report_path = temp_path("report-batch-refused");
+    let input = format!(
+        r#"{{"searches":[{{"collection":"a","query":{OR_MIX}}},{{"collection":"b","query":{TERM}}},{{"collection":"c","query":{MATCH},"cursor":"x"}}]}}"#
+    );
+    let output = run(&["--report", report_path.to_str().unwrap()], &input);
+    assert!(!output.status.success());
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
+    let refusals = report["refusals"].as_array().expect("refusals is an array");
+    assert_eq!(refusals.len(), 2);
+    assert!(refusals[0].as_str().unwrap().starts_with("searches[0]."));
+    assert!(refusals[1].as_str().unwrap().starts_with("searches[2]."));
+    assert_eq!(report["changes"], serde_json::json!([]));
+    let _ = std::fs::remove_file(report_path);
 }
