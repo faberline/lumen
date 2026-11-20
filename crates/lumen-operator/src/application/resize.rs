@@ -17,7 +17,8 @@ use crate::domain::lumen_spec::Lumen;
 
 pub use service_k8s::resize::{decide, parse_storage_bytes, PvcResizeOutcome, ResizeAction};
 
-/// List the live `raft-<name>-<n>` PVCs for the named `Lumen` instance,
+/// List the live `raft-<name>-<n>` (or `raft-<name>-s<k>-<n>` per shard) PVCs
+/// for the named `Lumen` instance,
 /// compare each to the CR's declared `spec.serving.raftStorage`, and patch
 /// `spec.resources.requests.storage` on PVCs that are safe to grow (bound
 /// `StorageClass.allowVolumeExpansion == true`, `dry_run == false`).
@@ -38,15 +39,66 @@ pub async fn resize_instance(
     let desired = cr.spec.serving.raft_storage.clone();
 
     let label_selector = format!("app.kubernetes.io/instance={name}");
-    let prefix = format!("raft-{name}-");
 
     service_k8s::resize::resize_instance(
         client,
         namespace,
         &label_selector,
-        |pvc_name| pvc_name.starts_with(&prefix),
+        |pvc_name| pvc_belongs_to_instance(pvc_name, name),
         |_pvc_name| desired.clone(),
         dry_run,
     )
     .await
+}
+
+/// True when `pvc_name` is a raft claim of the instance `name`: `raft-<name>-<n>`
+/// for a single StatefulSet, or `raft-<name>-s<k>-<n>` for shard `k` when
+/// `spec.shardCount > 1`. Any other shape, or another instance, is false.
+pub(crate) fn pvc_belongs_to_instance(pvc_name: &str, name: &str) -> bool {
+    let prefix = format!("raft-{name}-");
+    let Some(rest) = pvc_name.strip_prefix(&prefix) else {
+        return false;
+    };
+    let all_digits = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
+    if all_digits(rest) {
+        return true;
+    }
+    match rest.strip_prefix('s').and_then(|r| r.split_once('-')) {
+        Some((shard, ordinal)) => all_digits(shard) && all_digits(ordinal),
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pvc_belongs_to_instance;
+
+    #[test]
+    fn pvc_matches_single_set_names() {
+        assert!(pvc_belongs_to_instance("raft-lumen-0", "lumen"));
+        assert!(pvc_belongs_to_instance("raft-lumen-12", "lumen"));
+    }
+
+    #[test]
+    fn pvc_matches_two_shard_names() {
+        assert!(pvc_belongs_to_instance("raft-lumen-s0-0", "lumen"));
+        assert!(pvc_belongs_to_instance("raft-lumen-s1-2", "lumen"));
+    }
+
+    #[test]
+    fn pvc_rejects_other_instance_and_shapes() {
+        for pvc in [
+            "raft-lumen-extra-0",
+            "raft-lumen-s-0",
+            "raft-lumen-s1-",
+            "raft-lumen-",
+            "raft-other-0",
+            "data-lumen-0",
+        ] {
+            assert!(
+                !pvc_belongs_to_instance(pvc, "lumen"),
+                "{pvc} must not match"
+            );
+        }
+    }
 }

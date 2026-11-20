@@ -23,8 +23,8 @@ pub(super) fn service_monitor(cx: &RenderCtx<'_>) -> Value {
 // actually published today. `LumenRaftLeaderAbsent` reads this pod's
 // self-scraped `lumen_raft_leader_known` gauge (`src/app/observability/metrics.rs`, wired in
 // `src/bin/lumen/serve.rs`). `LumenPvcNearFull` reads the kubelet's
-// `kubelet_volume_stats_*` series against the `raft-<name>-<ordinal>`
-// StatefulSet PVC name pattern (`volumeClaimTemplates` name is `raft`, see
+// `kubelet_volume_stats_*` series against the `raft-<name>-<ordinal>` (or
+// `raft-<name>-s<k>-<ordinal>` per shard) StatefulSet PVC name pattern (`volumeClaimTemplates` name is `raft`, see
 // `serving_statefulset`). `LumenStorageDegraded` (#2516) reads
 // `lumen_storage_degraded`, the self-scraped gauge a pod sets to `1` the
 // moment a durable write path (AOF append, segment/RDB checkpoint save, or
@@ -59,7 +59,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                     {
                         "alert": "LumenNoReadyServingPods",
                         "expr": format!(
-                            "kube_statefulset_status_replicas_ready{{statefulset=\"{}\", namespace=\"{}\"}} == 0",
+                            "kube_statefulset_status_replicas_ready{{statefulset=~\"{}(-s[0-9]+)?\", namespace=\"{}\"}} == 0",
                             cx.name(), cx.ns()
                         ),
                         "for": "2m",
@@ -124,7 +124,7 @@ pub(super) fn prometheus_rule(cx: &RenderCtx<'_>) -> Value {
                     {
                         "alert": "LumenPvcNearFull",
                         "expr": format!(
-                            "kubelet_volume_stats_available_bytes{{namespace=\"{}\", persistentvolumeclaim=~\"^raft-{}-[0-9]+$\"}} / kubelet_volume_stats_capacity_bytes{{namespace=\"{}\", persistentvolumeclaim=~\"^raft-{}-[0-9]+$\"}} < 0.1",
+                            "kubelet_volume_stats_available_bytes{{namespace=\"{}\", persistentvolumeclaim=~\"^raft-{}(-s[0-9]+)?-[0-9]+$\"}} / kubelet_volume_stats_capacity_bytes{{namespace=\"{}\", persistentvolumeclaim=~\"^raft-{}(-s[0-9]+)?-[0-9]+$\"}} < 0.1",
                             cx.ns(), cx.name(), cx.ns(), cx.name()
                         ),
                         "for": "10m",
