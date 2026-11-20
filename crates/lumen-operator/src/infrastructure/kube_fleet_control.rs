@@ -45,6 +45,18 @@ impl FleetControl for KubeFleetControl {
             .map(|live| live.labels().get(FLEET_LABEL).cloned()))
     }
 
+    async fn lumen_spec(
+        &self,
+        namespace: &str,
+        name: &str,
+    ) -> anyhow::Result<Option<serde_json::Value>> {
+        let api: Api<Lumen> = Api::namespaced(self.client.clone(), namespace);
+        match api.get_opt(name).await? {
+            Some(live) => Ok(Some(serde_json::to_value(&live.spec)?)),
+            None => Ok(None),
+        }
+    }
+
     async fn lumen_live(
         &self,
         namespace: &str,
@@ -119,7 +131,9 @@ impl FleetControl for KubeFleetControl {
 mod tests {
     use super::*;
     use crate::domain::lumen_fleet::plan::{plan, seed_object};
-    use crate::domain::lumen_fleet::{FleetInstance, LumenFleetSpec, PlanOutcome, PrunePolicy};
+    use crate::domain::lumen_fleet::{
+        FleetInstance, LumenFleetSpec, PlanOutcome, PrunePolicy, RolloutPolicy,
+    };
     use crate::domain::lumen_spec::LumenSpec;
     use serde_json::json;
 
@@ -142,6 +156,7 @@ mod tests {
                     ..Default::default()
                 }],
                 prune_policy: PrunePolicy::default(),
+                rollout_policy: RolloutPolicy::default(),
             },
         );
         fleet.metadata.generation = Some(1);

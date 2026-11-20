@@ -148,3 +148,12 @@ fn the_fleet_crd_types_instance_access() {
     assert!(required.contains(&json!("namespace")), "{items}");
     assert!(required.contains(&json!("name")), "{items}");
 }
+
+#[test]
+fn the_fleet_crd_declares_the_rollout_policy() {
+    let yaml = fleet_crd_yaml();
+    assert!(yaml.contains("rolloutPolicy"), "{yaml}");
+    assert!(yaml.contains("maxConcurrent"), "{yaml}");
+    assert!(yaml.contains("paused"), "{yaml}");
+    assert!(yaml.contains("minimum: 1"), "{yaml}");
+}
