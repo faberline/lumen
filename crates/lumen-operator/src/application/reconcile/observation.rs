@@ -352,7 +352,10 @@ impl Lumen {
     /// doc's contract; the live usage read is a cache lookup, not a scrape.
     pub(super) fn observe(&self, ready: &ReadyFacts) -> Observation {
         let name = self.name_any();
-        let serving_ready = ready.get(&name) as i32;
+        let serving_ready = crate::application::render::serving_set_names(self)
+            .iter()
+            .map(|set| ready.get(set))
+            .sum::<i64>() as i32;
         let desired = self.spec.storage_pod_count();
         let usage = shard_usage_cache()
             .lock()
