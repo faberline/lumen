@@ -12,7 +12,7 @@ use crate::domain::lumen_spec::runtime::{flag_name, TYPED_RUNTIME_OPTIONS};
 use crate::domain::lumen_spec::LumenSpec;
 
 /// Spec paths the reshard driver owns at runtime; see the module docs.
-const DRIVER_OWNED_PATHS: &[&[&str]] = &[
+pub(crate) const DRIVER_OWNED_PATHS: &[&[&str]] = &[
     &["shardCount"],
     &["shardMap"],
     &["reshardPolicy", "workflow"],
@@ -264,7 +264,7 @@ pub fn apply_object(fleet: &str, planned: &PlannedInstance, spec: &Value) -> Val
     seed_object(fleet, planned, &spec)
 }
 
-fn remove_path(value: &mut Value, path: &[&str]) {
+pub(crate) fn remove_path(value: &mut Value, path: &[&str]) {
     let Some((head, rest)) = path.split_first() else {
         return;
     };

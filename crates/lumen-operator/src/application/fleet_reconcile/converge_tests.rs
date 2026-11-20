@@ -5,7 +5,9 @@
 use super::control::FleetControl;
 use super::*;
 use crate::domain::lumen_fleet::children::ORPHAN_RETAINED_MESSAGE;
-use crate::domain::lumen_fleet::{FleetInstance, LumenFleet, LumenFleetSpec, PrunePolicy};
+use crate::domain::lumen_fleet::{
+    FleetInstance, LumenFleet, LumenFleetSpec, PrunePolicy, RolloutPolicy,
+};
 use crate::domain::lumen_spec::LumenSpec;
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -27,6 +29,7 @@ fn fleet(instances: Vec<FleetInstance>, prune_policy: PrunePolicy) -> LumenFleet
             defaults: defaults(),
             instances,
             prune_policy,
+            rollout_policy: RolloutPolicy::default(),
         },
     );
     fleet.metadata.generation = Some(1);
@@ -48,6 +51,8 @@ struct State {
     live: BTreeMap<(String, String), Option<String>>,
     /// `(namespace, name)` -> the whole live `Lumen` as JSON.
     lives: BTreeMap<(String, String), Value>,
+    /// `(namespace, name)` -> the live `Lumen`'s spec.
+    specs: BTreeMap<(String, String), Value>,
     listed: Vec<(String, String)>,
     /// `(method, key)` -> the error text the call returns.
     failures: BTreeMap<(String, String), String>,
@@ -76,6 +81,15 @@ impl FakeControl {
             .unwrap()
             .live
             .insert((namespace.into(), name.into()), label.map(str::to_string));
+        self
+    }
+
+    fn with_spec(self, namespace: &str, name: &str, spec: Value) -> Self {
+        self.state
+            .lock()
+            .unwrap()
+            .specs
+            .insert((namespace.to_string(), name.to_string()), spec);
         self
     }
 
@@ -155,6 +169,17 @@ impl FleetControl for FakeControl {
             .cloned())
     }
 
+    async fn lumen_spec(&self, namespace: &str, name: &str) -> anyhow::Result<Option<Value>> {
+        self.check("lumen_spec", &format!("{namespace}/{name}"))?;
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .specs
+            .get(&(namespace.to_string(), name.to_string()))
+            .cloned())
+    }
+
     async fn lumen_live(&self, namespace: &str, name: &str) -> anyhow::Result<Option<Value>> {
         self.check("lumen_live", &format!("{namespace}/{name}"))?;
         Ok(self
@@ -230,13 +255,14 @@ async fn one_failing_entry_does_not_stop_the_others() {
         .fail("lumen_fleet_label", "denied/lumen", "forbidden: 403")
         .fail("apply_lumen", "conflict/lumen", "conflict: 409")
         .fail("namespace_exists", "observe", "timeout reading namespace");
-    let fleet = fleet(
+    let mut fleet = fleet(
         ["ok", "missing", "denied", "conflict", "observe"]
             .into_iter()
             .map(instance_in)
             .collect(),
         PrunePolicy::Retain,
     );
+    fleet.spec.rollout_policy.max_concurrent = 5;
 
     converge(&fake, &fleet).await.expect("pass completes");
 
@@ -470,4 +496,103 @@ async fn a_child_with_no_status_is_not_ready() {
     assert_eq!(ready["status"], "False");
     assert_eq!(ready["message"], "a/lumen: no status yet");
     assert_eq!(status["notReadyInstances"], 1);
+}
+
+/// Three declared namespaces, each with a live `Lumen` of this fleet, so each
+/// instance needs an apply.
+fn three_live() -> FakeControl {
+    ["a", "b", "c"]
+        .into_iter()
+        .fold(FakeControl::default(), |fake, ns| {
+            fake.with_namespace(ns).with_live(ns, "lumen", Some("f"))
+        })
+}
+
+#[tokio::test]
+async fn a_default_fleet_applies_one_instance_per_pass() {
+    let fake = three_live();
+    let fleet = fleet(["a", "b", "c"].map(instance_in).into(), PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["Applied", "Held", "Held"]);
+    assert_eq!(fake.calls(), ["apply:a/lumen"]);
+    assert!(message_of(&patches[0], "b").contains("rollout slot"));
+}
+
+#[tokio::test]
+async fn a_settled_instance_takes_no_slot() {
+    let fake = three_live().with_spec("a", "lumen", serde_json::to_value(defaults()).unwrap());
+    let fleet = fleet(["a", "b", "c"].map(instance_in).into(), PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["Applied", "Applied", "Held"]);
+    assert_eq!(fake.calls(), ["apply:a/lumen", "apply:b/lumen"]);
+}
+
+#[tokio::test]
+async fn a_paused_fleet_makes_no_call() {
+    let fake = three_live().with_spec("a", "lumen", serde_json::to_value(defaults()).unwrap());
+    let mut fleet = fleet(["a", "b", "c"].map(instance_in).into(), PrunePolicy::Retain);
+    fleet.spec.rollout_policy.paused = true;
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["Held", "Held", "Held"]);
+    assert!(fake.calls().is_empty(), "calls: {:?}", fake.calls());
+    assert!(message_of(&patches[0], "a").contains("paused"));
+}
+
+#[tokio::test]
+async fn a_paused_fleet_never_prunes() {
+    let fake = FakeControl::default()
+        .with_namespace("a")
+        .with_listed("old", "lumen");
+    let mut fleet = fleet(vec![instance_in("a")], PrunePolicy::Delete);
+    fleet.spec.rollout_policy.paused = true;
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    assert!(!fake.calls().iter().any(|call| call.starts_with("delete:")));
+    let patches = fake.patches();
+    assert_eq!(
+        patches[0]["status"]["entries"]
+            .as_array()
+            .expect("entries")
+            .iter()
+            .find(|entry| entry["namespace"] == "old")
+            .map(|entry| entry["state"].clone()),
+        Some(json!("Orphaned"))
+    );
+}
+
+#[tokio::test]
+async fn a_held_instance_is_not_pruned_or_reported_as_orphan() {
+    let fake = three_live().with_listed("b", "lumen");
+    let fleet = fleet(["a", "b", "c"].map(instance_in).into(), PrunePolicy::Delete);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    assert!(!fake.calls().iter().any(|call| call.starts_with("delete:")));
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["Applied", "Held", "Held"]);
+}
+
+#[tokio::test]
+async fn a_failed_spec_read_is_an_observe_failure() {
+    let fake = FakeControl::default()
+        .with_namespace("a")
+        .with_live("a", "lumen", Some("f"))
+        .fail("lumen_spec", "a/lumen", "forbidden: 403");
+    let fleet = fleet(vec![instance_in("a")], PrunePolicy::Retain);
+
+    converge(&fake, &fleet).await.expect("pass completes");
+
+    let patches = fake.patches();
+    assert_eq!(states(&patches[0]), ["ObserveFailed"]);
+    assert!(!fake.calls().iter().any(|call| call.starts_with("apply:")));
 }
