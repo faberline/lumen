@@ -5,7 +5,7 @@ use crate::index::application::engine::tests::{build_users_schema, item};
 use crate::index::application::engine::Engine;
 use crate::shared_kernel::types::document::{FieldValue, IndexRequest};
 use crate::shared_kernel::types::query::{MatchOp, MatchQuery, QueryNode, TermQuery};
-use crate::shared_kernel::types::search::SearchRequest;
+use crate::shared_kernel::types::search::{SearchRequest, TrackTotal};
 
 #[test]
 fn duplicate_field_in_one_index_request_is_replacement() {
@@ -37,7 +37,7 @@ fn duplicate_field_in_one_index_request_is_replacement() {
                 cursor: None,
                 routing_key: None,
                 sort: None,
-                track_total: true,
+                track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
                 collapse: None,
                 scoring: None,
                 filter: None,
@@ -58,7 +58,7 @@ fn duplicate_field_in_one_index_request_is_replacement() {
                 cursor: None,
                 routing_key: None,
                 sort: None,
-                track_total: true,
+                track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
                 collapse: None,
                 scoring: None,
                 filter: None,
@@ -105,7 +105,7 @@ fn reindex_replaces_field_value() {
                 cursor: None,
                 routing_key: None,
                 sort: None,
-                track_total: true,
+                track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
                 collapse: None,
                 scoring: None,
                 filter: None,
@@ -126,7 +126,7 @@ fn reindex_replaces_field_value() {
                 cursor: None,
                 routing_key: None,
                 sort: None,
-                track_total: true,
+                track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
                 collapse: None,
                 scoring: None,
                 filter: None,
@@ -150,3 +150,66 @@ fn idempotency_skips_duplicate_request_id() {
 }
 
 mod external_version_lww;
+
+#[test]
+fn up_to_total_is_a_lower_bound_exact_total_is_full() {
+    let e = Engine::new();
+    e.create_collection("users", build_users_schema()).unwrap();
+    let items: Vec<_> = (0..50)
+        .map(|i| {
+            item(
+                &format!("u{i:02}"),
+                "bio",
+                FieldValue::String("shared token".into()),
+            )
+        })
+        .collect();
+    e.index(
+        "users",
+        IndexRequest {
+            items,
+            request_id: None,
+        },
+    )
+    .unwrap();
+
+    let search = |track_total: TrackTotal| {
+        e.search(
+            "users",
+            SearchRequest {
+                query: QueryNode::Match(MatchQuery {
+                    field: "bio".into(),
+                    text: "token".into(),
+                    op: MatchOp::Or,
+                }),
+                limit: 5,
+                offset: 0,
+                cursor: None,
+                routing_key: None,
+                sort: None,
+                track_total,
+                collapse: None,
+                scoring: None,
+                filter: None,
+            },
+        )
+        .unwrap()
+    };
+
+    let exact = search(TrackTotal::Exact);
+    let up_to = search(TrackTotal::UpTo { limit: 10_000 });
+    let none = search(TrackTotal::None);
+
+    assert_eq!(exact.total, 50);
+    assert_eq!(exact.hits.len(), 5);
+    assert!(
+        up_to.total >= 5 && up_to.total <= 50,
+        "up_to total {}",
+        up_to.total
+    );
+    assert!(
+        none.total >= 5 && none.total <= 50,
+        "none total {}",
+        none.total
+    );
+}

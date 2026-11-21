@@ -98,6 +98,7 @@ pub mod auth_delegator;
 pub mod hpa;
 pub mod loops;
 pub mod managed_service;
+pub mod member_versions;
 pub mod observation;
 pub mod plan_verdicts;
 pub mod shard_usage;

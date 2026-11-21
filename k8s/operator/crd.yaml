@@ -568,6 +568,39 @@ spec:
                 description: Desired serving replicas (apply-time count, or the live count).
                 format: int32
                 type: integer
+              effectiveCompatibilityVersion:
+                description: The lowest compatibility version among the reporting members (#248 slice 1a). A missing or stale member never raises it.
+                nullable: true
+                type: string
+              members:
+                description: Each member's reported version, capabilities and state (#248 slice 1a). Absent until a member has reported.
+                items:
+                  description: One fleet member's reported version (#248 slice 1a).
+                  properties:
+                    capabilities:
+                      default: []
+                      description: The capabilities the member reports. Empty when `Missing`.
+                      items:
+                        type: string
+                      type: array
+                    compatibilityVersion:
+                      default: ''
+                      description: The compatibility version the member reports. Empty when `Missing`.
+                      type: string
+                    name:
+                      default: ''
+                      description: The member's pod name, e.g. `search-0`.
+                      type: string
+                    state:
+                      default: ''
+                      description: '`Reported`, `Stale` (the last report is older than the freshness window) or `Missing` (no report yet).'
+                      type: string
+                    version:
+                      default: ''
+                      description: The exact version the member runs. Empty when `Missing`.
+                      type: string
+                  type: object
+                type: array
               message:
                 default: ''
                 description: Last human-readable reconcile message.

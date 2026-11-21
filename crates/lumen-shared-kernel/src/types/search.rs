@@ -60,11 +60,12 @@ pub struct SearchRequest {
     /// `offset`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort: Option<Vec<SortSpec>>,
-    /// Whether to compute the exact total match count. Defaults to `true`
-    /// (back-compat). When `false`, the planner may early-terminate and
-    /// `total` becomes a lower bound (≥ the returned page size).
+    /// How `total` is counted. Defaults to `up_to` with `limit` 10000. `exact`
+    /// counts every match; `none` and `up_to` may stop early, so `total` is a
+    /// lower bound (at least the returned page size). The legacy JSON bools
+    /// `true` and `false` mean `exact` and `none`.
     #[serde(default = "default_track_total")]
-    pub track_total: bool,
+    pub track_total: TrackTotal,
     /// Collapse (field-collapse / group-by) on a keyword field: return ONE hit
     /// per distinct value of this field, scored by the MAX member score, ranked
     /// over groups. `hit.external_id` becomes the collapse value, `total` the
@@ -86,8 +87,68 @@ fn default_limit() -> u32 {
     20
 }
 
-fn default_track_total() -> bool {
-    true
+fn default_track_total() -> TrackTotal {
+    TrackTotal::default()
+}
+
+/// How a search counts `total`. Wire forms: `{"mode":"none"}`,
+/// `{"mode":"up_to","limit":50}`, `{"mode":"exact"}`. The legacy JSON bools
+/// are still accepted: `true` is `exact`, `false` is `none`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum TrackTotal {
+    /// Do not count past the page. `total` is a lower bound.
+    None,
+    /// Count up to `limit` matches. `total` is a lower bound above `limit`.
+    UpTo {
+        /// Largest count the engine must reach before it may stop early.
+        limit: u64,
+    },
+    /// Count every match. `total` is exact.
+    Exact,
+}
+
+impl Default for TrackTotal {
+    fn default() -> Self {
+        TrackTotal::UpTo { limit: 10_000 }
+    }
+}
+
+impl TrackTotal {
+    /// True only for [`TrackTotal::Exact`]: the engine takes the exact path.
+    pub fn is_exact(&self) -> bool {
+        matches!(self, TrackTotal::Exact)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum TrackTotalWire {
+    Bool(bool),
+    Tagged(TrackTotalTagged),
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+enum TrackTotalTagged {
+    None,
+    UpTo { limit: u64 },
+    Exact,
+}
+
+impl<'de> Deserialize<'de> for TrackTotal {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(match TrackTotalWire::deserialize(deserializer)? {
+            TrackTotalWire::Bool(true) => TrackTotal::Exact,
+            TrackTotalWire::Bool(false) => TrackTotal::None,
+            TrackTotalWire::Tagged(TrackTotalTagged::None) => TrackTotal::None,
+            TrackTotalWire::Tagged(TrackTotalTagged::UpTo { limit }) => TrackTotal::UpTo { limit },
+            TrackTotalWire::Tagged(TrackTotalTagged::Exact) => TrackTotal::Exact,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -291,5 +352,56 @@ mod tests {
         )
         .expect("SearchRequest with filter must parse");
         assert!(req.filter.is_some());
+    }
+
+    #[test]
+    fn track_total_wire_forms() {
+        let parse = |s: &str| serde_json::from_str::<TrackTotal>(s).expect(s);
+        assert_eq!(parse(r#"{"mode":"none"}"#), TrackTotal::None);
+        assert_eq!(
+            parse(r#"{"mode":"up_to","limit":50}"#),
+            TrackTotal::UpTo { limit: 50 }
+        );
+        assert_eq!(parse(r#"{"mode":"exact"}"#), TrackTotal::Exact);
+        assert_eq!(parse("true"), TrackTotal::Exact);
+        assert_eq!(parse("false"), TrackTotal::None);
+    }
+
+    #[test]
+    fn track_total_default_is_up_to_10000_when_omitted() {
+        let req: SearchRequest =
+            serde_json::from_str(r#"{"query":{"term":{"field":"tags","value":"rust"}}}"#)
+                .expect("query-only SearchRequest must parse");
+        assert_eq!(req.track_total, TrackTotal::UpTo { limit: 10_000 });
+    }
+
+    #[test]
+    fn track_total_rejects_unknown_forms() {
+        for bad in [r#"{"mode":"x"}"#, r#""exact""#, "5", r#"{"mode":"up_to"}"#] {
+            assert!(
+                serde_json::from_str::<TrackTotal>(bad).is_err(),
+                "must reject {bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn track_total_round_trips() {
+        let up_to = TrackTotal::UpTo { limit: 50 };
+        let value = serde_json::to_value(up_to).expect("serialize");
+        assert_eq!(value, serde_json::json!({"mode":"up_to","limit":50}));
+        let back: TrackTotal = serde_json::from_value(value).expect("parse back");
+        assert_eq!(back, up_to);
+        assert_eq!(
+            serde_json::to_value(TrackTotal::Exact).expect("serialize"),
+            serde_json::json!({"mode":"exact"})
+        );
+    }
+
+    #[test]
+    fn track_total_is_exact_only_for_exact() {
+        assert!(TrackTotal::Exact.is_exact());
+        assert!(!TrackTotal::None.is_exact());
+        assert!(!TrackTotal::UpTo { limit: 1 }.is_exact());
     }
 }

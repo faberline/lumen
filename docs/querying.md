@@ -178,6 +178,8 @@ The request uses the top-level keys `scoring` and `filter`. `query` is only the 
 {"scoring": {"match": {"field": "bio", "text": "rust"}}, "filter": {"term": {"field": "status", "value": "active"}}}
 ```
 
+The migration tool splits a legacy `query` tree by node kind. The scoring nodes are `match`, `knn`, `rrf` and `hamming`. The filter nodes are `term`, `terms`, `prefix`, `ids`, `range`, `has_child`, `exists` and `duplicated`. An `and` of both kinds is split into `scoring` and `filter`. An `or` or a `not` over both kinds changes the result set or the score when it is split, so the tool refuses it and names the node path.
+
 The collapse request is an object with one `field`:
 
 ```json
@@ -187,6 +189,8 @@ The collapse request is an object with one `field`:
 The response carries `collapse_key` on each hit and `collapsed_total`.
 
 A sort key states its missing behavior as `"first"` or `"last"`. The legacy default `exclude` has no 0.5 form: the migration tool refuses it and asks the caller to choose `first` or `last`.
+
+A legacy cursor is not portable. A 0.4 cursor cannot continue a 0.5 query, so the migration tool refuses it and the caller starts again from the first page. The tool converts a legacy `collapse` string to `{"collapse":{"field":"<string>"}}`. It refuses a legacy `/duplicates` request: Search v2 removes `/duplicates`, and the replacement is a terms facet followed by a term filter for each selected value. The tool converts each item of a `collections:search` batch with the same rules. One refused item refuses the whole batch, and the refusal names the item index.
 
 ### Search v2 collapse
 

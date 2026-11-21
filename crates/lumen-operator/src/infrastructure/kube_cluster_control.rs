@@ -127,6 +127,20 @@ fn sets_converged(sets: &[serde_json::Value], desired_replicas: i64) -> bool {
     revisions_converged && ready >= desired_replicas && updated >= desired_replicas
 }
 
+/// The admin URL of one shard's serving pod. With `shard_count <= 1` the one
+/// StatefulSet keeps the old pod name `<name>-<shard>`. Above 1 each shard is
+/// its own StatefulSet `<name>-s<shard>`, and the admin plane addresses its
+/// pod 0 (`<name>-s<shard>-0`) through the same headless Service.
+fn shard_pod_url(namespace: &str, name: &str, shard: u32, shard_count: u32) -> String {
+    if shard_count <= 1 {
+        format!("http://{name}-{shard}.{name}-headless.{namespace}.svc.cluster.local:{CLIENT_PORT}")
+    } else {
+        format!(
+            "http://{name}-s{shard}-0.{name}-headless.{namespace}.svc.cluster.local:{CLIENT_PORT}"
+        )
+    }
+}
+
 #[async_trait]
 impl ClusterControl for KubeClusterControl {
     async fn patch_spec(
@@ -202,7 +216,17 @@ impl ClusterControl for KubeClusterControl {
     }
 
     fn shard_base_url(&self, namespace: &str, name: &str, shard: u32) -> String {
-        format!("http://{name}-{shard}.{name}-headless.{namespace}.svc.cluster.local:{CLIENT_PORT}")
+        shard_pod_url(namespace, name, shard, 1)
+    }
+
+    fn shard_base_url_in_layout(
+        &self,
+        namespace: &str,
+        name: &str,
+        shard: u32,
+        shard_count: u32,
+    ) -> String {
+        shard_pod_url(namespace, name, shard, shard_count)
     }
 
     async fn serving_topology_converged(
@@ -232,7 +256,10 @@ impl ClusterControl for KubeClusterControl {
         map_version: u64,
     ) -> Result<bool> {
         for shard in 0..shard_count {
-            let url = format!("{}/metrics", self.shard_base_url(namespace, name, shard));
+            let url = format!(
+                "{}/metrics",
+                self.shard_base_url_in_layout(namespace, name, shard, shard_count)
+            );
             // An unreachable pod (mid-rollout, mid-restart) or a decode
             // failure is "not converged yet", not an error — the caller
             // just keeps the fence armed and retries next tick, exactly
@@ -262,7 +289,12 @@ impl ClusterControl for KubeClusterControl {
 mod tests {
     use serde_json::json;
 
-    use super::{is_serving_set, sets_converged};
+    use super::{is_serving_set, sets_converged, shard_pod_url};
+    use crate::application::reshard_driver::cluster_control::ClusterControl;
+    use crate::domain::lumen_spec::Lumen;
+    use anyhow::Result;
+    use async_trait::async_trait;
+    use service_auth::k8s::ProjectedToken;
 
     #[test]
     fn is_serving_set_matches_base_and_shard_suffix() {
@@ -306,5 +338,65 @@ mod tests {
         let short = [json!({"readyReplicas": 1, "updatedReplicas": 2,
                             "currentRevision": "a", "updateRevision": "a"})];
         assert!(!sets_converged(&short, 2));
+    }
+
+    #[test]
+    fn shard_pod_url_single_shard_keeps_old_form() {
+        assert_eq!(
+            shard_pod_url("ns", "lumen", 0, 1),
+            "http://lumen-0.lumen-headless.ns.svc.cluster.local:7373"
+        );
+        assert_eq!(
+            shard_pod_url("ns", "lumen", 0, 0),
+            "http://lumen-0.lumen-headless.ns.svc.cluster.local:7373"
+        );
+    }
+
+    #[test]
+    fn shard_pod_url_two_shards_uses_per_shard_pod() {
+        assert_eq!(
+            shard_pod_url("ns", "lumen", 1, 2),
+            "http://lumen-s1-0.lumen-headless.ns.svc.cluster.local:7373"
+        );
+        assert_eq!(
+            shard_pod_url("ns", "lumen", 0, 2),
+            "http://lumen-s0-0.lumen-headless.ns.svc.cluster.local:7373"
+        );
+    }
+
+    /// A minimal double that implements only the required methods, so the
+    /// trait's provided layout method is the one under test.
+    struct Fixed;
+
+    #[async_trait]
+    impl ClusterControl for Fixed {
+        async fn patch_spec(
+            &self,
+            _ns: &str,
+            _name: &str,
+            _patch: serde_json::Value,
+        ) -> Result<()> {
+            Ok(())
+        }
+        async fn statefulset_ready_replicas(&self, _ns: &str, _name: &str) -> Result<i64> {
+            Ok(0)
+        }
+        async fn trigger_rolling_restart(&self, _ns: &str, _name: &str) -> Result<()> {
+            Ok(())
+        }
+        async fn admin_token(&self, _ns: &str, _lumen: &Lumen) -> Result<Option<ProjectedToken>> {
+            Ok(None)
+        }
+        fn shard_base_url(&self, _ns: &str, _name: &str, shard: u32) -> String {
+            format!("local-{shard}")
+        }
+    }
+
+    #[test]
+    fn default_layout_method_ignores_shard_count() {
+        assert_eq!(
+            Fixed.shard_base_url_in_layout("ns", "lumen", 2, 4),
+            "local-2"
+        );
     }
 }

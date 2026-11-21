@@ -277,7 +277,7 @@ fn exact_ids(engine: &Engine, value: &str) -> Vec<String> {
                 cursor: None,
                 routing_key: None,
                 sort: None,
-                track_total: true,
+                track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
                 collapse: None,
                 scoring: None,
                 filter: None,
