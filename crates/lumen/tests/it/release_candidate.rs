@@ -5111,8 +5111,8 @@ fn ci_workflow_follows_stage_standard() {
             "test job skips lint",
             replace_once(
                 &source,
-                "  test-workspace:\n    name: \"test: workspace (default features)\"\n    needs: lint\n",
-                "  test-workspace:\n    name: \"test: workspace (default features)\"\n",
+                "  test-workspace:\n    name: \"test: workspace (default features)\"\n    needs: [lint, test-select]\n    if: needs.test-select.outputs.tests == 'true'\n",
+                "  test-workspace:\n    name: \"test: workspace (default features)\"\n    needs: [test-select]\n    if: needs.test-select.outputs.tests == 'true'\n",
             ),
         ),
         (
