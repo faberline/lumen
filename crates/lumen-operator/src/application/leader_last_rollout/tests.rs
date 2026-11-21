@@ -263,11 +263,21 @@ fn no_transfer_target_waits() {
     );
 }
 
+/// Count the members that run the new revision.
+fn updated_count(f: &ShardRolloutFacts) -> usize {
+    f.rollout
+        .members
+        .values()
+        .filter(|m| m.revision == "rev-b")
+        .count()
+}
+
 /// Apply each step to the facts, as the StatefulSet and Raft would, until the
-/// planner completes. Returns the released members in order.
-fn run_rollout(start_leader: u32) -> Vec<u32> {
+/// planner completes. Returns each released member with the leader at the
+/// moment of its release.
+fn run_rollout(start_leader: u32) -> Vec<(u32, Option<u32>)> {
     let mut f = facts(3, Some(start_leader), &all_old());
-    let mut released = Vec::new();
+    let mut released: Vec<(u32, Option<u32>)> = Vec::new();
     for _ in 0..20 {
         match plan_leader_last(&f, false) {
             LeaderLastStep::TransferLeader { from, to } => {
@@ -275,6 +285,18 @@ fn run_rollout(start_leader: u32) -> Vec<u32> {
                 f.leader = Some(to);
             }
             LeaderLastStep::SetPartition { partition, member } => {
+                // A partition step releases exactly one member: the partition
+                // moves down from member + 1 to member, never further.
+                assert_eq!(
+                    partition, member,
+                    "a release sets the partition to the released member"
+                );
+                assert_eq!(
+                    f.rollout.partition,
+                    member + 1,
+                    "partition must go down by exactly one"
+                );
+                let updated_before = updated_count(&f);
                 if f.leader == Some(member) {
                     let old_below = (0..member).any(
                         |o| !matches!(f.rollout.members.get(&o), Some(m) if m.revision == "rev-b"),
@@ -284,17 +306,28 @@ fn run_rollout(start_leader: u32) -> Vec<u32> {
                         "leader {member} released while an old follower remains below it"
                     );
                 }
-                released.push(member);
+                released.push((member, f.leader));
                 f.rollout.partition = partition;
                 f.rollout
                     .members
                     .insert(member, ObservedMember::new("rev-b", true));
+                assert_eq!(
+                    updated_count(&f),
+                    updated_before + 1,
+                    "exactly one member is released per step"
+                );
             }
             LeaderLastStep::Complete => {
+                let order: Vec<u32> = released.iter().map(|(m, _)| *m).collect();
+                assert_eq!(order, vec![2, 1, 0], "members must be released leader last");
+                let leader_at_zero = released
+                    .iter()
+                    .find(|(m, _)| *m == 0)
+                    .map(|(_, leader)| *leader);
                 assert_eq!(
-                    released,
-                    vec![2, 1, 0],
-                    "members must be released leader last"
+                    leader_at_zero,
+                    Some(Some(0)),
+                    "the leader must be 0 when member 0 is released"
                 );
                 return released;
             }
@@ -308,15 +341,15 @@ fn run_rollout(start_leader: u32) -> Vec<u32> {
 
 #[test]
 fn nx3_rollout_updates_the_leader_last_and_never_two_at_once_from_leader_0() {
-    assert_eq!(run_rollout(0), vec![2, 1, 0]);
+    run_rollout(0);
 }
 
 #[test]
 fn nx3_rollout_updates_the_leader_last_and_never_two_at_once_from_leader_1() {
-    assert_eq!(run_rollout(1), vec![2, 1, 0]);
+    run_rollout(1);
 }
 
 #[test]
 fn nx3_rollout_updates_the_leader_last_and_never_two_at_once_from_leader_2() {
-    assert_eq!(run_rollout(2), vec![2, 1, 0]);
+    run_rollout(2);
 }
