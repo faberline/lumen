@@ -27,6 +27,7 @@ pub(crate) fn spec_gen(args: GenArgs) -> Result<()> {
     // only for `Lang::Ts` (a TypeScript-only concern).
     let opts = GenOptions::new(lang, PathBuf::new(), args.out.clone(), "createClient")
         .with_target(target)
+        .with_service_compatibility(format!("lumen {}", env!("CARGO_PKG_VERSION")))
         .with_http_client(match args.http {
             GenHttp::Fetch => HttpClient::Fetch,
             GenHttp::Axios => HttpClient::Axios,

@@ -559,3 +559,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{
     let _ = fs::remove_dir_all(&dir);
 }
 // CODEGEN-END
+
+/// The gate fails, instead of returning, when a generated-client toolchain is missing.
+#[test]
+#[should_panic(expected = "required generated-client tool")]
+fn require_command_fails_when_a_tool_is_missing() {
+    require_command("lumen-no-such-tool-xyz");
+}
