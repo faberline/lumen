@@ -230,6 +230,9 @@ fn hnsw_returns_self_as_top_neighbour() {
     use rand::SeedableRng;
     let mut rng = rand::rngs::StdRng::seed_from_u64(7);
     let idx = HnswCpuIndex::new(spec(64, VectorMetric::L2, None));
+    // The graph is built with an OS-seeded level generator, so the beam must
+    // cover the corpus (200 vectors) for an exact self-match to be certain.
+    idx.set_ef_search(200);
     let mut all = Vec::new();
     for i in 0..200 {
         let v = rand_vec(&mut rng, 64);
