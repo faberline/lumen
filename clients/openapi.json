@@ -2944,8 +2944,7 @@
             "nullable": true
           },
           "track_total": {
-            "type": "boolean",
-            "description": "Whether to compute the exact total match count. Defaults to `true`\n(back-compat). When `false`, the planner may early-terminate and\n`total` becomes a lower bound (≥ the returned page size)."
+            "$ref": "#/components/schemas/TrackTotal"
           }
         },
         "additionalProperties": false
@@ -3101,6 +3100,64 @@
               "$ref": "#/components/schemas/FieldValue"
             }
           }
+        }
+      },
+      "TrackTotal": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "none"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Count up to `limit` matches. `total` is a lower bound above `limit`.",
+            "required": [
+              "limit",
+              "mode"
+            ],
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Largest count the engine must reach before it may stop early.",
+                "minimum": 0
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "up_to"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "exact"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "How a search counts `total`. Wire forms: `{\"mode\":\"none\"}`,\n`{\"mode\":\"up_to\",\"limit\":50}`, `{\"mode\":\"exact\"}`. The legacy JSON bools\nare still accepted: `true` is `exact`, `false` is `none`.",
+        "discriminator": {
+          "propertyName": "mode"
         }
       },
       "VectorBackend": {

@@ -157,7 +157,7 @@ impl Engine {
             // collapse values until the page is full — never materializing the
             // full matched set (the difference between 37 ms and the floor at
             // 1M). Order is unspecified, like any constant-score filter page.
-            if offset == 0 && !req.track_total && query_is_constant_score(&req.query) {
+            if offset == 0 && !req.track_total.is_exact() && query_is_constant_score(&req.query) {
                 if let Some(iter) = collapse_driver(coll, &req.query) {
                     let want = limit.max(1);
                     // Collapse values are owned `String` so the source can be the

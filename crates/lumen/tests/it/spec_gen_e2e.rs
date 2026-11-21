@@ -701,7 +701,7 @@ with Client(base_url) as client:
     query = QueryNode.model_validate({"match": {"field": "body", "text": "blue", "op": "or"}})
     search = client.search(
         collection_id=collection_id,
-        body=SearchRequest(query=query, limit=10, track_total=True),
+        body=SearchRequest(query=query, limit=10, track_total={"mode": "exact"}),
     )
     assert [hit.external_id for hit in search.hits] == ["u1"], search
 

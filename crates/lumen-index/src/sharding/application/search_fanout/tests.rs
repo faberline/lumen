@@ -140,7 +140,7 @@ fn search_req(sort: Option<Vec<SortSpec>>) -> SearchRequest {
         cursor: None,
         routing_key: None,
         sort,
-        track_total: true,
+        track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
         collapse: None,
         scoring: None,
         filter: None,
