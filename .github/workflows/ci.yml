@@ -42,9 +42,47 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+  test-select:
+    name: "test: select by changed paths"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      tests: ${{ steps.select.outputs.tests }}
+      image: ${{ steps.select.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select the groups from the changed paths
+        id: select
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          all=()
+          if [ "$EVENT_NAME" != "pull_request" ]; then all=(--all); fi
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files?per_page=100" \
+              --jq '.[] | .filename, (.previous_filename // empty)' > "$RUNNER_TEMP/changed.txt"
+            [ "$(wc -l < "$RUNNER_TEMP/changed.txt")" -lt 3000 ] || all=(--all)
+          else
+            : > "$RUNNER_TEMP/changed.txt"
+          fi
+          python3 scripts/ci/select_paths.py --map .github/ci-paths.json "${all[@]}" \
+            < "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_OUTPUT"
+
   test-workspace:
     name: "test: workspace (default features)"
-    needs: lint
+    needs: [lint, test-select]
+    if: needs.test-select.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -82,7 +120,8 @@ jobs:
 
   test-all-features:
     name: "test: workspace (all features)"
-    needs: lint
+    needs: [lint, test-select]
+    if: needs.test-select.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -128,7 +167,8 @@ jobs:
 
   test-features:
     name: "test: single features (lumen, lumen-index)"
-    needs: lint
+    needs: [lint, test-select]
+    if: needs.test-select.outputs.tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -187,7 +227,8 @@ jobs:
 
   e2e-image:
     name: "e2e: test image"
-    needs: [test-workspace, test-all-features, test-features]
+    needs: [test-workspace, test-all-features, test-features, test-select]
+    if: needs.test-select.outputs.image == 'true'
     permissions:
       contents: read
       packages: write
@@ -198,7 +239,8 @@ jobs:
   e2e-client:
     name: "e2e: test client image"
     # The client waits for the test image: the identity check of that image runs in this job.
-    needs: [test-workspace, test-all-features, test-features, e2e-image]
+    needs: [test-workspace, test-all-features, test-features, e2e-image, test-select]
+    if: needs.test-select.outputs.image == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -516,6 +558,7 @@ jobs:
     if: always()
     needs:
       - lint
+      - test-select
       - test-workspace
       - test-all-features
       - test-features

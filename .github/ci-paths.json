@@ -1,0 +1,67 @@
+{
+  "rules": [
+    {
+      "class": "image",
+      "paths": [
+        ".github/**",
+        ".cargo/**",
+        "Cargo.toml",
+        "Cargo.lock",
+        "aw.toml",
+        "rust-toolchain.toml",
+        "deny.toml",
+        "clippy.toml",
+        "Dockerfile*",
+        ".dockerignore",
+        "build.sh",
+        "install.sh",
+        "compose.yaml",
+        "scripts/ci/**",
+        "k8s/**",
+        "kustomize/**",
+        "terraform/**",
+        "vendor/**",
+        "crates/*/Cargo.toml",
+        "crates/*/build.rs",
+        "crates/lumen/src/**",
+        "crates/lumen-operator/**",
+        "crates/lumen-access/**",
+        "crates/lumen-replication/**",
+        "crates/lumen-shared-kernel/**",
+        "crates/lumen-index/src/index/interfaces/**",
+        "crates/lumen-index/src/sharding/**",
+        "crates/lumen/tests/it/e2e/**",
+        "crates/lumen/tests/it/docker_named_volume.rs",
+        "crates/lumen/tests/it/spec_gen_e2e.rs",
+        "crates/lumen/tests/it/behavior_lumen_claim_*.rs",
+        "crates/lumen/tests/it/main.rs"
+      ]
+    },
+    {
+      "class": "unit",
+      "paths": [
+        "crates/*/tests/**",
+        "crates/lumen-storage/**",
+        "crates/lumen-index/src/index/domain/**",
+        "crates/lumen-index/src/index/application/**",
+        "clients/**",
+        "examples/**",
+        "observability/**",
+        "proptest-regressions/**",
+        "release-evidence/**",
+        "*.md",
+        "llms.txt",
+        "docs/benchmarks-scale.md"
+      ]
+    },
+    {
+      "class": "docs",
+      "paths": [
+        "docs/**",
+        ".claude/**",
+        ".codex/**",
+        "LICENSE"
+      ]
+    }
+  ]
+}
