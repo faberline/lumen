@@ -14,6 +14,7 @@ use crate::issue::{issue, TOOL};
 use crate::k8s::k8s;
 use crate::migrate;
 use crate::query::dispatch_query;
+use crate::restore_set;
 use crate::serve::serve;
 use crate::spec::spec_gen;
 use crate::standalone;
@@ -86,5 +87,6 @@ pub(crate) async fn run() -> Result<()> {
         Command::Connect(args) => connect(args).await,
         Command::Query(args) => dispatch_query(args).await,
         Command::Migrate(args) => migrate::dispatch(args),
+        Command::RestoreSet(args) => restore_set::dispatch_restore_set(args).await,
     }
 }
