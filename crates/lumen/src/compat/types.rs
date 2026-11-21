@@ -20,6 +20,6 @@ pub use crate::shared_kernel::types::schema::{
 pub use crate::shared_kernel::types::search::{
     BatchSearchItem, BatchSearchRequest, BatchSearchResponse, BatchSearchResult, DuplicateGroup,
     DuplicatesRequest, DuplicatesResponse, SearchAllRequest, SearchAllResponse, SearchHit,
-    SearchRequest, SearchResponse, MAX_BATCH_SEARCH_SIZE,
+    SearchRequest, SearchResponse, TrackTotal, MAX_BATCH_SEARCH_SIZE,
 };
 pub use crate::shared_kernel::types::stats::{CacheStats, FieldStats, StatsResponse, StorageStats};
