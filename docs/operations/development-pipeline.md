@@ -42,7 +42,8 @@ Each path has one class:
 
 A path takes the highest class of every rule that matches it (`image` over
 `unit` over `docs`). Root `*.md`, `llms.txt`, `clients/**` and
-`docs/benchmarks-scale.md` are class `unit`, because tests read them.
+`docs/benchmarks-scale.md` and `docs/deployment.md` are class `unit`, because
+tests read them.
 
 Everything runs on a push to `main`, when a path matches no rule, when the
 file list is 3000 files or more, and when the map is missing or invalid. If

@@ -84,6 +84,7 @@ fn select_docs_only_runs_neither_group() {
 fn select_files_that_tests_read_run_the_tests() {
     for path in [
         "docs/benchmarks-scale.md",
+        "docs/deployment.md",
         "README.md",
         "STATUS.md",
         "llms.txt",

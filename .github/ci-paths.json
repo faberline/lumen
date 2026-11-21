@@ -51,7 +51,8 @@
         "release-evidence/**",
         "*.md",
         "llms.txt",
-        "docs/benchmarks-scale.md"
+        "docs/benchmarks-scale.md",
+        "docs/deployment.md"
       ]
     },
     {
