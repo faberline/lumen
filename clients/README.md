@@ -107,9 +107,8 @@ main generated-client boundaries are:
   `Retry-After`, deadline, cancellation, or idempotency-safe write retry.
 - Lumen does not ship a Managed client-workload Kustomize template. The current
   `k8s/overlays/template` is a Standalone runtime template.
-- The generated-client CRUD test can skip Python, TypeScript, or Rust when its
-  local interpreter, dependency, compiler, Node runtime, or Cargo tool is
-  missing. A green run is not proof that all three languages executed.
+- The generated-client CRUD test fails when the Python, TypeScript or Rust tool
+  is missing (it never skips a language); it still needs those tools installed.
 - There is no general HTTP compatibility and deprecation policy. Do not infer
   one from the committed snapshot.
 
