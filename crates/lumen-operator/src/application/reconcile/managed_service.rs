@@ -6,12 +6,17 @@ use service_k8s::{ConditionFact, ManagedService, ReadinessTarget, ReadyFacts};
 
 use crate::application::reconcile::access_policy::apply_access_policy;
 use crate::application::reconcile::auth_delegator::apply_auth_delegator_binding;
+use crate::application::reconcile::member_versions::{
+    cached_member_reports, expected_member_names, now_secs,
+};
 use crate::application::reconcile::plan_verdicts::{
     access_policy_error, auth_delegation_error, capacity_error, check_peer_identity,
     peer_identity_error, ACCESS_POLICY_CONTEXT_KEY, AUTH_DELEGATION_CONTEXT_KEY,
     PEER_IDENTITY_CONTEXT_KEY,
 };
+use crate::application::reconcile::shard_usage::cache_key;
 use crate::application::render;
+use crate::domain::lumen_spec::member_versions::summarize_members;
 use crate::domain::lumen_spec::Lumen;
 use crate::infrastructure::kube_access_policy_control::KubeAccessPolicyControl;
 use crate::infrastructure::kube_auth_delegator_control::KubeAuthDelegatorControl;
@@ -136,7 +141,7 @@ impl ManagedService for Lumen {
 
     fn status_patch(&self, ready: &ReadyFacts) -> serde_json::Value {
         let obs = self.observe(ready);
-        json!({ "status": {
+        let mut status = json!({
             "phase": obs.phase,
             "observedGeneration": self.metadata.generation.unwrap_or(0),
             "servingReadyReplicas": obs.serving_ready,
@@ -144,7 +149,17 @@ impl ManagedService for Lumen {
             "shardCount": self.spec.shard_count,
             "reshard": obs.reshard,
             "message": format!("{}/{} serving pods ready", obs.serving_ready, obs.desired),
-        }})
+        });
+        // #248 slice 1a: the member versions, only once a member has reported.
+        // Without cached reports the patch is exactly what it was before.
+        if let Some(reports) = cached_member_reports(&cache_key(self)) {
+            let summary = summarize_members(&expected_member_names(self), &reports, now_secs());
+            status["members"] = serde_json::to_value(&summary.members).unwrap_or_default();
+            if let Some(effective) = summary.effective_compatibility_version {
+                status["effectiveCompatibilityVersion"] = json!(effective);
+            }
+        }
+        json!({ "status": status })
     }
 
     /// #2601: the Kubernetes-convention convergence surface, derived from the
