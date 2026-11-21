@@ -380,6 +380,122 @@ fn gen_target_override_writes_the_requested_contract() {
     assert_eq!(manifest["minimum_version"], "3.11");
 }
 
+fn read_manifest(dir: &Path) -> serde_json::Value {
+    serde_json::from_str(&std::fs::read_to_string(dir.join(".openapi-codegen.json")).unwrap())
+        .unwrap()
+}
+
+fn spec_gen_into(lang: &str, dir: &Path) {
+    let out = run_generator(
+        lumen()
+            .args(["spec", "gen", "--lang", lang, "--out"])
+            .arg(dir),
+    );
+    assert!(
+        out.status.success(),
+        "spec gen --lang {lang} failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// The manifest records the OpenAPI SHA, generator, target, Lumen version and dependencies.
+#[test]
+fn gen_manifest_records_sha_generator_target_and_compatibility() {
+    use sha2::{Digest, Sha256};
+    let expected_sha = format!(
+        "{:x}",
+        Sha256::digest(lumen::spec::openapi_json().as_bytes())
+    );
+    let expected_compat = format!("lumen {}", env!("CARGO_PKG_VERSION"));
+    for (lang, target) in [
+        ("ts", "typescript-5.0"),
+        ("py", "python-3.14"),
+        ("rust", "rust-2024"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        spec_gen_into(lang, dir.path());
+        let manifest = read_manifest(dir.path());
+        assert_eq!(manifest["openapi_sha256"], expected_sha.as_str(), "{lang}");
+        assert!(
+            manifest["generator_version"]
+                .as_str()
+                .is_some_and(|v| !v.is_empty()),
+            "{lang}: generator_version"
+        );
+        assert_eq!(
+            manifest["service_compatibility"],
+            expected_compat.as_str(),
+            "{lang}"
+        );
+        assert_eq!(manifest["target"], target, "{lang}");
+        assert!(
+            manifest["runtime_dependencies"]
+                .as_array()
+                .is_some_and(|a| !a.is_empty()),
+            "{lang}: runtime_dependencies"
+        );
+    }
+}
+
+/// A client generated from an older OpenAPI document has another SHA than the current one.
+#[test]
+fn gen_manifest_sha_detects_a_stale_openapi_document() {
+    use sha2::{Digest, Sha256};
+    let dir = tempfile::tempdir().unwrap();
+    spec_gen_into("rust", dir.path());
+    let recorded = read_manifest(dir.path())["openapi_sha256"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let current = format!(
+        "{:x}",
+        Sha256::digest(lumen::spec::openapi_json().as_bytes())
+    );
+    assert_eq!(recorded, current);
+    // Negative control: one extra trailing space is a changed document.
+    let stale = format!(
+        "{:x}",
+        Sha256::digest(format!("{} ", lumen::spec::openapi_json()).as_bytes())
+    );
+    assert_ne!(recorded, stale, "a changed document must have another SHA");
+}
+
+/// Every generated import has a matching runtime dependency in the manifest.
+#[test]
+fn gen_manifest_runtime_dependencies_cover_the_generated_imports() {
+    let rust_dir = tempfile::tempdir().unwrap();
+    spec_gen_into("rust", rust_dir.path());
+    let deps: Vec<String> = read_manifest(rust_dir.path())["runtime_dependencies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d.as_str().unwrap().to_string())
+        .collect();
+    for dep in ["reqwest", "serde", "serde_json"] {
+        assert!(deps.iter().any(|d| d == dep), "missing {dep}: {deps:?}");
+    }
+    let models = std::fs::read_to_string(rust_dir.path().join("models.rs")).unwrap();
+    assert!(models.contains("use serde::{Deserialize, Serialize};"));
+    let client = std::fs::read_to_string(rust_dir.path().join("client.rs")).unwrap();
+    assert!(client.contains("serde_json::"));
+
+    let py_dir = tempfile::tempdir().unwrap();
+    spec_gen_into("py", py_dir.path());
+    let py_deps: Vec<String> = read_manifest(py_dir.path())["runtime_dependencies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d.as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        py_deps.iter().any(|d| d == "pydantic>=2"),
+        "missing pydantic>=2: {py_deps:?}"
+    );
+    let models_py = std::fs::read_to_string(py_dir.path().join("models.py")).unwrap();
+    assert!(models_py.contains("from pydantic import"));
+}
+
 /// R3: `lumen spec` (no subcommand) still prints the OpenAPI document unchanged.
 #[test]
 fn plain_spec_still_prints_openapi() {
