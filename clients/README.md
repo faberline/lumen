@@ -105,6 +105,10 @@ main generated-client boundaries are:
   OpenAPI snapshot.
 - No generated client applies Lumen's planned operation-aware backoff,
   `Retry-After`, deadline, cancellation, or idempotency-safe write retry.
+- The OpenAPI document classifies every operation with `x-retry-class`
+  (`safe-read` for GET and QUERY, `non-retryable` for POST, PUT and DELETE;
+  `idempotency-key` waits for the idempotency ledger). Generated clients do
+  not read it yet; that waits for the openapi-codegen emitter (faberline/core#595).
 - Lumen does not ship a Managed client-workload Kustomize template. The current
   `k8s/overlays/template` is a Standalone runtime template.
 - The generated-client CRUD test can skip Python, TypeScript, or Rust when its
