@@ -389,6 +389,90 @@ fn plain_spec_still_prints_openapi() {
     assert_eq!(stdout, lumen::spec::openapi_json());
 }
 
+const HTTP_METHODS: [&str; 9] = [
+    "get", "put", "post", "delete", "patch", "head", "options", "trace", "query",
+];
+
+/// Every operation of the live OpenAPI document as (METHOD, path, x-retry-class).
+fn retry_class_of_each_operation() -> Vec<(String, String, Option<String>)> {
+    let doc: serde_json::Value = serde_json::from_str(&lumen::spec::openapi_json()).unwrap();
+    let mut out = Vec::new();
+    for (path, item) in doc["paths"].as_object().unwrap() {
+        for method in HTTP_METHODS {
+            if let Some(op) = item.get(method) {
+                let class = op
+                    .get("x-retry-class")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
+                out.push((method.to_uppercase(), path.clone(), class));
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn retry_class_is_set_on_every_operation() {
+    let ops = retry_class_of_each_operation();
+    assert!(ops.len() >= 35, "{} operations", ops.len());
+    for (method, path, class) in &ops {
+        let class = class
+            .as_deref()
+            .unwrap_or_else(|| panic!("{method} {path}: no x-retry-class"));
+        assert!(
+            ["safe-read", "idempotency-key", "non-retryable"].contains(&class),
+            "{method} {path}: {class}"
+        );
+    }
+}
+
+#[test]
+fn retry_class_get_and_query_are_safe_read_and_writes_are_non_retryable() {
+    let ops = retry_class_of_each_operation();
+    for (method, path, class) in &ops {
+        match method.as_str() {
+            "GET" | "QUERY" => assert_eq!(class.as_deref(), Some("safe-read"), "{method} {path}"),
+            "POST" | "PUT" | "DELETE" => {
+                assert_eq!(class.as_deref(), Some("non-retryable"), "{method} {path}")
+            }
+            _ => {}
+        }
+    }
+    // Negative control: a QUERY twin is cloned from its POST; it must not keep the POST class.
+    for path in ["/collections", "/collections/{collection_id}"] {
+        assert!(
+            ops.iter()
+                .any(|(m, p, c)| m == "QUERY" && p == path && c.as_deref() == Some("safe-read")),
+            "QUERY {path} is not safe-read"
+        );
+    }
+}
+
+#[test]
+fn retry_class_never_marks_a_post_safe_read_or_idempotency_key_yet() {
+    let ops = retry_class_of_each_operation();
+    assert!(ops
+        .iter()
+        .all(|(m, _, c)| !(m == "POST" && c.as_deref() == Some("safe-read"))));
+    assert!(ops
+        .iter()
+        .all(|(_, _, c)| c.as_deref() != Some("idempotency-key")));
+}
+
+#[test]
+fn retry_class_snapshot_in_clients_openapi_matches() {
+    let committed: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../clients/openapi.json")).unwrap();
+    assert_eq!(
+        committed["paths"]["/collections/{collection_id}"]["put"]["x-retry-class"],
+        "non-retryable"
+    );
+    assert_eq!(
+        committed["paths"]["/collections/{collection_id}/stats"]["get"]["x-retry-class"],
+        "safe-read"
+    );
+}
+
 /// R4: generated Python h2c client drives a live Lumen public API journey.
 #[test]
 #[ignore = "AW EC gate: opens a local h2c listener; run explicitly with --ignored"]

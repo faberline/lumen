@@ -199,6 +199,7 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
     let mut doc = ApiDoc::openapi();
     doc.info.version = env!("CARGO_PKG_VERSION").to_string();
     inject_query_twins(&mut doc);
+    inject_retry_classes(&mut doc);
     doc
 }
 
@@ -251,6 +252,38 @@ fn inject_query_twins(doc: &mut utoipa::openapi::OpenApi) {
             item.extensions
                 .get_or_insert_with(Default::default)
                 .insert("query".to_string(), query_op);
+        }
+    }
+}
+
+/// Classify every operation for retries with `x-retry-class`. The service
+/// supplies this value; a client never infers it from the HTTP method.
+/// `libs/openapi-codegen` reads it as `OperationIR.retry_class`. Writes stay
+/// `non-retryable` until the idempotency ledger lands (#64, #65); then a route
+/// with a landed idempotency key becomes `idempotency-key`.
+///
+/// This runs after `inject_query_twins`: the QUERY operation is a clone of its
+/// POST twin, so its class must overwrite the cloned POST value.
+fn inject_retry_classes(doc: &mut utoipa::openapi::OpenApi) {
+    for item in doc.paths.paths.values_mut() {
+        for (method, op) in item.operations.iter_mut() {
+            let class = if *method == openapi::PathItemType::Get {
+                "safe-read"
+            } else {
+                "non-retryable"
+            };
+            op.extensions
+                .get_or_insert_with(Default::default)
+                .insert("x-retry-class".to_string(), serde_json::json!(class));
+        }
+        if let Some(query) = item
+            .extensions
+            .as_mut()
+            .and_then(|ext| ext.get_mut("query"))
+        {
+            if let Some(query) = query.as_object_mut() {
+                query.insert("x-retry-class".to_string(), serde_json::json!("safe-read"));
+            }
         }
     }
 }
