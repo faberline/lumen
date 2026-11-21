@@ -38,6 +38,7 @@ mod capacity_retire_hpa;
 mod certificate_ownership;
 mod checkpoint_aof_failure_recovery;
 mod checkpoint_publication_contract;
+mod ci_select;
 mod cli_client_ksa_token;
 mod cli_convention;
 mod cli_credential_paths_retired;
