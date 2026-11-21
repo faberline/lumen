@@ -131,7 +131,7 @@ fn visit_sorted_bucket(
             *total += 1;
             if page.len() < want {
                 page.push((id, sort_score(&values[0])));
-            } else if !req.track_total {
+            } else if !req.track_total.is_exact() {
                 return Ok(false);
             }
         }
@@ -156,7 +156,7 @@ fn visit_sorted_bucket(
         *total += 1;
         if page.len() < want {
             page.push((id, sort_score(&values[0])));
-        } else if !req.track_total {
+        } else if !req.track_total.is_exact() {
             return Ok(false);
         }
     }
@@ -235,7 +235,7 @@ pub(super) fn try_generic_sort_plan(
             .into());
         }
     }
-    if !req.track_total {
+    if !req.track_total.is_exact() {
         total = total.max(page.len() as u64);
     }
     Ok(Some((page, total, PlanKind::SortedField)))

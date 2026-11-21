@@ -96,7 +96,7 @@ fn create_collection_supersedes_tombstone_with_fresh_empty_collection() {
                 cursor: None,
                 routing_key: None,
                 sort: None,
-                track_total: true,
+                track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
                 collapse: None,
                 scoring: None,
                 filter: None,

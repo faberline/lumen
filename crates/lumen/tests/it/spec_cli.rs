@@ -115,6 +115,15 @@ fn openapi_json_exposes_batch_search_endpoint_and_schemas() {
     }
 }
 
+#[test]
+fn openapi_json_exposes_the_track_total_schema() {
+    let v: Value = serde_json::from_str(&openapi_json()).expect("openapi is valid JSON");
+    assert!(
+        !v["components"]["schemas"]["TrackTotal"].is_null(),
+        "OpenAPI is missing the TrackTotal schema"
+    );
+}
+
 /// #1292: `lumen spec` publishes the `docs:replace` batch endpoint, the
 /// single-resource `docs/{external_id}` sugar endpoint, and their request/
 /// response schemas — generated from the same live-router `ApiDoc` source

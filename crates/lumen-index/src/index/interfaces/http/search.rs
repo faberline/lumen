@@ -105,7 +105,7 @@ pub(crate) async fn search_all(
             cursor: None,
             routing_key: req.routing_key,
             sort: req.sort,
-            track_total: true,
+            track_total: lumen_shared_kernel::types::search::TrackTotal::Exact,
             collapse: None,
             scoring: None,
             filter: None,
