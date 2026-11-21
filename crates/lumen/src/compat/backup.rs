@@ -4,6 +4,10 @@
 pub use crate::persistence::application::backup::{
     fetch_snapshot_bytes, restore_snapshot_bytes, run_backup,
 };
+pub use crate::persistence::application::backup_set_report::{
+    run_queries, verify_restored_set, Check, QueryAnswer, ShardReport, VerificationReport,
+    REPORT_VERSION,
+};
 pub use crate::persistence::application::backup_set_restore::{
     restore_backup_set, BackupSetSource, DirSource, EngineSet, RestoreError, RestoreOptions,
     RestoreReport, ShardRestoreTarget,

@@ -295,3 +295,17 @@ pub(crate) enum InspectFormat {
     /// `documents_scanned`.
     Json,
 }
+
+/// `lumen restore-set`: restore a multi-shard backup set into per-shard segment roots, restart, and print a verification report.
+#[derive(clap::Args)]
+pub(crate) struct RestoreSetArgs {
+    /// Directory that holds `lumen-backup-manifest.json` and the shard artifacts.
+    #[arg(long)]
+    pub(crate) from: PathBuf,
+    /// Directory that receives `shard-0` .. `shard-{n-1}`.
+    #[arg(long)]
+    pub(crate) data_root: PathBuf,
+    /// JSON file `{ "<collection>": [ <SearchRequest>, ... ] }` compared before and after the restart.
+    #[arg(long)]
+    pub(crate) queries: Option<PathBuf>,
+}
