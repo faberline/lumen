@@ -10,8 +10,10 @@ no-default-features = false
 [advisories]
 db-path = "~/.cargo/advisory-db"
 version = 2
-# Ignore specific advisories (none currently)
-ignore = []
+# Only an advisory with no fixed version may be ignored, with a reason a reviewer can check.
+ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono 0.4 is marked unmaintained and no fixed version exists. It is a direct workspace dependency (Cargo.toml, features serde) and a transitive one through k8s-openapi and kube. The advisory is a maintenance notice, not a vulnerability. Remove this entry when chrono 0.4 is replaced or maintained again." },
+]
 
 [licenses]
 version = 2
