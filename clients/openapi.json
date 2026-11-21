@@ -58,7 +58,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "safe-read"
       }
     },
     "/admin/backup/local": {
@@ -106,7 +107,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/admin/backup:scoped": {
@@ -144,7 +146,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/admin/checkpoint": {
@@ -174,7 +177,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/admin/reshard:apply": {
@@ -212,7 +216,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/admin/reshard:evict": {
@@ -250,7 +255,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/admin/reshard:fence": {
@@ -288,7 +294,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/admin/reshard:prune": {
@@ -326,7 +333,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/admin/restart:seal-hnsw-cache": {
@@ -408,7 +416,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/admin/restore": {
@@ -481,7 +490,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections": {
@@ -504,7 +514,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "safe-read"
       },
       "query": {
         "tags": [
@@ -545,7 +556,8 @@
             }
           }
         },
-        "x-post-twin": "/collections:search"
+        "x-post-twin": "/collections:search",
+        "x-retry-class": "safe-read"
       }
     },
     "/collections/{collection_id}": {
@@ -606,7 +618,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       },
       "delete": {
         "tags": [
@@ -654,7 +667,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       },
       "query": {
         "tags": [
@@ -694,7 +708,8 @@
             }
           }
         },
-        "x-post-twin": "/collections/{collection_id}/search"
+        "x-post-twin": "/collections/{collection_id}/search",
+        "x-retry-class": "safe-read"
       }
     },
     "/collections/{collection_id}/docs/{external_id}": {
@@ -766,7 +781,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       },
       "delete": {
         "tags": [
@@ -809,7 +825,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/docs:merge": {
@@ -892,7 +909,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/docs:replace": {
@@ -955,7 +973,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/docs:truncate": {
@@ -1001,7 +1020,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/docs:unindex": {
@@ -1067,7 +1087,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/duplicates": {
@@ -1110,7 +1131,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/fields/{field_name}": {
@@ -1158,7 +1180,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/index": {
@@ -1242,7 +1265,8 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/index/{external_id}": {
@@ -1296,7 +1320,8 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/reindex/stream": {
@@ -1343,7 +1368,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/search": {
@@ -1384,7 +1410,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/search:all": {
@@ -1437,7 +1464,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/collections/{collection_id}/stats": {
@@ -1468,7 +1496,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "safe-read"
       }
     },
     "/collections:search": {
@@ -1510,7 +1539,8 @@
               }
             }
           }
-        }
+        },
+        "x-retry-class": "non-retryable"
       }
     },
     "/debug/cluster": {
@@ -1533,7 +1563,8 @@
         },
         "security": [
           {}
-        ]
+        ],
+        "x-retry-class": "safe-read"
       }
     },
     "/healthz": {
@@ -1557,7 +1588,8 @@
         },
         "security": [
           {}
-        ]
+        ],
+        "x-retry-class": "safe-read"
       }
     },
     "/metrics": {
@@ -1581,7 +1613,8 @@
         },
         "security": [
           {}
-        ]
+        ],
+        "x-retry-class": "safe-read"
       }
     },
     "/readyz": {
@@ -1601,7 +1634,8 @@
         },
         "security": [
           {}
-        ]
+        ],
+        "x-retry-class": "safe-read"
       }
     },
     "/version": {
@@ -1626,7 +1660,8 @@
         },
         "security": [
           {}
-        ]
+        ],
+        "x-retry-class": "safe-read"
       }
     }
   },
