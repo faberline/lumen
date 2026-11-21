@@ -8,5 +8,6 @@ pub mod change_budget;
 pub mod change_journal;
 pub mod change_memory_cost;
 pub mod change_record_cost;
+pub mod idempotency_ledger;
 pub mod wal_log;
 pub mod wal_record;
