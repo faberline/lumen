@@ -11,7 +11,9 @@ passes:
 1. `lint`: `cargo fmt --all -- --check` and
    `cargo clippy --workspace --all-targets --locked -- -D warnings`.
 2. `test-*`: workspace tests in the default profile, with all features, and
-   with each feature profile on its own.
+   with each feature profile on its own. It also holds `test-audit`:
+   `cargo deny --workspace check` (advisories, licenses, bans, sources)
+   with cargo-deny 0.20.2.
 3. `e2e-*`: the test image, image identity, generated client, standalone
    container, GKE (overlay and operator) and the native functional contracts.
 4. `gate`: `if: always()`, needs every other job and fails unless each one

@@ -13,6 +13,14 @@ version = 2
 # Only an advisory with no fixed version may be ignored, with a reason a reviewer can check.
 ignore = [
     { id = "RUSTSEC-2026-0543", reason = "chrono 0.4 is marked unmaintained and no fixed version exists. It is a direct workspace dependency (Cargo.toml, features serde) and a transitive one through k8s-openapi and kube. The advisory is a maintenance notice, not a vulnerability. Remove this entry when chrono 0.4 is replaced or maintained again." },
+    { id = "RUSTSEC-2025-0012", reason = "backoff is marked unmaintained and no fixed version exists. The advisory is a maintenance notice, not a vulnerability. Remove this entry when backoff is dropped from the dependency tree or a maintained release exists." },
+    { id = "RUSTSEC-2025-0141", reason = "bincode is marked unmaintained and no fixed version exists. The advisory is a maintenance notice, not a vulnerability. Remove this entry when bincode is dropped from the dependency tree or a maintained release exists." },
+    { id = "RUSTSEC-2024-0384", reason = "instant is marked unmaintained and no fixed version exists. The advisory is a maintenance notice, not a vulnerability. Remove this entry when instant is dropped from the dependency tree or a maintained release exists." },
+    { id = "RUSTSEC-2024-0436", reason = "paste is marked unmaintained and no fixed version exists. The advisory is a maintenance notice, not a vulnerability. Remove this entry when paste is dropped from the dependency tree or a maintained release exists." },
+    { id = "RUSTSEC-2026-0441", reason = "pin-utils is marked unmaintained and no fixed version exists. The advisory is a maintenance notice, not a vulnerability. Remove this entry when pin-utils is dropped from the dependency tree or a maintained release exists." },
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is marked unmaintained and no fixed version exists. The advisory is a maintenance notice, not a vulnerability. Remove this entry when proc-macro-error is dropped from the dependency tree or a maintained release exists." },
+    { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile is marked unmaintained and no fixed version exists. The advisory is a maintenance notice, not a vulnerability. Remove this entry when rustls-pemfile is dropped from the dependency tree or a maintained release exists." },
+    { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml is marked unmaintained and no fixed version exists. The advisory is a maintenance notice, not a vulnerability. Remove this entry when unsafe-libyaml is dropped from the dependency tree or a maintained release exists." },
 ]
 
 [licenses]
