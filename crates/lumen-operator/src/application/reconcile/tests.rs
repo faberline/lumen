@@ -37,6 +37,8 @@ mod handover;
 
 mod hpa;
 
+mod member_versions;
+
 mod peer_identity;
 mod readiness_targets;
 

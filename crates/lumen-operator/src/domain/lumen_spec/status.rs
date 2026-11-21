@@ -45,6 +45,36 @@ pub struct LumenStatus {
     /// [`super::reconcile`]'s no-I/O `status_patch` contract.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conditions: Vec<service_k8s::Condition>,
+    /// Each member's reported version, capabilities and state (#248 slice 1a).
+    /// Absent until a member has reported.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<LumenMemberStatus>,
+    /// The lowest compatibility version among the reporting members (#248
+    /// slice 1a). A missing or stale member never raises it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_compatibility_version: Option<String>,
+}
+
+/// One fleet member's reported version (#248 slice 1a).
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LumenMemberStatus {
+    /// The member's pod name, e.g. `search-0`.
+    #[serde(default)]
+    pub name: String,
+    /// The exact version the member runs. Empty when `Missing`.
+    #[serde(default)]
+    pub version: String,
+    /// The capabilities the member reports. Empty when `Missing`.
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+    /// The compatibility version the member reports. Empty when `Missing`.
+    #[serde(default)]
+    pub compatibility_version: String,
+    /// `Reported`, `Stale` (the last report is older than the freshness window)
+    /// or `Missing` (no report yet).
+    #[serde(default)]
+    pub state: String,
 }
 
 /// Data-plane capacity status.

@@ -13,6 +13,7 @@
 
 pub mod access;
 pub mod auth_migration;
+pub mod member_versions;
 pub mod reshard_status;
 pub mod runtime;
 pub mod serving;
