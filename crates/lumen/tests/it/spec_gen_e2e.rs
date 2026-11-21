@@ -832,4 +832,174 @@ with Client(base_url) as client:
 
     client.drop_collection(collection_id=collection_id, force=True)
 "#;
+
+const LUMEN_TOKEN_PATH: &str = "/var/run/secrets/lumen.axiom.dev/token";
+const K8S_TOKEN_PATH: &str = "/var/run/secrets/kubernetes.io/serviceaccount/token";
+const TEST_CA_PATH: &str = "/tmp/lumen-test-ca.pem";
+
+#[test]
+fn gen_managed_ksa_embeds_the_lumen_token_path_and_ca_path() {
+    for (lang, runtime, needles) in [
+        (
+            "ts",
+            "runtime.ts",
+            &["const MANAGED_CA_PATH = \"/tmp/lumen-test-ca.pem\";"][..],
+        ),
+        (
+            "py",
+            "client.py",
+            &[
+                "_MANAGED_TOKEN_PATH = \"/var/run/secrets/lumen.axiom.dev/token\"",
+                "_MANAGED_CA_PATH = \"/tmp/lumen-test-ca.pem\"",
+            ][..],
+        ),
+        (
+            "rust",
+            "client.rs",
+            &[
+                "const MANAGED_TOKEN_PATH: &str = \"/var/run/secrets/lumen.axiom.dev/token\";",
+                "const MANAGED_CA_PATH: &str = \"/tmp/lumen-test-ca.pem\";",
+            ][..],
+        ),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let output = run_generator(
+            lumen()
+                .args(["spec", "gen", "--lang", lang, "--managed-ksa", "--ca-path"])
+                .arg(TEST_CA_PATH)
+                .arg("--out")
+                .arg(dir.path()),
+        );
+        assert!(
+            output.status.success(),
+            "spec gen --lang {lang} --managed-ksa failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(dir.path().join(".openapi-codegen.json").is_file());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.lines().any(|line| line.starts_with("target:")),
+            "{lang}: stdout has no target line\n{stdout}"
+        );
+        let source = std::fs::read_to_string(dir.path().join(runtime)).unwrap();
+        assert!(
+            source.contains(LUMEN_TOKEN_PATH),
+            "{lang} did not embed the lumen token path"
+        );
+        assert!(
+            source.contains(TEST_CA_PATH),
+            "{lang} did not embed the CA path"
+        );
+        assert!(
+            !source.contains(K8S_TOKEN_PATH),
+            "{lang} still embeds the Kubernetes service-account token path"
+        );
+        for needle in needles {
+            assert!(source.contains(needle), "{lang}: missing {needle:?}");
+        }
+    }
+}
+
+#[test]
+fn gen_managed_ksa_requires_ca_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_generator(
+        lumen()
+            .args(["spec", "gen", "--lang", "py", "--managed-ksa", "--out"])
+            .arg(dir.path()),
+    );
+    assert!(
+        !output.status.success(),
+        "--managed-ksa without --ca-path must be refused"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--ca-path"),
+        "stderr does not name --ca-path:\n{stderr}"
+    );
+    assert!(
+        !dir.path().join(".openapi-codegen.json").exists(),
+        "a refused --managed-ksa run must write no output"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_generator(
+        lumen()
+            .args(["spec", "gen", "--lang", "py", "--ca-path"])
+            .arg(TEST_CA_PATH)
+            .arg("--out")
+            .arg(dir.path()),
+    );
+    assert!(
+        !output.status.success(),
+        "--ca-path without --managed-ksa must be refused"
+    );
+}
+
+#[test]
+fn gen_without_managed_ksa_keeps_the_standalone_token_path() {
+    for (lang, runtime) in [
+        ("ts", "runtime.ts"),
+        ("py", "client.py"),
+        ("rust", "client.rs"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let output = run_generator(
+            lumen()
+                .args(["spec", "gen", "--lang", lang, "--out"])
+                .arg(dir.path()),
+        );
+        assert!(
+            output.status.success(),
+            "spec gen --lang {lang} failed\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let source = std::fs::read_to_string(dir.path().join(runtime)).unwrap();
+        assert!(
+            source.contains(K8S_TOKEN_PATH),
+            "{lang} default output lost the Kubernetes token path"
+        );
+        assert!(
+            !source.contains(LUMEN_TOKEN_PATH),
+            "{lang} default output leaked the lumen token path"
+        );
+    }
+}
+
+#[test]
+fn gen_managed_ksa_runtime_refuses_http_and_downgrade_in_source() {
+    for (lang, runtime, needle) in [
+        (
+            "py",
+            "client.py",
+            "_managed_read(_MANAGED_TOKEN_PATH, \"token\")",
+        ),
+        (
+            "rust",
+            "client.rs",
+            "managed_read(std::path::Path::new(MANAGED_TOKEN_PATH), \"token\")?",
+        ),
+        ("ts", "runtime.ts", "https:"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let output = run_generator(
+            lumen()
+                .args(["spec", "gen", "--lang", lang, "--managed-ksa", "--ca-path"])
+                .arg(TEST_CA_PATH)
+                .arg("--out")
+                .arg(dir.path()),
+        );
+        assert!(
+            output.status.success(),
+            "spec gen --lang {lang} --managed-ksa failed\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let source = std::fs::read_to_string(dir.path().join(runtime)).unwrap();
+        assert!(
+            source.contains(needle),
+            "{lang}: generated source lacks {needle:?}"
+        );
+    }
+}
 // HANDWRITE-END

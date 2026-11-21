@@ -133,6 +133,12 @@ pub(crate) struct GenArgs {
     /// HTTP backend for the TypeScript client (ignored for py/rust).
     #[arg(long, value_enum, default_value_t = GenHttp::Fetch)]
     pub(crate) http: GenHttp,
+    /// Emit the explicit ManagedKsa profile: HTTPS only, private CA, fixed token path.
+    #[arg(long)]
+    pub(crate) managed_ksa: bool,
+    /// CA bundle path that the generated ManagedKsa client trusts (required with --managed-ksa).
+    #[arg(long, value_name = "PATH", requires = "managed_ksa")]
+    pub(crate) ca_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
