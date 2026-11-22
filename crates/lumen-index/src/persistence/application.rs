@@ -13,6 +13,7 @@
 pub mod background_merge;
 #[cfg(feature = "backup")]
 pub mod backup;
+pub mod backup_set_report;
 pub mod backup_set_restore;
 pub mod capacity;
 pub mod ports;
