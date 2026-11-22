@@ -21,6 +21,7 @@ The [product README](../README.md) owns the product contract.
 | Data-plane runbook | [Data-plane runbook](runbooks/data-plane.md) |
 | Product plans | [Product guide index](product/README.md) |
 | Contributor workflow and gates | [Contributing](../CONTRIBUTING.md) |
+| Lumen 1.0.0 evidence record (S4, performance numbers, release pipeline) | [Release evidence](release/1.0.0-evidence.md) |
 
 Migration guides describe a version boundary.
 See [Search v2](migration-search-v2.md),
