@@ -86,6 +86,7 @@ mod llm_command_template_flags_are_live;
 mod lumen_bench_cli;
 mod merge_cleanup_checkpoint_serialization;
 mod migrate_collection_schema;
+mod migrate_fixture_matrix;
 mod migrate_search_request;
 mod native_committed_capacity_progress;
 mod native_oversized_committed_apply;
