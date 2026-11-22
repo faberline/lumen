@@ -15,6 +15,7 @@ keep current behavior separate from the Search v2 target.
 | Fact | Canonical source | Discovery |
 |---|---|---|
 | HTTP methods, paths, operation IDs, declared request and response schemas, status codes, media types, and security | [`lumen spec` OpenAPI](../clients/openapi.json) | Run `lumen spec` or request `GET /openapi.json`. |
+| Stability promise and breaking-change rules | [Compatibility](compatibility.md) | Read the versioned-surface table; the HTTP row is checked by `openapi_compat`. |
 | QUERY and POST twins, read-consistency header, and routed response behavior | This protocol guide and current OpenAPI | Run `lumen spec`, then use `lumen llm --topic local-search` or `select-query`. |
 | Current and target schema, write, durability, rebuild, and activation meaning | [Indexing guide](indexing.md) | Read the current and Search v2 subsections separately. |
 | Source ownership, current query navigation, and target query, result, facet, metric, and limit meaning | [Querying guide](querying.md) | Run `lumen llm --topic querying --format json`. |

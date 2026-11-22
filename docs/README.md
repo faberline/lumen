@@ -13,6 +13,7 @@ The [product README](../README.md) owns the product contract.
 | Schema, writes, durability and rebuild | [Indexing](indexing.md) |
 | Search, scoring, facets and hydration | [Querying](querying.md) |
 | HTTP contract and source map | [Protocol](protocol.md) |
+| Stability promise | [Compatibility](compatibility.md) |
 | Connection profiles and request mechanics | [Client integration](client-integration.md) |
 | Generated clients | [Client artifacts](../clients/README.md) |
 | Authentication and access | [Authentication](authentication.md) |
