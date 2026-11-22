@@ -128,6 +128,11 @@ const REGISTRY: &[GatedTarget] = &[
         required_features: &[],
     },
     GatedTarget {
+        path: "tests/it/restore_set_cli.rs",
+        gate: r#"#![cfg(feature = "backup")]"#,
+        required_features: &["backup"],
+    },
+    GatedTarget {
         path: "tests/it/legacy_3073_app.rs",
         gate: r#"#![cfg(feature = "raft-wal")]"#,
         required_features: &["raft-wal"],

@@ -120,6 +120,7 @@ mod report_4018_app;
 mod reshard_admin_e2e;
 mod reshard_driver_e2e;
 mod restore_cold_recovery_contract;
+mod restore_set_cli;
 mod retired_credential_surface;
 mod rig_stateful_adapter;
 mod routed_shard_e2e;
