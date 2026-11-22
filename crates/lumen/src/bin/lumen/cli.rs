@@ -13,7 +13,8 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::cli::client::{
-    BackupArgs, ConnectArgs, InspectArgs, QueryArgs, SnapshotExportArgs, SnapshotImportArgs,
+    BackupArgs, ConnectArgs, InspectArgs, QueryArgs, RestoreSetArgs, SnapshotExportArgs,
+    SnapshotImportArgs,
 };
 use crate::cli::k8s::K8sArgs;
 use crate::cli::serve::ServeArgs;
@@ -112,6 +113,8 @@ pub(crate) enum Command {
     /// Offline Search v2 migration tools. Read current JSON from stdin, write
     /// Search v2 JSON plus a report to stdout. They never contact a runtime.
     Migrate(MigrateArgs),
+    /// Restore a multi-shard backup set into per-shard segment roots, restart, and print a verification report.
+    RestoreSet(RestoreSetArgs),
 }
 
 #[derive(clap::Args)]

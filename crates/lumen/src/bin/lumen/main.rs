@@ -38,6 +38,7 @@ mod issue;
 mod k8s;
 mod migrate;
 mod query;
+mod restore_set;
 mod run;
 mod serve;
 #[cfg(feature = "raft-wal")]
