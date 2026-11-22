@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
-use crate::domain::lumen_fleet::{PrunePolicy, FLEET_LABEL};
+use crate::domain::lumen_fleet::{PlanOutcome, PlannedInstance, PrunePolicy, FLEET_LABEL};
 
 /// A child's identity: its namespace and its name.
 pub type ChildKey = (String, String);
@@ -18,6 +18,16 @@ pub type ChildKey = (String, String);
 /// The child key of an instance.
 pub fn child_key(namespace: &str, name: &str) -> ChildKey {
     (namespace.to_string(), name.to_string())
+}
+
+/// The children a fleet declares: the instances that planned `Ready`.
+/// A `Rejected` instance is not declared (today's behavior).
+pub fn declared_children(planned: &[PlannedInstance]) -> BTreeSet<ChildKey> {
+    planned
+        .iter()
+        .filter(|p| matches!(p.outcome, PlanOutcome::Ready(_)))
+        .map(|p| child_key(&p.namespace, &p.name))
+        .collect()
 }
 
 /// Who owns a live child, judged from its [`FLEET_LABEL`] value.

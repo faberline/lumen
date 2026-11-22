@@ -1137,3 +1137,305 @@ fn not_settled_when_a_planned_field_is_missing_in_live() {
 fn an_invalid_planned_spec_is_not_settled() {
     assert!(!is_settled(&json!({"nope":1}), &json!({"nope":1})));
 }
+
+/// The `search` fleet of `docs/deployment.md` ("Render a fill-in template"),
+/// with the digest placeholder replaced by 64 times `a`.
+fn docs_fleet(instances: Vec<FleetInstance>) -> LumenFleet {
+    let digest = "a".repeat(64);
+    let mut fleet = LumenFleet::new(
+        "search",
+        LumenFleetSpec {
+            defaults: serde_json::from_value(json!({
+                "image": format!("ghcr.io/faberline/lumen@sha256:{digest}"),
+                "auth": "required",
+                "servingTlsSecret": "search-serving-tls",
+                "serving": {
+                    "cpu": "2",
+                    "memory": "8Gi",
+                    "raftStorage": "50Gi",
+                    "raftStorageClass": "ssd",
+                },
+                "placement": { "initialMachineType": "e2-standard-2" },
+            }))
+            .expect("docs defaults parse"),
+            instances,
+            prune_policy: PrunePolicy::Retain,
+            rollout_policy: RolloutPolicy::default(),
+        },
+    );
+    fleet.metadata.generation = Some(1);
+    fleet
+}
+
+fn docs_team_a() -> FleetInstance {
+    instance("search-team-a", Some(json!({ "serving": { "cpu": "4" } })))
+}
+
+fn docs_team_b() -> FleetInstance {
+    instance("search-team-b", None)
+}
+
+/// Exact oracle: the complete create and apply bodies of both documented
+/// entries. The literals are the oracle; a later change must not edit them.
+#[test]
+fn deployment_doc_manifest_oracle_exact_seed_and_apply_objects() {
+    let planned = plan(&docs_fleet(vec![docs_team_a(), docs_team_b()]));
+    assert_eq!(planned.len(), 2);
+    let digest = "a".repeat(64);
+    let image = format!("ghcr.io/faberline/lumen@sha256:{digest}");
+
+    // team-a: serving.cpu "4" (the entry's override); the rest from defaults.
+    let a = &planned[0];
+    assert_eq!(a.namespace, "search-team-a");
+    assert_eq!(
+        seed_object("search", a, ready(a)),
+        json!({
+            "apiVersion": "lumen.dev/v1alpha1",
+            "kind": "Lumen",
+            "metadata": {
+                "name": "search",
+                "namespace": "search-team-a",
+                "labels": {
+                    "lumen.dev/fleet": "search",
+                    "app.kubernetes.io/managed-by": "lumen-fleet"
+                }
+            },
+            "spec": {
+                "image": image,
+                "imagePullPolicy": null,
+                "shardCount": 1,
+                "shardMap": { "version": 0, "virtualBucketCount": 4096 },
+                "replicasPerShard": 1,
+                "voterCount": 1,
+                "servingTlsSecret": "search-serving-tls",
+                "logFormat": "pretty",
+                "logLevel": null,
+                "auth": "required",
+                "serving": {
+                    "cpu": "4",
+                    "memory": "8Gi",
+                    "graceSecs": 30,
+                    "raftStorage": "50Gi",
+                    "raftStorageClass": "ssd"
+                },
+                "placement": { "initialMachineType": "e2-standard-2" },
+                "reshardPolicy": {
+                    "prepareAtPercent": 50,
+                    "urgentAtPercent": 85,
+                    "workflow": {
+                        "phase": "Complete",
+                        "convergenceRemediationRestartCount": 0
+                    }
+                },
+                "observability": false,
+                "networkPolicy": false
+            }
+        })
+    );
+    assert_eq!(
+        apply_object("search", a, ready(a)),
+        json!({
+            "apiVersion": "lumen.dev/v1alpha1",
+            "kind": "Lumen",
+            "metadata": {
+                "name": "search",
+                "namespace": "search-team-a",
+                "labels": {
+                    "lumen.dev/fleet": "search",
+                    "app.kubernetes.io/managed-by": "lumen-fleet"
+                }
+            },
+            "spec": {
+                "image": image,
+                "imagePullPolicy": null,
+                "networkPolicy": false,
+                "observability": false,
+                "replicasPerShard": 1,
+                "voterCount": 1,
+                "servingTlsSecret": "search-serving-tls",
+                "logFormat": "pretty",
+                "logLevel": null,
+                "auth": "required",
+                "serving": {
+                    "cpu": "4",
+                    "memory": "8Gi",
+                    "graceSecs": 30,
+                    "raftStorage": "50Gi",
+                    "raftStorageClass": "ssd"
+                },
+                "placement": { "initialMachineType": "e2-standard-2" },
+                "reshardPolicy": {
+                    "prepareAtPercent": 50,
+                    "urgentAtPercent": 85
+                }
+            }
+        })
+    );
+
+    // team-b: no override, so serving.cpu is the default "2".
+    let b = &planned[1];
+    assert_eq!(b.namespace, "search-team-b");
+    assert_eq!(
+        seed_object("search", b, ready(b)),
+        json!({
+            "apiVersion": "lumen.dev/v1alpha1",
+            "kind": "Lumen",
+            "metadata": {
+                "name": "search",
+                "namespace": "search-team-b",
+                "labels": {
+                    "lumen.dev/fleet": "search",
+                    "app.kubernetes.io/managed-by": "lumen-fleet"
+                }
+            },
+            "spec": {
+                "image": image,
+                "imagePullPolicy": null,
+                "shardCount": 1,
+                "shardMap": { "version": 0, "virtualBucketCount": 4096 },
+                "replicasPerShard": 1,
+                "voterCount": 1,
+                "servingTlsSecret": "search-serving-tls",
+                "logFormat": "pretty",
+                "logLevel": null,
+                "auth": "required",
+                "serving": {
+                    "cpu": "2",
+                    "memory": "8Gi",
+                    "graceSecs": 30,
+                    "raftStorage": "50Gi",
+                    "raftStorageClass": "ssd"
+                },
+                "placement": { "initialMachineType": "e2-standard-2" },
+                "reshardPolicy": {
+                    "prepareAtPercent": 50,
+                    "urgentAtPercent": 85,
+                    "workflow": {
+                        "phase": "Complete",
+                        "convergenceRemediationRestartCount": 0
+                    }
+                },
+                "observability": false,
+                "networkPolicy": false
+            }
+        })
+    );
+    assert_eq!(
+        apply_object("search", b, ready(b)),
+        json!({
+            "apiVersion": "lumen.dev/v1alpha1",
+            "kind": "Lumen",
+            "metadata": {
+                "name": "search",
+                "namespace": "search-team-b",
+                "labels": {
+                    "lumen.dev/fleet": "search",
+                    "app.kubernetes.io/managed-by": "lumen-fleet"
+                }
+            },
+            "spec": {
+                "image": image,
+                "imagePullPolicy": null,
+                "networkPolicy": false,
+                "observability": false,
+                "replicasPerShard": 1,
+                "voterCount": 1,
+                "servingTlsSecret": "search-serving-tls",
+                "logFormat": "pretty",
+                "logLevel": null,
+                "auth": "required",
+                "serving": {
+                    "cpu": "2",
+                    "memory": "8Gi",
+                    "graceSecs": 30,
+                    "raftStorage": "50Gi",
+                    "raftStorageClass": "ssd"
+                },
+                "placement": { "initialMachineType": "e2-standard-2" },
+                "reshardPolicy": {
+                    "prepareAtPercent": 50,
+                    "urgentAtPercent": 85
+                }
+            }
+        })
+    );
+}
+
+/// A rejected entry between two good ones must not change their bodies.
+#[test]
+fn a_rejected_entry_between_good_entries_leaves_their_bodies_unchanged() {
+    let baseline = plan(&docs_fleet(vec![docs_team_a(), docs_team_b()]));
+    let bad = instance("search-bad", Some(json!({ "serving": { "cpuu": "1" } })));
+    let with_bad = plan(&docs_fleet(vec![docs_team_a(), bad, docs_team_b()]));
+
+    assert_eq!(with_bad.len(), 3);
+    assert!(matches!(with_bad[1].outcome, PlanOutcome::Rejected(_)));
+    for i in [0, 1] {
+        let good_before = &baseline[i];
+        let good_after = &with_bad[i * 2];
+        assert_eq!(
+            seed_object("search", good_before, ready(good_before)),
+            seed_object("search", good_after, ready(good_after)),
+        );
+        assert_eq!(
+            apply_object("search", good_before, ready(good_before)),
+            apply_object("search", good_after, ready(good_after)),
+        );
+    }
+}
+
+/// `declared_children` holds exactly the instances that planned `Ready`.
+#[test]
+fn declared_children_holds_only_ready_instances() {
+    let baseline = plan(&docs_fleet(vec![docs_team_a(), docs_team_b()]));
+    let bad = instance("search-bad", Some(json!({ "serving": { "cpuu": "1" } })));
+    let with_bad = plan(&docs_fleet(vec![docs_team_a(), bad, docs_team_b()]));
+
+    let expected: BTreeSet<ChildKey> = [
+        child_key("search-team-a", &baseline[0].name),
+        child_key("search-team-b", &baseline[1].name),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(declared_children(&with_bad), expected);
+    assert!(!declared_children(&with_bad).contains(&child_key("search-bad", &with_bad[1].name)));
+}
+
+/// Today's behavior, kept on purpose for the oracle, not a decision: a
+/// rejected entry is not declared, so its live child counts as an orphan.
+/// A later change may fix this and must then edit this test.
+#[test]
+fn rejected_entry_live_child_counts_as_orphan_current_oracle_behavior() {
+    let bad = instance("search-bad", Some(json!({ "serving": { "cpuu": "1" } })));
+    let with_bad = plan(&docs_fleet(vec![docs_team_a(), bad, docs_team_b()]));
+    let declared = declared_children(&with_bad);
+    let key = child_key("search-bad", &with_bad[1].name);
+
+    assert_eq!(
+        prune_decision(&key, &declared, PrunePolicy::Retain),
+        PruneDecision::Orphaned
+    );
+    assert_eq!(
+        prune_decision(&key, &declared, PrunePolicy::Delete),
+        PruneDecision::Pruned
+    );
+}
+
+/// Negative control for the delete choice: a declared child is kept under
+/// both policies.
+#[test]
+fn a_declared_child_is_never_selected_for_delete() {
+    let baseline = plan(&docs_fleet(vec![docs_team_a(), docs_team_b()]));
+    let declared = declared_children(&baseline);
+    assert_eq!(declared.len(), 2);
+    for key in &declared {
+        assert_eq!(
+            prune_decision(key, &declared, PrunePolicy::Retain),
+            PruneDecision::Keep
+        );
+        assert_eq!(
+            prune_decision(key, &declared, PrunePolicy::Delete),
+            PruneDecision::Keep
+        );
+    }
+}

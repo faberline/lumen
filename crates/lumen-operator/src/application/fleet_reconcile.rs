@@ -9,7 +9,8 @@ use kube::runtime::{watcher, WatchStreamExt};
 
 use crate::domain::lumen_fleet::aggregate::{aggregate, live_child_from_json, DeclaredEntry};
 use crate::domain::lumen_fleet::children::{
-    adoption, child_key, prune_decision, Adoption, ChildKey, PruneDecision, ORPHAN_RETAINED_MESSAGE,
+    adoption, child_key, declared_children, prune_decision, Adoption, ChildKey, PruneDecision,
+    ORPHAN_RETAINED_MESSAGE,
 };
 use crate::domain::lumen_fleet::gate::{child_progress, ChildProgress, GateDecision, RolloutGate};
 use crate::domain::lumen_fleet::plan::{apply_object, plan, seed_object};
@@ -203,8 +204,8 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
 
     let fleet_name = fleet.name_any();
     let planned = plan(fleet);
+    let declared = declared_children(&planned);
     let mut entries = Vec::new();
-    let mut declared: BTreeSet<ChildKey> = BTreeSet::new();
 
     // Phase A: reads only. Each instance gets what it needs in this pass.
     let mut probes: Vec<Probe> = Vec::new();
@@ -216,10 +217,6 @@ async fn converge(control: &dyn FleetControl, fleet: &LumenFleet) -> anyhow::Res
                 continue;
             }
         };
-        // Declared before the first cluster call: an `ObserveFailed` entry
-        // must stay declared so that `Delete` never prunes it.
-        declared.insert(child_key(&instance.namespace, &instance.name));
-
         match control.namespace_exists(&instance.namespace).await {
             Ok(true) => {}
             Ok(false) => {
