@@ -153,6 +153,7 @@ mod standalone_gke_acceptance_contract;
 mod standalone_gke_render;
 mod stats_metadata_e2e;
 mod structured_stdout_traceparent;
+mod threat_model_doc;
 mod truncate_docs_e2e;
 mod vector_e2e;
 mod vector_field_keeps_its_backend_across_reopen;
