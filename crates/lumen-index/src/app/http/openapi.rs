@@ -199,7 +199,40 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
     let mut doc = ApiDoc::openapi();
     doc.info.version = env!("CARGO_PKG_VERSION").to_string();
     inject_query_twins(&mut doc);
+    inject_retry_classes(&mut doc);
     doc
+}
+
+/// Classify every operation with `x-retry-class`, the service-supplied retry
+/// classification that openapi-codegen reads (core `OperationIR.retry_class`).
+/// A client never infers the class from the HTTP method. GET and QUERY are
+/// `safe-read`; POST, PUT, DELETE and the other methods are `non-retryable`.
+/// No route is `idempotency-key` until the idempotency ledger lands (#64,
+/// #65); then a route with a landed key becomes `idempotency-key`.
+///
+/// Runs after `inject_query_twins`: a QUERY twin is cloned from its POST
+/// operation, so its class is set here and overwrites the cloned value.
+fn inject_retry_classes(doc: &mut utoipa::openapi::OpenApi) {
+    for item in doc.paths.paths.values_mut() {
+        for (method, op) in item.operations.iter_mut() {
+            let class = if *method == openapi::PathItemType::Get {
+                "safe-read"
+            } else {
+                "non-retryable"
+            };
+            op.extensions
+                .get_or_insert_with(Default::default)
+                .insert("x-retry-class".to_string(), serde_json::json!(class));
+        }
+        if let Some(query) = item
+            .extensions
+            .as_mut()
+            .and_then(|ext| ext.get_mut("query"))
+            .and_then(|value| value.as_object_mut())
+        {
+            query.insert("x-retry-class".to_string(), serde_json::json!("safe-read"));
+        }
+    }
 }
 
 /// Describe the #1297 `QUERY` twins (OpenAPI 3.2 / RFC 10008, epic #1296 R1)
