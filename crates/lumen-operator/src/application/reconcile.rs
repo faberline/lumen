@@ -108,6 +108,7 @@ use kube::Client;
 use crate::application::reconcile::loops::{
     spawn_auth_delegator_sweep_loop, spawn_hpa_handoff_loop,
 };
+use crate::application::reconcile::member_versions::spawn_member_version_loop;
 use crate::application::reconcile::shard_usage::spawn_shard_usage_loop;
 use crate::domain::lumen_spec::Lumen;
 
@@ -123,11 +124,14 @@ use crate::domain::lumen_spec::Lumen;
 /// [`crate::application::fleet_reconcile::spawn_fleet_loop`]), and the auth-delegator
 /// binding sweep (#2876; independently leader-gated — see
 /// [`spawn_auth_delegator_sweep_loop`], which cleans up the one child no owner
-/// reference can reach).
+/// reference can reach). The member version loop scrapes each pod's `/version`
+/// into the status cache (every replica runs it, like the shard-usage loop; see
+/// [`spawn_member_version_loop`]).
 pub async fn run() -> anyhow::Result<()> {
     match Client::try_default().await {
         Ok(client) => {
             spawn_shard_usage_loop(client.clone());
+            spawn_member_version_loop(client.clone());
             crate::application::reshard_driver::driver_loop::spawn_reshard_driver_loop(
                 client.clone(),
             );
