@@ -93,7 +93,7 @@ Use the [README](README.md) for the product workflow and capabilities. Use the
 
 An ignored test is not a pass. `docs/ignored-tests.md` lists every ignored test with its kind and the CI job that runs it. A guard test keeps the list equal to the source.
 
-Ignored tests that run in CI: `ci.yml` (jobs `e2e-native`, `e2e-gke`); `gke-test.yml` (job `standalone-container`); `lumen-release-candidate.yml` (jobs `perf-coarse`, `container-smoke`, `container-smoke-arm64`, `GKE e2e`).
+Ignored tests that run in CI: `ci.yml` (jobs `e2e-native`, `e2e-gke`); `gke-test.yml` (job `standalone-container`); `lumen-release-candidate.yml` (jobs `perf-coarse`, `container-smoke`, `container-smoke-arm64`, `gke-e2e`).
 Ignored tests that no CI job runs: `competitive_perf_gate_disk`, `approved_30_minute_durable_workload`, `write_qps_bench`, `engine_index_qps_probe`, `wal_codec_probe`, `lumen_scale_bench`, `hnsw_ef_recall_latency_sweep`, `disk_format_size_and_decode_speed`, `measure_background_merge_job_cost_by_collection_count`.
 
 ## Evidence policy
