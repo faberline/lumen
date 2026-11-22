@@ -77,7 +77,7 @@ Authorization headers always win. External and local hosts do not read it.
 `ManagedKsa` remains separate. It requires HTTPS, private CA trust, and the
 fixed `/var/run/secrets/lumen.axiom.dev/token` path. It keeps its private
 audience contract unchanged. A missing, unreadable, or empty token fails before
-transport. A `401` never downgrades to anonymous.
+transport. A `401` never downgrades to anonymous. `lumen spec gen --managed-ksa --ca-path <PATH>` generates the profile.
 Server-side TokenReview, not client-side token parsing, remains authoritative.
 
 For a human shell, use `lumen connect`. It obtains an audience-bound token
