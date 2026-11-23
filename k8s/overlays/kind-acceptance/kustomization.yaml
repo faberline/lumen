@@ -1,0 +1,21 @@
+# Kind acceptance overlay (#570). scripts/kind-acceptance.sh sets the image
+# tag on a temp copy with `kustomize edit set image`; the tracked tag stays
+# REPLACE_ME so an unedited render fails loudly.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lumen
+
+resources:
+  - ../dev
+  - data-pvc.yaml
+
+images:
+  - name: ghcr.io/faberline/lumen
+    newTag: REPLACE_ME
+
+patches:
+  - target:
+      kind: Deployment
+      name: lumen
+    path: lumen-deployment.yaml

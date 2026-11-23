@@ -82,6 +82,7 @@ mod indexing_segment_compaction;
 mod inherited_checkpoint_file_sync;
 mod jieba_bigram_fallback_e2e;
 mod jieba_fallback_staging;
+mod kind_acceptance_contract;
 mod legacy_3073_app;
 mod llm_command_template_flags_are_live;
 mod lumen_bench_cli;
