@@ -102,6 +102,7 @@ jobs:
     needs: image
     if: ${{ !cancelled() && (needs.image.result == 'success' || needs.image.result == 'skipped') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       packages: read
