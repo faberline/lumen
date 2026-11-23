@@ -2,7 +2,7 @@
 //!
 //! R1 says the generic lifecycle belongs in shared libraries and that Lumen
 //! supplies profiles. That is an architectural claim, and architectural claims
-//! decay silently: the first copy of an issuance loop into `apps/lumen` compiles,
+//! decay silently: the first copy of an issuance loop into the lumen repository compiles,
 //! passes every behavioural test, and is only visible to someone who happens to
 //! read the right file. So it is checked here, mechanically, against the source
 //! tree itself.

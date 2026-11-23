@@ -483,7 +483,7 @@ fn test_release_preparation_rejects_retired_routes_and_stale_llms_guidance() {
     validate_llms_release_guidance(&llms).expect("live llms guidance is current");
 
     for retired in [
-        "git add Cargo.lock apps/lumen",
+        "git add Cargo.lock .",
         "git commit --allow-empty -m \"release(lumen): ${TAG}\"",
         "git push origin lumen@0.4.28",
         "project_build_prepare_release_version lumen",
