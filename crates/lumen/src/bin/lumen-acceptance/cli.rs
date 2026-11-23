@@ -60,6 +60,9 @@ pub(super) struct RunArgs {
     /// Comma-separated phase names. Omitted means the mode's default list.
     #[arg(long)]
     pub(super) phases: Option<String>,
+    /// Shell command that restarts the Lumen under test. With --endpoint only.
+    #[arg(long, conflicts_with = "spawn")]
+    pub(super) restart_cmd: Option<String>,
 }
 
 #[cfg(test)]
@@ -114,6 +117,39 @@ mod tests {
             "/tmp/a",
         ]);
         assert!(both.is_err());
+    }
+
+    #[test]
+    fn cli_parses_restart_cmd() {
+        let parsed = Cli::try_parse_from([
+            "lumen-acceptance",
+            "functional",
+            "--endpoint",
+            "http://x",
+            "--restart-cmd",
+            "true",
+            "--artifact-dir",
+            "/tmp/a",
+        ])
+        .expect("endpoint with restart-cmd parses");
+        match parsed.command {
+            Command::Functional(args) => {
+                assert_eq!(args.restart_cmd, Some("true".to_string()));
+            }
+            Command::Performance(_) => panic!("expected functional"),
+        }
+
+        let with_spawn = Cli::try_parse_from([
+            "lumen-acceptance",
+            "functional",
+            "--spawn",
+            "/bin/lumen",
+            "--restart-cmd",
+            "true",
+            "--artifact-dir",
+            "/tmp/a",
+        ]);
+        assert!(with_spawn.is_err());
     }
 
     #[test]
