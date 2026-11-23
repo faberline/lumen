@@ -1,0 +1,23 @@
+# The durable single-node Deployment for Kind: embedded WAL and a claim at the
+# image's LUMEN_DATA_DIR, so the restart check has data to restart from. No
+# resources block and no placement: Kind has one node. The auth wiring comes
+# from ../dev and is not added again here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumen
+spec:
+  template:
+    spec:
+      containers:
+        - name: lumen
+          env:
+            - name: LUMEN_WAL
+              value: embedded
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/lumen/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: lumen-data
