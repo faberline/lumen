@@ -12,6 +12,7 @@ use crate::fail_closed::FailClosed;
 use crate::lifecycle::CollectionLifecycle;
 use crate::report::{summary, write_report, Mode, PhaseResult, PhaseStatus, Report};
 use crate::restart::RestartPersistence;
+use crate::restarter::{CommandRestart, Restarter};
 use crate::spawn::{LumenChild, SharedChild, SpawnCleanup};
 use crate::visible_version::VisibleVersion;
 use crate::writes::WritesAndMasking;
@@ -134,10 +135,11 @@ impl Cleanup for NoCleanup {
     }
 }
 
-/// The default phase names of a mode. A spawned child also gets `restart_persistence`,
-/// which needs the child to restart, then `checkpoint_and_merge`, which reads the counters,
-/// and last `fail_closed`, which stops the child and damages its files.
-fn default_phase_names(mode: Mode, spawned: bool) -> Vec<&'static str> {
+/// The default phase names of a mode. A restartable target (a spawned child, or an endpoint
+/// with `--restart-cmd`) also gets `restart_persistence`, which needs the restart, then
+/// `checkpoint_and_merge`, which reads the counters. Only a spawned child gets last
+/// `fail_closed`, which stops the child and damages its files.
+fn default_phase_names(mode: Mode, spawned: bool, restartable: bool) -> Vec<&'static str> {
     match mode {
         Mode::Functional => {
             let mut names = vec![
@@ -146,9 +148,11 @@ fn default_phase_names(mode: Mode, spawned: bool) -> Vec<&'static str> {
                 "writes_and_masking",
                 "visible_version",
             ];
-            if spawned {
+            if restartable {
                 names.push("restart_persistence");
                 names.push("checkpoint_and_merge");
+            }
+            if spawned {
                 names.push("fail_closed");
             }
             names
@@ -163,8 +167,16 @@ fn phase_list(
     args: &RunArgs,
     child: Option<&SharedChild>,
 ) -> Result<Vec<Box<dyn Phase>>> {
+    let restarter = match (child, &args.restart_cmd) {
+        (Some(child), _) => Some(Restarter::Child(child.clone())),
+        (None, Some(command)) => Some(Restarter::Command(CommandRestart {
+            command: command.clone(),
+            endpoint: args.endpoint.clone(),
+        })),
+        (None, None) => None,
+    };
     let names: Vec<String> = match &args.phases {
-        None => default_phase_names(mode, child.is_some())
+        None => default_phase_names(mode, child.is_some(), restarter.is_some())
             .into_iter()
             .map(str::to_string)
             .collect(),
@@ -187,17 +199,16 @@ fn phase_list(
             "collection_lifecycle" => Ok(Box::new(CollectionLifecycle) as Box<dyn Phase>),
             "writes_and_masking" => Ok(Box::new(WritesAndMasking) as Box<dyn Phase>),
             "visible_version" => Ok(Box::new(VisibleVersion) as Box<dyn Phase>),
-            "restart_persistence" => match child {
-                Some(child) => Ok(Box::new(RestartPersistence {
-                    child: child.clone(),
+            "restart_persistence" => match &restarter {
+                Some(restarter) => Ok(Box::new(RestartPersistence {
+                    restarter: restarter.clone(),
                 }) as Box<dyn Phase>),
-                None => bail!("phase `restart_persistence` needs --spawn"),
+                None => bail!("phase `restart_persistence` needs --spawn or --restart-cmd"),
             },
-            "checkpoint_and_merge" => match child {
-                Some(child) => {
-                    Ok(Box::new(CheckpointAndMerge::new(child.clone())) as Box<dyn Phase>)
-                }
-                None => bail!("phase `checkpoint_and_merge` needs --spawn"),
+            "checkpoint_and_merge" => match &restarter {
+                Some(restarter) => Ok(Box::new(CheckpointAndMerge::new(restarter.clone()))
+                    as Box<dyn Phase>),
+                None => bail!("phase `checkpoint_and_merge` needs --spawn or --restart-cmd"),
             },
             "fail_closed" => match child {
                 Some(child) => Ok(Box::new(FailClosed::new(child.clone())) as Box<dyn Phase>),
@@ -348,9 +359,10 @@ mod tests {
         run_args.phases = Some("checkpoint_and_merge".into());
         let err = phase_list(Mode::Functional, &run_args, None)
             .err()
-            .expect("checkpoint_and_merge without a child is an error");
+            .expect("checkpoint_and_merge without a child or a restart command is an error");
         assert!(
-            format!("{err:#}").contains("phase `checkpoint_and_merge` needs --spawn"),
+            format!("{err:#}")
+                .contains("phase `checkpoint_and_merge` needs --spawn or --restart-cmd"),
             "{err:#}"
         );
     }
@@ -367,7 +379,53 @@ mod tests {
             seed: 1,
             phases: None,
             spawn: None,
+            restart_cmd: None,
         }
+    }
+
+    #[test]
+    fn restart_cmd_unlocks_the_restart_phases() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut run_args = args(dir.path());
+        run_args.restart_cmd = Some("true".into());
+        run_args.phases = Some("restart_persistence,checkpoint_and_merge".into());
+        let list = phase_list(Mode::Functional, &run_args, None)
+            .expect("the restart phases build with a restart command");
+        let names: Vec<&str> = list.iter().map(|phase| phase.name()).collect();
+        assert_eq!(names, ["restart_persistence", "checkpoint_and_merge"]);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn restart_cmd_failure_is_named() {
+        let (_server, url) = crate::http::tests::serve_for_test();
+        let err = tokio::task::spawn_blocking(move || -> Result<()> {
+            let dir = tempfile::tempdir()?;
+            let mut run_args = args(dir.path());
+            run_args.endpoint = url;
+            run_args.restart_cmd = Some("exit 3".into());
+            run_args.phases = Some("restart_persistence".into());
+            let list = phase_list(Mode::Functional, &run_args, None)?;
+            list[0].run(&run_args.endpoint, dir.path())
+        })
+        .await
+        .expect("join")
+        .expect_err("a restart command that exits 3 fails the phase");
+        assert!(format!("{err:#}").contains("exit"), "{err:#}");
+    }
+
+    #[test]
+    fn default_phases_with_restart_cmd_skip_fail_closed() {
+        assert_eq!(
+            default_phase_names(Mode::Functional, false, true),
+            [
+                "endpoint_configured",
+                "collection_lifecycle",
+                "writes_and_masking",
+                "visible_version",
+                "restart_persistence",
+                "checkpoint_and_merge"
+            ]
+        );
     }
 
     #[test]
@@ -465,7 +523,7 @@ mod tests {
     #[test]
     fn functional_default_list_has_all_phases() {
         assert_eq!(
-            default_phase_names(Mode::Functional, false),
+            default_phase_names(Mode::Functional, false, false),
             [
                 "endpoint_configured",
                 "collection_lifecycle",
@@ -477,7 +535,7 @@ mod tests {
 
     #[test]
     fn default_phases_add_restart_only_when_spawned() {
-        let without = default_phase_names(Mode::Functional, false);
+        let without = default_phase_names(Mode::Functional, false, false);
         assert_eq!(
             without,
             [
@@ -487,20 +545,18 @@ mod tests {
                 "visible_version"
             ]
         );
-        let with = default_phase_names(Mode::Functional, true);
+        let with = default_phase_names(Mode::Functional, true, true);
         assert_eq!(with.len(), 7);
         assert_eq!(&with[..4], without.as_slice());
         assert_eq!(with[4], "restart_persistence");
         assert_eq!(with[5], "checkpoint_and_merge");
         assert_eq!(with[6], "fail_closed");
-        assert_eq!(
-            default_phase_names(Mode::Performance, false),
-            ["endpoint_configured"]
-        );
-        assert_eq!(
-            default_phase_names(Mode::Performance, true),
-            ["endpoint_configured"]
-        );
+        for (spawned, restartable) in [(false, false), (true, true)] {
+            assert_eq!(
+                default_phase_names(Mode::Performance, spawned, restartable),
+                ["endpoint_configured"]
+            );
+        }
     }
 
     #[test]
@@ -510,9 +566,10 @@ mod tests {
         run_args.phases = Some("restart_persistence".into());
         let err = phase_list(Mode::Functional, &run_args, None)
             .err()
-            .expect("restart_persistence without a child is an error");
+            .expect("restart_persistence without a child or a restart command is an error");
         assert!(
-            format!("{err:#}").contains("phase `restart_persistence` needs --spawn"),
+            format!("{err:#}")
+                .contains("phase `restart_persistence` needs --spawn or --restart-cmd"),
             "{err:#}"
         );
     }
@@ -531,10 +588,10 @@ mod tests {
     #[test]
     fn default_phases_end_with_fail_closed_when_spawned() {
         assert_eq!(
-            default_phase_names(Mode::Functional, true).last(),
+            default_phase_names(Mode::Functional, true, true).last(),
             Some(&"fail_closed")
         );
-        assert!(!default_phase_names(Mode::Functional, false).contains(&"fail_closed"));
+        assert!(!default_phase_names(Mode::Functional, false, false).contains(&"fail_closed"));
     }
 
     #[test]
