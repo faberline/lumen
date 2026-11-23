@@ -14,6 +14,7 @@ mod metrics;
 mod perf_gate;
 mod report;
 mod restart;
+mod restarter;
 mod run;
 mod spawn;
 mod visible_version;

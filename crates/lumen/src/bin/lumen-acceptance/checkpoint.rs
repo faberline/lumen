@@ -12,18 +12,18 @@ use serde_json::{json, Value};
 use crate::http::HttpApi;
 use crate::lifecycle::search;
 use crate::metrics::observe;
+use crate::restarter::Restarter;
 use crate::run::{Observed, Phase};
-use crate::spawn::SharedChild;
 
 pub(super) struct CheckpointAndMerge {
-    child: SharedChild,
+    restarter: Restarter,
     observed: Mutex<Observed>,
 }
 
 impl CheckpointAndMerge {
-    pub(super) fn new(child: SharedChild) -> Self {
+    pub(super) fn new(restarter: Restarter) -> Self {
         Self {
-            child,
+            restarter,
             observed: Mutex::new(Observed::default()),
         }
     }
@@ -37,14 +37,7 @@ impl Phase for CheckpointAndMerge {
     fn run(&self, endpoint: &str, _artifact_dir: &Path) -> Result<()> {
         let api = HttpApi::new(endpoint)?;
         let collection = format!("acceptance-checkpoint-{}", std::process::id());
-        let mut restart = || -> Result<()> {
-            let mut child = self
-                .child
-                .lock()
-                .map_err(|_| anyhow!("child lock poisoned"))?;
-            child.stop()?;
-            child.start()
-        };
+        let mut restart = || self.restarter.restart();
         let observed = run_checkpoint(&api, &collection, &mut restart)?;
         *self
             .observed
@@ -125,7 +118,10 @@ pub(super) fn run_checkpoint(
         bail!("after restart the hits are {hits_after:?}, wanted {hits_before:?}");
     }
 
-    // 6. Best effort cleanup.
+    // 6. A fresh write after the restart is searchable with the earlier hits.
+    crate::restart::prove_fresh_write(api, &base, &hits_before)?;
+
+    // 7. Best effort cleanup.
     let _ = api.call("DELETE", &delete, None);
     Ok(observed)
 }

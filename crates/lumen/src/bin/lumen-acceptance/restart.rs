@@ -10,11 +10,11 @@ use serde_json::{json, Value};
 
 use crate::http::HttpApi;
 use crate::lifecycle::search;
+use crate::restarter::Restarter;
 use crate::run::Phase;
-use crate::spawn::SharedChild;
 
 pub(super) struct RestartPersistence {
-    pub(super) child: SharedChild,
+    pub(super) restarter: Restarter,
 }
 
 impl Phase for RestartPersistence {
@@ -25,14 +25,7 @@ impl Phase for RestartPersistence {
     fn run(&self, endpoint: &str, _artifact_dir: &Path) -> Result<()> {
         let api = HttpApi::new(endpoint)?;
         let collection = format!("acceptance-restart-{}", std::process::id());
-        let mut restart = || -> Result<()> {
-            let mut child = self
-                .child
-                .lock()
-                .map_err(|_| anyhow!("child lock poisoned"))?;
-            child.stop()?;
-            child.start()
-        };
+        let mut restart = || self.restarter.restart();
         run_restart(&api, &collection, &mut restart)
     }
 }
@@ -103,8 +96,33 @@ pub(super) fn run_restart(
         bail!("after restart the hits are {after:?}, wanted {before:?}");
     }
 
-    // 7. Best effort cleanup.
+    // 7. A fresh write after the restart is searchable with the earlier hits.
+    prove_fresh_write(api, &base, &before)?;
+
+    // 8. Best effort cleanup.
     let _ = api.call("DELETE", &delete, None);
+    Ok(())
+}
+
+/// After a restart: index `doc-after-restart` (kw=red) and prove that the search returns
+/// the earlier hits plus the new one.
+pub(super) fn prove_fresh_write(api: &HttpApi, base: &str, earlier: &[String]) -> Result<()> {
+    api.expect(
+        "index doc-after-restart",
+        &[200],
+        "POST",
+        &format!("{base}/index"),
+        Some(&json!({"items": [
+            {"external_id": "doc-after-restart", "field": "kw", "value": "red"}
+        ]})),
+    )?;
+    let after = term_red_retrying(api, base)?;
+    let mut want: Vec<String> = earlier.to_vec();
+    want.push("doc-after-restart".into());
+    want.sort();
+    if after != want {
+        bail!("after the fresh write the hits are {after:?}, wanted {want:?} (doc-after-restart)");
+    }
     Ok(())
 }
 
@@ -203,6 +221,49 @@ mod tests {
             format!("{err:#}").contains("after restart the hits are"),
             "{err:#}"
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn prove_fresh_write_passes_and_names_the_new_document() {
+        let (_server, url) = serve_for_test();
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let api = HttpApi::new(&url)?;
+            let base = "/collections/acceptance-fresh-ok";
+            api.expect(
+                "create",
+                &[200],
+                "PUT",
+                base,
+                Some(&json!({"fields": {"kw": {"type": "keyword"}}})),
+            )?;
+            api.expect(
+                "index doc-1",
+                &[200],
+                "POST",
+                &format!("{base}/index"),
+                Some(&json!({"items": [
+                    {"external_id": "doc-1", "field": "kw", "value": "red"}
+                ]})),
+            )?;
+            prove_fresh_write(&api, base, &["doc-1".to_string()])
+        })
+        .await
+        .expect("join")
+        .expect("a fresh write after the restart is proved");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn prove_fresh_write_fails_when_the_write_is_refused() {
+        let (_server, url) = serve_for_test();
+        let err = tokio::task::spawn_blocking(move || -> Result<()> {
+            let api = HttpApi::new(&url)?;
+            // The collection was never created, so the write is refused.
+            prove_fresh_write(&api, "/collections/acceptance-fresh-missing", &[])
+        })
+        .await
+        .expect("join")
+        .expect_err("a refused fresh write must fail");
+        assert!(format!("{err:#}").contains("doc-after-restart"), "{err:#}");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
