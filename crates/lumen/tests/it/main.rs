@@ -74,6 +74,7 @@ mod hnsw_ef_recall;
 mod hnsw_shutdown_cache;
 mod http_body_limit_e2e;
 mod hybrid_rrf;
+mod ignored_inventory;
 mod index_text_parity;
 mod indexing_durable_oracle;
 mod indexing_partial_error_recovery;
