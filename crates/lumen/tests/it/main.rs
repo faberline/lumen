@@ -116,6 +116,7 @@ mod raft_shutdown_failover;
 mod reindex_stream_e2e;
 mod release_artifacts;
 mod release_candidate;
+mod release_evidence_record;
 mod release_feature_set;
 mod release_promotion;
 mod reopen_names_the_fields_that_need_reindexing;
