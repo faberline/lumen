@@ -99,6 +99,7 @@ mod operator_backup_kubernetes_wiring;
 mod operator_rbac_coverage;
 mod operator_render;
 mod operator_retired_credential_projection;
+mod ops_docs;
 mod oversized_text_staging;
 mod perf_gate;
 mod planner_diff;
