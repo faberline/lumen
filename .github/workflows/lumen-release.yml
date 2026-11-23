@@ -44,6 +44,7 @@ jobs:
   verify-inputs:
     name: prove immutable tag and candidate receipt
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       actions: read
       attestations: read
@@ -170,6 +171,7 @@ jobs:
     name: promote exact candidate root and publish release
     needs: verify-inputs
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       actions: read
       attestations: read

@@ -20,6 +20,7 @@ jobs:
   identity:
     name: candidate identity
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       actions: read
       contents: read
@@ -99,6 +100,7 @@ jobs:
     name: build (${{ matrix.target }})
     needs: identity
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     permissions:
       contents: read
     strategy:
@@ -174,6 +176,7 @@ jobs:
     name: build candidate image and attest
     needs: [identity, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       attestations: write
       contents: read
@@ -325,6 +328,7 @@ jobs:
     name: bind candidate inputs
     needs: [identity, build, ghcr-image-and-attest]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -380,6 +384,7 @@ jobs:
     name: cargo gates (default features)
     needs: [identity]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -421,6 +426,7 @@ jobs:
     name: cargo gates (operator delegated-auth)
     needs: [identity]
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     permissions:
       contents: read
     steps:
@@ -462,6 +468,7 @@ jobs:
     name: cargo gates (raft-wal)
     needs: [identity]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -503,6 +510,7 @@ jobs:
     name: cargo gates (release feature set)
     needs: [identity]
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -540,6 +548,7 @@ jobs:
     name: standalone container smoke
     needs: [identity, ghcr-image-and-attest]
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: read
@@ -585,6 +594,7 @@ jobs:
     name: standalone container smoke (arm64)
     needs: [identity, ghcr-image-and-attest]
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
     permissions:
       contents: read
       packages: read
@@ -635,6 +645,7 @@ jobs:
     name: cloud-free config gates
     needs: [identity]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -673,6 +684,7 @@ jobs:
     name: coarse performance gates
     needs: [identity]
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -764,6 +776,7 @@ jobs:
     name: verify candidate supply chain
     needs: [identity, manifest, ghcr-image-and-attest]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       attestations: read
       contents: read
@@ -859,6 +872,7 @@ jobs:
     name: final candidate receipt
     needs: [identity, build, manifest, ghcr-image-and-attest, gates-default, gates-operator, gates-raft-wal, gates-release-features, container-smoke, container-smoke-arm64, cloud-free-config, perf-coarse, verify-candidate, gke-e2e]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
