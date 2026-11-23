@@ -42,12 +42,6 @@ edit generated schema as a substitute for changing its source.
 
 ## Local Workflow
 
-Authorized behavior work runs through the agents in `.claude/agents/`.
-`lumen-pm` drafts product documents. `lumen-qa` writes the failing black-box
-case (`aw e2e`) before `lumen-dev` changes `src/` and adds the red unit test and
-implementation (`aw impl`). A fresh `lumen-qa` run executes the declared
-complete gate. The controller owns Git, tracker, and acceptance.
-
 Keep Lumen-specific search behavior, schema, storage format, and the data-plane
 hooks that core calls in this repository: request classification and result
 merge, bucket data, domain readiness, and domain alerts. Operations move to
