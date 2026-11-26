@@ -2,7 +2,7 @@
 # AW-EC-TOOL-BEGIN
 project = "lumen"
 source_contract = "lumen-security-hardening-auth-bearer-rbac"
-target = "apps/lumen"
+target = "."
 version = 1
 # AW-EC-TOOL-END
 # CODEGEN-END

@@ -432,23 +432,23 @@ fn shared_and_domain_ownership_are_total_and_disjoint() {
     for (title, app_claim) in [
         (
             "Indexing",
-            "- [`apps/lumen`](./) defines field behavior, analyzers, mutation rules, segment formats, and the derived-index lifecycle.",
+            "- [`lumen`](./) defines field behavior, analyzers, mutation rules, segment formats, and the derived-index lifecycle.",
         ),
         (
             "Querying",
-            "- [`apps/lumen`](./) defines query validation, planning, scoring, filtering, grouping, sorting, pagination, and read-consistency behavior.",
+            "- [`lumen`](./) defines query validation, planning, scoring, filtering, grouping, sorting, pagination, and read-consistency behavior.",
         ),
         (
             "Kubernetes-native deployment",
-            "- [`apps/lumen`](./) defines the CRD, defaults, topology policy, conditions, and Lumen resource composition.",
+            "- [`lumen`](./) defines the CRD, defaults, topology policy, conditions, and Lumen resource composition.",
         ),
         (
             "Scaling and availability",
-            "- [`apps/lumen`](./) defines virtual-bucket routing, shard ownership, reshard phases, write fences, checkpoints, and scatter/gather behavior.",
+            "- [`lumen`](./) defines virtual-bucket routing, shard ownership, reshard phases, write fences, checkpoints, and scatter/gather behavior.",
         ),
         (
             "Security and access",
-            "- [`apps/lumen`](./) defines the security posture, Lumen permission mapping, anonymous route set, identity separation, and integration policy.",
+            "- [`lumen`](./) defines the security posture, Lumen permission mapping, anonymous route set, identity separation, and integration policy.",
         ),
     ] {
         let section = normalized_capability_section(README, title);
