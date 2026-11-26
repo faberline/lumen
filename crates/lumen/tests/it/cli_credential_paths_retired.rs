@@ -17,7 +17,7 @@
 //! satisfy while re-growing the path under a new name; behaviour alone
 //! passes on a build whose help text still advertises the flag.
 //!
-//! Scope note: this gate reads `apps/lumen` only, and only the surface that
+//! Scope note: this gate reads the lumen repository only, and only the surface that
 //! ships — source, examples, docs, manifests, generated clients, README. The
 //! generated half is not a formality: the first thing this scan caught, once
 //! widened, was a committed `clients/openapi.json` still publishing the
@@ -49,7 +49,7 @@ fn lumen_dir() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
 }
 
-/// Every shipped text file under `apps/lumen`, excluding `tests/` (see the
+/// Every shipped text file under the lumen repository, excluding `tests/` (see the
 /// scope note above), `target/`, and anything not human-readable.
 ///
 /// `clients/` earns its place on this list the hard way: `clients/openapi.json`
@@ -136,10 +136,10 @@ fn lumen_bin() -> String {
 
 /// AC1: no credential environment variable, no Google instance-identity
 /// endpoint, and no Application Default Credentials handoff anywhere in the
-/// surface `apps/lumen` ships.
+/// surface the lumen repository ships.
 ///
 /// These are spelled as exact strings rather than as a fuzzy "token" search
-/// because `apps/lumen` legitimately contains the word: the GCS *destination
+/// because the lumen repository legitimately contains the word: the GCS *destination
 /// sink* in the storage topic authenticates to Google Cloud Storage, which is
 /// a backup target, not a Lumen request identity. Conflating the two is how a
 /// residue gate ends up either useless or permanently red.
