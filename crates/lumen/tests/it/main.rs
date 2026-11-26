@@ -50,6 +50,7 @@ mod collection_version_never_moves_backwards;
 mod committed_staged_text_stage_failure;
 mod control_plane_identity_e2e;
 mod core_pin_is_v0_5_2;
+mod coverage_exceptions_doc;
 mod coverage_gaps_e2e;
 mod coverage_pass_e2e;
 mod credential_planes;
