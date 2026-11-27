@@ -10,6 +10,7 @@ kind: Kustomization
 namespace: lumen
 
 resources:
+  - namespace.yaml
   - ../../operator
 
 images:

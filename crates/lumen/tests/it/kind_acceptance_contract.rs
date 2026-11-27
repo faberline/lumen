@@ -265,6 +265,14 @@ fn operator_overlay_has_the_operator_shape() {
     assert!(kustomization.contains("REPLACE_ME"));
     assert!(kustomization.contains("namespace: lumen"));
     assert!(kustomization.contains("Never"));
+    assert!(
+        kustomization.contains("- namespace.yaml"),
+        "the operator overlay must create Namespace lumen itself"
+    );
+
+    let namespace = repo_file(&format!("{base}/namespace.yaml"));
+    assert!(namespace.contains("kind: Namespace"));
+    assert!(namespace.contains("name: lumen"));
 
     let cr = repo_file(&format!("{base}/lumen-cr.yaml"));
     for needle in [
