@@ -18,7 +18,7 @@ pub struct AccessSpec {
 /// `additionalProperties: false` next to `properties`, which the API server
 /// rejects in a structural CRD schema. Deserialization still denies unknown
 /// fields through the real subject type.
-fn subject_list_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+fn subject_list_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
     /// One ServiceAccount, named exactly. Wildcards, groups and raw usernames are
     /// not representable here.
     #[derive(JsonSchema)]
@@ -30,7 +30,7 @@ fn subject_list_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::sc
         #[allow(dead_code)]
         name: String,
     }
-    <Vec<SubjectSchema>>::json_schema(gen)
+    <Vec<SubjectSchema>>::json_schema(generator)
 }
 
 /// One ServiceAccount, named exactly. Wildcards, groups and raw usernames are
