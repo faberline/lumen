@@ -356,9 +356,9 @@ jobs:
       id-token: write
       contents: read
       packages: read
-    uses: faberline/aw/.github/workflows/gke-test.yml@efe1a96e54617e60f6e2b7d154aea67fca8c96f8
+    uses: faberline/aw/.github/workflows/gke-test.yml@df50599e6e52e6459d3b40450a02b4333cd5f50c
     with:
-      aw-ref: efe1a96e54617e60f6e2b7d154aea67fca8c96f8
+      aw-ref: df50599e6e52e6459d3b40450a02b4333cd5f50c
       image: ${{ needs.resolve.outputs.image }}
       image-name: ghcr.io/faberline/lumen
       namespace: lumen
