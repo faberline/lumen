@@ -16,7 +16,7 @@ Lumen is one Cargo workspace with the faberline `saas-service` crates:
 
 | Crate | Holds |
 |---|---|
-| `crates/lumen` | The binary, the library facade, `compat`, tests, and benches |
+| `crates/lumen` | The binary, the library facade, tests, and benches |
 | `crates/lumen-shared-kernel` | The wire types, log entry, and capture barrier every context shares |
 | `crates/lumen-access` | The `access` context: identity, authorization, and peer TLS |
 | `crates/lumen-index` | `index`, `ingest`, `persistence`, `sharding`, and the `app` root |
@@ -33,7 +33,7 @@ directions.
 `ports::cluster_status` port.
 The [domain guide](domain/README.md) maps source modules to their owners.
 `crates/lumen-index/src/app` connects those modules into the running service.
-`crates/lumen/src/compat` keeps the public Rust module paths used by existing callers.
+`crates/lumen/src/lib.rs` keeps the public Rust module paths used by existing callers.
 The [layout decision](adr/0001-ddd-context-layout.md) records the P1 boundary.
 [ddd.toml](../ddd.toml) records the layers and remaining exceptions.
 
