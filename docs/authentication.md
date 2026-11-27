@@ -357,16 +357,16 @@ source.
 
 ## Responsibility boundaries
 
-`apps/lumen` names this repository. `libs/<name>` names the
+`lumen` names this repository. `core/<name>` names the
 [faberline/core](https://github.com/faberline/core) crate of that name at git
 tag `v0.4.13`.
 
 | Source | Responsibility |
 |---|---|
-| `apps/lumen` | Standalone and Managed modes, typed access CRD, whole-runtime permission meaning, anonymous route policy, Lumen audience and path, and SAR resource mapping. |
-| `libs/service-auth` | Current Rust projected-token preflight, a planned portable opaque token source, TokenRequest, TokenReview, SubjectAccessReview, redaction, and fail-closed decisions. TokenReview remains the server authority. |
-| `libs/openapi-codegen` | A service-neutral provider that can return dynamic request headers before every request. |
-| `libs/service-k8s` | Projected-token rendering, Role and RoleBinding shapes, certificate lifecycle wiring, public CA ConfigMap ownership, prune, and status projection. |
+| `lumen` | Standalone and Managed modes, typed access CRD, whole-runtime permission meaning, anonymous route policy, Lumen audience and path, and SAR resource mapping. |
+| `core/service-auth` | Current Rust projected-token preflight, a planned portable opaque token source, TokenRequest, TokenReview, SubjectAccessReview, redaction, and fail-closed decisions. TokenReview remains the server authority. |
+| `core/openapi-codegen` | A service-neutral provider that can return dynamic request headers before every request. |
+| `core/service-k8s` | Projected-token rendering, Role and RoleBinding shapes, certificate lifecycle wiring, public CA ConfigMap ownership, prune, and status projection. |
 | Kubernetes | ServiceAccount identity, short-lived token issue and rotation, RBAC policy, TokenReview, and SubjectAccessReview results. |
 
 ## References
