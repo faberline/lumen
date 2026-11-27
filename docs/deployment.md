@@ -555,3 +555,7 @@ capacity, child-status, leadership, and reconcile diagnostics.
 The future GKE Standard Regional gate also covers node drain, Pod loss, zone
 loss, rollout interruption, recovery, certificate rotation, client trust,
 backup, and restore. Do not use the current zonal result as that evidence.
+
+## Kind acceptance
+
+`scripts/kind-acceptance.sh --mode all` runs the acceptance gate on a run-scoped Kind cluster. It builds one image, creates the cluster, and runs the overlay mode (`k8s/overlays/kind-acceptance`) and then the operator mode (`k8s/overlays/kind-acceptance-operator`, one Lumen custom resource that the operator reconciles) on that cluster. Each mode runs the shared functional runner with a real restart and checks the rendered topology in the operator mode. It writes one combined report to `<artifact-dir>/report.json`, which is passed only when both modes pass, and it always deletes the cluster, even when a mode fails.
