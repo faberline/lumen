@@ -53,7 +53,7 @@ pub mod status;
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use crate::domain::lumen_spec::access::AccessSpec;
 use crate::domain::lumen_spec::runtime::RuntimeSettings;
@@ -298,16 +298,11 @@ pub enum PlanOutcome {
 /// [`FleetInstance::spec`]. A structural CRD schema has to say *something*
 /// about every property, and "an object whose keys are validated later, by
 /// deserializing the merge result into a `LumenSpec`" is what this expresses.
-fn free_form_object(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-    let mut schema = schemars::schema::SchemaObject {
-        instance_type: Some(schemars::schema::InstanceType::Object.into()),
-        ..Default::default()
-    };
-    schema.extensions.insert(
-        "x-kubernetes-preserve-unknown-fields".to_string(),
-        json!(true),
-    );
-    schemars::schema::Schema::Object(schema)
+fn free_form_object(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "object",
+        "x-kubernetes-preserve-unknown-fields": true
+    })
 }
 
 #[cfg(test)]
