@@ -30,6 +30,37 @@ pub(crate) fn read_consistency_from(headers: &HeaderMap) -> ReadConsistency {
     )
 }
 
+/// Resolves the idempotency key of an index request: a valid
+/// `Idempotency-Key` header wins over the body `request_id`; with no header
+/// the body value is returned unchanged. The error message never contains
+/// the key value.
+pub(crate) fn idempotency_key_from(
+    headers: &HeaderMap,
+    body_request_id: Option<String>,
+) -> Result<Option<String>, ApiErr> {
+    let invalid = || {
+        ApiErr::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_idempotency_key",
+            "Idempotency-Key must be 1 to 255 visible ASCII characters and appear once",
+        )
+    };
+    let mut values = headers.get_all("idempotency-key").iter();
+    let Some(value) = values.next() else {
+        return Ok(body_request_id);
+    };
+    if values.next().is_some() {
+        return Err(invalid());
+    }
+    let bytes = value.as_bytes();
+    let valid =
+        (1..=255).contains(&bytes.len()) && bytes.iter().all(|byte| (0x21..=0x7E).contains(byte));
+    if !valid {
+        return Err(invalid());
+    }
+    Ok(Some(String::from_utf8_lossy(bytes).into_owned()))
+}
+
 /// Enforces a resolved `x-read-consistency` against this pod's live
 /// per-shard cluster state (`AppState::cluster`) before a read reaches the
 /// local engine (#1310).
@@ -196,3 +227,6 @@ pub(crate) async fn acquire_direct_mutation_permit(
     };
     gate.shared().await.map(Some).map_err(ApiErr::from)
 }
+
+#[cfg(test)]
+mod tests;
