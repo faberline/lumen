@@ -297,7 +297,7 @@ fn workflow_runs_cells_in_lanes_through_aw() {
     let cell = &workflow["jobs"]["cell"];
     assert_eq!(
         cell["uses"],
-        "faberline/aw/.github/workflows/gke-test.yml@main"
+        "faberline/aw/.github/workflows/gke-test.yml@df50599e6e52e6459d3b40450a02b4333cd5f50c"
     );
     // At most max_nodes of the perf pools in faberline/aw pools.yaml.
     assert_eq!(cell["strategy"]["max-parallel"], 3);
@@ -305,6 +305,7 @@ fn workflow_runs_cells_in_lanes_through_aw() {
     assert_eq!(workflow["concurrency"]["cancel-in-progress"], false);
     assert_eq!(cell["strategy"]["fail-fast"], false);
     let with = &cell["with"];
+    assert_eq!(with["aw-ref"], "df50599e6e52e6459d3b40450a02b4333cd5f50c");
     for folder in ["overlay", "test-job"] {
         let path = root().join(with[folder].as_str().unwrap());
         assert!(path.join("kustomization.yaml").is_file(), "{folder}");
