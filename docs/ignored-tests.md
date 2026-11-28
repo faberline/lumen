@@ -41,6 +41,7 @@ An ignored test is not a pass. This file lists every `#[ignore]` test under `cra
 | crates/lumen/tests/perf_gate_vs_db.rs | `lumen_scale_bench` | report only | LUMEN-ONLY disk scale bench (no pg/OS) — report, run --ignored --nocapture lumen_scale_bench | none |
 | crates/lumen/tests/it/hnsw_ef_recall.rs | `hnsw_ef_recall_latency_sweep` | measurement harness | bench/validation harness — run with --release --ignored --nocapture | none |
 | crates/lumen/tests/it/disk_format_bench.rs | `disk_format_size_and_decode_speed` | measurement harness | measurement harness — run explicitly with --ignored --nocapture | none |
+| crates/lumen/tests/idle_rss_per_value.rs | `bytes_per_value_report` | measurement harness | idle RSS per indexed value after a reopen (#577): run with `-- --ignored --nocapture` | none |
 | crates/lumen-index/src/persistence/application/background_merge/tests/phase_metrics.rs | `measure_background_merge_job_cost_by_collection_count` | measurement harness | measurement: prints a per-phase cost breakdown, asserts no wall-clock budget | none |
 
 ## Empty stubs
