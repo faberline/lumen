@@ -49,7 +49,7 @@ axios runtime. Both forms also emit TanStack Query hooks.
 |---|---|---|---|---|
 | TypeScript | Promise-based typed client with fetch or axios runtime and TanStack Query hooks | HTTP/1.1 through fetch or axios; Node-only file-bearer opt-in for eligible cluster URLs | Explicit file-bearer provider or fixed headers | No published package, NDJSON stream method, or typed API error. Browser use hard-fails for eligible token URLs. |
 | Python | Pydantic models with sync `Client` and async `AsyncClient` | Generated HTTP/2-capable h2c and TLS runtime | Explicit file-bearer opt-in or fixed headers | No published package, NDJSON stream method, or typed API error. The runtime needs Python and Pydantic 2. |
-| Rust | Serde models with a blocking client | `reqwest::blocking` over HTTP/1.1 or negotiated TLS | Explicit file-bearer opt-in | No published package, async client, NDJSON stream method, or typed API error. Component unions become `serde_json::Value`; string enums become `String`. |
+| Rust | Serde models with a blocking client | `reqwest::blocking` over HTTP/1.1 or negotiated TLS | Explicit file-bearer opt-in | No published package, async client, NDJSON stream method, or typed API error. Discriminated and untagged component unions and string enums are typed Rust enums. The `FieldValue` union stays `serde_json::Value`. |
 
 All three generated clients support Lumen's dedicated `QUERY` operations and a
 runtime POST fallback. They generate ordinary JSON operations. The current
@@ -99,7 +99,7 @@ main generated-client boundaries are:
 - The OpenAPI operation declarations do not yet include the complete shared
   `401`, `413`, `429`, and `500` response set or the
   `X-Read-Consistency` request header.
-- Rust does not preserve the full OpenAPI union and enum type surface.
+- Rust types every component union and enum except `FieldValue`, which stays `serde_json::Value` (its `oneOf` has two array branches and both `integer` and `number`).
 - No generated client has typed Search v2 facet or metric methods, definitions, or
   results. The target `kind`-discriminated search unions are not in the current
   OpenAPI snapshot.
