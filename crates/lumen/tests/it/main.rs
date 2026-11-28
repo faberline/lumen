@@ -66,6 +66,7 @@ mod efficiency_lumen_claim_competitor_performance_external_comparison;
 mod efficiency_lumen_claim_elastic_disk_tier;
 mod feature_gated_targets_are_registered;
 mod field_query_correctness_contract;
+mod generated_client_protocol_parity;
 mod generated_clients_crud_e2e;
 mod generated_hydration;
 mod gke_perf_evidence;
