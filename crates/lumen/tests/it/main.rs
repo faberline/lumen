@@ -97,6 +97,7 @@ mod native_oversized_committed_replace;
 mod native_private_layer_cap;
 mod nonsegment_budget_progress;
 mod opaque_projected_token_contract;
+mod openapi_compat;
 mod operator_backup_kubernetes_wiring;
 mod operator_rbac_coverage;
 mod operator_render;
