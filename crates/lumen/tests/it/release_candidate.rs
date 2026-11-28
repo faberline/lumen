@@ -2692,7 +2692,20 @@ fn e2e_sources() -> E2eSources {
     }
 }
 fn perf_gate_source() -> String {
-    fs::read_to_string(root().join("crates/lumen/tests/it/perf_gate.rs")).unwrap()
+    let dir = root().join("crates/lumen/tests/it");
+    let parent = fs::read_to_string(dir.join("perf_gate.rs")).unwrap();
+    let child = fs::read_to_string(dir.join("perf_gate/durable_workload.rs")).unwrap();
+    assert_eq!(parent.matches("mod durable_workload;\n").count(), 1);
+    let mut inline = String::from("mod durable_workload {\n");
+    for line in child.lines() {
+        if !line.is_empty() {
+            inline.push_str("    ");
+            inline.push_str(line);
+        }
+        inline.push('\n');
+    }
+    inline.push_str("}\n");
+    parent.replacen("mod durable_workload;\n", &inline, 1)
 }
 fn perf_workload_ledger_source() -> String {
     fs::read_to_string(root().join("crates/lumen/tests/it/support/perf_workload_ledger.rs"))
