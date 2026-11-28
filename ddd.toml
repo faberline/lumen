@@ -119,10 +119,10 @@ mod_module_files = "deny"
 path = "crates/lumen-shared-kernel/src"
 
 # Code that may use every context. `app` is the composition root (D1);
-# `compat` keeps the module paths from before the split alive until outside
+# `lib.rs` keeps the module paths from before the split alive until outside
 # callers move to the new ones (D3).
 [assembly]
-modules = ["crates/lumen-index/src/app", "crates/lumen/src/compat"]
+modules = ["crates/lumen-index/src/app", "crates/lumen/src/lib.rs"]
 
 [[contexts]]
 name = "access"
