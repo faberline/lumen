@@ -49,9 +49,19 @@ pub(in crate::index) fn query_predicate(
         QueryNode::Rrf(_) => bail!("rrf cannot be evaluated as a per-doc predicate"),
         QueryNode::HasChild(_) => bail!("has_child cannot be evaluated as a per-doc predicate"),
         QueryNode::Hamming(_) => bail!("hamming cannot be evaluated as a per-doc predicate"),
-        // Exists/Duplicated test membership in the field's doc-union; the sort-walk
+        // Exists: for keyword, number and set fields the doc-union is the field's
+        // coverage, so test this one document against its own coverage. The
+        // doc-union rebuilt the whole bitmap on every call, which made a sort walk
+        // over N documents O(N^2) (faberline/lumen#578). Other types keep the union.
+        QueryNode::Exists(e) => match coll.fields.get(&e.field) {
+            Some(FieldIndex::Keyword(_) | FieldIndex::Number(_) | FieldIndex::Set(_)) => coll
+                .eid_fields
+                .get(&id)
+                .is_some_and(|coverage| coverage.contains(&e.field)),
+            _ => eval_field_doc_union(coll, &e.field, 1)?.contains(id),
+        },
+        // Duplicated tests membership in the field's doc-union; the sort-walk
         // runs over a bounded candidate set so the recompute stays cheap.
-        QueryNode::Exists(e) => eval_field_doc_union(coll, &e.field, 1)?.contains(id),
         QueryNode::Duplicated(d) => {
             eval_field_doc_union(coll, &d.field, d.min_group_size.max(2) as u64)?.contains(id)
         }
