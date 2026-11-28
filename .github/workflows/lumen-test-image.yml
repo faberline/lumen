@@ -58,6 +58,7 @@ jobs:
   build:
     name: build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -112,6 +113,7 @@ jobs:
     name: publish ghcr test image
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       image: ${{ steps.digest.outputs.image }}
       digest: ${{ steps.push.outputs.digest }}
