@@ -1,0 +1,24 @@
+# The Kind operator acceptance CR (#571). scripts/kind-acceptance.sh replaces
+# REPLACE_ME on a temp copy with the run's image and applies it after the CRD
+# is Established. The non-empty nodeSelector keeps placement off the GCE
+# capacity catalog, which Kind does not have.
+apiVersion: lumen.dev/v1alpha1
+kind: Lumen
+metadata:
+  name: lumen
+  namespace: lumen
+spec:
+  image: REPLACE_ME
+  imagePullPolicy: Never
+  shardCount: 1
+  replicasPerShard: 1
+  voterCount: 1
+  logFormat: pretty
+  auth: disabled
+  placement:
+    nodeSelector:
+      kubernetes.io/os: linux
+  serving:
+    cpu: 250m
+    memory: 512Mi
+    raftStorage: 1Gi

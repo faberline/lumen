@@ -1,0 +1,43 @@
+# Kind operator acceptance overlay (#571). The shipped operator install moved
+# into the lumen namespace with one replica. scripts/kind-acceptance.sh sets
+# the image tag on a temp copy with `kustomize edit set image`; the tracked tag
+# stays REPLACE_ME so an unedited render fails loudly. The Lumen CR is
+# lumen-cr.yaml: the script applies it after the CRD is Established, so it is
+# not listed in resources.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: lumen
+
+resources:
+  - namespace.yaml
+  - ../../operator
+
+images:
+  - name: ghcr.io/faberline/lumen
+    newTag: REPLACE_ME
+
+patches:
+  - target:
+      kind: Namespace
+      name: lumen-system
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: lumen-system
+  # One operator replica, requests without limits (as the gke-test overlay),
+  # and the image of the run is loaded into Kind, so it is never pulled.
+  - target:
+      kind: Deployment
+      name: lumen-operator
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/limits
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
