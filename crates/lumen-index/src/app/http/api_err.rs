@@ -55,11 +55,11 @@ pub(crate) fn batch_search_storage_error(e: anyhow::Error) -> BatchSearchResult 
 /// classification arms. (`crate::shared_kernel::types::api_error::ApiError`
 /// stays a distinct local struct of the same `{error, message}` shape purely
 /// for OpenAPI schema identity — see its doc comment.)
-pub struct ApiErr(service_http::ApiErr);
+pub struct ApiErr(Box<service_http::ApiErr>);
 
 impl ApiErr {
     pub(crate) fn new(status: StatusCode, kind: &'static str, message: impl Into<String>) -> Self {
-        Self(service_http::ApiErr::new(status, kind, message))
+        Self(Box::new(service_http::ApiErr::new(status, kind, message)))
     }
 
     pub(crate) fn not_found(msg: impl Into<String>) -> Self {
@@ -67,14 +67,14 @@ impl ApiErr {
     }
 
     fn pending_change_capacity(msg: impl Into<String>) -> Self {
-        Self(
+        Self(Box::new(
             service_http::ApiErr::new(
                 StatusCode::TOO_MANY_REQUESTS,
                 "pending_change_capacity",
                 msg,
             )
             .with_retry_after_seconds(1),
-        )
+        ))
     }
 }
 
@@ -223,7 +223,7 @@ impl From<anyhow::Error> for ApiErr {
 
 impl IntoResponse for ApiErr {
     fn into_response(self) -> axum::response::Response {
-        self.0.into_response()
+        (*self.0).into_response()
     }
 }
 

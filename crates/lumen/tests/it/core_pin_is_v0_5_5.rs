@@ -10,7 +10,7 @@ fn repo_file(relative: &str) -> String {
 }
 
 #[test]
-fn workspace_manifest_pins_every_core_crate_to_v0_5_2() {
+fn workspace_manifest_pins_every_core_crate_to_v0_5_5() {
     let manifest = repo_file("Cargo.toml");
     let lines: Vec<&str> = manifest
         .lines()
@@ -26,12 +26,12 @@ fn workspace_manifest_pins_every_core_crate_to_v0_5_2() {
     );
     for line in &lines {
         assert!(
-            line.contains(r#"tag = "v0.5.2""#),
-            "core dependency is not pinned to v0.5.2: {line}"
+            line.contains(r#"tag = "v0.5.5""#),
+            "core dependency is not pinned to v0.5.5: {line}"
         );
     }
     for (number, line) in manifest.lines().enumerate() {
-        for old in ["v0.4.14", "v0.5.0", "v0.5.1"] {
+        for old in ["v0.4.14", "v0.5.0", "v0.5.1", "v0.5.2", "v0.5.3", "v0.5.4"] {
             assert!(
                 !line.contains(old),
                 "Cargo.toml line {} still pins {old}: {line}",
@@ -42,7 +42,7 @@ fn workspace_manifest_pins_every_core_crate_to_v0_5_2() {
 }
 
 #[test]
-fn lock_file_resolves_every_core_crate_from_v0_5_2() {
+fn lock_file_resolves_every_core_crate_from_v0_5_5() {
     let lock = repo_file("Cargo.lock");
     let lines: Vec<&str> = lock
         .lines()
@@ -55,7 +55,7 @@ fn lock_file_resolves_every_core_crate_from_v0_5_2() {
     );
     for line in &lines {
         assert!(
-            line.contains("?tag=v0.5.2#"),
+            line.contains("?tag=v0.5.5#"),
             "Cargo.lock resolves a core crate from another tag: {line}"
         );
     }

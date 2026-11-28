@@ -487,7 +487,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{
     )?;
     assert_eq!(indexed.indexed, 3);
 
-    let query = serde_json::json!({{"term": {{"field": "email", "value": "a@x.com"}}}});
+    let query: models::QueryNode = serde_json::from_value(serde_json::json!({{"term": {{"field": "email", "value": "a@x.com"}}}}))?;
     let found = client.search(
         "users".to_string(),
         models::SearchRequest {{
